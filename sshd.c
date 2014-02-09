@@ -1730,7 +1730,8 @@ main(int ac, char **av)
 		free(fp);
 	}
 	accumulate_host_timing_secret(cfg, NULL);
-	if (!sensitive_data.have_ssh2_key) {
+	/* The GSSAPI key exchange can run without a host key */
+	if (!sensitive_data.have_ssh2_key && !options.gss_keyex) {
 		logit("sshd: no hostkeys available -- exiting.");
 		exit(1);
 	}

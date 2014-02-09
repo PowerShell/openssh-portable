@@ -2688,13 +2688,19 @@ do_cleanup(struct ssh *ssh, Authctxt *authctxt)
 
 #ifdef KRB5
 	if (options.kerberos_ticket_cleanup &&
-	    authctxt->krb5_ctx)
+	    authctxt->krb5_ctx) {
+		temporarily_use_uid(authctxt->pw);
 		krb5_cleanup_proc(authctxt);
+		restore_uid();
+	}
 #endif
 
 #ifdef GSSAPI
-	if (options.gss_cleanup_creds)
+	if (options.gss_cleanup_creds) {
+		temporarily_use_uid(authctxt->pw);
 		ssh_gssapi_cleanup_creds();
+		restore_uid();
+	}
 #endif
 
 	/* remove agent socket */

@@ -74,6 +74,7 @@ extern Authmethod method_passwd;
 extern Authmethod method_kbdint;
 extern Authmethod method_hostbased;
 #ifdef GSSAPI
+extern Authmethod method_gsskeyex;
 extern Authmethod method_gssapi;
 #endif
 
@@ -81,6 +82,7 @@ Authmethod *authmethods[] = {
 	&method_none,
 	&method_pubkey,
 #ifdef GSSAPI
+	&method_gsskeyex,
 	&method_gssapi,
 #endif
 	&method_passwd,

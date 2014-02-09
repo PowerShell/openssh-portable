@@ -62,6 +62,7 @@
 #include "dispatch.h"
 #include "monitor.h"
 #include "myproposal.h"
+#include "xmalloc.h"
 
 #include "ssherr.h"
 #include "sshbuf.h"
@@ -747,6 +748,9 @@ kex_free(struct kex *kex)
 	sshbuf_free(kex->session_id);
 	sshbuf_free(kex->initial_sig);
 	sshkey_free(kex->initial_hostkey);
+#ifdef GSSAPI
+	free(kex->gss_host);
+#endif /* GSSAPI */
 	free(kex->failed_choice);
 	free(kex->hostkey_alg);
 	free(kex->name);

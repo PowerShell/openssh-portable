@@ -786,6 +786,30 @@ int main(void) { if (NSVersionOfRunTimeLibrary("System") >= (60 << 16))
 	    [Use tunnel device compatibility to OpenBSD])
 	AC_DEFINE([SSH_TUN_PREPEND_AF], [1],
 	    [Prepend the address family to IP tunnel traffic])
+	AC_MSG_CHECKING([if we have the Security Authorization Session API])
+	AC_TRY_COMPILE([#include <Security/AuthSession.h>],
+		[SessionCreate(0, 0);],
+		[ac_cv_use_security_session_api="yes"
+		 AC_DEFINE([USE_SECURITY_SESSION_API], [1],
+			[platform has the Security Authorization Session API])
+		 LIBS="$LIBS -framework Security"
+		 AC_MSG_RESULT([yes])],
+		[ac_cv_use_security_session_api="no"
+		 AC_MSG_RESULT([no])])
+	AC_MSG_CHECKING([if we have an in-memory credentials cache])
+	AC_TRY_COMPILE(
+		[#include <Kerberos/Kerberos.h>],
+		[cc_context_t c;
+		 (void) cc_initialize (&c, 0, NULL, NULL);],
+		[AC_DEFINE([USE_CCAPI], [1],
+			[platform uses an in-memory credentials cache])
+		 LIBS="$LIBS -framework Security"
+		 AC_MSG_RESULT([yes])
+		 if test "x$ac_cv_use_security_session_api" = "xno"; then
+			AC_MSG_ERROR([*** Need a security framework to use the credentials cache API ***])
+		fi],
+		[AC_MSG_RESULT([no])]
+	)
 	m4_pattern_allow([AU_IPv])
 	AC_CHECK_DECL([AU_IPv4], [],
 	    AC_DEFINE([AU_IPv4], [0], [System only supports IPv4 audit records])

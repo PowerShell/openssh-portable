@@ -106,14 +106,14 @@ LIBSSH_OBJS=${LIBOPENSSH_OBJS} \
 	readpass.o ttymodes.o xmalloc.o addr.o addrmatch.o \
 	atomicio.o dispatch.o mac.o misc.o utf8.o \
 	monitor_fdpass.o rijndael.o ssh-dss.o ssh-ecdsa.o ssh-ecdsa-sk.o \
-	ssh-ed25519-sk.o ssh-rsa.o dh.o \
+	ssh-ed25519-sk.o ssh-rsa.o ssh-null.o dh.o \
 	msg.o progressmeter.o dns.o entropy.o gss-genr.o umac.o umac128.o \
 	ssh-pkcs11.o smult_curve25519_ref.o \
 	poly1305.o chacha.o cipher-chachapoly.o cipher-chachapoly-libcrypto.o \
 	ssh-ed25519.o digest-openssl.o digest-libc.o \
 	hmac.o ed25519.o hash.o \
 	kex.o kex-names.o kexdh.o kexgex.o kexecdh.o kexc25519.o \
-	kexgexc.o kexgexs.o \
+	kexgexc.o kexgexs.o kexgssc.o \
 	kexsntrup761x25519.o kexmlkem768x25519.o sntrup761.o kexgen.o \
 	sftp-realpath.o platform-pledge.o platform-tracing.o platform-misc.o \
 	sshbuf-io.o
@@ -137,7 +137,7 @@ SSHD_SESSION_OBJS=sshd-session.o auth-rhosts.o auth-passwd.o \
 	auth-bsdauth.o auth2-hostbased.o auth2-kbdint.o \
 	auth2-none.o auth2-passwd.o auth2-pubkey.o auth2-pubkeyfile.o \
 	monitor.o monitor_wrap.o auth-krb5.o \
-	auth2-gss.o gss-serv.o gss-serv-krb5.o \
+	auth2-gss.o gss-serv.o gss-serv-krb5.o kexgsss.o \
 	loginrec.o auth-pam.o auth-shadow.o auth-sia.o \
 	sftp-server.o sftp-common.o \
 	uidswap.o platform-listen.o $(SKOBJS)
@@ -148,7 +148,7 @@ SSHD_AUTH_OBJS=sshd-auth.o \
 	serverloop.o auth.o auth2.o auth-options.o session.o auth2-chall.o \
 	groupaccess.o auth-bsdauth.o auth2-hostbased.o auth2-kbdint.o \
 	auth2-none.o auth2-passwd.o auth2-pubkey.o auth2-pubkeyfile.o \
-	auth2-gss.o gss-serv.o gss-serv-krb5.o \
+	auth2-gss.o gss-serv.o gss-serv-krb5.o kexgsss.o \
 	monitor_wrap.o auth-krb5.o \
 	audit.o audit-bsm.o audit-linux.o platform.o \
 	loginrec.o auth-pam.o auth-shadow.o auth-sia.o \

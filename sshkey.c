@@ -140,6 +140,9 @@ extern const struct sshkey_impl sshkey_dsa_cert_impl;
 extern const struct sshkey_impl sshkey_xmss_impl;
 extern const struct sshkey_impl sshkey_xmss_cert_impl;
 #endif
+#ifdef GSSAPI
+extern const struct sshkey_impl sshkey_null_impl;
+#endif /* GSSAPI */
 
 const struct sshkey_impl * const keyimpls[] = {
 	&sshkey_ed25519_impl,
@@ -179,6 +182,9 @@ const struct sshkey_impl * const keyimpls[] = {
 	&sshkey_xmss_impl,
 	&sshkey_xmss_cert_impl,
 #endif
+#ifdef GSSAPI
+	&sshkey_null_impl,
+#endif /* GSSAPI */
 	NULL
 };
 
@@ -348,7 +354,7 @@ sshkey_alg_list(int certs_only, int plain_only, int include_sigonly, char sep)
 
 	for (i = 0; keyimpls[i] != NULL; i++) {
 		impl = keyimpls[i];
-		if (impl->name == NULL)
+		if (impl->name == NULL || impl->type == KEY_NULL)
 			continue;
 		if (!include_sigonly && impl->sigonly)
 			continue;

@@ -976,10 +976,67 @@ The default is
 Specifies whether user authentication based on GSSAPI is allowed.
 The default is
 .Cm no .
+.It Cm GSSAPIClientIdentity
+If set, specifies the GSSAPI client identity that ssh should use when
+connecting to the server. The default is unset, which means that the default
+identity will be used.
 .It Cm GSSAPIDelegateCredentials
 Forward (delegate) credentials to the server.
 The default is
 .Cm no .
+.It Cm GSSAPIKeyExchange
+Specifies whether key exchange based on GSSAPI may be used. When using
+GSSAPI key exchange the server need not have a host key.
+The default is
+.Dq no .
+.It Cm GSSAPIRenewalForcesRekey
+If set to
+.Dq yes
+then renewal of the client's GSSAPI credentials will force the rekeying of the
+ssh connection. With a compatible server, this will delegate the renewed
+credentials to a session on the server.
+.Pp
+Checks are made to ensure that credentials are only propagated when the new
+credentials match the old ones on the originating client and where the
+receiving server still has the old set in its cache.
+.Pp
+The default is
+.Dq no .
+.Pp
+For this to work
+.Cm GSSAPIKeyExchange
+needs to be enabled in the server and also used by the client.
+.It Cm GSSAPIServerIdentity
+If set, specifies the GSSAPI server identity that ssh should expect when
+connecting to the server. The default is unset, which means that the
+expected GSSAPI server identity will be determined from the target
+hostname.
+.It Cm GSSAPITrustDns
+Set to
+.Dq yes
+to indicate that the DNS is trusted to securely canonicalize
+the name of the host being connected to. If
+.Dq no ,
+the hostname entered on the
+command line will be passed untouched to the GSSAPI library.
+The default is
+.Dq no .
+.It Cm GSSAPIKexAlgorithms
+The list of key exchange algorithms that are offered for GSSAPI
+key exchange. Possible values are
+.Bd -literal -offset 3n
+gss-gex-sha1-,
+gss-group1-sha1-,
+gss-group14-sha1-,
+gss-group14-sha256-,
+gss-group16-sha512-,
+gss-nistp256-sha256-,
+gss-curve25519-sha256-
+.Ed
+.Pp
+The default is
+.Dq gss-group14-sha256-,gss-group16-sha512-,gss-nistp256-sha256-,gss-curve25519-sha256-,gss-gex-sha1-,gss-group14-sha1- .
+This option only applies to connections using GSSAPI.
 .It Cm HashKnownHosts
 Indicates that
 .Xr ssh 1

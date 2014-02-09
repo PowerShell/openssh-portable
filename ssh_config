@@ -24,6 +24,8 @@
 #   HostbasedAuthentication no
 #   GSSAPIAuthentication no
 #   GSSAPIDelegateCredentials no
+#   GSSAPIKeyExchange no
+#   GSSAPITrustDNS no
 #   BatchMode no
 #   CheckHostIP no
 #   AddressFamily any

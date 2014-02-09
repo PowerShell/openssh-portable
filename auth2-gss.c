@@ -1,7 +1,7 @@
 /* $OpenBSD: auth2-gss.c,v 1.36 2024/05/17 04:42:13 djm Exp $ */
 
 /*
- * Copyright (c) 2001-2003 Simon Wilkinson. All rights reserved.
+ * Copyright (c) 2001-2007 Simon Wilkinson. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -51,12 +51,54 @@
 #define SSH_GSSAPI_MAX_MECHS	2048
 
 extern ServerOptions options;
+extern struct authmethod_cfg methodcfg_gsskeyex;
 extern struct authmethod_cfg methodcfg_gssapi;
 
 static int input_gssapi_token(int type, u_int32_t plen, struct ssh *ssh);
 static int input_gssapi_mic(int type, u_int32_t plen, struct ssh *ssh);
 static int input_gssapi_exchange_complete(int type, u_int32_t plen, struct ssh *ssh);
 static int input_gssapi_errtok(int, u_int32_t, struct ssh *);
+
+/*
+ * The 'gssapi_keyex' userauth mechanism.
+ */
+static int
+userauth_gsskeyex(struct ssh *ssh, const char *method)
+{
+	Authctxt *authctxt = ssh->authctxt;
+	int r, authenticated = 0;
+	struct sshbuf *b = NULL;
+	gss_buffer_desc mic, gssbuf;
+	u_char *p;
+	size_t len;
+
+	if ((r = sshpkt_get_string(ssh, &p, &len)) != 0 ||
+	    (r = sshpkt_get_end(ssh)) != 0)
+		fatal_fr(r, "parsing");
+
+	if ((b = sshbuf_new()) == NULL)
+		fatal_f("sshbuf_new failed");
+
+	mic.value = p;
+	mic.length = len;
+
+	ssh_gssapi_buildmic(b, authctxt->user, authctxt->service,
+	    "gssapi-keyex", ssh->kex->session_id);
+
+	if ((gssbuf.value = sshbuf_mutable_ptr(b)) == NULL)
+		fatal_f("sshbuf_mutable_ptr failed");
+	gssbuf.length = sshbuf_len(b);
+
+	/* gss_kex_context is NULL with privsep, so we can't check it here */
+	if (!GSS_ERROR(mm_ssh_gssapi_checkmic(gss_kex_context, &gssbuf, &mic)))
+		authenticated = mm_ssh_gssapi_userok(authctxt->user,
+		    authctxt->pw, 1);
+
+	sshbuf_free(b);
+	free(mic.value);
+
+	return (authenticated);
+}
 
 /*
  * We only support those mechanisms that we know about (ie ones that we know
@@ -267,7 +309,7 @@ input_gssapi_exchange_complete(int type, u_int32_t plen, struct ssh *ssh)
 	if ((r = sshpkt_get_end(ssh)) != 0)
 		fatal_fr(r, "parse packet");
 
-	authenticated = mm_ssh_gssapi_userok(authctxt->user);
+	authenticated = mm_ssh_gssapi_userok(authctxt->user, authctxt->pw, 1);
 
 	authctxt->postponed = 0;
 	ssh_dispatch_set(ssh, SSH2_MSG_USERAUTH_GSSAPI_TOKEN, NULL);
@@ -308,7 +350,8 @@ input_gssapi_mic(int type, u_int32_t plen, struct ssh *ssh)
 	gssbuf.length = sshbuf_len(b);
 
 	if (!GSS_ERROR(mm_ssh_gssapi_checkmic(gssctxt, &gssbuf, &mic)))
-		authenticated = mm_ssh_gssapi_userok(authctxt->user);
+		authenticated = mm_ssh_gssapi_userok(authctxt->user,
+		    authctxt->pw, 0);
 	else
 		logit("GSSAPI MIC check failed");
 
@@ -323,6 +366,11 @@ input_gssapi_mic(int type, u_int32_t plen, struct ssh *ssh)
 	userauth_finish(ssh, authenticated, "gssapi-with-mic", NULL);
 	return 0;
 }
+
+Authmethod method_gsskeyex = {
+	&methodcfg_gsskeyex,
+	userauth_gsskeyex,
+};
 
 Authmethod method_gssapi = {
 	&methodcfg_gssapi,
