@@ -185,7 +185,8 @@ function Start-SSHBootstrap
     if (-not ($machinePath.ToLower().Contains($nativeMSBuildPath.ToLower())))
     {
         Write-BuildMsg -AsVerbose -Message "Adding $nativeMSBuildPath to Path environment variable"
-        $newMachineEnvironmentPath = "$nativeMSBuildPath;$newMachineEnvironmentPath"
+        $newMachineEnvironmentPath += ";$nativeMSBuildPath"
+        $env:Path += ";$nativeMSBuildPath"
     }
     else
     {
@@ -199,15 +200,15 @@ function Start-SSHBootstrap
     }
 
     # install nasm
-    $nsamPath = Join-Path $env:USERPROFILE -ChildPath 'appdata\local\NASM'    
-    if (-not (Test-Path -Path $nsamPath -PathType Container))
+    $nasmPath = Join-Path $env:USERPROFILE -ChildPath 'appdata\local\NASM'    
+    if (-not (Test-Path -Path $nasmPath -PathType Container))
     {
         Write-BuildMsg -AsInfo -Message "NASM not present. Installing NASM."        
         choco install nasm -y --force  --execution-timeout 10000 
     }
     else
     {
-        Write-BuildMsg -AsVerbose -Message "$nsam present. Skipping installation."
+        Write-BuildMsg -AsVerbose -Message "$nasmPath present. Skipping installation."
     }
 
     # Install Visual Studio 2015 Community
@@ -239,6 +240,7 @@ function Start-SSHBootstrap
     {
         Write-BuildMsg -AsError -ErrorAction Stop -Message "Cannot find Visual Studio 2015 Environment variable VS140COMNTOOlS"
     }
+
     $item = Get-Item(Join-Path -Path $env:VS140COMNTOOLS -ChildPath '../../vc')
 
     $script:vcPath = $item.FullName
@@ -282,8 +284,8 @@ function Start-SSHBuild
         Remove-Item -Path $script:BuildLogFile
     }
 
-    Write-Information -MessageData "Starting Open SSH build." -InformationAction Continue
-    Write-Information -MessageData "Build Log: $($script:BuildLogFile)" -InformationAction Continue
+    Write-BuildMsg -AsInfo -Message "Starting Open SSH build."
+    Write-BuildMsg -AsInfo -Message "Build Log: $($script:BuildLogFile)"
 
     Start-SSHBootstrap
     $msbuildCmd = "msbuild.exe"
