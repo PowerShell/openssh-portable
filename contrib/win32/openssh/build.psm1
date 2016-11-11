@@ -200,7 +200,7 @@ function Start-SSHBootstrap
     }
 
     # install nasm
-    $nasmPath = Join-Path $env:USERPROFILE -ChildPath 'appdata\local\NASM'    
+    $nasmPath = Join-Path "${env:ProgramFiles(x86)}\NASM"   
     if (-not (Test-Path -Path $nasmPath -PathType Container))
     {
         Write-BuildMsg -AsInfo -Message "NASM not present. Installing NASM."        
@@ -217,9 +217,8 @@ function Start-SSHBootstrap
 
     if ($null -eq $VSPackageInstalled)
     {
-        Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName."
-        $adminFilePath = "$script:dscRepositoryRoot\tools\VSDeploymentWithBuildToolsDeployment.xml"
-        choco install $packageName -packageParameters "--AdminFile $adminFilePath" -y --force  --execution-timeout 10000
+        Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName."        
+        choco install $packageName -y --force  --execution-timeout 10000
     }
     else
     {
