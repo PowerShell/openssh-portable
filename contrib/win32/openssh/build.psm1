@@ -200,7 +200,7 @@ function Start-SSHBootstrap
     }
 
     # install nasm
-    $nasmPath = Join-Path "${env:ProgramFiles(x86)}\NASM"   
+    $nasmPath = "${env:ProgramFiles(x86)}\NASM"   
     if (-not (Test-Path -Path $nasmPath -PathType Container))
     {
         Write-BuildMsg -AsInfo -Message "NASM not present. Installing NASM."        
@@ -218,7 +218,7 @@ function Start-SSHBootstrap
     if ($null -eq $VSPackageInstalled)
     {
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName."        
-        choco install $packageName -y --force  --execution-timeout 10000
+        choco install $packageName -y --force --execution-timeout 10000
     }
     else
     {
@@ -234,7 +234,7 @@ function Start-SSHBootstrap
         exit
     }
 
-    # Ensure the VS C toolset is installed
+    <# Ensure the VS C toolset is installed
     if ($null -eq $env:VS140COMNTOOLS)
     {
         Write-BuildMsg -AsError -ErrorAction Stop -Message "Cannot find Visual Studio 2015 Environment variable VS140COMNTOOlS"
@@ -247,7 +247,7 @@ function Start-SSHBootstrap
     if ((Test-Path -Path $vcPath\vcvarsall.bat) -eq $false)
     {
         Write-BuildMsg -AsError -ErrorAction Stop -Message "Could not find Visual Studio vcvarsall.bat at" + $vcPath
-    }
+    }#>
 
     $repositoryRoot = Get-RepositoryRoot
 
