@@ -4,7 +4,6 @@ Set-StrictMode -Version Latest
 [string] $script:vcPlatform = $script:platform
 [string] $script:vcPath = $null
 [System.IO.DirectoryInfo] $script:OpenSSHRoot = $null
-[string] $script:OpenSSHRepoUrl = 'https://github.com/PowerShell/openssh-portable'
 [bool] $script:Verbose = $false
 [string] $script:BuildLogFile = $null
 
@@ -200,15 +199,17 @@ function Start-SSHBootstrap
     }
 
     # install nasm
-    $nasmPath = "${env:ProgramFiles(x86)}\NASM"   
+    $packageName = "nasm"
+    $nasmPath = "${env:ProgramFiles(x86)}\NASM"
+
     if (-not (Test-Path -Path $nasmPath -PathType Container))
     {
-        Write-BuildMsg -AsInfo -Message "NASM not present. Installing NASM."        
-        choco install nasm -y --force  --execution-timeout 10000 
+        Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName."        
+        choco install $packageName -y --force  --execution-timeout 10000 
     }
     else
     {
-        Write-BuildMsg -AsVerbose -Message "$nasmPath present. Skipping installation."
+        Write-BuildMsg -AsVerbose -Message "$packageName present. Skipping installation."
     }
 
     # Install Visual Studio 2015 Community
@@ -217,24 +218,39 @@ function Start-SSHBootstrap
 
     if ($null -eq $VSPackageInstalled)
     {
-        Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName."        
-        choco install $packageName -y --force --execution-timeout 10000
+        Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName." 
+        $adminFilePath = "$script:OpenSSHRoot\contrib\win32\openssh\VSWithBuildTools.xml"
+        choco install $packageName -packageParameters "--AdminFile $adminFilePath" -y --force  --execution-timeout 10000
     }
     else
     {
         Write-BuildMsg -AsVerbose -Message "$packageName present. Skipping installation."
-    }    
+    }
+
+    # Install Windows 8.1 SDK
+    $packageName = "windows-sdk-8.1"
+    $sdkPath = "C:\Program Files (x86)\Windows Kits\8.1\bin\x86\register_app.vbs"
+
+    if (-not (Test-Path -Path $sdkPath))
+    {
+        Write-BuildMsg -AsInfo  -Message "Windows 8.1 SDK not present. Installing $packageName."
+        choco install $packageName -y
+    }
+    else
+    {
+        Write-BuildMsg -AsInfo -Message "$packageName present. Skipping installation." -Silent:$silent
+    }
 
     # Require restarting PowerShell session
     if ($null -eq $VSPackageInstalled)
     {
-        Write-Host "To apply changes, please close this PowerShell window, open a new one and call Start-DscBuild or Start-DscBootstrap again." -ForegroundColor Black -BackgroundColor Yellow
+        Write-Host "To apply changes, please close this PowerShell window, open a new one and call Start-SSHBuild or Start-DscBootstrap again." -ForegroundColor Black -BackgroundColor Yellow
         Write-Host -NoNewLine 'Press any key to close this PowerShell window...' -ForegroundColor Black -BackgroundColor Yellow
         $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
         exit
     }
 
-    <# Ensure the VS C toolset is installed
+    # Ensure the VS C toolset is installed
     if ($null -eq $env:VS140COMNTOOLS)
     {
         Write-BuildMsg -AsError -ErrorAction Stop -Message "Cannot find Visual Studio 2015 Environment variable VS140COMNTOOlS"
@@ -247,7 +263,7 @@ function Start-SSHBootstrap
     if ((Test-Path -Path $vcPath\vcvarsall.bat) -eq $false)
     {
         Write-BuildMsg -AsError -ErrorAction Stop -Message "Could not find Visual Studio vcvarsall.bat at" + $vcPath
-    }#>
+    }
 
     $repositoryRoot = Get-RepositoryRoot
 
