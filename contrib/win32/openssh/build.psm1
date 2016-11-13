@@ -294,7 +294,7 @@ function Start-SSHBuild
         $script:Verbose =  ($PSBoundParameters['Verbose']).IsPresent
     }    
 
-    $script:BuildLogFile = Get-BuildLogFile -root $repositoryRoot -Configuration $Configuration -NativeHostArch $NativeHostArch
+    $script:BuildLogFile = Get-BuildLogFile -root $repositoryRoot.FullName -Configuration $Configuration -NativeHostArch $NativeHostArch
     if (Test-Path -Path $script:BuildLogFile)
     {
         Remove-Item -Path $script:BuildLogFile
@@ -305,7 +305,8 @@ function Start-SSHBuild
 
     Start-SSHBootstrap
     $msbuildCmd = "msbuild.exe"
-    $cmdMsg = @("Win32-OpenSSH.sln", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic", "/noconsolelogger")    
+    $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
+    $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic", "/noconsolelogger")    
 
     Write-Information -MessageData $msbuildCmd
     Write-Information -MessageData $cmdMsg    
@@ -320,7 +321,6 @@ function Start-SSHBuild
 
     Write-BuildMsg -AsVerbose -Message "Finished Open SSH build."
 }
-
 
 function Get-BuildLogFile
 {
@@ -338,6 +338,17 @@ function Get-BuildLogFile
         
     )    
     return Join-Path -Path $root -ChildPath "contrib\win32\openssh\OpenSSH$($Configuration)$($NativeHostArch).log"    
+}
+
+function Get-SolutionFile
+{
+    param
+    (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNull()]
+        [System.IO.DirectoryInfo] $root        
+    )    
+    return Join-Path -Path $root -ChildPath "contrib\win32\openssh\Win32-OpenSSH.sln"    
 }
 
 <#
