@@ -262,7 +262,7 @@ function Start-SSHBootstrap
 
     $script:vcPath = $item.FullName
     Write-BuildMsg -AsVerbose -Message "vcPath: $script:vcPath"
-    if ((Test-Path -Path $($script:vcPath)\vcvarsall.bat) -eq $false)
+    if ((Test-Path -Path "$script:vcPath\vcvarsall.bat") -eq $false)
     {
         Write-BuildMsg -AsError -ErrorAction Stop -Message "Could not find Visual Studio vcvarsall.bat at" + $script:vcPath
     }
