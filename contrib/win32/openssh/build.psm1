@@ -1,7 +1,6 @@
 ﻿
 Set-StrictMode -Version Latest
 [string] $script:platform = $env:PROCESSOR_ARCHITECTURE
-[string] $script:vcPlatform = $script:platform
 [string] $script:vcPath = $null
 [System.IO.DirectoryInfo] $script:OpenSSHRoot = $null
 [bool] $script:Verbose = $false
@@ -140,11 +139,14 @@ function Start-SSHBootstrap
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
     $newMachineEnvironmentPath = $machinePath
 
+    # NOTE: Unless -Verbose is specified, most informational output will only go to the log file.
+    [bool] $silent = -not $script:Verbose
+
     # Install chocolatey
     $chocolateyPath = "$env:AllUsersProfile\chocolatey\bin"
     if(Get-Command "choco" -ErrorAction SilentlyContinue)
     {
-        Write-BuildMsg -AsVerbose -Message "Chocolatey is already installed. Skipping installation."
+        Write-BuildMsg -AsVerbose -Message "Chocolatey is already installed. Skipping installation." -Silent:$silent
     }
     else
     {
@@ -172,7 +174,7 @@ function Start-SSHBootstrap
     }
     else
     {
-        Write-BuildMsg -AsVerbose -Message "$gitCmdPath already present in Path environment variable"
+        Write-BuildMsg -AsVerbose -Message "$gitCmdPath already present in Path environment variable" -Silent:$silent
     }
 
     $nativeMSBuildPath = "${env:ProgramFiles(x86)}\MSBuild\14.0\bin"
@@ -189,7 +191,7 @@ function Start-SSHBootstrap
     }
     else
     {
-        Write-BuildMsg -AsVerbose -Message "$nativeMSBuildPath already present in Path environment variable"
+        Write-BuildMsg -AsVerbose -Message "$nativeMSBuildPath already present in Path environment variable" -Silent:$silent
     }
 
     # Update machine environment path
@@ -209,7 +211,7 @@ function Start-SSHBootstrap
     }
     else
     {
-        Write-BuildMsg -AsVerbose -Message "$packageName present. Skipping installation."
+        Write-BuildMsg -AsVerbose -Message "$packageName present. Skipping installation." -Silent:$silent
     }
 
     # Install Visual Studio 2015 Community
@@ -224,7 +226,7 @@ function Start-SSHBootstrap
     }
     else
     {
-        Write-BuildMsg -AsVerbose -Message "$packageName present. Skipping installation."
+        Write-BuildMsg -AsVerbose -Message "$packageName present. Skipping installation." -Silent:$silent
     }
 
     # Install Windows 8.1 SDK
@@ -260,15 +262,10 @@ function Start-SSHBootstrap
 
     $script:vcPath = $item.FullName
     Write-BuildMsg -AsVerbose -Message "vcPath: $script:vcPath"
-    if ((Test-Path -Path $vcPath\vcvarsall.bat) -eq $false)
+    if ((Test-Path -Path $($script:vcPath)\vcvarsall.bat) -eq $false)
     {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "Could not find Visual Studio vcvarsall.bat at" + $vcPath
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "Could not find Visual Studio vcvarsall.bat at" + $script:vcPath
     }
-
-    $repositoryRoot = Get-RepositoryRoot
-
-    # Get openssh-portable root    
-    $script:OpenSSHRoot = Get-Item -Path $repositoryRoot
 }
 
 
@@ -288,6 +285,10 @@ function Start-SSHBuild
     $script:BuildLogFile = $null
 
     [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
+
+    # Get openssh-portable root    
+    $script:OpenSSHRoot = Get-Item -Path $repositoryRoot.FullName
+
     if($PSBoundParameters.ContainsKey("Verbose"))
     {
         $script:Verbose =  ($PSBoundParameters['Verbose']).IsPresent
@@ -362,7 +363,7 @@ function Get-RepositoryRoot
         $path = Join-Path -Path $currentDir.FullName -ChildPath '.git'
         if (Test-Path -Path $path)
         {
-            return $currentDir.FullName
+            return $currentDir
         }
         $currentDir = $currentDir.Parent
     }
@@ -370,4 +371,4 @@ function Get-RepositoryRoot
     throw new-object System.IO.DirectoryNotFoundException("Could not find the root of the GIT repository")
 }
 
-Export-ModuleMember -Function Start-SSHBuild
+Export-ModuleMember -Function Start-SSHBuild, Get-RepositoryRoot
