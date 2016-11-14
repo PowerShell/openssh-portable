@@ -271,8 +271,7 @@ function Start-SSHBootstrap
 
 function Start-SSHBuild
 {
-    #[CmdletBinding(SupportsShouldProcess=$false)]
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess=$false)]    
     param
     (        
         [ValidateSet('x86', 'x64')]
@@ -306,7 +305,7 @@ function Start-SSHBuild
     Start-SSHBootstrap
     $msbuildCmd = "msbuild.exe"
     $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
-    $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic", "/noconsolelogger")    
+    $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
 
     Write-Information -MessageData $msbuildCmd
     Write-Information -MessageData $cmdMsg    
@@ -382,4 +381,4 @@ function Get-RepositoryRoot
     throw new-object System.IO.DirectoryNotFoundException("Could not find the root of the GIT repository")
 }
 
-Export-ModuleMember -Function Start-SSHBuild, Get-RepositoryRoot
+Export-ModuleMember -Function Start-SSHBuild, Get-RepositoryRoot, Get-BuildLogFile
