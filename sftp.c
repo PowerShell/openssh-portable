@@ -870,12 +870,9 @@ do_ls_dir(struct sftp_conn *conn, const char *path,
 		tmp = path_strip(path, strip_path);
 		m += strlen(tmp);
 		free(tmp);
-#ifdef WINDOWS
-        width = ConScreenSizeX();
-#else
+
 		if (ioctl(fileno(stdin), TIOCGWINSZ, &ws) != -1)
 			width = ws.ws_col;
-#endif
 		columns = width / (m + 2);
 		columns = MAX(columns, 1);
 		colspace = width / columns;
@@ -997,12 +994,8 @@ do_globbed_ls(struct sftp_conn *conn, const char *path,
 		return err;
 	}
 	
-#ifdef WINDOWS
-    width = ConScreenSizeX();
-#else
 	if (ioctl(fileno(stdin), TIOCGWINSZ, &ws) != -1)
 		width = ws.ws_col;
-#endif
 
 	if (!(lflag & LS_SHORT_VIEW)) {
 		/* Count entries for sort and find longest filename */
@@ -2391,7 +2384,7 @@ connect_to_server(char *path, char **args, int *in, int *out)
 		char fullCmd[MAX_PATH] = { 0 };
 		char ioArg[1024] = { 0 };
 		PROCESS_INFORMATION pi = { 0 };
-		STARTUPINFO si = { 0 };
+		STARTUPINFOW si = { 0 };
 
 		debug3("Generating ssh-client command...");
                 fullCmd[0] = '\0';

@@ -2442,10 +2442,6 @@ channel_input_extended_data(int type, u_int32_t seq, void *ctxt)
 	char *data;
 	u_int data_len, tcode;
 	Channel *c;
-#ifdef WIN32_FIXME
-        char *respbuf = NULL;
-        size_t resplen = 0;
-#endif
 
 	/* Get the channel number and verify it. */
 	id = packet_get_int();
@@ -2481,20 +2477,7 @@ channel_input_extended_data(int type, u_int32_t seq, void *ctxt)
 	}
 	debug2("channel %d: rcvd ext data %d", c->self, data_len);
 	c->local_window -= data_len;
-	#ifndef WIN32_FIXME//N
 	buffer_append(&c->extended, data, data_len);
-	#else
-        if (c->client_tty) {
-                if (telProcessNetwork(data, data_len, &respbuf, &resplen) > 0) // run it by ANSI engine if it is the ssh client
-                        buffer_append(&c->extended, data, data_len);
-
-                if (respbuf != NULL) {
-                        sshbuf_put(&c->input, respbuf, resplen);
-                }
-        }
-	else
-		buffer_append(&c->extended, data, data_len);
-	#endif
 	free(data);
 	return 0;
 }
@@ -3901,20 +3884,11 @@ channel_send_window_changes(void)
 		    channels[i]->type != SSH_CHANNEL_OPEN)
 			continue;
 #ifndef WIN32_FIXME
-		if (ioctl(channels[i]->rfd, TIOCGWINSZ, &ws) < 0)
-			continue
-#else
-		{
-			CONSOLE_SCREEN_BUFFER_INFO c_info;
-			/* TODO - Fix this for multiple channels*/
-			if (!GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &c_info))
-				continue;
-			ws.ws_col = c_info.dwSize.X;
-			ws.ws_row = c_info.dwSize.Y;
-			ws.ws_xpixel = 640;
-			ws.ws_ypixel = 480;
-		}
+                /* TODO - Fix this for multiple channels*/
 #endif
+                if (ioctl(channels[i]->rfd, TIOCGWINSZ, &ws) < 0)
+                        continue;
+
 		channel_request_start(i, "window-change", 0);
 		packet_put_int((u_int)ws.ws_col);
 		packet_put_int((u_int)ws.ws_row);

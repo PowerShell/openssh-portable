@@ -114,13 +114,6 @@
 #include "ssh-pkcs11.h"
 #endif
 
-#ifdef WIN32_FIXME
-  #include <sys/stat.h>
-
-  char dotsshdir[MAX_PATH];
-
-#endif /* WIN32_FIXME */
-
 extern char *__progname;
 
 /* Saves a copy of argv for setproctitle emulation */
@@ -733,11 +726,7 @@ main(int ac, char **av)
                     strerror(errno));
                 break;
             }
-#ifdef WIN32_FIXME
-            add_identity_file(&options, NULL, 1, pw);
-#else
-            add_identity_file(&options, NULL, 1);
-#endif
+            add_identity_file(&options, NULL, p, 1);
             break;
         case 'I':
 #ifdef ENABLE_PKCS11
@@ -774,13 +763,8 @@ main(int ac, char **av)
                 }
                 break;
         case 'V':
-#ifndef WIN32_FIXME
-            fprintf(stderr, "%s, %s\n",
-                SSH_RELEASE,
-#else
             fprintf(stderr, "%s %s, %s\n",
                 SSH_RELEASE, __DATE__,
-#endif
 #ifdef WITH_OPENSSL
                 SSLeay_version(SSLEAY_VERSION)
 #else
@@ -980,12 +964,6 @@ main(int ac, char **av)
 		}
 		ac--, av++;
 	}
-  #ifdef WIN32_FIXME
- 	// create various Windows user home directory based file names
-    sprintf(dotsshdir,"%s\\%s", pw->pw_dir, _PATH_SSH_USER_DIR );
-    _mkdir(dotsshdir); //this base directory for the user is needed
-
-  #endif
 
 	/* Check that we got a host name. */
 	if (!host)
@@ -1118,12 +1096,7 @@ main(int ac, char **av)
 	}
 
 	/* Fill configuration defaults. */
-	#ifndef WIN32_FIXME
 	fill_default_options(&options);
-	#else
-	fill_default_options(&options, pw);
-	#endif
-
 
 	/*
 	 * If ProxyJump option specified, then construct a ProxyCommand now.
@@ -1413,10 +1386,8 @@ main(int ac, char **av)
 #endif
 		}
 	}
-#ifdef WIN32_FIXME
-  SetFileAttributes(buf, FILE_ATTRIBUTE_HIDDEN);
-#endif
-	/* load options.identity_files */
+
+        /* load options.identity_files */
 	load_public_identity_files();
 
 	/* optionally set the SSH_AUTHSOCKET_ENV_NAME varibale */
@@ -1480,34 +1451,11 @@ main(int ac, char **av)
 		options.certificate_files[i] = NULL;
 	}
 	
-    #ifdef WIN32_FIXME
-	if (tty_flag) {
-		//AllocConsole();
-	    ConInputInitParams(); // init the Console input side with global parameters
-	    ConInit(STD_OUTPUT_HANDLE, TRUE); //init the output console surface for us to write
-        ConClearScreen();
-	}
-	else {
-		//extern int glob_itissshclient;
-		//glob_itissshclient = 1; // tell our contrib/win32/win32compat/socket.c code it is for ssh client side
-	}
-	#endif
-
 	exit_status = compat20 ? ssh_session2() : ssh_session();
 	packet_close();
 
 	if (options.control_path != NULL && muxserver_sock != -1)
 		unlink(options.control_path);
-
-  /*
-   * Windows specific Cleanup.
-   */
-   
-#ifdef WIN32_FIXME
-  
-	if (tty_flag)
-		ConUnInit(); // restore terminal to previous settings if it was a tty session
-#endif
 
 	/* Kill ProxyCommand if it is running. */
 	ssh_kill_proxy_command();
@@ -1518,7 +1466,7 @@ main(int ac, char **av)
 static void
 control_persist_detach(void)
 {
-#ifndef WIN32_FIXME//R
+#ifndef WINDOWS
 	pid_t pid;
 	int devnull, keep_stderr;
 
@@ -1562,7 +1510,7 @@ control_persist_detach(void)
 	daemon(1, 1);
 	setproctitle("%s [mux]", options.control_path);
 #else
-	fatal("not supported in Windows");
+	fatal("ControlMaster is not supported in Windows");
 #endif
 }
 
@@ -1805,22 +1753,12 @@ ssh_session(void)
 		packet_put_cstring(cp);
 
 		/* Store window size in the packet. */
-
-  #ifdef WIN32_FIXME
-  
-    packet_put_int((u_int) 25);  /*row*/
-    packet_put_int((u_int) 80);  /*col*/
-    packet_put_int((u_int) 640); /*xpixel*/
-    packet_put_int((u_int) 480); /*ypixel*/
-
-  #else
-		if (ioctl(fileno(stdin), TIOCGWINSZ, &ws) < 0)
+                if (ioctl(fileno(stdin), TIOCGWINSZ, &ws) < 0)
 			memset(&ws, 0, sizeof(ws));
 		packet_put_int((u_int)ws.ws_row);
 		packet_put_int((u_int)ws.ws_col);
 		packet_put_int((u_int)ws.ws_xpixel);
 		packet_put_int((u_int)ws.ws_ypixel);
-#endif
 
 		/* Store tty modes in the packet. */
 		tty_make_modes(fileno(stdin), NULL);
