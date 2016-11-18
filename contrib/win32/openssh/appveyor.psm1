@@ -92,10 +92,10 @@ function Invoke-MSIEXEC
     )
     $process = Start-Process -FilePath msiexec.exe -ArgumentList $arguments -Wait -PassThru
     if ($process.ExitCode -eq 0){
-        Write-Verbose "$InstallFile has been successfully installed"
+        Write-host "$InstallFile has been successfully installed"
     }
     else {
-        Write-Verbose  "installer exit code  $($process.ExitCode) for file  $($InstallFile)"
+        Write-host  "installer exit code  $($process.ExitCode) for file  $($InstallFile)"
     }
   
   return $process.ExitCode
@@ -111,11 +111,11 @@ function Install-PSCore
   param()
   $downloadLocation = Download-PSCoreMSI
     
-  Write-Verbose "Installing PSCore ..."
+  Write-host "Installing PSCore ..."
   if(-not [string]::IsNullOrEmpty($downloadLocation))
   {
     $processExitCode = Invoke-MSIEXEC -InstallFile $downloadLocation
-    Write-Verbose "Process exitcode: $processExitCode"
+    Write-host "Process exitcode: $processExitCode"
   }
 }
 
@@ -159,6 +159,7 @@ function Download-PSCoreMSI
     $url = Get-PSCoreMSILocation
     if([string]::IsNullOrEmpty($url))
     {
+        Write-Host "url is empty"
         return ''
     }
     $parsed = $url.Substring($url.LastIndexOf("/") + 1)
