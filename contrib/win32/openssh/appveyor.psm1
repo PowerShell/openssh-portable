@@ -107,8 +107,6 @@ function Invoke-MSIEXEC
 #>
 function Install-PSCoreFromGithub
 {
-  [CmdletBinding()]
-  param()
   $downloadLocation = Download-PSCoreMSI
     
   Write-host "Installing PSCore ..."
