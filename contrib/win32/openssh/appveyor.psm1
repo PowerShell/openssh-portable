@@ -478,21 +478,13 @@ function Run-OpenSSHTests
   param
   (    
       [string] $testResultsFile = "$env:SystemDrive\OpenSSH\TestResults.xml",
-      [string] $testInstallFolder = "$env:SystemDrive\OpenSSH",       
-      [switch] $uploadResults
+      [string] $testInstallFolder = "$env:SystemDrive\OpenSSH"      
   )
 
   Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder
 
   # Run all tests.
-  Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile
-
-  # UploadResults if specified.
-  if ($uploadResults -and $env:APPVEYOR_JOB_ID)
-  {
-      #(New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", (Resolve-Path $testResultsFile))
-      Invoke-WebRequest -Uri "https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)" -Method Post -InFile $testResultsFile
-  }
+  Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile  
 
   $xml = [xml](Get-Content -raw $testResultsFile) 
   if ([int]$xml.'test-results'.failures -gt 0) 
@@ -505,4 +497,20 @@ function Run-OpenSSHTests
   { 
       $Error| Out-File "$env:SystemDrive\OpenSSH\TestError.txt" -Append
   }
+}
+
+function Upload-OpenSSHTestResults
+{  
+  [CmdletBinding()]
+  param
+  (    
+      [string] $testResultsFile = "$env:SystemDrive\OpenSSH\TestResults.xml"
+  )  
+
+  # UploadResults if specified.
+  if ($env:APPVEYOR_JOB_ID)
+  {
+      (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", (Resolve-Path $testResultsFile))      
+  }
+ 
 }
