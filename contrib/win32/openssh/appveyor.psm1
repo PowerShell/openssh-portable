@@ -65,10 +65,10 @@ function Invoke-AppVeyorFull
 # Implements the AppVeyor 'build_script' step
 function Invoke-AppVeyorBuild
 {  
-      Start-SSHBuild -Configuration Release -NativeHostArch x64 -Verbose
+      #Start-SSHBuild -Configuration Release -NativeHostArch x64 -Verbose
       Start-SSHBuild -Configuration Debug -NativeHostArch x64 -Verbose
-      Start-SSHBuild -Configuration Release -NativeHostArch x86 -Verbose
-      Start-SSHBuild -Configuration Debug -NativeHostArch x86 -Verbose
+      #Start-SSHBuild -Configuration Release -NativeHostArch x86 -Verbose
+      #Start-SSHBuild -Configuration Debug -NativeHostArch x86 -Verbose
 }
 
 <#
@@ -105,7 +105,7 @@ function Invoke-MSIEXEC
     .Synopsis
     This function installs PSCore MSI on the AppVeyor build machine
 #>
-function Install-PSCore
+function Install-PSCoreFromGithub
 {
   [CmdletBinding()]
   param()
@@ -197,16 +197,16 @@ function Install-TestDependencies
     $isModuleAvailable = Get-Module 'Pester' -ListAvailable
     if (-not ($isModuleAvailable))
     {
-      Write-Verbose 'Installing Pester...'
+      Write-Host 'Installing Pester...'
       choco install Pester -y --force
     }
 
     if ( -not (Test-Path "$env:ProgramData\chocolatey\lib\sysinternals\tools" ) ) {
-        Write-Verbose "sysinternals not present. Installing sysinternals."
+        Write-Host "sysinternals not present. Installing sysinternals."
         choco install sysinternals -y            
     }
-
-    Install-PSCore
+    Write-Host "Installing pscore..."
+    Install-PSCoreFromGithub
 }
 <#
     .Synopsis
