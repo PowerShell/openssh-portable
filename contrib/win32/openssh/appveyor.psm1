@@ -112,8 +112,11 @@ function Install-PSCore
   $downloadLocation = Download-PSCoreMSI
     
   Write-Verbose "Installing PSCore ..."
-  $processExitCode = Invoke-MSIEXEC -InstallFile $downloadLocation
-  Write-Verbose "Process exitcode: $processExitCode"
+  if(-not [string]::IsNullOrEmpty($downloadLocation))
+  {
+    $processExitCode = Invoke-MSIEXEC -InstallFile $downloadLocation
+    Write-Verbose "Process exitcode: $processExitCode"
+  }
 }
 
 <#
@@ -154,6 +157,10 @@ function Get-PSCoreMSILocation
 function Download-PSCoreMSI
 {
     $url = Get-PSCoreMSILocation
+    if([string]::IsNullOrEmpty($url))
+    {
+        return ''
+    }
     $parsed = $url.Substring($url.LastIndexOf("/") + 1)
     if(-not (Test-path "$env:SystemDrive\PScore" -PathType Container))
     {
