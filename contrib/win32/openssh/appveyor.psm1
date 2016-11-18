@@ -72,6 +72,110 @@ function Invoke-AppVeyorBuild
 }
 
 <#
+    .Synopsis
+    This function invokes msiexec.exe to install PSCore on the AppVeyor build machine
+#>
+function Invoke-MSIEXEC
+{
+  [CmdletBinding()]  
+  param(
+    [Parameter(Mandatory=$true)]
+    [string] $InstallFile
+  )
+
+    Write-Verbose "Installing $InstallFile..."
+    $arguments = @(
+    "/i"
+    "`"$InstallFile`""
+    "/qn"
+    "/norestart"
+    )
+    $process = Start-Process -FilePath msiexec.exe -ArgumentList $arguments -Wait -PassThru
+    if ($process.ExitCode -eq 0){
+        Write-Verbose "$InstallFile has been successfully installed"
+    }
+    else {
+        Write-Verbose  "installer exit code  $($process.ExitCode) for file  $($InstallFile)"
+    }
+  
+  return $process.ExitCode
+}
+
+<#
+    .Synopsis
+    This function installs PSCore MSI on the AppVeyor build machine
+#>
+function Install-PSCore
+{
+  [CmdletBinding()]
+  param()
+  $downloadLocation = Download-PSCoreMSI
+    
+  Write-Verbose "Installing PSCore ..."
+  $processExitCode = Invoke-MSIEXEC -InstallFile $downloadLocation
+  Write-Verbose "Process exitcode: $processExitCode"
+}
+
+<#
+    .Synopsis
+    Retuns MSI location for PSCore for Win10, Windows 8.1 and 2012 R2
+#>
+function Get-PSCoreMSILocation
+{
+  $osversion = ([String][Environment]::OSVersion.Version).Substring(0, 10)
+  if($osversion.StartsWith("6.3"))
+  {
+      if ($($env:PROCESSOR_ARCHITECTURE).Contains('64'))
+      {
+        return 'https://github.com/PowerShell/PowerShell/releases/download/v6.0.0-alpha.12/PowerShell_6.0.0.12-alpha.12-win81-x64.msi'
+      }
+      else
+      {
+        return   ''
+      }
+  }
+  elseif ($osversion.StartsWith("10.0"))
+  {
+    if ($($env:PROCESSOR_ARCHITECTURE).Contains('64'))
+      {
+        return 'https://github.com/PowerShell/PowerShell/releases/download/v6.0.0-alpha.12/PowerShell_6.0.0.12-alpha.12-win10-x64.msi'
+      }
+      else
+      {
+        return   ''
+      }
+  }
+}
+
+<#
+    .Synopsis
+    This functions downloads MSI and returns the path where the file is downloaded.
+#>
+function Download-PSCoreMSI
+{
+    $url = Get-PSCoreMSILocation
+    $parsed = $url.Substring($url.LastIndexOf("/") + 1)
+    if(-not (Test-path "$env:SystemDrive\PScore" -PathType Container))
+    {
+        New-Item -ItemType Directory -Force -Path "$env:SystemDrive\PScore" | out-null 
+    }
+    $downloadLocation = "$env:SystemDrive\PScore\$parsed"
+    if(-not (Test-path $downloadLocation -PathType Leaf))
+    {
+        Invoke-WebRequest -Uri $url -OutFile $downloadLocation -ErrorVariable v
+    }
+
+    if ($v)
+    {
+        throw "Failed to download PSCore MSI package from $url"
+    }
+    else
+    {
+        return $downloadLocation
+    }
+}
+
+<#
       .SYNOPSIS
       This function installs the tools required by our tests
       1) Pester for running the tests  
@@ -93,6 +197,8 @@ function Install-TestDependencies
         Write-Verbose "sysinternals not present. Installing sysinternals."
         choco install sysinternals -y            
     }
+
+    Install-PSCore
 }
 <#
     .Synopsis
@@ -331,12 +437,12 @@ function Run-OpenSSHPesterTest
 {
     param($testRoot, $outputXml) 
      
-   # Discover all BVT and Unit tests and run them. 
-   Push-Location $testRoot 
-   $testFolders = Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique 
-   "<test/>" | Set-Content -Path $outputXml
-   #Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile  $outputXml -Tag "CI"
-   Pop-Location
+   # Discover all BVT and Unit tests and run them.
+    Push-Location $testRoot 
+    $testFolders = Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique 
+   
+    Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile  $outputXml -Tag 'CI'
+    Pop-Location
 }
 
 <#
