@@ -406,7 +406,7 @@ function Add-PackageArtifact
     $files = Get-Item -Path $packageFile
     if ($files -ne $null)
     {        
-        $files | % { $artifacts.Add($_.FullName) }
+        $files | % { $null = $artifacts.Add($_.FullName) }
     }
     else
     {

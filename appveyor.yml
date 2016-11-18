@@ -24,9 +24,7 @@ before_test:
 
 test_script:
   - ps: |
-      & "$env:ProgramFiles\PowerShell\6.0.0.12\powershell.exe"
-      Import-Module $env:APPVEYOR_BUILD_FOLDER\contrib\win32\openssh\AppVeyor.psm1
-      Run-OpenSSHTests -uploadResults
+      & "$env:ProgramFiles\PowerShell\6.0.0.12\powershell.exe" -Command {Import-Module $env:APPVEYOR_BUILD_FOLDER\contrib\win32\openssh\AppVeyor.psm1;Run-OpenSSHTests -uploadResults}
       
 on_finish:
   - ps: |
