@@ -14,6 +14,7 @@ build_script:
 
 before_test:
   - ps: Install-OpenSSH
+  - ps: Install-TestDependencies
   - ps: Write-Verbose "Restart computer ..."
   - ps: Restart-Computer -ComputerName localhost -Force
   - ps: Start-Sleep -s 5 # Needs to be proceeded with -ps: as it's interpreted by AppVeyor
