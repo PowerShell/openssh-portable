@@ -125,16 +125,14 @@ function Get-PSCoreMSIDownloadURL
 {
   $osversion = ([String][Environment]::OSVersion.Version).Substring(0, 10)
   Write-Host "osversion:$osversion"
-  if($osversion.StartsWith("6.3"))
+  if($osversion.StartsWith("6"))
   {
       if ($($env:PROCESSOR_ARCHITECTURE).Contains('64'))
       {
-        Write-Host "8.1 64"
         return 'https://github.com/PowerShell/PowerShell/releases/download/v6.0.0-alpha.12/PowerShell_6.0.0.12-alpha.12-win81-x64.msi'
       }
       else
       {
-        Write-Host "8.1 x86"
         return   ''
       }
   }
@@ -142,17 +140,13 @@ function Get-PSCoreMSIDownloadURL
   {
     if ($($env:PROCESSOR_ARCHITECTURE).Contains('64'))
       {
-        Write-Host "10 64"
         return 'https://github.com/PowerShell/PowerShell/releases/download/v6.0.0-alpha.12/PowerShell_6.0.0.12-alpha.12-win10-x64.msi'
       }
       else
-      {
-        Write-Host "10 x86"
+      {        
         return   ''
       }
   }
-  Write-Host "none of them"
-  return 'https://github.com/PowerShell/PowerShell/releases/download/v6.0.0-alpha.12/PowerShell_6.0.0.12-alpha.12-win81-x64.msi'
 }
 
 <#
