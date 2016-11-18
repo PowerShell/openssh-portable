@@ -121,17 +121,19 @@ function Install-PSCoreFromGithub
     .Synopsis
     Retuns MSI location for PSCore for Win10, Windows 8.1 and 2012 R2
 #>
-function Get-PSCoreMSILocation
+function Get-PSCoreMSIDownloadURL
 {
   $osversion = ([String][Environment]::OSVersion.Version).Substring(0, 10)
   if($osversion.StartsWith("6.3"))
   {
       if ($($env:PROCESSOR_ARCHITECTURE).Contains('64'))
       {
+        Write-Host "8.1 64"
         return 'https://github.com/PowerShell/PowerShell/releases/download/v6.0.0-alpha.12/PowerShell_6.0.0.12-alpha.12-win81-x64.msi'
       }
       else
       {
+        Write-Host "8.1 x86"
         return   ''
       }
   }
@@ -139,13 +141,17 @@ function Get-PSCoreMSILocation
   {
     if ($($env:PROCESSOR_ARCHITECTURE).Contains('64'))
       {
+        Write-Host "10 64"
         return 'https://github.com/PowerShell/PowerShell/releases/download/v6.0.0-alpha.12/PowerShell_6.0.0.12-alpha.12-win10-x64.msi'
       }
       else
       {
+        Write-Host "10 x86"
         return   ''
       }
   }
+  Write-Host "none of them"
+  return 'https://github.com/PowerShell/PowerShell/releases/download/v6.0.0-alpha.12/PowerShell_6.0.0.12-alpha.12-win81-x64.msi'
 }
 
 <#
@@ -154,7 +160,7 @@ function Get-PSCoreMSILocation
 #>
 function Download-PSCoreMSI
 {
-    $url = Get-PSCoreMSILocation
+    $url = Get-PSCoreMSIDownloadURL
     if([string]::IsNullOrEmpty($url))
     {
         Write-Host "url is empty"
