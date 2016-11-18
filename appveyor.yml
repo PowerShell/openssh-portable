@@ -13,8 +13,10 @@ build_script:
       Invoke-AppVeyorBuild
 
 before_test:
-  - ps: Install-OpenSSH
-  - ps: Install-TestDependencies
+  - ps: |
+      Import-Module $env:APPVEYOR_BUILD_FOLDER\contrib\win32\openssh\AppVeyor.psm
+      Install-OpenSSH
+      Install-TestDependencies
   - ps: Write-Verbose "Restart computer ..."
   - ps: Restart-Computer -ComputerName localhost -Force
   - ps: Start-Sleep -s 5 # Needs to be proceeded with -ps: as it's interpreted by AppVeyor
