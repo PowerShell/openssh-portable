@@ -47,10 +47,11 @@ function Invoke-AppVeyorFull
     {
         $env:APPVEYOR_SCHEDULED_BUILD = 'True'
     }
-    try {
-        #Invoke-AppVeyorInstall
+    try {        
         Invoke-AppVeyorBuild
         Install-OpenSSH
+        Install-TestDependencies
+        & "$env:ProgramFiles\PowerShell\6.0.0.12\powershell.exe" -Command {Import-Module $($repoRoot.FullName)\contrib\win32\openssh\AppVeyor.psm1;Run-OpenSSHTests -uploadResults}
         Run-OpenSSHTests -uploadResults
         Publish-Artifact        
     }
@@ -425,12 +426,11 @@ function Publish-Artifact
     [System.Collections.ArrayList] $artifacts = [System.Collections.ArrayList]::new()
     Add-PackageArtifact  -artifacts $artifacts -packageFile "$env:APPVEYOR_BUILD_FOLDER\Win32OpenSSH*.zip"
 
-    # Get the build.log file for each build configuration
-    [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
-    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repositoryRoot.FullName -Configuration Release -NativeHostArch x86)
-    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repositoryRoot.FullName -Configuration Debug -NativeHostArch x86)
-    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repositoryRoot.FullName -Configuration Release -NativeHostArch x64)
-    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repositoryRoot.FullName -Configuration Debug -NativeHostArch x64)
+    # Get the build.log file for each build configuration    
+    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Release -NativeHostArch x86)
+    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Debug -NativeHostArch x86)
+    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Release -NativeHostArch x64)
+    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Debug -NativeHostArch x64)
 
     foreach ($artifact in $artifacts)
     {
