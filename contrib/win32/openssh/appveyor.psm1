@@ -444,7 +444,7 @@ function Run-OpenSSHPesterTest
 {
     param($testRoot, $outputXml) 
      
-   # Discover all BVT and Unit tests and run them.
+   # Discover all CI tests and run them.
     Push-Location $testRoot 
     $testFolders = Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique 
    
@@ -490,7 +490,8 @@ function Run-OpenSSHTests
   # UploadResults if specified.
   if ($uploadResults -and $env:APPVEYOR_JOB_ID)
   {
-      (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", (Resolve-Path $testResultsFile))
+      #(New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", (Resolve-Path $testResultsFile))
+      Invoke-WebRequest -Uri "https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)" -Method Post -InFile $testResultsFile
   }
 
   $xml = [xml](Get-Content -raw $testResultsFile) 
