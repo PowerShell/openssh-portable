@@ -505,9 +505,8 @@ function Upload-OpenSSHTestResults
   param
   (    
       [string] $testResultsFile = "$env:SystemDrive\OpenSSH\TestResults.xml"
-  )  
-
-  # UploadResults if specified.
+  )
+  
   if ($env:APPVEYOR_JOB_ID)
   {
       (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", (Resolve-Path $testResultsFile))      
