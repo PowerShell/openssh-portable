@@ -52,7 +52,7 @@ function Invoke-AppVeyorFull
         Install-OpenSSH
         Install-TestDependencies
         & "$env:ProgramFiles\PowerShell\6.0.0.12\powershell.exe" -Command {Import-Module $($repoRoot.FullName)\contrib\win32\openssh\AppVeyor.psm1;Run-OpenSSHTests -uploadResults}
-        Run-OpenSSHTests -uploadResults
+        Run-OpenSSHTests
         Publish-Artifact        
     }
     finally {
