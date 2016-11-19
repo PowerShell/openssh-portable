@@ -66,10 +66,10 @@ function Invoke-AppVeyorFull
 # Implements the AppVeyor 'build_script' step
 function Invoke-AppVeyorBuild
 {  
-      #Start-SSHBuild -Configuration Release -NativeHostArch x64 -Verbose
+      Start-SSHBuild -Configuration Release -NativeHostArch x64 -Verbose
       Start-SSHBuild -Configuration Debug -NativeHostArch x64 -Verbose
-      #Start-SSHBuild -Configuration Release -NativeHostArch x86 -Verbose
-      #Start-SSHBuild -Configuration Debug -NativeHostArch x86 -Verbose
+      Start-SSHBuild -Configuration Release -NativeHostArch x86 -Verbose
+      Start-SSHBuild -Configuration Debug -NativeHostArch x86 -Verbose
 }
 
 <#
