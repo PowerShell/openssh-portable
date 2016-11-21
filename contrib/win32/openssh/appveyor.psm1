@@ -134,7 +134,7 @@ function Get-PSCoreMSIDownloadURL
       }
       else
       {
-        return   ''
+        return ''
       }
   }
   elseif ($osversion.Contains("10.0"))
@@ -145,7 +145,7 @@ function Get-PSCoreMSIDownloadURL
       }
       else
       {        
-        return   ''
+        return ''
       }
   }
 }
@@ -415,7 +415,6 @@ function Add-PackageArtifact
     }
 }
 
-
 <#
     .Synopsis
     After build and test run completes, upload all artifacts from the build machine.
@@ -440,6 +439,10 @@ function Publish-Artifact
     }
 }
 
+<#
+    .Synopsis
+    Run OpenSSH pester tests.
+#>
 function Run-OpenSSHPesterTest
 {
     param($testRoot, $outputXml) 
@@ -449,6 +452,41 @@ function Run-OpenSSHPesterTest
     $testFolders = Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique 
    
     Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile  $outputXml -Tag 'CI'
+    Pop-Location
+}
+
+<#
+    .Synopsis
+    Run unit tests.
+#>
+function Run-OpenSSHUnitTest
+{
+    param($testRoot, $unitTestOutputFile) 
+     
+   # Discover all CI tests and run them.
+    Push-Location $testRoot
+
+    Remove-Item -Path $unitTestOutputFile -Force -ErrorAction SilentlyContinue
+
+    $unitTestFiles = Get-Item -Path (Join-Path $testRoot "unittest-*.exe")
+    $testFailed = $false
+    if ($unitTestFiles -ne $null)
+    {        
+        $unitTestFiles | % { 
+            & $_.FullName >> $unitTestOutputFile
+            $errorCode = $LASTEXITCODE
+            if ($errorCode -ne 0)
+            {
+                $testFailed = $true
+                Write-Host "$_.FullName test failed for OpenSSH.`nExitCode: $error"
+            }
+        }
+        if($testFailed)
+        {
+            throw "SSH unit tests failed" 
+        }
+    }
+    
     Pop-Location
 }
 
@@ -478,13 +516,14 @@ function Run-OpenSSHTests
   param
   (    
       [string] $testResultsFile = "$env:SystemDrive\OpenSSH\TestResults.xml",
+      [string] $unitTestResultsFile = "$env:SystemDrive\OpenSSH\UnitTestResults.txt",
       [string] $testInstallFolder = "$env:SystemDrive\OpenSSH"      
   )
 
   Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder
 
-  # Run all tests.
-  Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile  
+  # Run all pester tests.
+  Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile
 
   $xml = [xml](Get-Content -raw $testResultsFile) 
   if ([int]$xml.'test-results'.failures -gt 0) 
@@ -497,6 +536,8 @@ function Run-OpenSSHTests
   { 
       $Error| Out-File "$env:SystemDrive\OpenSSH\TestError.txt" -Append
   }
+  
+  Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
 }
 
 function Upload-OpenSSHTestResults
