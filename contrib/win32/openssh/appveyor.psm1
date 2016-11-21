@@ -532,8 +532,7 @@ function Run-OpenSSHTests
       [string] $testResultsFile = "$env:SystemDrive\OpenSSH\TestResults.xml",
       [string] $unitTestResultsFile = "$env:SystemDrive\OpenSSH\UnitTestResults.txt",
       [string] $testInstallFolder = "$env:SystemDrive\OpenSSH"      
-  )
-  Set-BuildVariable -Name TestPassed -Value False
+  )  
 
   Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder
 
@@ -553,8 +552,6 @@ function Run-OpenSSHTests
   }
   
   Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
-
-  Set-BuildVariable -Name TestPassed -Value True
 }
 
 function Upload-OpenSSHTestResults
