@@ -394,14 +394,14 @@ function Add-BuildLog
     .Parameter packageFile
     Path to the package
 #>
-function Add-PackageArtifact
+function Add-Artifact
 {
     param
     (
         [ValidateNotNull()]
         [System.Collections.ArrayList] $artifacts,
 
-        [string] $packageFile = "$env:APPVEYOR_BUILD_FOLDER\Win32OpenSSH*.zip"
+        [string] $FileToAdd = "$env:APPVEYOR_BUILD_FOLDER\Win32OpenSSH*.zip"
     )    
     
     $files = Get-Item -Path $packageFile
@@ -423,7 +423,8 @@ function Publish-Artifact
 {
     Write-Output "Publishing project artifacts"
     [System.Collections.ArrayList] $artifacts = [System.Collections.ArrayList]::new()
-    Add-PackageArtifact  -artifacts $artifacts -packageFile "$env:APPVEYOR_BUILD_FOLDER\Win32OpenSSH*.zip"
+    Add-Artifact  -artifacts $artifacts -FileToAdd "$env:APPVEYOR_BUILD_FOLDER\Win32OpenSSH*.zip"
+    Add-Artifact  -artifacts $artifacts -FileToAdd "$env:SystemDrive\OpenSSH\UnitTestResults.txt"
 
     # Get the build.log file for each build configuration    
     Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Release -NativeHostArch x86)
