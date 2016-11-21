@@ -88,6 +88,7 @@ const struct ssh_digest digests[SSH_DIGEST_MAX] = {
 		(md_update_fn *) SHA1Update,
 		(md_final_fn *) SHA1Final
 	},
+#ifdef WITH_OPENSSL
 	{
 		SSH_DIGEST_SHA256,
 		"SHA256",
@@ -118,6 +119,7 @@ const struct ssh_digest digests[SSH_DIGEST_MAX] = {
 		(md_update_fn *) SHA512_Update,
 		(md_final_fn *) SHA512_Final
 	}
+#endif
 };
 
 static const struct ssh_digest *
