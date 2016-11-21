@@ -477,11 +477,12 @@ function Run-OpenSSHUnitTest
         Remove-Item -Path $unitTestOutputFile -Force -ErrorAction SilentlyContinue
     }
 
-    $unitTestFiles = Get-Item -Path (Join-Path $testRoot "unittest-*.exe")
+    $unitTestFiles = $unitTestFiles = Get-ChildItem -Path "$testRoot\unittest*.exe" -Include unittest-kex.exe, unittest-bitmap.exe, unittest-sshbuf.exe, unittest-win32compat.exe
     $testFailed = $false
     if ($unitTestFiles -ne $null)
     {        
-        $unitTestFiles | % { 
+        $unitTestFiles | % {
+            Write-Output "Running OpenSSH unit $($_.FullName)..."
             & $_.FullName >> $unitTestOutputFile
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
