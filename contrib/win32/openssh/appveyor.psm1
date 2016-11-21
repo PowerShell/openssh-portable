@@ -496,9 +496,10 @@ function Run-OpenSSHUnitTest
             if ($errorCode -ne 0)
             {
                 $testFailed = $true
-                Write-Output "$_.FullName test failed for OpenSSH.`nExitCode: $error"
+                Write-Output "$($_.FullName) test failed for OpenSSH.`nExitCode: $error"
             }
-        }
+        }        
+
         if($testFailed)
         {
             throw "SSH unit tests failed" 
