@@ -93,10 +93,10 @@ function Invoke-MSIEXEC
     )
     $process = Start-Process -FilePath msiexec.exe -ArgumentList $arguments -Wait -PassThru
     if ($process.ExitCode -eq 0){
-        Write-host "$InstallFile has been successfully installed"
+        Write-Output "$InstallFile has been successfully installed"
     }
     else {
-        Write-host  "installer exit code  $($process.ExitCode) for file  $($InstallFile)"
+        Write-Output  "installer exit code  $($process.ExitCode) for file  $($InstallFile)"
     }
   
   return $process.ExitCode
@@ -110,11 +110,11 @@ function Install-PSCoreFromGithub
 {
   $downloadLocation = Download-PSCoreMSI
     
-  Write-host "Installing PSCore ..."
+  Write-Output "Installing PSCore ..."
   if(-not [string]::IsNullOrEmpty($downloadLocation))
   {
     $processExitCode = Invoke-MSIEXEC -InstallFile $downloadLocation
-    Write-host "Process exitcode: $processExitCode"
+    Write-Output "Process exitcode: $processExitCode"
   }
 }
 
@@ -125,7 +125,7 @@ function Install-PSCoreFromGithub
 function Get-PSCoreMSIDownloadURL
 {
   $osversion = ([String][Environment]::OSVersion.Version).Substring(0, 10)
-  Write-Host "osversion:$osversion"
+  Write-Output "osversion:$osversion"
   if($osversion.StartsWith("6"))
   {
       if ($($env:PROCESSOR_ARCHITECTURE).Contains('64'))
@@ -159,7 +159,7 @@ function Download-PSCoreMSI
     $url = Get-PSCoreMSIDownloadURL
     if([string]::IsNullOrEmpty($url))
     {
-        Write-Host "url is empty"
+        Write-Output "url is empty"
         return ''
     }
     $parsed = $url.Substring($url.LastIndexOf("/") + 1)
@@ -197,15 +197,15 @@ function Install-TestDependencies
     $isModuleAvailable = Get-Module 'Pester' -ListAvailable
     if (-not ($isModuleAvailable))
     {
-      Write-Host 'Installing Pester...'
+      Write-Output 'Installing Pester...'
       choco install Pester -y --force
     }
 
     if ( -not (Test-Path "$env:ProgramData\chocolatey\lib\sysinternals\tools" ) ) {
-        Write-Host "sysinternals not present. Installing sysinternals."
+        Write-Output "sysinternals not present. Installing sysinternals."
         choco install sysinternals -y            
     }
-    Write-Host "Installing pscore..."
+    Write-Output "Installing pscore..."
     Install-PSCoreFromGithub
 }
 <#
@@ -454,6 +454,7 @@ function Run-OpenSSHPesterTest
      
    # Discover all CI tests and run them.
     Push-Location $testRoot 
+    Write-Output "Running OpenSSH Pester tests..."
     $testFolders = Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique 
    
     Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile  $outputXml -Tag 'CI'
@@ -470,6 +471,7 @@ function Run-OpenSSHUnitTest
      
    # Discover all CI tests and run them.
     Push-Location $testRoot
+    Write-Output "Running OpenSSH unit tests..."
     if (Test-Path $unitTestOutputFile)    
     {
         Remove-Item -Path $unitTestOutputFile -Force -ErrorAction SilentlyContinue
@@ -485,7 +487,7 @@ function Run-OpenSSHUnitTest
             if ($errorCode -ne 0)
             {
                 $testFailed = $true
-                Write-Host "$_.FullName test failed for OpenSSH.`nExitCode: $error"
+                Write-Output "$_.FullName test failed for OpenSSH.`nExitCode: $error"
             }
         }
         if($testFailed)
