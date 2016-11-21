@@ -322,7 +322,11 @@ function Build-Win32OpenSSHPackage
     Copy-Item -Path $rktoolsPath -Destination $OpenSSHDir -Force -ErrorAction Stop
 
     $package = "$env:APPVEYOR_BUILD_FOLDER\Win32OpenSSH$Configuration$folderName.zip"
-    Remove-Item -Path "$env:APPVEYOR_BUILD_FOLDER\Win32OpenSSH*.zip" -Force -ErrorAction SilentlyContinue
+    $allPackage = "$env:APPVEYOR_BUILD_FOLDER\Win32OpenSSH*.zip"
+    if (Test-Path $allPackage)
+    {
+        Remove-Item -Path $allPackage -Force -ErrorAction SilentlyContinue
+    }
 
     Add-Type -assemblyname System.IO.Compression.FileSystem
     [System.IO.Compression.ZipFile]::CreateFromDirectory($OpenSSHDir, $package)    
@@ -466,8 +470,10 @@ function Run-OpenSSHUnitTest
      
    # Discover all CI tests and run them.
     Push-Location $testRoot
-
-    Remove-Item -Path $unitTestOutputFile -Force -ErrorAction SilentlyContinue
+    if (Test-Path $unitTestOutputFile)    
+    {
+        Remove-Item -Path $unitTestOutputFile -Force -ErrorAction SilentlyContinue
+    }
 
     $unitTestFiles = Get-Item -Path (Join-Path $testRoot "unittest-*.exe")
     $testFailed = $false
