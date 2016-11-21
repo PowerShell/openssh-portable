@@ -381,8 +381,10 @@ function Add-BuildLog
     )
 
     if (Test-Path -Path $buildLog)
-    {        
+    {
+        Write-Output "Adding $buildLog to local artifacts"
         $null = $artifacts.Add($buildLog)
+        Write-Output "Adding $buildLog to local artifacts- completed"
     }
     else
     {
@@ -408,14 +410,16 @@ function Add-Artifact
         [string] $FileToAdd = "$env:APPVEYOR_BUILD_FOLDER\Win32OpenSSH*.zip"
     )    
     
-    $files = Get-Item -Path $packageFile
+    $files = Get-ChildItem -Path $FileToAdd -ErrorAction Ignore
     if ($files -ne $null)
-    {        
+    {
+        Write-Output "Adding $($_.FullName) to local artifacts"
         $files | % { $null = $artifacts.Add($_.FullName) }
+        Write-Output "Adding $($_.FullName) to local artifacts- completed"
     }
     else
     {
-        Write-Warning "Skip publishing package artifacts. $env:APPVEYOR_BUILD_FOLDER\Win32OpenSSH*.zip does not exist"
+        Write-Warning "Skip publishing package artifacts. $FileToAdd does not exist"
     }
 }
 
@@ -431,9 +435,9 @@ function Publish-Artifact
     Add-Artifact  -artifacts $artifacts -FileToAdd "$env:SystemDrive\OpenSSH\UnitTestResults.txt"
 
     # Get the build.log file for each build configuration    
-    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Release -NativeHostArch x86)
-    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Debug -NativeHostArch x86)
-    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Release -NativeHostArch x64)
+    #Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Release -NativeHostArch x86)
+    #Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Debug -NativeHostArch x86)
+    #Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Release -NativeHostArch x64)
     Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Debug -NativeHostArch x64)
 
     foreach ($artifact in $artifacts)
@@ -467,7 +471,7 @@ function Run-OpenSSHPesterTest
 #>
 function Run-OpenSSHUnitTest
 {
-    param($testRoot, $unitTestOutputFile) 
+    param($testRoot, $unitTestOutputFile)
      
    # Discover all CI tests and run them.
     Push-Location $testRoot
@@ -529,6 +533,7 @@ function Run-OpenSSHTests
       [string] $unitTestResultsFile = "$env:SystemDrive\OpenSSH\UnitTestResults.txt",
       [string] $testInstallFolder = "$env:SystemDrive\OpenSSH"      
   )
+  Set-BuildVariable -Name TestPassed -Value False
 
   Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder
 
@@ -548,6 +553,8 @@ function Run-OpenSSHTests
   }
   
   Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
+
+  Set-BuildVariable -Name TestPassed -Value True
 }
 
 function Upload-OpenSSHTestResults
