@@ -124,8 +124,8 @@ function Install-PSCoreFromGithub
 #>
 function Get-PSCoreMSIDownloadURL
 {
-  $osversion = ([String][Environment]::OSVersion.Version).Substring(0, 10)
-  Write-Output "osversion:$osversion"
+  $osversion = [String][Environment]::OSVersion.Version
+  Write-Host "osversion:$osversion"
   if($osversion.StartsWith("6"))
   {
       if ($($env:PROCESSOR_ARCHITECTURE).Contains('64'))
