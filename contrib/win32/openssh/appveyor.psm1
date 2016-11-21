@@ -413,9 +413,13 @@ function Add-Artifact
     $files = Get-ChildItem -Path $FileToAdd -ErrorAction Ignore
     if ($files -ne $null)
     {
-        Write-Output "Adding $($_.FullName) to local artifacts"
-        $files | % { $null = $artifacts.Add($_.FullName) }
-        Write-Output "Adding $($_.FullName) to local artifacts- completed"
+        
+        $files | % {
+            Write-Output "Adding $($_.FullName) to local artifacts"
+            $null = $artifacts.Add($_.FullName) 
+            Write-Output "Adding $($_.FullName) to local artifacts- completed"
+         }
+        
     }
     else
     {
@@ -481,7 +485,7 @@ function Run-OpenSSHUnitTest
         Remove-Item -Path $unitTestOutputFile -Force -ErrorAction SilentlyContinue
     }
 
-    $unitTestFiles = $unitTestFiles = Get-ChildItem -Path "$testRoot\unittest*.exe" -Include unittest-kex.exe, unittest-bitmap.exe, unittest-sshbuf.exe, unittest-win32compat.exe
+    $unitTestFiles = Get-ChildItem -Path "$testRoot\unittest*.exe" -Include unittest-kex.exe, unittest-bitmap.exe, unittest-sshbuf.exe, unittest-win32compat.exe
     $testFailed = $false
     if ($unitTestFiles -ne $null)
     {        
