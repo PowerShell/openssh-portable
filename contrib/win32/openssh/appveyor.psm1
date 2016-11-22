@@ -388,8 +388,9 @@ function Deploy-OpenSSHTests
     $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "regress\pesterTests"
     Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Include *.ps1,*.psm1 -Force -ErrorAction Stop
 
-    $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$Configuration"
-    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Force -ErrorAction Stop    
+    $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$Configuration"    
+    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Exclude ssh-agent.exe, sshd.exe -Force -ErrorAction Stop
+    
 }
 
 
