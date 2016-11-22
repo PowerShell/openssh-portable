@@ -2292,7 +2292,7 @@ main(int argc, char **argv)
     /*
      * -rand option used for generate random password.
      */
-     
+#ifdef WITH_OPENSSL     
     if ((argc == 2) && ((strncmp(argv[1], "-rand", 5) == 0)))
     {
       BIO *out = BIO_new(BIO_s_file());
@@ -2363,6 +2363,7 @@ main(int argc, char **argv)
     
       exit(0);
     }
+#endif
 
   #endif	
 
