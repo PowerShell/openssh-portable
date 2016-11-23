@@ -134,6 +134,7 @@ do_kex_with_key(char *kex, int keytype, int bits)
 	ASSERT_INT_GE(sshbuf_len(state), 1);
 	TEST_DONE();
 
+#ifdef WITH_OPENSSL
 	TEST_START("ssh_packet_set_state");
 	server2 = NULL;
 	ASSERT_INT_EQ(ssh_init(&server2, 1, NULL), 0);
@@ -157,6 +158,7 @@ do_kex_with_key(char *kex, int keytype, int bits)
 	server2->kex->load_host_private_key = server->kex->load_host_private_key;
 	server2->kex->sign = server->kex->sign;
 	TEST_DONE();
+#endif
 
 	TEST_START("rekeying server2");
 	ASSERT_INT_EQ(kex_send_kexinit(server2), 0);

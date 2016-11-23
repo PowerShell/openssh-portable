@@ -101,6 +101,7 @@ sshkey_file_tests(void)
 	sshkey_free(k1);
 #endif
 
+#ifdef WITH_OPENSSL
 	TEST_START("parse RSA from private");
 	buf = load_file("rsa_1");
 	ASSERT_INT_EQ(sshkey_parse_private_fileblob(buf, "", &k1, NULL), 0);
@@ -116,6 +117,7 @@ sshkey_file_tests(void)
 	BN_free(b);
 	BN_free(c);
 	TEST_DONE();
+#endif
 
 	TEST_START("parse RSA from private w/ passphrase");
 	buf = load_file("rsa_1_pw");
@@ -192,6 +194,7 @@ sshkey_file_tests(void)
 
 	sshkey_free(k1);
 
+#ifdef WITH_OPENSSL
 	TEST_START("parse DSA from private");
 	buf = load_file("dsa_1");
 	ASSERT_INT_EQ(sshkey_parse_private_fileblob(buf, "", &k1, NULL), 0);
@@ -207,6 +210,7 @@ sshkey_file_tests(void)
 	BN_free(b);
 	BN_free(c);
 	TEST_DONE();
+#endif
 
 	TEST_START("parse DSA from private w/ passphrase");
 	buf = load_file("dsa_1_pw");
