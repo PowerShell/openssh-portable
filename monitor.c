@@ -81,9 +81,7 @@
 #include "zlib.h"
 #define TARGET_OS_MAC 1
 #else
-#ifndef WIN32_ZLIB_NO
 #include "zlib.h"
-#endif
 #endif
 #include "packet.h"
 #include "auth-options.h"
@@ -1885,13 +1883,11 @@ monitor_apply_keystate(struct monitor *pmonitor)
 	}
 
 	/* Update with new address */
-#ifndef WIN32_ZLIB_NO
 	if (options.compression) {
 		ssh_packet_set_compress_hooks(ssh, pmonitor->m_zlib,
 		    (ssh_packet_comp_alloc_func *)mm_zalloc,
 		    (ssh_packet_comp_free_func *)mm_zfree);
 	}
-#endif
 }
 
 /* This function requries careful sanity checking */
@@ -1956,12 +1952,10 @@ monitor_init(void)
 		mon->m_zback = mm_create(NULL, MM_MEMSIZE);
 		mon->m_zlib = mm_create(mon->m_zback, 20 * MM_MEMSIZE);
 
-#ifndef WIN32_ZLIB_NO
 		/* Compression needs to share state across borders */
 		ssh_packet_set_compress_hooks(ssh, mon->m_zlib,
 		    (ssh_packet_comp_alloc_func *)mm_zalloc,
 		    (ssh_packet_comp_free_func *)mm_zfree);
-#endif
 	}
 
 	return mon;
