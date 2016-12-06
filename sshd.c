@@ -1485,59 +1485,35 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 			 */
 			platform_pre_fork();
 #ifdef WINDOWS
-                        /* 
-                         * fork() repleacement for Windows -
-                         * - Put accepted socket in a env varaibale
-                         * - disable inheritance on listening socket and startup fds
-                         * - Spawn child sshd.exe 
-                         */
-                        {
-				PROCESS_INFORMATION pi;
-				STARTUPINFO si;
-				BOOL b;
-				char path[MAX_PATH];
-
-				memset(&si, 0, sizeof(STARTUPINFO));
-                                pid = -1;
+			/* 
+            * fork() repleacement for Windows -
+            * - Put accepted socket in a env varaibale
+            * - disable inheritance on listening socket and startup fds
+            * - Spawn child sshd.exe 
+            */
+            {
+				char* path_utf8 = utf16_to_utf8(GetCommandLineW());
 				char remotesoc[64];
-                                snprintf(remotesoc, sizeof(remotesoc), "%p", sfd_to_handle(*newsock));
-                                SetEnvironmentVariable("SSHD_REMSOC", remotesoc);
-                                debug("Remote Handle %s", remotesoc);
 
-                                /*TODO - disable inheritance on listener and starup fds*/
-				si.cb = sizeof(STARTUPINFO);
-				si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-				si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-				si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-				si.wShowWindow = SW_HIDE;
-				si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+				if (path_utf8 == NULL)
+					fatal("Failed to alloc memory");
+				
+                snprintf(remotesoc, sizeof(remotesoc), "%p", sfd_to_handle(*newsock));
+                SetEnvironmentVariable("SSHD_REMSOC", remotesoc);
+                debug("Remote Handle %s", remotesoc);
 
-				/*
-				 * Create the child process
-				 */
-				strncpy(path, GetCommandLineA(), MAX_PATH);
-				if (CreateProcess(NULL, path, NULL, NULL, TRUE,
-					CREATE_NEW_PROCESS_GROUP, NULL, NULL,
-					&si, &pi) == FALSE) {
-					debug("CreateProcess failure: %d", GetLastError());
-					exit(1);
-				}				
+                /*TODO - disable inheritance on listener and startup fds*/
+				pid = spawn_child(path_utf8, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, 0);
 
+				free(path_utf8);
 				close(*newsock);
 				close(startup_pipes[i]);
 				startup_pipes[i] = -1;
 				startups--;
-
-				sw_add_child(pi.hProcess, pi.dwProcessId);
-				CloseHandle(pi.hThread);
-				pid = pi.dwProcessId;
 			}
-			
-			if (pid == 0) {
 #else
 
 			if ((pid = fork()) == 0) {
-#endif
 				/*
 				 * Child.  Close the listening and
 				 * max_startup sockets.  Start using
@@ -1560,7 +1536,7 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 					close(config_s[0]);
 				break;
 			}
-
+#endif
 			/* Parent.  Stay in the loop. */
 			platform_post_fork_parent(pid);
 			if (pid < 0)

@@ -122,24 +122,20 @@ int w32_ioctl(int d, int request, ...);
 #define EPFNOSUPPORT	        WSAEPFNOSUPPORT
 #endif
 
+int spawn_child(char* cmd, int in, int out, int err, int inherit_console);
+
 
 /* 
  * these routines are temporarily defined here to allow transition 
  * from older POSIX wrapper to the newer one. After complete transition 
  * these should be gone or moved to a internal header.
  */
-int w32_temp_DelChildToWatch(HANDLE processtowatch);
-int w32_temp_AddChildToWatch(HANDLE processtowatch);
 HANDLE w32_fd_to_handle(int fd);
 int w32_allocate_fd_for_handle(HANDLE h, BOOL is_sock);
 int sw_add_child(HANDLE child, DWORD pid);
 
 /* temporary definitions to aid in transition */
-#define WSHELPDelChildToWatch(a) w32_temp_DelChildToWatch((a))
-#define WSHELPAddChildToWatch(a) w32_temp_AddChildToWatch((a))
 #define sfd_to_handle(a) w32_fd_to_handle((a))
-#define allocate_sfd(a, b) w32_allocate_fd_for_handle((a, b))
-//#define WSHELPwopen(a, b) w32_open((a, b))
 
 /* TODO - These defs need to revisited and positioned appropriately */
 #define environ _environ
