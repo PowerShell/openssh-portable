@@ -2446,8 +2446,29 @@ connect_to_server(char *path, char **args, int *in, int *out)
 		fcntl(pout[1], F_SETFD, FD_CLOEXEC);
 		fcntl(pin[0], F_SETFD, FD_CLOEXEC);
 
-		sshpid = spawn_child(full_cmd, c_in, c_out, STDERR_FILENO, 0);
+		sshpid = spawn_child(full_cmd, c_in, c_out, STDERR_FILENO, NORMAL_PRIORITY_CLASS);
 		free(full_cmd);
+
+		/*PROCESS_INFORMATION pi = { 0 };
+		STARTUPINFOW si = { 0 };
+
+		si.cb = sizeof(STARTUPINFOW);
+		si.hStdInput = sfd_to_handle(c_in);
+		si.hStdOutput = sfd_to_handle(c_out);
+		si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+		si.wShowWindow = SW_HIDE;
+		si.dwFlags = STARTF_USESTDHANDLES;
+		si.lpDesktop = NULL;
+
+		if (CreateProcessW(NULL, utf8_to_utf16(full_cmd), NULL, NULL, TRUE,
+			NORMAL_PRIORITY_CLASS, NULL,
+			NULL, &si, &pi) == TRUE) {
+			sshpid = pi.dwProcessId;
+			CloseHandle(pi.hThread);
+			sw_add_child(pi.hProcess, pi.dwProcessId);
+		}
+		else
+			errno = GetLastError();*/
  	}
 
 	if (sshpid == -1)

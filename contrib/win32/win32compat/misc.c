@@ -309,13 +309,12 @@ spawn_child(char* cmd, int in, int out, int err, DWORD flags) {
 		return -1;
 	}
 
-	memset(&si, 0, sizeof(STARTUPINFO));
-	si.cb = sizeof(STARTUPINFO);
+	memset(&si, 0, sizeof(STARTUPINFOW));
+	si.cb = sizeof(STARTUPINFOW);
 	si.hStdInput = w32_fd_to_handle(in);
 	si.hStdOutput = w32_fd_to_handle(out);
 	si.hStdError = w32_fd_to_handle(err);
-	si.wShowWindow = SW_HIDE;
-	si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+	si.dwFlags = STARTF_USESTDHANDLES;
 
 	b = CreateProcessW(NULL, cmd_utf16, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
 
