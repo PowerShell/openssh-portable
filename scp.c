@@ -340,40 +340,29 @@ do_cmd(char *host, char *remuser, char *cmd, int *fdin, int *fdout)
 	addargs(&args, "%s", cmd);
 
 	{
-		PROCESS_INFORMATION pi = { 0 };
-		STARTUPINFOW si = { 0 };
-		char* buf = xmalloc(1024);
-		/* TODO - check that 1024 buffer size is sufficient for resulting cmdline */
-		char* ptr = buf;
+		char* full_cmd;
+		size_t cmdlen = 0;
 		char** list = args.list;
-		*ptr = '\0';
+
+		cmdlen = strlen(w32_programdir()) + 2;
+		while (*list)
+			cmdlen += strlen(*list++) + 1;
+
+		full_cmd = xmalloc(cmdlen);
+		full_cmd[0] = '\0';
+		strcat(full_cmd, w32_programdir());
+		strcat(full_cmd, "\\");
+		list = args.list;
 		while (*list) {
-			memcpy(ptr, *list, strlen(*list));
-			ptr += strlen(*list);
-			*ptr++ = ' ';
-			list++;
+			strcat(full_cmd, *list++);
+			strcat(full_cmd, " ");
 		}
-		*--ptr = '\0';
 
 		fcntl(pout[0], F_SETFD, FD_CLOEXEC);
 		fcntl(pin[1], F_SETFD, FD_CLOEXEC);
 
-		si.cb = sizeof(STARTUPINFOW);
-		si.hStdInput = sfd_to_handle(pin[0]);
-		si.hStdOutput = sfd_to_handle(pout[1]);
-		si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-		si.wShowWindow = SW_HIDE;
-		si.dwFlags = STARTF_USESTDHANDLES;
-		si.lpDesktop = NULL;
-		if (CreateProcessW(NULL, utf8_to_utf16(buf), NULL, NULL, TRUE,
-			NORMAL_PRIORITY_CLASS, NULL,
-			NULL, &si, &pi) == TRUE) {
-			do_cmd_pid = pi.dwProcessId;
-			CloseHandle(pi.hThread);
-			sw_add_child(pi.hProcess, pi.dwProcessId);
-		}
-		else
-			errno = GetLastError();
+		do_cmd_pid = spawn_child(full_cmd, pin[0], pout[1], STDERR_FILENO, 0);
+		free(full_cmd);
 	}
 
 
