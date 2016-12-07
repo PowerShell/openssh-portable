@@ -122,7 +122,7 @@ int w32_ioctl(int d, int request, ...);
 #define EPFNOSUPPORT	        WSAEPFNOSUPPORT
 #endif
 
-int spawn_child(char* cmd, int in, int out, int err, int inherit_console);
+int spawn_child(char* cmd, int in, int out, int err, DWORD flags);
 
 
 /* 

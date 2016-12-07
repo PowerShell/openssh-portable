@@ -1503,7 +1503,7 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
                 debug("Remote Handle %s", remotesoc);
 
                 /*TODO - disable inheritance on listener and startup fds*/
-				pid = spawn_child(path_utf8, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, 0);
+				pid = spawn_child(path_utf8, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, CREATE_NEW_PROCESS_GROUP);
 
 				free(path_utf8);
 				close(*newsock);

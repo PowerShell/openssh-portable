@@ -294,14 +294,15 @@ int w32_ioctl(int d, int request, ...) {
         }
 }
 
-
+HANDLE w32_fd_to_handle(int fd);
 int 
-spawn_child(char* cmd, int in, int out, int err, int inherit_console) {
+spawn_child(char* cmd, int in, int out, int err, DWORD flags) {
 	PROCESS_INFORMATION pi;
 	STARTUPINFOW si;
 	BOOL b;
-	DWORD flags = (inherit_console == 1) ? 0 : DETACHED_PROCESS;
 	wchar_t * cmd_utf16;
+
+	debug("spawning %s", cmd);
 
 	if ((cmd_utf16 = utf8_to_utf16(cmd)) == NULL) {
 		errno = ENOMEM;

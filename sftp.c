@@ -2424,54 +2424,31 @@ connect_to_server(char *path, char **args, int *in, int *out)
 
 #ifdef WINDOWS
 	{
+		size_t cmdlen = 0;
 		int i = 0;
-		char fullCmd[MAX_PATH] = { 0 };
-		char ioArg[1024] = { 0 };
-		PROCESS_INFORMATION pi = { 0 };
-		STARTUPINFOW si = { 0 };
+		char* full_cmd;
 
-		debug3("Generating ssh-client command...");
-                fullCmd[0] = '\0';
-                if (path[0] != '\0' && path[1] != ':') {
-                        strncat(fullCmd, w32_programdir(), MAX_PATH);
-                        strncat(fullCmd, "\\", MAX_PATH);
-                }
-		strncat(fullCmd, path, MAX_PATH);
-		for (i = 1; args[i]; i++) {
-			strncat(fullCmd, " ", MAX_PATH);
-			strncat(fullCmd, args[i], MAX_PATH);
+		cmdlen = strlen(w32_programdir()) + 1 + strlen(path) + 1;
+		for (i = 1; args[i]; i++)
+			cmdlen += strlen(args[i]) + 1;
+
+		full_cmd = xmalloc(cmdlen);
+		full_cmd[0] = '\0';
+		strcat(full_cmd, w32_programdir());
+		strcat(full_cmd, "\\");
+		strcat(full_cmd, path);
+		for (i = 1; args[i]; i++) 	{
+			strcat(full_cmd, " ");
+			strcat(full_cmd, args[i]);
 		}
 
+		/* disable inheritance on local pipe ends*/
 		fcntl(pout[1], F_SETFD, FD_CLOEXEC);
 		fcntl(pin[0], F_SETFD, FD_CLOEXEC);
 
-		/*
-		* Assign sockets to StartupInfo.
-		*/
-
-		si.cb = sizeof(STARTUPINFOW);
-		si.hStdInput = sfd_to_handle(c_in);
-		si.hStdOutput = sfd_to_handle(c_out);
-		si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-		si.wShowWindow = SW_HIDE;
-		si.dwFlags = STARTF_USESTDHANDLES;
-		si.lpDesktop = NULL;
-
-		/*
-		* Create child ssh process with given stdout/stdin.
-		*/
-		debug("Executing ssh client: \"%.500s\"...\n", fullCmd);	
-
-		if (CreateProcessW(NULL, utf8_to_utf16(fullCmd), NULL, NULL, TRUE,
-			NORMAL_PRIORITY_CLASS, NULL,
-			NULL, &si, &pi) == TRUE) {
-			sshpid = pi.dwProcessId;
-			CloseHandle(pi.hThread);
-			sw_add_child(pi.hProcess, pi.dwProcessId);
-		}
-		else
-			errno = GetLastError();
-	}
+		sshpid = spawn_child(full_cmd, c_in, c_out, STDERR_FILENO, 0);
+		free(full_cmd);
+ 	}
 
 	if (sshpid == -1)
 #else

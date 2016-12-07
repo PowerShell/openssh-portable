@@ -12,7 +12,7 @@
 #include "inc\dirent.h"
 
 
-typedef struct DIR_ {
+struct DIR_ {
 	intptr_t hFile;
 	struct _finddata_t c_file;
 	char initName[260];
@@ -54,7 +54,7 @@ DIR * opendir(char *name)
         pdir->c_file.time_write = c_file.time_write;
 		pdir->first = 1;
 
-        if ((tmp = utf16_to_utf8(&(c_file.name))) == NULL)
+        if ((tmp = utf16_to_utf8(c_file.name)) == NULL)
             fatal("failed to covert input arguments");
 
         strcpy_s(pdir->c_file.name, MAX_PATH, tmp);
@@ -98,7 +98,7 @@ struct dirent *readdir(void *avp)
 		    }
 		    pdirentry = (struct dirent *) malloc( sizeof(struct dirent) );
 
-            if ((tmp = utf16_to_utf8(&(c_file.name))) == NULL)
+            if ((tmp = utf16_to_utf8(c_file.name)) == NULL)
                 fatal("failed to covert input arguments");
             pdirentry->d_name= tmp;
             tmp = NULL;
