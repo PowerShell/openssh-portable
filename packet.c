@@ -1147,15 +1147,11 @@ ssh_packet_enable_delayed_compress(struct ssh *ssh)
 			if ((r = ssh_packet_init_compression(ssh)) != 0)
 				return r;
 			if (mode == MODE_OUT) {
-#ifndef WIN32_ZLIB_NO
 				if ((r = start_compression_out(ssh, 6)) != 0)
 					return r;
-#endif
 			} else {
-#ifndef WIN32_ZLIB_NO
 				if ((r = start_compression_in(ssh)) != 0)
 					return r;
-#endif
 			}
 			comp->enabled = 1;
 		}
