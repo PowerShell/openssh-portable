@@ -1,4 +1,7 @@
-
+/* 
+ * Temporary zlib.h header for Windows 
+ * TODO - decide on a compression solution for Windows
+ */
 #pragma once
 #include <Windows.h>
 
