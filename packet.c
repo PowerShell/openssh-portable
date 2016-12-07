@@ -62,9 +62,7 @@
 #include <signal.h>
 #include <time.h>
 
-#ifndef WIN32_ZLIB_NO
 #include <zlib.h>
-#endif
 
 #include "buffer.h"	/* typedefs XXX */
 #include "key.h"	/* typedefs XXX */
@@ -145,10 +143,8 @@ struct session_state {
 	struct sshbuf *compression_buffer;
 
 	/* Incoming/outgoing compression dictionaries */
-#ifndef WIN32_ZLIB_NO
 	z_stream compression_in_stream;
 	z_stream compression_out_stream;
-#endif
 	int compression_in_started;
 	int compression_out_started;
 	int compression_in_failures;
@@ -552,7 +548,6 @@ ssh_packet_close(struct ssh *ssh)
 	sshbuf_free(state->incoming_packet);
 	for (mode = 0; mode < MODE_MAX; mode++)
 		kex_free_newkeys(state->newkeys[mode]);
-#ifndef WIN32_ZLIB_NO
 	if (state->compression_buffer) {
 		sshbuf_free(state->compression_buffer);
 		if (state->compression_out_started) {
@@ -578,7 +573,6 @@ ssh_packet_close(struct ssh *ssh)
 				inflateEnd(stream);
 		}
 	}
-#endif
 	if ((r = cipher_cleanup(&state->send_context)) != 0)
 		error("%s: cipher_cleanup failed: %s", __func__, ssh_err(r));
 	if ((r = cipher_cleanup(&state->receive_context)) != 0)
@@ -619,7 +613,6 @@ ssh_packet_init_compression(struct ssh *ssh)
 	return 0;
 }
 
-#ifndef WIN32_ZLIB_NO
 static int
 start_compression_out(struct ssh *ssh, int level)
 {
@@ -639,9 +632,7 @@ start_compression_out(struct ssh *ssh, int level)
 	}
 	return 0;
 }
-#endif
 
-#ifndef WIN32_ZLIB_NO
 static int
 start_compression_in(struct ssh *ssh)
 {
@@ -658,13 +649,11 @@ start_compression_in(struct ssh *ssh)
 	}
 	return 0;
 }
-#endif
 
 
 int
 ssh_packet_start_compression(struct ssh *ssh, int level)
 {
-#ifndef WIN32_ZLIB_NO
 	int r;
 
 	if (ssh->state->packet_compression && !compat20)
@@ -675,13 +664,9 @@ ssh_packet_start_compression(struct ssh *ssh, int level)
 	    (r = start_compression_out(ssh, level)) != 0)
 		return r;
 	return 0;
-#else
-	return 0;
-#endif
 }
 
 
-#ifndef WIN32_ZLIB_NO
 /* XXX remove need for separate compression buffer */
 static int
 compress_buffer(struct ssh *ssh, struct sshbuf *in, struct sshbuf *out)
@@ -728,9 +713,7 @@ compress_buffer(struct ssh *ssh, struct sshbuf *in, struct sshbuf *out)
 	} while (ssh->state->compression_out_stream.avail_out == 0);
 	return 0;
 }
-#endif
 
-#ifndef WIN32_ZLIB_NO
 static int
 uncompress_buffer(struct ssh *ssh, struct sshbuf *in, struct sshbuf *out)
 {
@@ -777,9 +760,7 @@ uncompress_buffer(struct ssh *ssh, struct sshbuf *in, struct sshbuf *out)
 	}
 	/* NOTREACHED */
 }
-#endif
 
-#ifndef WIN32_ZLIB_NO
 /* Serialise compression state into a blob for privsep */
 static int
 ssh_packet_get_compress_state(struct sshbuf *m, struct ssh *ssh)
@@ -807,9 +788,7 @@ ssh_packet_get_compress_state(struct sshbuf *m, struct ssh *ssh)
 	sshbuf_free(b);
 	return r;
 }
-#endif
 
-#ifndef WIN32_ZLIB_NO
 /* Deserialise compression state from a blob for privsep */
 static int
 ssh_packet_set_compress_state(struct ssh *ssh, struct sshbuf *m)
@@ -848,9 +827,7 @@ ssh_packet_set_compress_state(struct ssh *ssh, struct sshbuf *m)
 	sshbuf_free(b);
 	return r;
 }
-#endif
 
-#ifndef WIN32_ZLIB_NO
 void
 ssh_packet_set_compress_hooks(struct ssh *ssh, void *ctx,
     void *(*allocfunc)(void *, u_int, u_int),
@@ -863,7 +840,6 @@ ssh_packet_set_compress_hooks(struct ssh *ssh, void *ctx,
 	ssh->state->compression_in_stream.zfree = (free_func)freefunc;
 	ssh->state->compression_in_stream.opaque = ctx;
 }
-#endif
 
 /*
  * Causes any further packets to be encrypted using the given key.  The same
@@ -930,11 +906,9 @@ ssh_packet_send1(struct ssh *ssh)
 		if ((r = sshbuf_put(state->compression_buffer,
 		    "\0\0\0\0\0\0\0\0", 8)) != 0)
 			goto out;
-#ifndef WIN32_ZLIB_NO
 		if ((r = compress_buffer(ssh, state->outgoing_packet,
 		    state->compression_buffer)) != 0)
 			goto out;
-#endif
 		sshbuf_reset(state->outgoing_packet);
                 if ((r = sshbuf_putb(state->outgoing_packet,
                     state->compression_buffer)) != 0)
@@ -1079,15 +1053,11 @@ ssh_set_newkeys(struct ssh *ssh, int mode)
 		if ((r = ssh_packet_init_compression(ssh)) < 0)
 			return r;
 		if (mode == MODE_OUT) {
-#ifndef WIN32_ZLIB_NO
 			if ((r = start_compression_out(ssh, 6)) != 0)
 				return r;
-#endif
 		} else {
-#ifndef WIN32_ZLIB_NO
 			if ((r = start_compression_in(ssh)) != 0)
 				return r;
-#endif
 		}
 		comp->enabled = 1;
 	}
@@ -1177,15 +1147,11 @@ ssh_packet_enable_delayed_compress(struct ssh *ssh)
 			if ((r = ssh_packet_init_compression(ssh)) != 0)
 				return r;
 			if (mode == MODE_OUT) {
-#ifndef WIN32_ZLIB_NO
 				if ((r = start_compression_out(ssh, 6)) != 0)
 					return r;
-#endif
 			} else {
-#ifndef WIN32_ZLIB_NO
 				if ((r = start_compression_in(ssh)) != 0)
 					return r;
-#endif
 			}
 			comp->enabled = 1;
 		}
@@ -1248,11 +1214,9 @@ ssh_packet_send2_wrapped(struct ssh *ssh)
 		if ((r = sshbuf_consume(state->outgoing_packet, 5)) != 0)
 			goto out;
 		sshbuf_reset(state->compression_buffer);
-#ifndef WIN32_ZLIB_NO
 		if ((r = compress_buffer(ssh, state->outgoing_packet,
 		    state->compression_buffer)) != 0)
 			goto out;
-#endif
 		sshbuf_reset(state->outgoing_packet);
 		if ((r = sshbuf_put(state->outgoing_packet,
 		    "\0\0\0\0\0", 5)) != 0 ||
@@ -1717,11 +1681,9 @@ ssh_packet_read_poll1(struct ssh *ssh, u_char *typep)
 
 	if (state->packet_compression) {
 		sshbuf_reset(state->compression_buffer);
-#ifndef WIN32_ZLIB_NO
 		if ((r = uncompress_buffer(ssh, state->incoming_packet,
 		    state->compression_buffer)) != 0)
 			goto out;
-#endif
 		sshbuf_reset(state->incoming_packet);
 		if ((r = sshbuf_putb(state->incoming_packet,
 		    state->compression_buffer)) != 0)
@@ -1922,11 +1884,9 @@ ssh_packet_read_poll2(struct ssh *ssh, u_char *typep, u_int32_t *seqnr_p)
 	    sshbuf_len(state->incoming_packet)));
 	if (comp && comp->enabled) {
 		sshbuf_reset(state->compression_buffer);
-#ifndef WIN32_ZLIB_NO
 		if ((r = uncompress_buffer(ssh, state->incoming_packet,
 		    state->compression_buffer)) != 0)
 			goto out;
-#endif
 		sshbuf_reset(state->incoming_packet);
 		if ((r = sshbuf_putb(state->incoming_packet,
 		    state->compression_buffer)) != 0)
@@ -2635,9 +2595,7 @@ ssh_packet_get_state(struct ssh *ssh, struct sshbuf *m)
 		return SSH_ERR_INTERNAL_ERROR;
 
 	if (
-#ifndef WIN32_ZLIB_NO
 	(r = ssh_packet_get_compress_state(m, ssh)) != 0 ||
-#endif
 	    (r = sshbuf_put_stringb(m, state->input)) != 0 ||
 	    (r = sshbuf_put_stringb(m, state->output)) != 0)
 		return r;
@@ -2821,9 +2779,7 @@ ssh_packet_set_state(struct ssh *ssh, struct sshbuf *m)
 	cipher_set_keycontext(&state->receive_context, keyin);
 
 	if (
-#ifndef WIN32_ZLIB_NO
 	(r = ssh_packet_set_compress_state(ssh, m)) != 0 ||
-#endif
 	    (r = ssh_packet_set_postauth(ssh)) != 0)
 		return r;
 

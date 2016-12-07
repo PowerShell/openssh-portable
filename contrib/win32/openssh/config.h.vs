@@ -1669,17 +1669,9 @@
 #define BROKEN_SYS_TERMIO_H
 
 
-// PRAGMA SYS PORT
 #define WITH_OPENSSL 1
-#define HAVE_KRB5_GET_ERROR_MESSAGE 1
-#define HAVE_KRB5_FREE_ERROR_MESSAGE 1
 #define HAVE_DECL_NFDBITS 0
 #define HAVE_DECL_HOWMANY 0
-#define HAVE_DES_CRYPT 1
-
-#define WIN32_ZLIB_NO 1
-#define USE_MSCNG 1
-
 #define HAVE_STRTOULL 1
 #define HAVE_USLEEP 1
 
@@ -1698,7 +1690,6 @@
 
 #define HAVE_EXPLICIT_BZERO
 
-#define WIN32_ZLIB_NO 1
 #define HAVE_MBTOWC 1
 
 #include <signal.h>
@@ -1711,9 +1702,6 @@
 
 /* disable inclusion of compatability defitnitions in CRT headers */
 #define __STDC__ 1
-// Use Pragma Systems Remote Console modules for shell sessions so that cmd/powershell fully
-// works remotely over SSH like they operate in a local machine
-//#define WIN32_PRAGMA_REMCON
 
 #define umac128_new umac_new
 #define umac128_update umac_update 

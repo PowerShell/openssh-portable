@@ -12,6 +12,8 @@
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\w32log.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\pwd.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\win32_dirent.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\no-ops.c" />
+    <ClCompile Include="..\win32compat\win32_zlib.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\w32fd.h" />

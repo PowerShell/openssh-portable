@@ -172,14 +172,13 @@ ssh_kex2(char *host, struct sockaddr *hostaddr, u_short port)
 	    compat_cipher_proposal(options.ciphers);
 	myproposal[PROPOSAL_ENC_ALGS_STOC] =
 	    compat_cipher_proposal(options.ciphers);
-#ifndef WIN32_ZLIB_NO
-	myproposal[PROPOSAL_COMP_ALGS_CTOS] =
+#ifdef WINDOWS
+        /* compression not supported in Windows yet */
+        myproposal[PROPOSAL_COMP_ALGS_CTOS] = "none";
+#else
+        myproposal[PROPOSAL_COMP_ALGS_CTOS] =
 	    myproposal[PROPOSAL_COMP_ALGS_STOC] = options.compression ?
 	    "zlib@openssh.com,zlib,none" : "none,zlib@openssh.com,zlib";
-#else
-	myproposal[PROPOSAL_COMP_ALGS_CTOS] =
-	    myproposal[PROPOSAL_COMP_ALGS_STOC] = options.compression ?
-	    "none" : "none";
 #endif
 	myproposal[PROPOSAL_MAC_ALGS_CTOS] =
 	    myproposal[PROPOSAL_MAC_ALGS_STOC] = options.macs;

@@ -606,6 +606,16 @@ process_get(struct sftp_conn *conn, const char *src, const char *dst,
 
 	abs_src = xstrdup(src);
 	abs_src = make_absolute(abs_src, pwd);
+
+#ifdef WINDOWS
+	if (strlen(abs_src) >= 2 && abs_src[2] == ':')
+	{
+		char *realPath = do_realpath(conn, abs_src);
+		free(abs_src);
+		abs_src = realPath;
+	}
+#endif	
+
 	memset(&g, 0, sizeof(g));
 
 	debug3("Looking up %s", abs_src);
@@ -645,8 +655,19 @@ process_get(struct sftp_conn *conn, const char *src, const char *dst,
 			} else {
 				abs_dst = xstrdup(dst);
 			}
-		} else if (dst) {
+		} else if (dst) {			
+#ifdef WINDOWS
+			{
+				if (is_dir(dst)) {
+					abs_dst = path_append(dst, filename);
+				}
+				else {
+					abs_dst = xstrdup(dst);
+				}				
+			}
+#else
 			abs_dst = path_append(dst, filename);
+#endif
 		} else {
 			abs_dst = xstrdup(filename);
 		}
@@ -732,8 +753,19 @@ process_put(struct sftp_conn *conn, const char *src, const char *dst,
 	}
 
 	/* If we aren't fetching to pwd then stash this status for later */
-	if (tmp_dst != NULL)
+	if (tmp_dst != NULL) {		
+		#ifdef WINDOWS
+		if (strlen(tmp_dst) >= 2 && tmp_dst[2] == ':')
+		{
+			char *realPath = do_realpath(conn, tmp_dst);
+			free(tmp_dst);
+			tmp_dst = realPath;
+		}
+		#endif
+
 		dst_is_dir = remote_is_dir(conn, tmp_dst);
+	}
+		
 
 	/* If multiple matches, dst may be directory or unspecified */
 	if (g.gl_matchc > 1 && tmp_dst && !dst_is_dir) {
@@ -764,8 +796,17 @@ process_put(struct sftp_conn *conn, const char *src, const char *dst,
 				abs_dst = path_append(tmp_dst, filename);
 			else
 				abs_dst = xstrdup(tmp_dst);
-		} else if (tmp_dst) {
-			abs_dst = path_append(tmp_dst, filename);
+		} else if (tmp_dst) {			
+			#ifdef WINDOWS
+			{
+				if (dst_is_dir)
+					abs_dst = path_append(tmp_dst, filename);
+				else
+					abs_dst = xstrdup(tmp_dst);
+			}
+			#else
+				abs_dst = path_append(tmp_dst, filename);
+			#endif
 		} else {
 			abs_dst = make_absolute(xstrdup(filename), pwd);
 		}
@@ -1560,6 +1601,9 @@ parse_dispatch_command(struct sftp_conn *conn, const char *cmd, char **pwd,
 	case I_RM:
 		path1 = make_absolute(path1, *pwd);
 		remote_glob(conn, path1, GLOB_NOCHECK, NULL, &g);
+#ifdef WINDOWS
+		if(g.gl_pathc > 0)
+#endif
 		for (i = 0; g.gl_pathv[i] && !interrupted; i++) {
             if (!quiet)
 #ifdef WINDOWS
@@ -2416,7 +2460,7 @@ connect_to_server(char *path, char **args, int *in, int *out)
 		/*
 		* Create child ssh process with given stdout/stdin.
 		*/
-		debug("Executing ssh client: \"%.500s\"...\n", fullCmd);
+		debug("Executing ssh client: \"%.500s\"...\n", fullCmd);	
 
 		if (CreateProcessW(NULL, utf8_to_utf16(fullCmd), NULL, NULL, TRUE,
 			NORMAL_PRIORITY_CLASS, NULL,

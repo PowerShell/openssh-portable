@@ -2817,9 +2817,14 @@ do_ssh2_kex(void)
 		myproposal[PROPOSAL_COMP_ALGS_CTOS] =
 		    myproposal[PROPOSAL_COMP_ALGS_STOC] = "none";
 	} else if (options.compression == COMP_DELAYED) {
-		myproposal[PROPOSAL_COMP_ALGS_CTOS] =
-		    myproposal[PROPOSAL_COMP_ALGS_STOC] =
+                myproposal[PROPOSAL_COMP_ALGS_CTOS] =
+                    myproposal[PROPOSAL_COMP_ALGS_STOC] =
+#ifdef WINDOWS
+                    /* compression not supported in Windows yet */
+                    "none";
+#else
 		    "none,zlib@openssh.com";
+#endif
 	}
 
 	if (options.rekey_limit || options.rekey_interval)
