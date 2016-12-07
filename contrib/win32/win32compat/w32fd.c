@@ -805,7 +805,7 @@ w32_fd_to_handle(int fd) {
 	HANDLE h = fd_table.w32_ios[fd]->handle;
 	if (fd <= STDERR_FILENO)
 		h = GetStdHandle(fd_table.w32_ios[fd]->std_handle);
-	return fd_table.w32_ios[fd]->handle;
+	return h;
 }
 
 int w32_allocate_fd_for_handle(HANDLE h, BOOL is_sock) {
