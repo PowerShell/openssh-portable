@@ -866,12 +866,24 @@ tolocal(int argc, char **argv)
 		if (!(src = colon(argv[i]))) {	/* Local to local. */
 			freeargs(&alist);
 #ifdef WINDOWS
-            addargs(&alist, "%s", _PATH_XCOPY);
-            if (iamrecursive)
-                addargs(&alist, "/S /E /H");
-            if (pflag)
-                addargs(&alist, "/K /X");
-            addargs(&alist, "/Y /F /I");
+            struct stat stb;            
+            int exists;
+
+            exists = stat(argv[i], &stb) == 0;            
+            if (exists && (S_ISREG(stb.st_mode))) {
+                addargs(&alist, "%s", _PATH_COPY);                
+                addargs(&alist, "/Y");
+            }
+            else
+            {
+                addargs(&alist, "%s", _PATH_XCOPY);
+                if (iamrecursive)
+                    addargs(&alist, "/S /E /H");
+                if (pflag)
+                    addargs(&alist, "/K /X");
+                addargs(&alist, "/Y /F /I");
+            }
+            
             addargs(&alist, "%s", argv[i]);
             addargs(&alist, "%s", argv[argc-1]);
 #else
