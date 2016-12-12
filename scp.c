@@ -463,7 +463,7 @@ void usage(void);
 
 int
 main(int argc, char **argv)
-{
+{    
 	int ch, fflag, tflag, status, n;
 	char *targ, **newargv;
 	const char *errstr;
@@ -562,7 +562,7 @@ main(int argc, char **argv)
 			iamremote = 1;
 			fflag = 1;
 			break;
-		case 't':	/* "to" */
+		case 't':	/* "to" */            
 			iamremote = 1;
 			tflag = 1;
 #ifdef HAVE_CYGWIN
@@ -809,14 +809,26 @@ tolocal(int argc, char **argv)
 	for (i = 0; i < argc - 1; i++) {
 		if (!(src = colon(argv[i]))) {	/* Local to local. */
 			freeargs(&alist);
-			addargs(&alist, "%s", _PATH_CP);
-			if (iamrecursive)
-				addargs(&alist, "-r");
-			if (pflag)
-				addargs(&alist, "-p");
-			addargs(&alist, "--");
-			addargs(&alist, "%s", argv[i]);
-			addargs(&alist, "%s", argv[argc-1]);
+#ifdef WINDOWS
+            addargs(&alist, "%s", _PATH_XCOPY);
+            if (iamrecursive)
+                addargs(&alist, "/S /E /H");
+            if (pflag)
+                addargs(&alist, "/K /X");
+            addargs(&alist, "/Y /F /I");
+            addargs(&alist, "%s", argv[i]);
+            addargs(&alist, "%s", argv[argc-1]);
+#else
+
+            addargs(&alist, "%s", _PATH_CP);
+            if (iamrecursive)
+                addargs(&alist, "-r");
+            if (pflag)
+                addargs(&alist, "-p");
+            addargs(&alist, "--");
+            addargs(&alist, "%s", argv[i]);
+            addargs(&alist, "%s", argv[argc-1]);
+#endif
 			if (do_local_cmd(&alist))
 				++errs;
 			continue;
@@ -1191,8 +1203,13 @@ sink(int argc, char **argv)
 				namebuf = xmalloc(need);
 				cursize = need;
 			}
-			(void) snprintf(namebuf, need, "%s%s%s", targ,
-			    strcmp(targ, "/") ? "/" : "", cp);
+#ifdef WINDOWS
+            (void)snprintf(namebuf, need, "%s%s%s", targ,
+                (targ[strlen(targ) - 1] == "\\" || targ[strlen(targ) - 1] == "/") ? "" : "\\", cp);
+#else
+            (void)snprintf(namebuf, need, "%s%s%s", targ,
+                strcmp(targ, "/") ? "/" : "", cp);
+#endif			
 			np = namebuf;
 		} else
 			np = targ;
