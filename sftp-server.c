@@ -1412,8 +1412,9 @@ process_extended_fstatvfs(u_int32_t id)
 		send_status(id, SSH2_FX_FAILURE);
 		return;
 	}
-
-	// Does the fstatvfs should return 0?
+#ifdef WINDOWS
+	/* Should fstatvfs return 0? */
+#endif
 	if (statvfs(handle_to_name(handle), &st) != 0)
 		if (fstatvfs(fd, &st) != 0)
 			send_status(id, errno_to_portable(errno));

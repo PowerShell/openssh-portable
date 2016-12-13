@@ -988,7 +988,7 @@ BOOL ResolveLink(wchar_t * tLink, wchar_t *ret, DWORD * plen, DWORD Flags)
 	CloseHandle(fileHandle);
 	return TRUE;
 }
-
+char	*xstrdup(const char *);
 char * get_inside_path(char * opath, BOOL bResolve, BOOL bMustExist)
 {
 	char * ipath;
@@ -1011,7 +1011,7 @@ char * get_inside_path(char * opath, BOOL bResolve, BOOL bMustExist)
 	}
 	else
 	{
-		ipath = strdup(opath);
+		ipath = xstrdup(opath);
 	}
 
 	free(opath_w);

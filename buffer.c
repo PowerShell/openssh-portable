@@ -56,7 +56,6 @@ buffer_check_alloc(Buffer *buffer, u_int len)
 	if (ret == SSH_ERR_NO_BUFFER_SPACE)
 		return 0;
 	fatal("%s: %s", __func__, ssh_err(ret));
-	return -1;
 }
 
 int
@@ -88,7 +87,6 @@ buffer_consume_ret(Buffer *buffer, u_int bytes)
 	if (ret == SSH_ERR_MESSAGE_INCOMPLETE)
 		return -1;
 	fatal("%s: %s", __func__, ssh_err(ret));
-	return -1;
 }
 
 void
@@ -108,7 +106,6 @@ buffer_consume_end_ret(Buffer *buffer, u_int bytes)
 	if (ret == SSH_ERR_MESSAGE_INCOMPLETE)
 		return -1;
 	fatal("%s: %s", __func__, ssh_err(ret));
-	return -1;
 }
 
 void

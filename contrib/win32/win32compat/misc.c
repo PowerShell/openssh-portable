@@ -467,6 +467,7 @@ w32_utimes(const char *filename, struct timeval *tvp) {
 	struct utimbuf ub;
 	ub.actime = tvp[0].tv_sec;
 	ub.modtime = tvp[1].tv_sec;
+	int ret;
 
 	// Skip the first '/' in the pathname
 	char resolvedPathName[MAX_PATH];
@@ -477,7 +478,9 @@ w32_utimes(const char *filename, struct timeval *tvp) {
 		return -1;
 	}
 
-	return (_wutime(resolvedPathName_utf16, &ub));
+	ret = _wutime(resolvedPathName_utf16, &ub);
+	free(resolvedPathName_utf16);
+	return ret;
 }
 
 int 
