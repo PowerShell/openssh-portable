@@ -893,9 +893,10 @@ tolocal(int argc, char **argv)
 
                 char * dest = argv[argc - 1];
                 int len = strlen(dest);
+                char * lastletter = dest + len - 1;                
                 
                 addargs(&alist, "%s%s%s", argv[argc - 1], 
-                    (dest[len - 1] == "\\" || dest[len - 1] == "/") ? "" : "\\", name);
+                    (lastletter == "\\" || lastletter == "/") ? "" : "\\", name);
             }
             else
             {
@@ -1290,9 +1291,10 @@ sink(int argc, char **argv)
 				namebuf = xmalloc(need);
 				cursize = need;
 			}
-#ifdef WINDOWS
+#ifdef WINDOWS                        
+            char * lastletter = targ + strlen(targ) - 1;
             (void)snprintf(namebuf, need, "%s%s%s", targ,
-                (targ[strlen(targ) - 1] == "\\" || targ[strlen(targ) - 1] == "/") ? "" : "\\", cp);
+                (lastletter == "\\" || lastletter == "/") ? "" : "\\", cp);
 #else
             (void)snprintf(namebuf, need, "%s%s%s", targ,
                 strcmp(targ, "/") ? "/" : "", cp);
