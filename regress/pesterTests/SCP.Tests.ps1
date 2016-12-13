@@ -69,7 +69,7 @@ Describe "Tests for scp command" -Tags "CI" {
             @{
                 Title = 'copy from local dir to local dir'
                 Source = $sourceDir
-                Destination = "$DestinationDir\$SourceDirName"
+                Destination = $DestinationDir
             }
             <# known issue 364
             @{
@@ -126,11 +126,11 @@ Describe "Tests for scp command" -Tags "CI" {
 
             .\scp -r -i $identifyFile $Source $Destination
             
-            $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path $Destination ) -Property Name, Length).Length -eq 0
+            $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length).Length -eq 0
             $equal | Should Be $true
 
             
-            $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir) (Get-ChildItem -Recurse -path $Destination ) -Property Name, Length).Length -eq 0
+            $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir) (Get-ChildItem -Recurse -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length).Length -eq 0
             $equal | Should Be $true
         }
     }
@@ -172,10 +172,10 @@ Describe "Tests for scp command" -Tags "CI" {
 
             .\scp -r -p -v $Source $Destination
             
-            $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path $Destination ) -Property Name, Length).Length -eq 0
+            $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length).Length -eq 0
             $equal | Should Be $true            
                         
-            $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir) (Get-ChildItem -Recurse -path $Destination ) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
+            $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir) (Get-ChildItem -Recurse -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
             $equal | Should Be $true
         }
     }
@@ -199,10 +199,10 @@ Describe "Tests for scp command" -Tags "CI" {
             param([string]$Title, $Source, $Destination)               
 
             .\scp -i $identifyFile -r -q $Source $Destination
-            $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path $Destination ) -Property Name, Length).Length -eq 0
+            $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length).Length -eq 0
             $equal | Should Be $true
                         
-            $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir) (Get-ChildItem -Recurse -path $Destination ) -Property Name, Length).Length -eq 0
+            $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir) (Get-ChildItem -Recurse -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length).Length -eq 0
             $equal | Should Be $true          
         }
     }    
