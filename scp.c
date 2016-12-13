@@ -870,11 +870,7 @@ tolocal(int argc, char **argv)
             int exists;
 
             exists = stat(argv[i], &stb) == 0;            
-            if (exists && (S_ISREG(stb.st_mode))) {
-                addargs(&alist, "%s", _PATH_COPY);                
-                addargs(&alist, "/Y");
-            }
-            else
+            if (exists && (S_ISDIR(stb.st_mode)))
             {
                 addargs(&alist, "%s", _PATH_XCOPY);
                 if (iamrecursive)
@@ -882,10 +878,32 @@ tolocal(int argc, char **argv)
                 if (pflag)
                     addargs(&alist, "/K /X");
                 addargs(&alist, "/Y /F /I");
+                addargs(&alist, "%s", argv[i]);
+
+                char *lastf = NULL, *lastr = NULL, *name;
+                if ((lastf = strrchr(argv[i], '/')) == NULL && (lastr = strrchr(argv[i], '\\')) == NULL)
+                    name = argv[i];
+                else {
+                    if (lastf)
+                        name = lastf;
+                    if (lastr)
+                        name = lastr;
+                    ++name;
+                }
+
+                char * dest = argv[argc - 1];
+                int len = strlen(dest);
+                
+                addargs(&alist, "%s%s%s", argv[argc - 1], 
+                    (dest[len - 1] == "\\" || dest[len - 1] == "/") ? "" : "\\", name);
             }
-            
-            addargs(&alist, "%s", argv[i]);
-            addargs(&alist, "%s", argv[argc-1]);
+            else
+            {
+                addargs(&alist, "%s", _PATH_COPY);
+                addargs(&alist, "/Y");
+                addargs(&alist, "%s", argv[i]);
+                addargs(&alist, "%s", argv[argc - 1]);
+            }
 #else
 
             addargs(&alist, "%s", _PATH_CP);
@@ -977,7 +995,7 @@ syserr:			run_err("%s: %s", name, strerror(errno));
 #ifdef WINDOWS
 		/* account for both slashes on Windows */
 		{
-			char *lastf = NULL, *lastr = NULL;
+            char *lastf = NULL, *lastr = NULL;
 			if ((lastf = strrchr(name, '/')) == NULL && (lastr = strrchr(name, '\\')) == NULL)
 				last = name;
 			else {
