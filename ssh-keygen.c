@@ -1588,6 +1588,7 @@ load_pkcs11_key(char *path)
 	return private;
 #else
 	fatal("no pkcs11 support");
+	return NULL;
 #endif /* ENABLE_PKCS11 */
 }
 

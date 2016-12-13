@@ -49,6 +49,8 @@ int w32_socketpair(int domain, int type, int protocol, int sv[2]);
 #define fdopen(a,b)	w32_fdopen((a), (b))
 #define fstat(a,b)	w32_fstat((a), (b))
 
+#define rename w32_rename
+
 struct w32_stat;
 int w32_pipe(int *pfds);
 int w32_open(const char *pathname, int flags, ...);
@@ -58,14 +60,8 @@ int w32_writev(int fd, const struct iovec *iov, int iovcnt);
 int w32_fstat(int fd, struct w32_stat *buf);
 int w32_stat(const char *path, struct w32_stat *buf);
 long w32_lseek( int fd, long offset, int origin);
-
 int w32_isatty(int fd);
 FILE* w32_fdopen(int fd, const char *mode);
-int w32_mkdir(const char *pathname, unsigned short mode);
-int w32_rmdir(const char *pathname);
-int w32_chdir(const char *dirname);
-char *w32_getcwd(char *buffer, int maxlen);
-int w32_unlink(const char *path);
 int w32_rename(const char *old_name, const char *new_name);
 
 /*common i/o*/

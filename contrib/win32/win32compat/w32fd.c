@@ -430,109 +430,6 @@ w32_lseek(int fd, long offset, int origin) {
 	return fileio_lseek(fd_table.w32_ios[fd], offset, origin);
 }
 
-int 
-w32_mkdir(const char *path_utf8, unsigned short mode) {
-	// Skip the first '/' in the pathname
-	char resolvedPathName[MAX_PATH];
-	realpathWin32i(path_utf8, resolvedPathName);
-
-    wchar_t *path_utf16 = utf8_to_utf16(resolvedPathName);
-    if (path_utf16 == NULL) {
-        errno = ENOMEM;
-        return -1;
-    }
-    int returnStatus = _wmkdir(path_utf16);
-	free(path_utf16);
-
-	return returnStatus;
-}
-
-int 
-w32_rename(const char *old_name, const char *new_name) {
-	// Skip the first '/' in the pathname
-	char resolvedOldPathName[MAX_PATH];
-	realpathWin32i(old_name, resolvedOldPathName);
-
-	// Skip the first '/' in the pathname
-	char resolvedNewPathName[MAX_PATH];
-	realpathWin32i(new_name, resolvedNewPathName);
-	
-	wchar_t *resolvedOldPathName_utf16 = utf8_to_utf16(resolvedOldPathName);
-	wchar_t *resolvedNewPathName_utf16 = utf8_to_utf16(resolvedNewPathName);
-	if (NULL == resolvedOldPathName_utf16 || NULL == resolvedNewPathName_utf16) {
-		errno = ENOMEM;
-		return -1;
-	}
-	
-	int returnStatus = _wrename(resolvedOldPathName_utf16, resolvedNewPathName_utf16);	
-	free(resolvedOldPathName_utf16);
-	free(resolvedNewPathName_utf16);
-
-	return returnStatus;
-}
-
-int
-w32_rmdir(const char *path) {
-	// Skip the first '/' in the pathname
-	char resolvedPathName[MAX_PATH];
-	realpathWin32i(path, resolvedPathName);
-
-	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(resolvedPathName);	
-	if (NULL == resolvedPathName_utf16) {
-		errno = ENOMEM;
-		return -1;
-	}
-
-	int returnStatus = _wrmdir(resolvedPathName_utf16);
-	free(resolvedPathName_utf16);
-
-	return returnStatus;
-}
-
-int
-w32_unlink(const char *path) {
-	// Skip the first '/' in the pathname
-	char resolvedPathName[MAX_PATH];
-	realpathWin32i(path, resolvedPathName);
-
-	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(resolvedPathName);
-	if (NULL == resolvedPathName_utf16) {
-		errno = ENOMEM;
-		return -1;
-	}
-
-	int returnStatus = _wunlink(resolvedPathName_utf16);
-	free(resolvedPathName_utf16);
-
-	return returnStatus;
-}
-
-int w32_chdir(const char *dirname_utf8) {
-    wchar_t *dirname_utf16 = utf8_to_utf16(dirname_utf8);
-    if (dirname_utf16 == NULL) {
-        errno = ENOMEM;
-        return -1;
-    }
-
-    int returnStatus = _wchdir(dirname_utf16);
-	free(dirname_utf16);
-
-	return returnStatus;
-}
-
-char *w32_getcwd(char *buffer, int maxlen) {
-    wchar_t wdirname[MAX_PATH];
-    char* putf8 = NULL;
-
-    wchar_t *wpwd = _wgetcwd(&wdirname[0], MAX_PATH);
-
-    if ((putf8 = utf16_to_utf8(&wdirname[0])) == NULL)
-            fatal("failed to convert input arguments");
-    strcpy(buffer, putf8);
-    free(putf8);
-
-    return buffer;
-}
 
 int
 w32_isatty(int fd) {
@@ -1114,7 +1011,7 @@ char * get_inside_path(char * opath, BOOL bResolve, BOOL bMustExist)
 	}
 	else
 	{
-		ipath = xstrdup(opath);
+		ipath = strdup(opath);
 	}
 
 	free(opath_w);

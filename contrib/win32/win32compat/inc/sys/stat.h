@@ -35,12 +35,7 @@
 
 #define stat w32_stat
 #define lstat w32_stat
-#define getcwd w32_getcwd
 #define mkdir w32_mkdir
-#define rmdir w32_rmdir
-#define chdir w32_chdir
-#define unlink w32_unlink
-#define rename w32_rename
 #define chmod w32_chmod
 
 struct w32_stat {
@@ -62,3 +57,4 @@ typedef _mode_t mode_t;
 
 void strmode(mode_t mode, char *p);
 int w32_chmod(const char *, mode_t);
+int w32_mkdir(const char *pathname, unsigned short mode);

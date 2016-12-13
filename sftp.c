@@ -2321,8 +2321,6 @@ connect_to_server(char *path, char **args, int *in, int *out)
 		fcntl(pout[1], F_SETFD, FD_CLOEXEC);
 		fcntl(pin[0], F_SETFD, FD_CLOEXEC);
 
-		//balu - test
-		memcpy(full_cmd, "sftp-server.exe", 16);
 		sshpid = spawn_child(full_cmd, c_in, c_out, STDERR_FILENO, 0);
 		free(full_cmd);
  	}
