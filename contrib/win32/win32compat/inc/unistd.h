@@ -30,7 +30,12 @@
 #define fsync(a) w32_fsync((a))
 #define ftruncate(a, b) w32_ftruncate((a), (b))
 
+#define symlink w32_symlink
+#define chown w32_chown
+
 int daemon(int nochdir, int noclose);
 char *crypt(const char *key, const char *salt);
-
+int link(const char *oldpath, const char *newpath);
+int w32_symlink(const char *target, const char *linkpath);
+int w32_chown(const char *pathname, unsigned int owner, unsigned int group);
 #endif

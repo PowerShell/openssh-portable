@@ -61,3 +61,4 @@ typedef unsigned short _mode_t;
 typedef _mode_t mode_t;
 
 void strmode(mode_t mode, char *p);
+int w32_chmod(const char *, mode_t);

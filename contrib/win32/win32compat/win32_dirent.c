@@ -22,7 +22,7 @@ struct DIR_ {
 
 /* Open a directory stream on NAME.
    Return a DIR stream on the directory, or NULL if it could not be opened.  */
-DIR * opendir(char *name)
+DIR * opendir(const char *name)
 {
     struct _wfinddata_t c_file;
     intptr_t hFile;

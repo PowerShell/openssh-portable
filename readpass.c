@@ -82,7 +82,8 @@ ssh_askpass(char *askpass, const char *msg)
 		si.wShowWindow = SW_HIDE;
 		si.dwFlags = STARTF_USESTDHANDLES;
 		si.lpDesktop = NULL;
-		if (CreateProcessW(NULL, utf8_to_utf16(askpass), NULL, NULL, TRUE,
+		wchar_t* wtmp = utf8_to_utf16(askpass);
+		if (CreateProcessW(NULL, wtmp, NULL, NULL, TRUE,
 			NORMAL_PRIORITY_CLASS, NULL,
 			NULL, &si, &pi) == TRUE) {
 			pid = pi.dwProcessId;
@@ -91,6 +92,8 @@ ssh_askpass(char *askpass, const char *msg)
 		}
 		else
 			errno = GetLastError();
+		
+		free(wtmp);
 	}
 	if (pid < 0) {
 #else
@@ -168,7 +171,9 @@ read_passphrase(const char *prompt, int flags)
 	}
 
 	/* prompt user */
-	_cputws(utf8_to_utf16(prompt));
+	wchar_t* wtmp = utf8_to_utf16(prompt);
+	_cputws(wtmp);
+	free(wtmp);
 
 	len = retr = 0;
 	int bufsize = sizeof(buf);

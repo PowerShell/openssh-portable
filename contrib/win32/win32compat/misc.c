@@ -35,6 +35,7 @@
 #include "inc\sys\statvfs.h"
 #include "inc\sys\time.h"
 #include <time.h>
+#include <Shlwapi.h>
 
 int usleep(unsigned int useconds)
 {
@@ -444,6 +445,51 @@ strmode(mode_t mode, char *p)
 
 int 
 w32_chmod(const char *pathname, mode_t mode) {
-        /* TODO - implement this */
-        return 0;
+    /* TODO - implement this */
+	errno = ENOTSUP;
+    return -1;
+}
+
+char* 
+w32_strcasestr(const char *string, const char *subString) {
+	return StrStrI(string, subString);
+}
+
+int 
+w32_chown(const char *pathname, unsigned int owner, unsigned int group) {
+	/* TODO - implement this */
+	errno = ENOTSUP;
+	return -1;
+}
+
+int
+w32_utimes(const char *filename, struct timeval *tvp) {
+	struct utimbuf ub;
+	ub.actime = tvp[0].tv_sec;
+	ub.modtime = tvp[1].tv_sec;
+
+	// Skip the first '/' in the pathname
+	char resolvedPathName[MAX_PATH];
+	realpathWin32i(filename, resolvedPathName);
+	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(resolvedPathName);
+	if (resolvedPathName_utf16 == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+
+	return (_wutime(resolvedPathName_utf16, &ub));
+}
+
+int 
+w32_symlink(const char *target, const char *linkpath) {
+	// Not supported in windows
+	errno = ENOTSUP;
+	return -1;
+}
+
+int 
+link(const char *oldpath, const char *newpath) {
+	// Not supported in windows
+	errno = ENOTSUP;
+	return -1;
 }

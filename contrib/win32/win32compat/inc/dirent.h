@@ -20,7 +20,7 @@ struct dirent {
 
 typedef struct DIR_ DIR;
 
-DIR * opendir(char *name);
+DIR * opendir(const char *name);
 int closedir(DIR *dirp);
 struct dirent *readdir(void *avp);
 

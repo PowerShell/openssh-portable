@@ -409,16 +409,24 @@ make_absolute(char *p, const char *pwd)
          *   - or second character is ":"
          * This code is also applicable from a Linux client to Windows target
          * Need to follow up with community if this makes sense in common code
-         */ 
-        if (p && p[0] != '/' &&  (p[0] == '\0' || p[1] != ':' ) ) {
+         */	
+    if (p && p[0] != '/' &&  (p[0] == '\0' || p[1] != ':' ) ) {		
 #else
 	if (p && p[0] != '/') {
 #endif
 		abs_str = path_append(pwd, p);
 		free(p);
 		return(abs_str);
-	} else
+	}
+	else
+#ifdef WINDOWS
+		// Append "/" to the absolute windows path		
+		if(strlen(p) >= 2 && p[1] == ':') {
+			p = path_append("/", p);
+		}
+#endif
 		return(p);
+
 }
 
 static int
@@ -913,9 +921,9 @@ do_ls_dir(struct sftp_conn *conn, const char *path,
 	        wchar_t* wtmp = utf8_to_utf16(fname);
 	        swprintf(buf, 1024, L"%-*s", colspace, wtmp);
 	        WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), buf, wcslen(buf), 0, 0);
-                free(wtmp);
+            free(wtmp);
 #else
-                printf("%-*s", colspace, fname);
+            printf("%-*s", colspace, fname);
 #endif
 			if (c >= columns) {
 				printf("\n");
@@ -2313,6 +2321,8 @@ connect_to_server(char *path, char **args, int *in, int *out)
 		fcntl(pout[1], F_SETFD, FD_CLOEXEC);
 		fcntl(pin[0], F_SETFD, FD_CLOEXEC);
 
+		//balu - test
+		memcpy(full_cmd, "sftp-server.exe", 16);
 		sshpid = spawn_child(full_cmd, c_in, c_out, STDERR_FILENO, 0);
 		free(full_cmd);
  	}

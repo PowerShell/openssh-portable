@@ -570,7 +570,8 @@ int do_exec_windows(Session *s, const char *command, int pty) {
         if (!b)
         {
                 debug("ERROR. Cannot create process (%u).\n", GetLastError());
-
+				free(pw_dir_w);
+				free(exec_command_w);
                 CloseHandle(hToken);
 
                 exit(1);
@@ -644,7 +645,8 @@ int do_exec_windows(Session *s, const char *command, int pty) {
         else
                 session_set_fds(s, pipein[1], pipeout[0], pipeerr[0], s->is_subsystem, 1); // tty interactive session
 
-
+		free(pw_dir_w);
+		free(exec_command_w);
         return 0;
 
 }

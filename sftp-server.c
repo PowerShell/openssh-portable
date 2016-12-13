@@ -907,14 +907,6 @@ process_setstat(u_int32_t id)
 	if ((r = sshbuf_get_cstring(iqueue, &name, NULL)) != 0 ||
 		(r = decode_attrib(iqueue, &a)) != 0)
 		fatal("%s: buffer error: %s", __func__, ssh_err(r));
-	#ifdef WIN32_FIXME
-	char resolvedname[MAXPATHLEN];
-	if (realpathWin32i(name, resolvedname))
-	{
-		free(name);
-		name = strdup(resolvedname);
-	}
-	#endif
 
 	debug("request %u: setstat name \"%s\"", id, name);
 	if (a.flags & SSH2_FILEXFER_ATTR_SIZE) {
@@ -944,12 +936,11 @@ process_setstat(u_int32_t id)
 	if (a.flags & SSH2_FILEXFER_ATTR_UIDGID) {
 		logit("set \"%s\" owner %lu group %lu", name,
 		    (u_long)a.uid, (u_long)a.gid);
-#ifndef WIN32_FIXME
 		r = chown(name, a.uid, a.gid);
 		if (r == -1)
 			status = errno_to_portable(errno);
-#endif
 	}
+
 	send_status(id, status);
 	free(name);
 }
@@ -975,11 +966,10 @@ process_fsetstat(u_int32_t id)
 		if (a.flags & SSH2_FILEXFER_ATTR_SIZE) {
 			logit("set \"%s\" size %llu",
 			    name, (unsigned long long)a.size);
-#ifndef WIN32_FIXME
+
 			r = ftruncate(fd, a.size);
 			if (r == -1)
 				status = errno_to_portable(errno);
-#endif
 		}
 		if (a.flags & SSH2_FILEXFER_ATTR_PERMISSIONS) {
 			logit("set \"%s\" mode %04o", name, a.perm);
@@ -1009,7 +999,7 @@ process_fsetstat(u_int32_t id)
 		if (a.flags & SSH2_FILEXFER_ATTR_UIDGID) {
 			logit("set \"%s\" owner %lu group %lu", name,
 			    (u_long)a.uid, (u_long)a.gid);
-#ifndef WIN32_FIXME
+
 #ifdef HAVE_FCHOWN
 			r = fchown(fd, a.uid, a.gid);
 #else
@@ -1017,7 +1007,6 @@ process_fsetstat(u_int32_t id)
 #endif
 			if (r == -1)
 				status = errno_to_portable(errno);
-#endif
 		}
 	}
 	send_status(id, status);
@@ -1310,7 +1299,7 @@ process_rename(u_int32_t id)
 		} else
 			status = SSH2_FX_OK;
 	} 
-#endif /* !WIN32_FIXME */	
+#endif
 	else if (stat(newpath, &sb) == -1) {
 		if (rename(oldpath, newpath) == -1)
 			status = errno_to_portable(errno);
@@ -1352,7 +1341,7 @@ static void
 process_symlink(u_int32_t id)
 {
 	char *oldpath, *newpath;
-	int r, status;
+	int r, status= SSH2_FX_OP_UNSUPPORTED;
 
 	if ((r = sshbuf_get_cstring(iqueue, &oldpath, NULL)) != 0 ||
 	    (r = sshbuf_get_cstring(iqueue, &newpath, NULL)) != 0)
@@ -1361,15 +1350,10 @@ process_symlink(u_int32_t id)
 	debug3("request %u: symlink", id);
 	logit("symlink old \"%s\" new \"%s\"", oldpath, newpath);
 
-	#ifdef WIN32_FIXME
-	send_status(id, SSH2_FX_OP_UNSUPPORTED);
-	#else
-
 	/* this will fail if 'newpath' exists */
 	r = symlink(oldpath, newpath);
 	status = (r == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
 	send_status(id, status);
-	#endif
 
 	free(oldpath);
 	free(newpath);
@@ -1428,22 +1412,20 @@ process_extended_fstatvfs(u_int32_t id)
 		send_status(id, SSH2_FX_FAILURE);
 		return;
 	}
-#ifdef WIN32_FIXME
-  if (statvfs(handle_to_name(handle), &st) != 0)
-  #else
-	if (fstatvfs(fd, &st) != 0)
-  #endif
-	
-		send_status(id, errno_to_portable(errno));
-	else
-		send_statvfs(id, &st);
+
+	// Does the fstatvfs should return 0?
+	if (statvfs(handle_to_name(handle), &st) != 0)
+		if (fstatvfs(fd, &st) != 0)
+			send_status(id, errno_to_portable(errno));
+		else
+			send_statvfs(id, &st);
 }
 
 static void
 process_extended_hardlink(u_int32_t id)
 {
 	char *oldpath, *newpath;
-	int r, status;
+	int r, status = SSH2_FX_OP_UNSUPPORTED;
 
 	if ((r = sshbuf_get_cstring(iqueue, &oldpath, NULL)) != 0 ||
 	    (r = sshbuf_get_cstring(iqueue, &newpath, NULL)) != 0)
@@ -1451,12 +1433,10 @@ process_extended_hardlink(u_int32_t id)
 
 	debug3("request %u: hardlink", id);
 	logit("hardlink old \"%s\" new \"%s\"", oldpath, newpath);
-#ifndef WIN32_FIXME
+
 	r = link(oldpath, newpath);
 	status = (r == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
-#else
-	status = SSH2_FX_OP_UNSUPPORTED;
-#endif
+
 	send_status(id, status);
 	free(oldpath);
 	free(newpath);
