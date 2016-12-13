@@ -19,7 +19,6 @@
 #define close w32_close
 #define dup w32_dup
 #define dup2 w32_dup2
-#define utime _utime
 #define _PATH_XCOPY "xcopy"
 #define _PATH_COPY "copy"
 #define sleep(sec) Sleep(1000 * sec)
