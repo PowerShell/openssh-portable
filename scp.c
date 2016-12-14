@@ -463,7 +463,7 @@ void usage(void);
 
 int
 main(int argc, char **argv)
-{    
+{
 	int ch, fflag, tflag, status, n;
 	char *targ, **newargv;
 	const char *errstr;
@@ -562,7 +562,7 @@ main(int argc, char **argv)
 			iamremote = 1;
 			fflag = 1;
 			break;
-		case 't':	/* "to" */            
+		case 't':	/* "to" */
 			iamremote = 1;
 			tflag = 1;
 #ifdef HAVE_CYGWIN
@@ -810,55 +810,55 @@ tolocal(int argc, char **argv)
 		if (!(src = colon(argv[i]))) {	/* Local to local. */
 			freeargs(&alist);
 #ifdef WINDOWS
-            struct stat stb;            
-            int exists;
+			struct stat stb;            
+			int exists;
 
-            exists = stat(argv[i], &stb) == 0;            
-            if (exists && (S_ISDIR(stb.st_mode)))
-            {
-                addargs(&alist, "%s", _PATH_XCOPY);
-                if (iamrecursive)
-                    addargs(&alist, "/S /E /H");
-                if (pflag)
-                    addargs(&alist, "/K /X");
-                addargs(&alist, "/Y /F /I");
-                addargs(&alist, "%s", argv[i]);
+			exists = stat(argv[i], &stb) == 0;
+			if (exists && (S_ISDIR(stb.st_mode)))
+			{
+				addargs(&alist, "%s", _PATH_XCOPY);
+				if (iamrecursive)
+					addargs(&alist, "/S /E /H");
+				if (pflag)
+					addargs(&alist, "/K /X");
+				addargs(&alist, "/Y /F /I");
+				addargs(&alist, "%s", argv[i]);
 
-                char *lastf = NULL, *lastr = NULL, *name;
-                if ((lastf = strrchr(argv[i], '/')) == NULL && (lastr = strrchr(argv[i], '\\')) == NULL)
-                    name = argv[i];
-                else {
-                    if (lastf)
-                        name = lastf;
-                    if (lastr)
-                        name = lastr;
-                    ++name;
-                }
+				char *lastf = NULL, *lastr = NULL, *name;
+				if ((lastf = strrchr(argv[i], '/')) == NULL && (lastr = strrchr(argv[i], '\\')) == NULL)
+					name = argv[i];
+				else {
+					if (lastf)
+						name = lastf;
+					if (lastr)
+						name = lastr;
+					++name;
+				}
 
-                char * dest = argv[argc - 1];
-                int len = strlen(dest);
-                char * lastletter = dest + len - 1;                
+				char * dest = argv[argc - 1];
+				int len = strlen(dest);
+				char * lastletter = dest + len - 1;
                 
-                addargs(&alist, "%s%s%s", argv[argc - 1], 
-                    (lastletter == "\\" || lastletter == "/") ? "" : "\\", name);
-            }
-            else
-            {
-                addargs(&alist, "%s", _PATH_COPY);
-                addargs(&alist, "/Y");
-                addargs(&alist, "%s", argv[i]);
-                addargs(&alist, "%s", argv[argc - 1]);
-            }
+				addargs(&alist, "%s%s%s", argv[argc - 1],
+					(lastletter == "\\" || lastletter == "/") ? "" : "\\", name);
+			}
+			else
+			{
+				addargs(&alist, "%s", _PATH_COPY);
+				addargs(&alist, "/Y");
+				addargs(&alist, "%s", argv[i]);
+				addargs(&alist, "%s", argv[argc - 1]);
+			}
 #else
 
-            addargs(&alist, "%s", _PATH_CP);
-            if (iamrecursive)
-                addargs(&alist, "-r");
-            if (pflag)
-                addargs(&alist, "-p");
-            addargs(&alist, "--");
-            addargs(&alist, "%s", argv[i]);
-            addargs(&alist, "%s", argv[argc-1]);
+			addargs(&alist, "%s", _PATH_CP);
+			if (iamrecursive)
+				addargs(&alist, "-r");
+			if (pflag)
+				addargs(&alist, "-p");
+			addargs(&alist, "--");
+			addargs(&alist, "%s", argv[i]);
+			addargs(&alist, "%s", argv[argc-1]);
 #endif
 			if (do_local_cmd(&alist))
 				++errs;
@@ -940,7 +940,7 @@ syserr:			run_err("%s: %s", name, strerror(errno));
 #ifdef WINDOWS
 		/* account for both slashes on Windows */
 		{
-            char *lastf = NULL, *lastr = NULL;
+			char *lastf = NULL, *lastr = NULL;
 			if ((lastf = strrchr(name, '/')) == NULL && (lastr = strrchr(name, '\\')) == NULL)
 				last = name;
 			else {
@@ -1235,9 +1235,9 @@ sink(int argc, char **argv)
 				cursize = need;
 			}
 #ifdef WINDOWS                        
-            char * lastletter = targ + strlen(targ) - 1;
-            (void)snprintf(namebuf, need, "%s%s%s", targ,
-                (lastletter == "\\" || lastletter == "/") ? "" : "\\", cp);
+			char * lastletter = targ + strlen(targ) - 1;
+			(void)snprintf(namebuf, need, "%s%s%s", targ,
+			(lastletter == "\\" || lastletter == "/") ? "" : "\\", cp);
 #else
             (void)snprintf(namebuf, need, "%s%s%s", targ,
                 strcmp(targ, "/") ? "/" : "", cp);
