@@ -1136,6 +1136,14 @@ server_listen(void)
 			close(listen_sock);
 			continue;
 		}
+#ifdef WINDOWS
+		/* disable inheritance on listener socket */
+		if (fcntl(listen_sock, F_SETFD, FD_CLOEXEC) != 0) {
+			error("F_SETFD  FD_CLOEXEC on listener socket %d failed with %d", listen_sock, errno);
+			close(listen_sock);
+			continue;
+		}
+#endif
 		/*
 		 * Set socket options.
 		 * Allow local port reuse in TIME_WAIT.
@@ -1333,23 +1341,27 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
             */
             {
 				char* path_utf8 = utf16_to_utf8(GetCommandLineW());
-				char remotesoc[64];
+				char fd_handle[30];  /* large enough to hold pointer value in hex */
 
 				if (path_utf8 == NULL)
 					fatal("Failed to alloc memory");
 				
-                snprintf(remotesoc, sizeof(remotesoc), "%p", sfd_to_handle(*newsock));
-                SetEnvironmentVariable("SSHD_REMSOC", remotesoc);
-                debug("Remote Handle %s", remotesoc);
-
-                /*TODO - disable inheritance on listener and startup fds*/
-				pid = spawn_child(path_utf8, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, CREATE_NEW_PROCESS_GROUP);
+                if (snprintf(fd_handle, sizeof(fd_handle), "%p", sfd_to_handle(*newsock)) == -1
+                    || SetEnvironmentVariable("SSHD_REMSOC", fd_handle) == FALSE
+				    || snprintf(fd_handle, sizeof(fd_handle), "%p", sfd_to_handle(startup_p[1])) == -1
+				    || SetEnvironmentVariable("SSHD_STARTUPSOC", fd_handle) == FALSE
+					|| fcntl(startup_p[0], F_SETFD, FD_CLOEXEC) == -1) {
+						debug("unable to set the right environment for child, closing connection ");
+						close(*newsock);
+						/* close child end of startup pipe. parent end will automatically be cleaned up on next iteration*/
+						close(startup_p[1]);
+						continue;
+				}
+                
+                pid = spawn_child(path_utf8, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, CREATE_NEW_PROCESS_GROUP);
 
 				free(path_utf8);
 				close(*newsock);
-				close(startup_pipes[i]);
-				startup_pipes[i] = -1;
-				startups--;
 			}
 #else
 
@@ -1986,17 +1998,18 @@ main(int ac, char **av)
       /* Windows - for sshd child, pick up the accepted socket*/
       if (is_child) {      
 		char *stopstring;
-		DWORD_PTR remotesochandle;
-		remotesochandle = strtol(getenv("SSHD_REMSOC"), &stopstring, 16);
-		debug("remote channel %d", remotesochandle);
+		DWORD_PTR handle;
+		handle = strtol(getenv("SSHD_REMSOC"), &stopstring, 16);
+		debug("remote channel %d", handle);
 
-		sock_in = sock_out = newsock = w32_allocate_fd_for_handle((HANDLE)remotesochandle, TRUE);
+		sock_in = sock_out = newsock = w32_allocate_fd_for_handle((HANDLE)handle, TRUE);
 
 		// we have the socket handle, delete it for child processes we create like shell 
 		SetEnvironmentVariable("SSHD_REMSOC", NULL);
-		SetHandleInformation((HANDLE)remotesochandle, HANDLE_FLAG_INHERIT, 0); // make the handle not to be inherited
-
-		startup_pipe = -1;
+		SetHandleInformation((HANDLE)handle, HANDLE_FLAG_INHERIT, 0); // make the handle not to be inherited
+		handle = strtol(getenv("SSHD_STARTUPSOC"), &stopstring, 16);
+		startup_pipe = w32_allocate_fd_for_handle((HANDLE)handle, FALSE);
+		SetHandleInformation((HANDLE)handle, HANDLE_FLAG_INHERIT, 0); // make the handle not to be inherited
       }
 	  else /* Windows and Unix sshd parent */
 #endif
