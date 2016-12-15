@@ -302,14 +302,35 @@ spawn_child(char* cmd, int in, int out, int err, DWORD flags) {
 	PROCESS_INFORMATION pi;
 	STARTUPINFOW si;
 	BOOL b;
+	char* abs_cmd;
 	wchar_t * cmd_utf16;
 
-	debug("spawning %s", cmd);
+	/* relative ? if so, add current module path to start */
+	if (!(cmd && cmd[0] != '\0' && (cmd[1] == ':' || cmd[0] == '\\' || cmd[0] == '.'))) {
+		char* ctr;
+		abs_cmd = malloc(strlen(w32_programdir()) + 1 + strlen(cmd) + 1);
+		if (abs_cmd == NULL) {
+			errno = ENOMEM;
+			return -1;
+		}
+		ctr = abs_cmd;
+		memcpy(ctr, w32_programdir(), strlen(w32_programdir()));
+		ctr += strlen(w32_programdir());
+		*ctr++ = '\\';
+		memcpy(ctr, cmd, strlen(cmd) + 1);
+	}
+	else
+		abs_cmd = cmd;
+	   
+	debug("spawning %s", abs_cmd);
 
-	if ((cmd_utf16 = utf8_to_utf16(cmd)) == NULL) {
+	if ((cmd_utf16 = utf8_to_utf16(abs_cmd)) == NULL) {
 		errno = ENOMEM;
 		return -1;
 	}
+
+	if(abs_cmd != cmd)
+		free(abs_cmd);
 
 	memset(&si, 0, sizeof(STARTUPINFOW));
 	si.cb = sizeof(STARTUPINFOW);

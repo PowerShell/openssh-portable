@@ -470,7 +470,7 @@ static int
 execute_in_shell(const char *cmd)
 {
 #ifdef WINDOWS
-	fatal("LocalCommand execution is not supported on Windows");
+	fatal("LocalCommand execution is not supported on Windows yet");
 	return 0;
 #else /* !WINDOWS */
 	pid_t pid;

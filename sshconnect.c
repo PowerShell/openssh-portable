@@ -107,6 +107,12 @@ ssh_proxy_fdpass_connect(const char *host, u_short port,
 {
 #ifdef WINDOWS
         fatal("proxy fdpass connect is not supported in Windows");
+	/* 
+	 * Unix logic relies on passing in ancillary data over domain sockets 
+	 * This concept does not exist in Windows. 
+	 * Possible implementation in Windows could have proxy_command return 
+	 * connection handle through IPC means
+	 */
         return 0;
 #else /* !WINDOWS */
 	char *command_string;
@@ -190,7 +196,7 @@ static int
 ssh_proxy_connect(const char *host, u_short port, const char *proxy_command)
 {
 #ifdef WINDOWS
-        fatal("Proxy connect is not supported in Windows");
+        fatal("Proxy connect is not supported in Windows yet");
         return 0;
 #else /* !WINDOWS */
 	char *command_string;
@@ -1492,7 +1498,7 @@ int
 ssh_local_cmd(const char *args)
 {
 #ifdef WINDOWS
-        fatal("executing local command is not supported in Windows");
+        fatal("executing local command is not supported in Windows yet");
         return 0;
 #else /* !WINDOWS */
 	char *shell;

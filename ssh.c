@@ -1468,6 +1468,11 @@ static void
 control_persist_detach(void)
 {
 #ifdef WINDOWS
+	/* 
+	 * This needs some level of support for domain sockets in Windows 
+	 * Domain sockets (w/out ancillary data support) can easily be 
+	 * implemented using named pipes.
+	 */
         fatal("ControlMaster is not supported in Windows yet");
 #else /* !WINDOWS */
         pid_t pid;

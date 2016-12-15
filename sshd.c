@@ -1334,32 +1334,31 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 			platform_pre_fork();
 #ifdef WINDOWS
 			/* 
-            * fork() repleacement for Windows -
-            * - Put accepted socket in a env varaibale
-            * - disable inheritance on listening socket and startup fds
-            * - Spawn child sshd.exe 
-            */
-            {
+			* fork() repleacement for Windows -
+			* - Put accepted socket in a env varaibale
+			* - disable inheritance on listening socket and startup fds
+			* - Spawn child sshd.exe
+			*/
+			{
 				char* path_utf8 = utf16_to_utf8(GetCommandLineW());
 				char fd_handle[30];  /* large enough to hold pointer value in hex */
 
 				if (path_utf8 == NULL)
 					fatal("Failed to alloc memory");
 				
-                if (snprintf(fd_handle, sizeof(fd_handle), "%p", sfd_to_handle(*newsock)) == -1
-                    || SetEnvironmentVariable("SSHD_REMSOC", fd_handle) == FALSE
+				if (snprintf(fd_handle, sizeof(fd_handle), "%p", sfd_to_handle(*newsock)) == -1
+				    || SetEnvironmentVariable("SSHD_REMSOC", fd_handle) == FALSE
 				    || snprintf(fd_handle, sizeof(fd_handle), "%p", sfd_to_handle(startup_p[1])) == -1
 				    || SetEnvironmentVariable("SSHD_STARTUPSOC", fd_handle) == FALSE
-					|| fcntl(startup_p[0], F_SETFD, FD_CLOEXEC) == -1) {
-						debug("unable to set the right environment for child, closing connection ");
-						close(*newsock);
-						/* close child end of startup pipe. parent end will automatically be cleaned up on next iteration*/
-						close(startup_p[1]);
-						continue;
+				    || fcntl(startup_p[0], F_SETFD, FD_CLOEXEC) == -1) {
+					error("unable to set the right environment for child, closing connection ");
+					close(*newsock);
+					/* close child end of startup pipe. parent end will automatically be cleaned up on next iteration*/
+					close(startup_p[1]);
+					continue;
 				}
                 
-                pid = spawn_child(path_utf8, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, CREATE_NEW_PROCESS_GROUP);
-
+				pid = spawn_child(path_utf8, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, CREATE_NEW_PROCESS_GROUP);
 				free(path_utf8);
 				close(*newsock);
 			}

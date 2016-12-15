@@ -95,7 +95,7 @@ ssh_get_authentication_socket(int *fdp)
 		*fdp = -1;
 
 #ifdef WINDOWS
-    /* Auth socket in Windows is a static-named pipe listener in ssh-agent*/
+	/* Auth socket in Windows is a static-named pipe listener in ssh-agent */
 	{
 #define SSH_AGENT_REG_ROOT L"SOFTWARE\\SSH\\Agent"
 #define SSH_AGENT_PIPE_NAME L"\\\\.\\pipe\\ssh-agent"
@@ -108,30 +108,22 @@ ssh_get_authentication_socket(int *fdp)
 			RegCloseKey(agent_root);
 		}
 
-		h = CreateFileW(
-				SSH_AGENT_PIPE_NAME,   // pipe name 
-				GENERIC_READ |  // read and write access 
-				GENERIC_WRITE,
-				0,              // no sharing 
-				NULL,           // default security attributes
-				OPEN_EXISTING,  // opens existing pipe 
-				FILE_FLAG_OVERLAPPED,              // attributes 
-				NULL);          // no template file 
-		if (h == INVALID_HANDLE_VALUE) {
+		h = CreateFileW(SSH_AGENT_PIPE_NAME, GENERIC_READ | GENERIC_WRITE, 0,
+		    NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL); 
+		if (h == INVALID_HANDLE_VALUE)
 			return SSH_ERR_AGENT_NOT_PRESENT;
-		}
 
-        /* 
+		/*
 		 * ensure that connected server pid matches published pid. this provides service side
-         * auth and prevents mitm
-         */
+		 * auth and prevents mitm
+		 */
 		if (!GetNamedPipeServerProcessId(h, &pipe_server_pid) || (agent_pid != pipe_server_pid)) {
 			debug("agent pid mismatch");
 			CloseHandle(h);
 			return SSH_ERR_AGENT_COMMUNICATION;
-
 		}
 
+		/* alloc fd for pipe handle */
 		if ((sock = w32_allocate_fd_for_handle(h, FALSE)) < 0) {
 			CloseHandle(h);
 			return SSH_ERR_SYSTEM_ERROR;

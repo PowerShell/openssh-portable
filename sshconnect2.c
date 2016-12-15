@@ -1579,7 +1579,7 @@ ssh_keysign(struct sshkey *key, u_char **sigp, size_t *lenp,
     const u_char *data, size_t datalen)
 {
 #ifdef WINDOWS
-        fatal("keysign is not supported in Windows");
+        fatal("keysign is not supported in Windows yet");
         return -1;
 #else /* !WINDOWS */
 	struct sshbuf *b;

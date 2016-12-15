@@ -2303,14 +2303,12 @@ connect_to_server(char *path, char **args, int *in, int *out)
 		int i = 0;
 		char* full_cmd;
 
-		cmdlen = strlen(w32_programdir()) + 1 + strlen(path) + 1;
+		cmdlen = strlen(path) + 1;
 		for (i = 1; args[i]; i++)
 			cmdlen += strlen(args[i]) + 1;
 
 		full_cmd = xmalloc(cmdlen);
 		full_cmd[0] = '\0';
-		strcat(full_cmd, w32_programdir());
-		strcat(full_cmd, "\\");
 		strcat(full_cmd, path);
 		for (i = 1; args[i]; i++) 	{
 			strcat(full_cmd, " ");
