@@ -616,3 +616,13 @@ w32_mkdir(const char *path_utf8, unsigned short mode) {
 
 	return returnStatus;
 }
+
+
+void
+getrnd(u_char *s, size_t len) {
+	HCRYPTPROV hProvider;
+	CryptAcquireContextW(&hProvider, 0, 0, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT);
+	
+	CryptGenRandom(hProvider, len, s);
+	CryptReleaseContext(hProvider, 0);
+}

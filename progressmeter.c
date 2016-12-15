@@ -227,13 +227,7 @@ refresh_progress_meter(void)
 			strlcat(buf, "    ", win_size);
 	}
 
-#ifdef WINDOWS
-	wchar_t* wtmp = utf8_to_utf16(buf);
-	WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-    free(wtmp);
-#else /* !WINDOWS */
 	atomicio(vwrite, STDOUT_FILENO, buf, win_size - 1);
-#endif  /* !WINDOWS */
 	last_update = now;
 }
 
@@ -290,11 +284,7 @@ stop_progress_meter(void)
 	if (cur_pos != end_pos)
 		refresh_progress_meter();
 
-#ifdef WINDOWS
-	WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-#else  /* !WINDOWS */
 	atomicio(vwrite, STDOUT_FILENO, "\n", 1);
-#endif  /* !WINDOWS */
 }
 
 /*ARGSUSED*/
