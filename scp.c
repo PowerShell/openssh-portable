@@ -809,6 +809,48 @@ tolocal(int argc, char **argv)
 	for (i = 0; i < argc - 1; i++) {
 		if (!(src = colon(argv[i]))) {	/* Local to local. */
 			freeargs(&alist);
+#ifdef WINDOWS
+			struct stat stb;            
+			int exists;
+
+			exists = stat(argv[i], &stb) == 0;
+			if (exists && (S_ISDIR(stb.st_mode)))
+			{
+				addargs(&alist, "%s", _PATH_XCOPY);
+				if (iamrecursive)
+					addargs(&alist, "/S /E /H");
+				if (pflag)
+					addargs(&alist, "/K /X");
+				addargs(&alist, "/Y /F /I");
+				addargs(&alist, "%s", argv[i]);
+
+				char *lastf = NULL, *lastr = NULL, *name;
+				if ((lastf = strrchr(argv[i], '/')) == NULL && (lastr = strrchr(argv[i], '\\')) == NULL)
+					name = argv[i];
+				else {
+					if (lastf)
+						name = lastf;
+					if (lastr)
+						name = lastr;
+					++name;
+				}
+
+				char * dest = argv[argc - 1];
+				int len = strlen(dest);
+				char * lastletter = dest + len - 1;
+                
+				addargs(&alist, "%s%s%s", argv[argc - 1],
+					(lastletter == "\\" || lastletter == "/") ? "" : "\\", name);
+			}
+			else
+			{
+				addargs(&alist, "%s", _PATH_COPY);
+				addargs(&alist, "/Y");
+				addargs(&alist, "%s", argv[i]);
+				addargs(&alist, "%s", argv[argc - 1]);
+			}
+#else
+
 			addargs(&alist, "%s", _PATH_CP);
 			if (iamrecursive)
 				addargs(&alist, "-r");
@@ -817,6 +859,7 @@ tolocal(int argc, char **argv)
 			addargs(&alist, "--");
 			addargs(&alist, "%s", argv[i]);
 			addargs(&alist, "%s", argv[argc-1]);
+#endif
 			if (do_local_cmd(&alist))
 				++errs;
 			continue;
@@ -1191,8 +1234,14 @@ sink(int argc, char **argv)
 				namebuf = xmalloc(need);
 				cursize = need;
 			}
-			(void) snprintf(namebuf, need, "%s%s%s", targ,
-			    strcmp(targ, "/") ? "/" : "", cp);
+#ifdef WINDOWS                        
+			char * lastletter = targ + strlen(targ) - 1;
+			(void)snprintf(namebuf, need, "%s%s%s", targ,
+			(lastletter == "\\" || lastletter == "/") ? "" : "\\", cp);
+#else
+            (void)snprintf(namebuf, need, "%s%s%s", targ,
+                strcmp(targ, "/") ? "/" : "", cp);
+#endif			
 			np = namebuf;
 		} else
 			np = targ;
