@@ -1996,20 +1996,21 @@ main(int ac, char **av)
 
 #ifdef WINDOWS
       /* Windows - for sshd child, pick up the accepted socket*/
-      if (is_child) {      
+      if (is_child) {
 		char *stopstring;
 		DWORD_PTR handle;
+
 		handle = strtol(getenv("SSHD_REMSOC"), &stopstring, 16);
-		debug("remote channel %d", handle);
-
-		sock_in = sock_out = newsock = w32_allocate_fd_for_handle((HANDLE)handle, TRUE);
-
-		// we have the socket handle, delete it for child processes we create like shell 
 		SetEnvironmentVariable("SSHD_REMSOC", NULL);
-		SetHandleInformation((HANDLE)handle, HANDLE_FLAG_INHERIT, 0); // make the handle not to be inherited
+		debug("child socket: %d", handle);
+		sock_in = sock_out = newsock = w32_allocate_fd_for_handle((HANDLE)handle, TRUE);
+		fcntl(newsock, F_SETFD, FD_CLOEXEC);
+
 		handle = strtol(getenv("SSHD_STARTUPSOC"), &stopstring, 16);
-		startup_pipe = w32_allocate_fd_for_handle((HANDLE)handle, FALSE);
-		SetHandleInformation((HANDLE)handle, HANDLE_FLAG_INHERIT, 0); // make the handle not to be inherited
+		SetEnvironmentVariable("SSHD_STARTUPSOC", NULL);
+		debug("child startup_pipe: %d", handle); 
+		startup_pipe = w32_allocate_fd_for_handle((HANDLE)handle, FALSE);		
+		fcntl(startup_pipe, F_SETFD, FD_CLOEXEC);
       }
 	  else /* Windows and Unix sshd parent */
 #endif

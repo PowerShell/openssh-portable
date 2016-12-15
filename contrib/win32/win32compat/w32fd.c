@@ -343,8 +343,8 @@ w32_pipe(int *pfds) {
 	fd_table_set(pio[1], write_index);
 	pfds[0] = read_index;
 	pfds[1] = write_index;
-	debug("pipe - read end: handle:%p, io:%p, fd:%d", pio[0]->handle, pio[0], read_index);
-	debug("pipe - write end: handle:%p, io:%p, fd:%d", pio[1]->handle, pio[1], write_index);
+	debug("pipe - r-h:%d,io:%p,fd:%d  w-h:%d,io:%p,fd:%d", 
+	    pio[0]->handle, pio[0], read_index, pio[1]->handle, pio[1], write_index);
 	return 0;
 }
 
