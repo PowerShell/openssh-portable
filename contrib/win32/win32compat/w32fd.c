@@ -347,7 +347,7 @@ w32_pipe(int *pfds) {
 	    pio[0]->handle, pio[0], read_index, pio[1]->handle, pio[1], write_index);
 	return 0;
 }
-
+char *realpath_win(const char *path, char resolved[MAX_PATH]);
 int
 w32_open(const char *pathname, int flags, ...) {
 	int min_index = fd_table_get_min_index();
@@ -359,7 +359,7 @@ w32_open(const char *pathname, int flags, ...) {
 
 	// Skip the first '/' in the pathname
 	char resolvedPathName[MAX_PATH];
-	realpathWin32i(pathname, resolvedPathName);
+	realpath_win(pathname, resolvedPathName);
 
 	pio = fileio_open(resolvedPathName, flags, 0);
 	if (pio == NULL)

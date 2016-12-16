@@ -19,6 +19,8 @@ struct DIR_ {
 	int first;
 };
 
+char * realpath_win(const char *path, char resolved[MAX_PATH]);
+
 /* Open a directory stream on NAME.
    Return a DIR stream on the directory, or NULL if it could not be opened.  */
 DIR * opendir(const char *name)
@@ -32,7 +34,7 @@ DIR * opendir(const char *name)
 	
 	// Skip the first '/' in the pathname
 	char resolvedPathName[MAX_PATH];
-	realpathWin32i(name, resolvedPathName);
+	realpath_win(name, resolvedPathName);
 
 	if ((wname = utf8_to_utf16(resolvedPathName)) == NULL) {
 		errno = ENOMEM;

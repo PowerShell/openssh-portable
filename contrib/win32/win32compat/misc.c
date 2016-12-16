@@ -478,6 +478,8 @@ w32_chown(const char *pathname, unsigned int owner, unsigned int group) {
 	return -1;
 }
 
+char *realpath_win(const char *path, char resolved[MAX_PATH]);
+
 int
 w32_utimes(const char *filename, struct timeval *tvp) {
 	struct utimbuf ub;
@@ -487,7 +489,7 @@ w32_utimes(const char *filename, struct timeval *tvp) {
 
 	// Skip the first '/' in the pathname
 	char resolvedPathName[MAX_PATH];
-	realpathWin32i(filename, resolvedPathName);
+	realpath_win(filename, resolvedPathName);
 	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(resolvedPathName);
 	if (resolvedPathName_utf16 == NULL) {
 		errno = ENOMEM;
@@ -517,11 +519,11 @@ int
 w32_rename(const char *old_name, const char *new_name) {
 	// Skip the first '/' in the pathname
 	char resolvedOldPathName[MAX_PATH];
-	realpathWin32i(old_name, resolvedOldPathName);
+	realpath_win(old_name, resolvedOldPathName);
 
 	// Skip the first '/' in the pathname
 	char resolvedNewPathName[MAX_PATH];
-	realpathWin32i(new_name, resolvedNewPathName);
+	realpath_win(new_name, resolvedNewPathName);
 
 	wchar_t *resolvedOldPathName_utf16 = utf8_to_utf16(resolvedOldPathName);
 	wchar_t *resolvedNewPathName_utf16 = utf8_to_utf16(resolvedNewPathName);
@@ -541,7 +543,7 @@ int
 w32_unlink(const char *path) {
 	// Skip the first '/' in the pathname
 	char resolvedPathName[MAX_PATH];
-	realpathWin32i(path, resolvedPathName);
+	realpath_win(path, resolvedPathName);
 
 	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(resolvedPathName);
 	if (NULL == resolvedPathName_utf16) {
@@ -559,7 +561,7 @@ int
 w32_rmdir(const char *path) {
 	// Skip the first '/' in the pathname
 	char resolvedPathName[MAX_PATH];
-	realpathWin32i(path, resolvedPathName);
+	realpath_win(path, resolvedPathName);
 
 	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(resolvedPathName);
 	if (NULL == resolvedPathName_utf16) {
@@ -606,7 +608,7 @@ int
 w32_mkdir(const char *path_utf8, unsigned short mode) {
 	// Skip the first '/' in the pathname
 	char resolvedPathName[MAX_PATH];
-	realpathWin32i(path_utf8, resolvedPathName);
+	realpath_win(path_utf8, resolvedPathName);
 
 	wchar_t *path_utf16 = utf8_to_utf16(resolvedPathName);
 	if (path_utf16 == NULL) {
@@ -623,7 +625,7 @@ int
 w32_stat(const char *path, struct w32_stat *buf) {
 	// Skip the first '/' in the pathname
 	char resolvedPathName[MAX_PATH];
-	realpathWin32i(path, resolvedPathName);
+	realpath_win(path, resolvedPathName);
 
 	return fileio_stat(resolvedPathName, (struct _stat64*)buf);
 }
@@ -634,7 +636,7 @@ readlink(const char *path, char *link, int linklen)
 {
 	// Skip the first '/' in the pathname
 	char resolvedPathName[MAX_PATH];
-	realpathWin32i(path, resolvedPathName);
+	realpath_win(path, resolvedPathName);
 
 	strcpy_s(link, linklen, resolvedPathName);
 	return 0;
@@ -646,7 +648,7 @@ readlink(const char *path, char *link, int linklen)
 *  path to produce a canonicalized absolute pathname.
 */
 char *
-realpathWin32(const char *path, char resolved[MAX_PATH])
+realpath(const char *path, char resolved[MAX_PATH])
 {
 	char tempPath[MAX_PATH];
 
@@ -681,14 +683,49 @@ realpathWin32(const char *path, char resolved[MAX_PATH])
 
 // like realpathWin32() but takes out the first slash so that windows systems can work on the actual file or directory
 char *
-realpathWin32i(const char *path, char resolved[MAX_PATH])
+realpath_win(const char *path, char resolved[MAX_PATH])
 {
 	char tempPath[MAX_PATH];
-	realpathWin32(path, tempPath);
+	realpath(path, tempPath);
 
 	strncpy(resolved, &tempPath[1], sizeof(tempPath) - 1);
 	return resolved;
 }
+
+// Maximum reparse buffer info size. The max user defined reparse 
+// data is 16KB, plus there's a header. 
+#define MAX_REPARSE_SIZE	17000 
+#define IO_REPARSE_TAG_SYMBOLIC_LINK      IO_REPARSE_TAG_RESERVED_ZERO 
+#define IO_REPARSE_TAG_MOUNT_POINT              (0xA0000003L)       // winnt ntifs 
+#define IO_REPARSE_TAG_HSM                      (0xC0000004L)       // winnt ntifs 
+#define IO_REPARSE_TAG_SIS                      (0x80000007L)       // winnt ntifs 
+#define REPARSE_MOUNTPOINT_HEADER_SIZE   8 
+
+
+typedef struct _REPARSE_DATA_BUFFER {
+	ULONG  ReparseTag;
+	USHORT ReparseDataLength;
+	USHORT Reserved;
+	union {
+		struct {
+			USHORT SubstituteNameOffset;
+			USHORT SubstituteNameLength;
+			USHORT PrintNameOffset;
+			USHORT PrintNameLength;
+			WCHAR PathBuffer[1];
+		} SymbolicLinkReparseBuffer;
+		struct {
+			USHORT SubstituteNameOffset;
+			USHORT SubstituteNameLength;
+			USHORT PrintNameOffset;
+			USHORT PrintNameLength;
+			WCHAR PathBuffer[1];
+		} MountPointReparseBuffer;
+		struct {
+			UCHAR  DataBuffer[1];
+		} GenericReparseBuffer;
+	};
+} REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;
 
 BOOL 
 ResolveLink(wchar_t * tLink, wchar_t *ret, DWORD * plen, DWORD Flags)
@@ -764,34 +801,4 @@ ResolveLink(wchar_t * tLink, wchar_t *ret, DWORD * plen, DWORD Flags)
 
 	CloseHandle(fileHandle);
 	return TRUE;
-}
-
-char *
-get_inside_path(char * opath, BOOL bResolve, BOOL bMustExist)
-{
-	char * ipath;
-	char * temp_name;
-	wchar_t temp[1024];
-	DWORD templen = 1024;
-	WIN32_FILE_ATTRIBUTE_DATA  FileInfo;
-
-	wchar_t* opath_w = utf8_to_utf16(opath);
-	if (!GetFileAttributesExW(opath_w, GetFileExInfoStandard, &FileInfo) && bMustExist)
-	{
-		free(opath_w);
-		return NULL;
-	}
-
-	if (bResolve)
-	{
-		ResolveLink(opath_w, temp, &templen, FileInfo.dwFileAttributes);
-		ipath = utf16_to_utf8(temp);
-	}
-	else
-	{
-		ipath = strdup(opath);
-	}
-
-	free(opath_w);
-	return ipath;
 }
