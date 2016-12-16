@@ -105,7 +105,7 @@ struct dirent *readdir(void *avp)
 
             if ((tmp = utf16_to_utf8(c_file.name)) == NULL)
                 fatal("failed to covert input arguments");
-			pdirentry->d_name = tmp;
+			strncpy(pdirentry->d_name, tmp, strlen(tmp) + 1);
             tmp = NULL;
 
 		    pdirentry->d_ino = 1; // a fictious one like UNIX to say it is nonzero

@@ -51,8 +51,6 @@
 #include "sftp.h"
 #include "sftp-common.h"
 
-
-
 /* Our verbosity */
 static LogLevel log_level = SYSLOG_LEVEL_ERROR;
 
