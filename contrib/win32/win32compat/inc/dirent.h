@@ -11,19 +11,8 @@
 #include <io.h>
 #include <fcntl.h>
 
-// Windows directory structure content
-//struct dirent {
-//	char *d_name ; // name of the directory entry
-//	int  d_ino; // UNIX inode
-//	//unsigned attrib ; // its attributes
-//};
-
 struct dirent {
 	int            d_ino;       /* Inode number */
-	//off_t        d_off;       /* Not an offset; see below */
-	unsigned short d_reclen;    /* Length of this record */
-	unsigned char  d_type;      /* Type of file; not supported
-								by all filesystem types */
 	char           d_name[256]; /* Null-terminated filename */
 };
 
