@@ -85,13 +85,15 @@ int rresvport_af(int *alport, sa_family_t af);
 #endif
 
 #ifndef HAVE_STRLCPY
-/* #include <sys/types.h> XXX Still needed? */
 size_t strlcpy(char *dst, const char *src, size_t siz);
 #endif
 
 #ifndef HAVE_STRLCAT
-/* #include <sys/types.h> XXX Still needed? */
 size_t strlcat(char *dst, const char *src, size_t siz);
+#endif
+
+#ifndef HAVE_STRCASESTR
+char *strcasestr(const char *, const char *);
 #endif
 
 #ifndef HAVE_SETENV
@@ -152,7 +154,6 @@ void compat_init_setproctitle(int argc, char *argv[]);
 #endif
 
 #ifndef HAVE_GETGROUPLIST
-/* #include <grp.h> XXXX Still needed ? */
 int getgrouplist(const char *, gid_t, gid_t *, int *);
 #endif
 
@@ -204,8 +205,6 @@ int asprintf(char **, const char *, ...);
 int openpty(int *, int *, char *, struct termios *, struct winsize *);
 #endif /* HAVE_OPENPTY */
 
-/* #include <sys/types.h> XXX needed? For size_t */
-
 #ifndef HAVE_SNPRINTF
 int snprintf(char *, size_t, SNPRINTF_CONST char *, ...);
 #endif
@@ -237,7 +236,7 @@ long long strtonum(const char *, long long, long long, const char **);
 # undef HAVE_NL_LANGINFO
 #ifndef WINDOWS
 # undef HAVE_MBTOWC
-#endif
+#endif  /* WINDOWS */
 # undef HAVE_LANGINFO_H
 #endif
 

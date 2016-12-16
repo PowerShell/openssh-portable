@@ -2062,7 +2062,7 @@ channel_post_mux_listener(Channel *c, fd_set *readset, fd_set *writeset)
 		close(newsock);
 		return;
 	}
-#endif
+#endif /* !WINDOWS */
 	nc = channel_new("multiplex client", SSH_CHANNEL_MUX_CLIENT,
 	    newsock, newsock, -1, c->local_window_max,
 	    c->local_maxpacket, 0, "mux-control", 1);

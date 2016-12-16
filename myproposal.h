@@ -170,9 +170,9 @@
 #ifdef WINDOWS
 /* compression not supported in Windows yet */
 #define	KEX_DEFAULT_COMP	"none"
-#else
+#else /* !WINDOWS */
 #define	KEX_DEFAULT_COMP	"none,zlib@openssh.com"
-#endif
+#endif /* !WINDOWS */
 #define	KEX_DEFAULT_LANG	""
 
 #define KEX_CLIENT \

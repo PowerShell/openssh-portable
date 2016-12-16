@@ -1,4 +1,4 @@
-/* $OpenBSD: sshd.c,v 1.479 2016/12/04 22:27:25 dtucker Exp $ */
+/* $OpenBSD: sshd.c,v 1.480 2016/12/09 03:04:29 djm Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -1136,6 +1136,14 @@ server_listen(void)
 			close(listen_sock);
 			continue;
 		}
+#ifdef WINDOWS
+		/* disable inheritance on listener socket */
+		if (fcntl(listen_sock, F_SETFD, FD_CLOEXEC) != 0) {
+			error("F_SETFD  FD_CLOEXEC on listener socket %d failed with %d", listen_sock, errno);
+			close(listen_sock);
+			continue;
+		}
+#endif
 		/*
 		 * Set socket options.
 		 * Allow local port reuse in TIME_WAIT.
@@ -1264,7 +1272,15 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 				continue;
 			}
 			if (drop_connection(startups) == 1) {
-				debug("drop connection #%d", startups);
+				char *laddr = get_local_ipaddr(*newsock);
+				char *raddr = get_peer_ipaddr(*newsock);
+
+				verbose("drop connection #%d from [%s]:%d "
+				    "on [%s]:%d past MaxStartups", startups,
+				    raddr, get_peer_port(*newsock),
+				    laddr, get_local_port(*newsock));
+				free(laddr);
+				free(raddr);
 				close(*newsock);
 				continue;
 			}
@@ -1326,30 +1342,33 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 			platform_pre_fork();
 #ifdef WINDOWS
 			/* 
-            * fork() repleacement for Windows -
-            * - Put accepted socket in a env varaibale
-            * - disable inheritance on listening socket and startup fds
-            * - Spawn child sshd.exe 
-            */
-            {
+			* fork() repleacement for Windows -
+			* - Put accepted socket in a env varaibale
+			* - disable inheritance on listening socket and startup fds
+			* - Spawn child sshd.exe
+			*/
+			{
 				char* path_utf8 = utf16_to_utf8(GetCommandLineW());
-				char remotesoc[64];
+				char fd_handle[30];  /* large enough to hold pointer value in hex */
 
 				if (path_utf8 == NULL)
 					fatal("Failed to alloc memory");
 				
-                snprintf(remotesoc, sizeof(remotesoc), "%p", sfd_to_handle(*newsock));
-                SetEnvironmentVariable("SSHD_REMSOC", remotesoc);
-                debug("Remote Handle %s", remotesoc);
-
-                /*TODO - disable inheritance on listener and startup fds*/
+				if (snprintf(fd_handle, sizeof(fd_handle), "%p", sfd_to_handle(*newsock)) == -1
+				    || SetEnvironmentVariable("SSHD_REMSOC", fd_handle) == FALSE
+				    || snprintf(fd_handle, sizeof(fd_handle), "%p", sfd_to_handle(startup_p[1])) == -1
+				    || SetEnvironmentVariable("SSHD_STARTUPSOC", fd_handle) == FALSE
+				    || fcntl(startup_p[0], F_SETFD, FD_CLOEXEC) == -1) {
+					error("unable to set the right environment for child, closing connection ");
+					close(*newsock);
+					/* close child end of startup pipe. parent end will automatically be cleaned up on next iteration*/
+					close(startup_p[1]);
+					continue;
+				}
+                
 				pid = spawn_child(path_utf8, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, CREATE_NEW_PROCESS_GROUP);
-
 				free(path_utf8);
 				close(*newsock);
-				close(startup_pipes[i]);
-				startup_pipes[i] = -1;
-				startups--;
 			}
 #else
 
@@ -1984,19 +2003,21 @@ main(int ac, char **av)
 
 #ifdef WINDOWS
       /* Windows - for sshd child, pick up the accepted socket*/
-      if (is_child) {      
+      if (is_child) {
 		char *stopstring;
-		DWORD_PTR remotesochandle;
-		remotesochandle = strtol(getenv("SSHD_REMSOC"), &stopstring, 16);
-		debug("remote channel %d", remotesochandle);
+		DWORD_PTR handle;
 
-		sock_in = sock_out = newsock = w32_allocate_fd_for_handle((HANDLE)remotesochandle, TRUE);
-
-		// we have the socket handle, delete it for child processes we create like shell 
+		handle = strtol(getenv("SSHD_REMSOC"), &stopstring, 16);
 		SetEnvironmentVariable("SSHD_REMSOC", NULL);
-		SetHandleInformation((HANDLE)remotesochandle, HANDLE_FLAG_INHERIT, 0); // make the handle not to be inherited
+		debug("child socket: %d", handle);
+		sock_in = sock_out = newsock = w32_allocate_fd_for_handle((HANDLE)handle, TRUE);
+		fcntl(newsock, F_SETFD, FD_CLOEXEC);
 
-		startup_pipe = -1;
+		handle = strtol(getenv("SSHD_STARTUPSOC"), &stopstring, 16);
+		SetEnvironmentVariable("SSHD_STARTUPSOC", NULL);
+		debug("child startup_pipe: %d", handle); 
+		startup_pipe = w32_allocate_fd_for_handle((HANDLE)handle, FALSE);		
+		fcntl(startup_pipe, F_SETFD, FD_CLOEXEC);
       }
 	  else /* Windows and Unix sshd parent */
 #endif

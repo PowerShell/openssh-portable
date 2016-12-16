@@ -607,9 +607,9 @@ derelativise_path(const char *path)
 #ifdef WINDOWS
         /* Windows absolute paths have a drive letter followed by :*/
 	if (expanded[1] == ':')
-#else
+#else  /* !WINDOWS */
 	if (*expanded == '/')
-#endif
+#endif  /* !WINDOWS */
 		return expanded;
 	if (getcwd(cwd, sizeof(cwd)) == NULL)
 		fatal("%s: getcwd: %s", __func__, strerror(errno));

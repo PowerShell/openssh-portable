@@ -84,9 +84,9 @@ can_output(void)
 #ifdef WINDOWS
 	/* TODO - confirm this is always true */
 	return 1;
-#else
+#else /* !WINDOWS */
 	return (getpgrp() == tcgetpgrp(STDOUT_FILENO));
-#endif
+#endif /* !WINDOWS */
 }
 
 static void
@@ -231,9 +231,9 @@ refresh_progress_meter(void)
 	wchar_t* wtmp = utf8_to_utf16(buf);
 	WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
     free(wtmp);
-#else
+#else /* !WINDOWS */
 	atomicio(vwrite, STDOUT_FILENO, buf, win_size - 1);
-#endif
+#endif  /* !WINDOWS */
 	last_update = now;
 }
 
@@ -292,9 +292,9 @@ stop_progress_meter(void)
 
 #ifdef WINDOWS
 	WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), L"\n", 1, 0, 0);
-#else
+#else  /* !WINDOWS */
 	atomicio(vwrite, STDOUT_FILENO, "\n", 1);
-#endif
+#endif  /* !WINDOWS */
 }
 
 /*ARGSUSED*/

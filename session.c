@@ -185,7 +185,7 @@ auth_input_request_forwarding(struct passwd * pw)
 #ifdef WINDOWS
         packet_send_debug("Agent forwarding not supported yet in Windows");
         return 0;
-#else
+#else  /* !WINDOWS */
 	Channel *nc;
 	int sock = -1;
 
@@ -242,7 +242,7 @@ auth_input_request_forwarding(struct passwd * pw)
 	auth_sock_name = NULL;
 	auth_sock_dir = NULL;
 	return 0;
-#endif
+#endif  /* !WINDOWS */
 }
 
 static void
@@ -292,6 +292,13 @@ xauth_valid_string(const char *s)
 #define USE_PIPES 1
 
 #ifdef WINDOWS
+/*
+ * do_exec* on Windows
+ * - Read and set user environment variables from registry
+ * - Build subsystem cmdline path
+ * - Interative shell/commands are executed using ssh-shellhost.exe
+ * - ssh-shellhost.exe implements server-side PTY for Windows
+ */
 #include <Shlobj.h>
 #include <Sddl.h>
 
@@ -661,7 +668,7 @@ do_exec_pty(Session *s, const char *command) {
         return do_exec_windows(s, command, 1);
 }
 
-#else
+#else    /* !WINDOWS */
 /*
  * This is called to fork and execute a command when we have no tty.  This
  * will call do_child from the child, and server_loop from the parent after
@@ -955,7 +962,7 @@ do_exec_pty(Session *s, const char *command)
 	session_set_fds(s, ptyfd, fdout, -1, 1, 1);
 	return 0;
 }
-#endif 
+#endif   /* !WINDOWS */
 
 #ifdef LOGIN_NEEDS_UTMPX
 static void
@@ -1856,9 +1863,9 @@ void
 do_child(Session *s, const char *command)
 {
 #ifdef WINDOWS
-        /*not called for Windows */
-        return;
-#else
+	/*not called for Windows */
+	return;
+#else  /* !WINDOWS */
 	extern char **environ;
 	char **env;
 	char *argv[ARGV_MAX];
@@ -2059,7 +2066,7 @@ do_child(Session *s, const char *command)
 	execve(shell, argv, env);
 	perror(shell);
 	exit(1);
-#endif
+#endif   /* !WINDOWS */
 }
 
 void

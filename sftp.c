@@ -312,7 +312,7 @@ static void printf_utf8(char *fmt,  ... ) {
 }
 
 #define printf(a,...)		printf_utf8((a), __VA_ARGS__)
-#endif
+#endif   /* WINDOWS */
 
 static void
 local_do_shell(const char *args)
@@ -2304,14 +2304,12 @@ connect_to_server(char *path, char **args, int *in, int *out)
 		int i = 0;
 		char* full_cmd;
 
-		cmdlen = strlen(w32_programdir()) + 1 + strlen(path) + 1;
+		cmdlen = strlen(path) + 1;
 		for (i = 1; args[i]; i++)
 			cmdlen += strlen(args[i]) + 1;
 
 		full_cmd = xmalloc(cmdlen);
 		full_cmd[0] = '\0';
-		strcat(full_cmd, w32_programdir());
-		strcat(full_cmd, "\\");
 		strcat(full_cmd, path);
 		for (i = 1; args[i]; i++) 	{
 			strcat(full_cmd, " ");

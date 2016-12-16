@@ -90,7 +90,6 @@ int w32_ftruncate(int fd, off_t length);
 char* w32_programdir();
 int w32_fsync(int fd);
 int w32_ioctl(int d, int request, ...);
-char* w32_strcasestr(const char *string, const char *subString);
 
 /* Shutdown constants */
 #define SHUT_WR SD_SEND
@@ -164,7 +163,6 @@ explicit_bzero(void *b, size_t len);
 /* string.h overrides */
 #define strcasecmp _stricmp
 #define strncasecmp _strnicmp
-#define strcasestr w32_strcasestr
 
 /* stdio.h overrides */
 #define fopen w32_fopen_utf8

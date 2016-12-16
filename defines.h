@@ -186,7 +186,7 @@ enum
 /* TODO - is this the right place for these defs ?*/
 # define S_ISUID            0x800 
 # define S_ISGID            0x400
-#endif
+#endif /* WINDOWS */
 #endif /* S_IXUSR */
 
 #if !defined(MAP_ANON) && defined(MAP_ANONYMOUS)
@@ -789,15 +789,16 @@ struct winsize {
 # define CUSTOM_SYS_AUTH_PASSWD 1
 #endif
 
+#ifdef WINDOWS
+/* Windows has custom non-BSD logic for password auth */
+# define CUSTOM_SYS_AUTH_PASSWD 1
+#endif /* WINDOWS */
+
 #if defined(HAVE_LIBIAF) && defined(HAVE_SET_ID) && !defined(HAVE_SECUREWARE)
 # define CUSTOM_SYS_AUTH_PASSWD 1
 #endif
 #if defined(HAVE_LIBIAF) && defined(HAVE_SET_ID) && !defined(BROKEN_LIBIAF)
 # define USE_LIBIAF
-#endif
-
-#ifdef WINDOWS
-# define CUSTOM_SYS_AUTH_PASSWD 1
 #endif
 
 /* HP-UX 11.11 */

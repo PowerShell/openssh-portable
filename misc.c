@@ -458,7 +458,7 @@ colon(char *cp)
         }
     }
     return NULL;
-#else
+#else /* !WINDOWS */
 	if (*cp == '[')
 		flag = 1;
 
@@ -473,7 +473,7 @@ colon(char *cp)
 			return NULL;
 	}
 	return NULL;
-#endif
+#endif /* !WINDOWS */
 }
 
 /*
@@ -810,7 +810,7 @@ sanitise_stdfd(void)
 #ifdef WINDOWS
 	/* nothing to do for Windows*/
 	return;
-#else
+#else /* !WINDOWS */
 	int nullfd, dupfd;
 
 	if ((nullfd = dupfd = open(_PATH_DEVNULL, O_RDWR)) == -1) {
@@ -829,7 +829,7 @@ sanitise_stdfd(void)
 	}
 	if (nullfd > STDERR_FILENO)
 		close(nullfd);
-#endif
+#endif /* !WINDOWS */
 }
 
 char *
@@ -1283,12 +1283,13 @@ bind_permitted(int port, uid_t uid)
 
 /* returns 1 if process is already daemonized, 0 otherwise */
 #ifdef WINDOWS
+/* TODO - what does this do ? */
 int 
 daemonized(void)
 {
 	return 1;
 }
-#else
+#else /* !WINDOWS */
 int
 daemonized(void)
 {
@@ -1305,4 +1306,4 @@ daemonized(void)
 	debug3("already daemonized");
 	return 1;
 }
-#endif
+#endif /* !WINDOWS */

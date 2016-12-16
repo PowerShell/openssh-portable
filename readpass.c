@@ -68,37 +68,12 @@ ssh_askpass(char *askpass, const char *msg)
 	osigchld = signal(SIGCHLD, SIG_DFL);
 #ifdef WINDOWS 
 	/* spawd child for Windows */
-	pid = -1;
-	{
-		PROCESS_INFORMATION pi = { 0 };
-		STARTUPINFOW si = { 0 };
-		
-		fcntl(p[0], F_SETFD, FD_CLOEXEC);
-		
-		si.cb = sizeof(STARTUPINFOW);
-		si.hStdInput = sfd_to_handle(p[1]);
-		si.hStdOutput = sfd_to_handle(p[1]);
-		si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-		si.wShowWindow = SW_HIDE;
-		si.dwFlags = STARTF_USESTDHANDLES;
-		si.lpDesktop = NULL;
-		wchar_t* wtmp = utf8_to_utf16(askpass);
-		if (CreateProcessW(NULL, wtmp, NULL, NULL, TRUE,
-			NORMAL_PRIORITY_CLASS, NULL,
-			NULL, &si, &pi) == TRUE) {
-			pid = pi.dwProcessId;
-			CloseHandle(pi.hThread);
-			sw_add_child(pi.hProcess, pi.dwProcessId);
-		}
-		else
-			errno = GetLastError();
-		
-		free(wtmp);
-	}
+	fcntl(p[0], F_SETFD, FD_CLOEXEC);
+	pid = spawn_child(askpass, p[1], p[1], STDERR_FILENO, 0);
 	if (pid < 0) {
-#else
+#else  /* !WINDOWS */
 	if ((pid = fork()) < 0) {
-#endif
+#endif  /* !WINDOWS */
 		error("ssh_askpass: fork: %s", strerror(errno));
 		signal(SIGCHLD, osigchld);
 		return NULL;
@@ -214,7 +189,7 @@ read_passphrase(const char *prompt, int flags)
 
 	return ret;
 
-#else
+#else   /* !WINDOWS */
 
 	char *askpass = NULL, *ret, buf[1024];
 	int rppflags, use_askpass = 0, ttyfd;
@@ -263,7 +238,7 @@ read_passphrase(const char *prompt, int flags)
 	explicit_bzero(buf, sizeof(buf));
 	return ret;
 	
-#endif
+#endif  /* !WINDOWS */
 
 }
 

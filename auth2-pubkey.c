@@ -219,7 +219,7 @@ userauth_pubkey(Authctxt *authctxt)
 				
 		}
 
-#else 
+#else  /* !WINDOWS */
 		if (PRIVSEP(user_key_allowed(authctxt->pw, key, 1)) &&
 		    PRIVSEP(key_verify(key, sig, slen, buffer_ptr(&b),
 		    buffer_len(&b))) == 1) {
@@ -230,7 +230,7 @@ userauth_pubkey(Authctxt *authctxt)
 		}
 		buffer_free(&b);
 		free(sig);
-#endif 
+#endif  /* !WINDOWS */
 
 	} else {
 		debug("%s: test whether pkalg/pkblob are acceptable for %s %s",
@@ -247,7 +247,7 @@ userauth_pubkey(Authctxt *authctxt)
 		 */
 #ifndef WINDOWS
 		if (PRIVSEP(user_key_allowed(authctxt->pw, key, 0)))  
-#endif		
+#endif  /* !WINDOWS */
 		{
 			packet_start(SSH2_MSG_USERAUTH_PK_OK);
 			packet_put_string(pkalg, alen);
@@ -448,7 +448,7 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 #ifdef WINDOWS
         logit("AuthorizedPrincipalsCommand and AuthorizedKeysCommand are not supported in Windows yet");
         return 0;
-#else
+#else  /* !WINDOWS */
 	FILE *f;
 	struct stat st;
 	int devnull, p[2], i;
@@ -568,7 +568,7 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 	debug3("%s: %s pid %ld", __func__, tag, (long)pid);
 	*child = f;
 	return pid;
-#endif
+#endif  /* !WINDOWS */
 }
 
 /* Returns 0 if pid exited cleanly, non-zero otherwise */

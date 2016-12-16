@@ -470,9 +470,9 @@ static int
 execute_in_shell(const char *cmd)
 {
 #ifdef WINDOWS
-	fatal("LocalCommand execution is not supported on Windows");
+	fatal("LocalCommand execution is not supported on Windows yet");
 	return 0;
-#else
+#else /* !WINDOWS */
 	pid_t pid;
 	int devnull, status;
 	extern uid_t original_real_uid;
@@ -530,7 +530,7 @@ execute_in_shell(const char *cmd)
 	}
 	debug3("command returned status %d", WEXITSTATUS(status));
 	return WEXITSTATUS(status);
-#endif
+#endif /* !WINDOWS */
 }
 
 /*
@@ -1724,7 +1724,7 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 		    (sb.st_mode & 022) != 0))
 			fatal("Bad owner or permissions on %s", filename);
 	}
-#endif
+#endif /* !WINDOWS */
 	debug("Reading configuration data %.200s", filename);
 
 	/*

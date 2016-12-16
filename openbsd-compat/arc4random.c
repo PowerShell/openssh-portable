@@ -117,9 +117,9 @@ _rs_stir(void)
 	/* TODO - replace rand() with a more secure generator */
 	for(int i =0;i<sizeof(rnd);i++)
 		rnd[i] = 48 + rand() % 10;
-#else
+#else   /* !WINDOWS */
 	getrnd(rnd, sizeof(rnd));
-#endif
+#endif    /* !WINDOWS */
 #endif
 
 	if (!rs_initialized) {

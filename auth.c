@@ -489,9 +489,9 @@ auth_secure_path(const char *name, struct stat *stp, const char *pw_dir,
     uid_t uid, char *err, size_t errlen)
 {
 #ifdef WINDOWS
-        error("auth_secure_path should not be called in Windows");
-        return -1;
-#else
+	error("auth_secure_path should not be called in Windows");
+	return -1;
+#else /* !WINDOWS */
 	char buf[PATH_MAX], homedir[PATH_MAX];
 	char *cp;
 	int comparehome = 0;
@@ -544,7 +544,7 @@ auth_secure_path(const char *name, struct stat *stp, const char *pw_dir,
 			break;
 	}
 	return 0;
-#endif 
+#endif  /* !WINDOWS */
 }
 
 /*
@@ -585,7 +585,7 @@ auth_openfile(const char *file, struct passwd *pw, int strict_modes,
                 return NULL;
         }
         /* TODO check permissions  */
-#else
+#else  /* !WINDOWS */
 	if ((fd = open(file, O_RDONLY|O_NONBLOCK)) == -1) {
 		if (log_missing || errno != ENOENT)
 			debug("Could not open %s '%s': %s", file_type, file,
@@ -615,7 +615,7 @@ auth_openfile(const char *file, struct passwd *pw, int strict_modes,
 		auth_debug_add("Ignored %s: %s", file_type, line);
 		return NULL;
 	}
-#endif
+#endif  /* !WINDOWS */
 	return f;
 }
 

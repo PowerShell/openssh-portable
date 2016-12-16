@@ -1041,7 +1041,7 @@ do_gen_all_hostkeys(struct passwd *pw)
 		if ((f = fopen(identity_file, "w")) == NULL) {
 			error("fopen %s failed: %s", identity_file, strerror(errno));
 		/* TODO - set permissions on file */
-#else
+#else  /* !WINDOWS */
 		fd = open(identity_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if (fd == -1) {
 			error("Could not save your public key in %s",
@@ -1054,7 +1054,7 @@ do_gen_all_hostkeys(struct passwd *pw)
 		if (f == NULL) {
 			error("fdopen %s failed", identity_file);
 			close(fd);
-#endif
+#endif  /* !WINDOWS */
 			sshkey_free(public);
 			first = 0;
 			continue;
@@ -1196,7 +1196,7 @@ do_known_hosts(struct passwd *pw, const char *name)
 {
 #ifdef WINDOWS
         fatal("Updating known_hosts is not supported in Windows yet.");
-#else
+#else  /* !WINDOWS */
 	  
 	char *cp, tmp[PATH_MAX], old[PATH_MAX];
 	int r, fd, oerrno, inplace = 0;
@@ -1289,7 +1289,7 @@ do_known_hosts(struct passwd *pw, const char *name)
 	}
 
 	exit (find_host && !ctx.found_key);
-#endif 
+#endif   /* !WINDOWS */
 }
 
 /*
@@ -2741,13 +2741,13 @@ passphrase_again:
 	if ((f = fopen(identity_file, "w")) == NULL)
 		fatal("fopen %s failed: %s", identity_file, strerror(errno));
 	/* TODO - set permissions on file */
-#else
+#else  /* !WINDOWS */
 	if ((fd = open(identity_file, O_WRONLY|O_CREAT|O_TRUNC, 0644)) == -1)
 		fatal("Unable to save public key to %s: %s",
 		    identity_file, strerror(errno));
 	if ((f = fdopen(fd, "w")) == NULL)
 		fatal("fdopen %s failed: %s", identity_file, strerror(errno));
-#endif
+#endif  /* !WINDOWS */
 	if ((r = sshkey_write(public, f)) != 0)
 		error("write key failed: %s", ssh_err(r));
 	fprintf(f, " %s\n", comment);

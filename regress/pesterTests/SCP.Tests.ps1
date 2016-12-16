@@ -158,14 +158,14 @@ Describe "Tests for scp command" -Tags "CI" {
             $equal | Should Be $true
         }
 
-        It 'File Copy with -p -c -v option: <Title> ' -TestCases:$testData {
+        <#It 'File Copy with -p -c -v option: <Title> ' -TestCases:$testData {
             param([string]$Title, $Source, $Destination)
 
             .\scp -p -c aes128-ctr -C $Source $Destination                                   #Todo: add -v after it is supported.
             #validate file content. DestPath is the path to the file.
             $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length).Length -eq 0 #todo: add LastWriteTime in comparison when issue is fixed
             $equal | Should Be $true
-        }
+        }#>
 
         <# known issue 369
         It 'Directory recursive Copy with -v option: <Title> ' -TestCases:$testData1 {

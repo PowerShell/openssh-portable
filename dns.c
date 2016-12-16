@@ -207,7 +207,7 @@ verify_host_key_dns(const char *hostname, struct sockaddr *address,
 #ifdef WINDOWS
 	error("dns host key verification is not supported in Windows yet");
 	return -1;
-#else
+#else /* !WINDOWS */
 	u_int counter;
 	int result;
 	struct rrsetinfo *fingerprints = NULL;
@@ -310,7 +310,7 @@ verify_host_key_dns(const char *hostname, struct sockaddr *address,
 		debug("no host key fingerprint found in DNS");
 
 	return 0;
-#endif 
+#endif  /* !WINDOWS */
 }
 
 /*
