@@ -32,7 +32,11 @@ DIR * opendir(const char *name)
     int needed;
     char *tmp = NULL;
 
-    if ((wname = utf8_to_utf16(name)) == NULL)
+	// Skip the first '/' in the pathname
+	char resolvedPathName[MAX_PATH];
+	realpathWin32i(name, resolvedPathName);
+
+    if ((wname = utf8_to_utf16(resolvedPathName)) == NULL)
         fatal("failed to covert input arguments");
 
     // add *.* for Windows _findfirst() search pattern
@@ -101,7 +105,7 @@ struct dirent *readdir(void *avp)
 
             if ((tmp = utf16_to_utf8(c_file.name)) == NULL)
                 fatal("failed to covert input arguments");
-            pdirentry->d_name= tmp;
+			pdirentry->d_name = tmp;
             tmp = NULL;
 
 		    pdirentry->d_ino = 1; // a fictious one like UNIX to say it is nonzero

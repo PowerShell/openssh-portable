@@ -67,6 +67,7 @@ fudge_readdir(struct SFTP_OPENDIR *od)
 	/* Solaris needs sizeof(dirent) + path length (see below) */
 	static char buf[sizeof(struct dirent) + MAXPATHLEN];
 	struct dirent *ret = (struct dirent *)buf;
+
 #ifdef __GNU_LIBRARY__
 	static int inum = 1;
 #endif /* __GNU_LIBRARY__ */
@@ -83,8 +84,16 @@ fudge_readdir(struct SFTP_OPENDIR *od)
 #ifdef BROKEN_ONE_BYTE_DIRENT_D_NAME
 	strlcpy(ret->d_name, od->dir[od->offset++]->filename, MAXPATHLEN);
 #else
+ #ifdef WINDOWS
+	static char temp[MAX_PATH];
+	memset(temp, 0, sizeof(temp));
+	ret->d_name = temp;
+	strlcpy(ret->d_name, od->dir[od->offset]->filename, strlen(od->dir[od->offset]->filename)+1);
+	od->offset++;
+ #else
 	strlcpy(ret->d_name, od->dir[od->offset++]->filename,
 	    sizeof(ret->d_name));
+ #endif
 #endif
 #ifdef __GNU_LIBRARY__
 	/*

@@ -860,57 +860,51 @@ int w32_fsync(int fd) {
     return FlushFileBuffers(w32_fd_to_handle(fd));
 }
 
+/*
+* This method will expands all symbolic links and resolves references to /./,
+*  /../ and extra '/' characters in the null-terminated string named by
+*  path to produce a canonicalized absolute pathname.
+*/
 char *realpathWin32(const char *path, char resolved[MAX_PATH])
 {
-	char realpath[MAX_PATH];
+	char tempPath[MAX_PATH];
 
-	strlcpy(resolved, path + 1, sizeof(realpath));
-	backslashconvert(resolved);
-	PathCanonicalizeA(realpath, resolved);
-	slashconvert(realpath);
+	if ((0 == strcmp(path, "./")) || (0 == strcmp(path, "."))) {
+		tempPath[0] = '/';
+		_getcwd(&tempPath[1], sizeof(tempPath) - 1);
+		slashconvert(tempPath);
 
-	/*
-	* Store terminating slash in 'X:/' on Windows.
-	*/
-
-	if (realpath[1] == ':' && realpath[2] == 0)
-	{
-		realpath[2] = '/';
-		realpath[3] = 0;
+		strncpy(resolved, tempPath, strlen(tempPath) + 1);
+		return resolved;
 	}
 
-	resolved[0] = *path; // will be our first slash in /x:/users/test1 format
-	strncpy(resolved + 1, realpath, sizeof(realpath) - 1);
+	if (path[0] != '/')
+		strlcpy(resolved, path, sizeof(tempPath));
+	else
+		strlcpy(resolved, path + 1, sizeof(tempPath));
+
+	backslashconvert(resolved);
+	PathCanonicalizeA(tempPath, resolved);
+	slashconvert(tempPath);
+
+	// Store terminating slash in 'X:/' on Windows.	
+	if (tempPath[1] == ':' && tempPath[2] == 0) {
+		tempPath[2] = '/';
+		tempPath[3] = 0;
+	}
+
+	resolved[0] = '/'; // will be our first slash in /x:/users/test1 format
+	strncpy(resolved + 1, tempPath, sizeof(tempPath) - 1);
 	return resolved;
 }
 
 // like realpathWin32() but takes out the first slash so that windows systems can work on the actual file or directory
 char *realpathWin32i(const char *path, char resolved[MAX_PATH])
 {
-	char realpath[MAX_PATH];
+	char tempPath[MAX_PATH];
+	realpathWin32(path, tempPath);
 
-	if (path[0] != '/') {
-		// absolute form x:/abc/def given, no first slash to take out
-		strlcpy(resolved, path, sizeof(realpath));
-	}
-	else
-		strlcpy(resolved, path + 1, sizeof(realpath));
-
-	backslashconvert(resolved);
-	PathCanonicalizeA(realpath, resolved);
-	slashconvert(realpath);
-
-	/*
-	* Store terminating slash in 'X:/' on Windows.
-	*/
-
-	if (realpath[1] == ':' && realpath[2] == 0)
-	{
-		realpath[2] = '/';
-		realpath[3] = 0;
-	}
-
-	strncpy(resolved, realpath, sizeof(realpath));
+	strncpy(resolved, &tempPath[1], sizeof(tempPath) - 1);
 	return resolved;
 }
 
@@ -988,7 +982,7 @@ BOOL ResolveLink(wchar_t * tLink, wchar_t *ret, DWORD * plen, DWORD Flags)
 	CloseHandle(fileHandle);
 	return TRUE;
 }
-char	*xstrdup(const char *);
+
 char * get_inside_path(char * opath, BOOL bResolve, BOOL bMustExist)
 {
 	char * ipath;
@@ -1011,7 +1005,7 @@ char * get_inside_path(char * opath, BOOL bResolve, BOOL bMustExist)
 	}
 	else
 	{
-		ipath = xstrdup(opath);
+		ipath = strdup(opath);
 	}
 
 	free(opath_w);

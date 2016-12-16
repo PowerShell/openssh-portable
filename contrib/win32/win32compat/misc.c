@@ -446,7 +446,7 @@ strmode(mode_t mode, char *p)
 int 
 w32_chmod(const char *pathname, mode_t mode) {
     /* TODO - implement this */
-	errno = ENOTSUP;
+	errno = EOPNOTSUPP;
     return -1;
 }
 
@@ -458,7 +458,7 @@ w32_strcasestr(const char *string, const char *subString) {
 int 
 w32_chown(const char *pathname, unsigned int owner, unsigned int group) {
 	/* TODO - implement this */
-	errno = ENOTSUP;
+	errno = EOPNOTSUPP;
 	return -1;
 }
 
@@ -486,14 +486,14 @@ w32_utimes(const char *filename, struct timeval *tvp) {
 int 
 w32_symlink(const char *target, const char *linkpath) {
 	// Not supported in windows
-	errno = ENOTSUP;
+	errno = EOPNOTSUPP;
 	return -1;
 }
 
 int 
 link(const char *oldpath, const char *newpath) {
-	// Not supported in windows
-	errno = ENOTSUP;
+	// Not supported in windows	
+	errno = EOPNOTSUPP;
 	return -1;
 }
 
