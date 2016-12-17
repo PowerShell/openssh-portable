@@ -418,14 +418,15 @@ make_absolute(char *p, const char *pwd)
 		free(p);
 		return(abs_str);
 	}
-	else
+
 #ifdef WINDOWS
-		// Append "/" to the absolute windows path		
-		if(strlen(p) >= 2 && p[1] == ':') {
-			p = path_append("/", p);
-		}
+	slashconvert(p); // convert '\\' to '/'
+	// Append "/" to the absolute windows path		
+	if(strlen(p) >= 2 && p[1] == ':') {
+		p = path_append("/", p);
+	}
 #endif
-		return(p);
+	return(p);
 
 }
 
@@ -915,15 +916,15 @@ do_ls_dir(struct sftp_conn *conn, const char *path,
 		} 
         else {
 #ifdef WINDOWS
-                /* cannot use printf_utf8 becuase of width specification */
-                /* printf_utf8 does not account for utf-16 based argument widths */
-	        wchar_t buf[1024]; 
-	        wchar_t* wtmp = utf8_to_utf16(fname);
-	        swprintf(buf, 1024, L"%-*s", colspace, wtmp);
-	        WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), buf, wcslen(buf), 0, 0);
-            free(wtmp);
+            /* cannot use printf_utf8 becuase of width specification */
+            /* printf_utf8 does not account for utf-16 based argument widths */
+			wchar_t buf[1024]; 
+			wchar_t* wtmp = utf8_to_utf16(fname);
+			swprintf(buf, 1024, L"%-*s", colspace, wtmp);
+			WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), buf, wcslen(buf), 0, 0);
+			free(wtmp);
 #else
-            printf("%-*s", colspace, fname);
+	        printf("%-*s", colspace, fname);
 #endif
 			if (c >= columns) {
 				printf("\n");
@@ -1009,15 +1010,15 @@ do_globbed_ls(struct sftp_conn *conn, const char *path,
                         free(lname);
 		} else {
 #ifdef WINDOWS
-                        /* cannot use printf_utf8 becuase of width specification */
-                        /* printf_utf8 does not account for utf-16 based argument widths */
-                        wchar_t buf[1024];
-                        wchar_t* wtmp = utf8_to_utf16(fname);
-                        swprintf(buf, 1024, L"%-*s", colspace, wtmp);
-                        WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), buf, wcslen(buf), 0, 0);
-                        free(wtmp);
+            /* cannot use printf_utf8 becuase of width specification */
+            /* printf_utf8 does not account for utf-16 based argument widths */
+            wchar_t buf[1024];
+            wchar_t* wtmp = utf8_to_utf16(fname);
+            swprintf(buf, 1024, L"%-*s", colspace, wtmp);
+            WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), buf, wcslen(buf), 0, 0);
+            free(wtmp);
 #else
-                        printf("%-*s", colspace, fname);
+            printf("%-*s", colspace, fname);
 #endif
             if (c >= columns) {
 				printf("\n");
@@ -1503,7 +1504,7 @@ parse_dispatch_command(struct sftp_conn *conn, const char *cmd, char **pwd,
 	if (ignore_errors != 0)
 		err_abort = 0;
 
-	memset(&g, 0, sizeof(g));
+	memset(&g, 0, sizeof(g));	
 
 	/* Perform command */
 	switch (cmdnum) {
@@ -2318,7 +2319,7 @@ connect_to_server(char *path, char **args, int *in, int *out)
 		/* disable inheritance on local pipe ends*/
 		fcntl(pout[1], F_SETFD, FD_CLOEXEC);
 		fcntl(pin[0], F_SETFD, FD_CLOEXEC);
-
+		
 		sshpid = spawn_child(full_cmd, c_in, c_out, STDERR_FILENO, 0);
 		free(full_cmd);
  	}

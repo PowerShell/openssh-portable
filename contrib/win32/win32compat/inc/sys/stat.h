@@ -33,6 +33,10 @@
 #define S_IFLNK  _S_IFLNK
 #define S_IFSOCK _S_IFSOCK
 
+ /* TODO - is this the right place for these defs ?*/
+# define S_ISUID            0x800 
+# define S_ISGID            0x400
+
 #define stat w32_stat
 #define lstat w32_stat
 #define mkdir w32_mkdir

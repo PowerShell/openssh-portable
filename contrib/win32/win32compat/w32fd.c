@@ -347,7 +347,7 @@ w32_pipe(int *pfds) {
 	    pio[0]->handle, pio[0], read_index, pio[1]->handle, pio[1], write_index);
 	return 0;
 }
-
+char *realpath_win(const char *path, char resolved[MAX_PATH]);
 int
 w32_open(const char *pathname, int flags, ...) {
 	int min_index = fd_table_get_min_index();
@@ -359,7 +359,7 @@ w32_open(const char *pathname, int flags, ...) {
 
 	// Skip the first '/' in the pathname
 	char resolvedPathName[MAX_PATH];
-	realpathWin32i(pathname, resolvedPathName);
+	realpath_win(pathname, resolvedPathName);
 
 	pio = fileio_open(resolvedPathName, flags, 0);
 	if (pio == NULL)
@@ -415,21 +415,11 @@ w32_fstat(int fd, struct w32_stat *buf) {
 	return fileio_fstat(fd_table.w32_ios[fd], (struct _stat64*)buf);
 }
 
-int
-w32_stat(const char *path, struct w32_stat *buf) {
-	// Skip the first '/' in the pathname
-	char resolvedPathName[MAX_PATH];
-	realpathWin32i(path, resolvedPathName);
-		
-	return fileio_stat(resolvedPathName, (struct _stat64*)buf);
-}
-
 long 
 w32_lseek(int fd, long offset, int origin) {
 	CHECK_FD(fd);
 	return fileio_lseek(fd_table.w32_ios[fd], offset, origin);
 }
-
 
 int
 w32_isatty(int fd) {
@@ -853,178 +843,9 @@ w32_ftruncate(int fd, off_t length) {
     return 0;
 }
 
-
-int w32_fsync(int fd) {
+int 
+w32_fsync(int fd) {
     CHECK_FD(fd);
 
     return FlushFileBuffers(w32_fd_to_handle(fd));
-}
-
-char *realpathWin32(const char *path, char resolved[MAX_PATH])
-{
-	char realpath[MAX_PATH];
-
-	strlcpy(resolved, path + 1, sizeof(realpath));
-	backslashconvert(resolved);
-	PathCanonicalizeA(realpath, resolved);
-	slashconvert(realpath);
-
-	/*
-	* Store terminating slash in 'X:/' on Windows.
-	*/
-
-	if (realpath[1] == ':' && realpath[2] == 0)
-	{
-		realpath[2] = '/';
-		realpath[3] = 0;
-	}
-
-	resolved[0] = *path; // will be our first slash in /x:/users/test1 format
-	strncpy(resolved + 1, realpath, sizeof(realpath) - 1);
-	return resolved;
-}
-
-// like realpathWin32() but takes out the first slash so that windows systems can work on the actual file or directory
-char *realpathWin32i(const char *path, char resolved[MAX_PATH])
-{
-	char realpath[MAX_PATH];
-
-	if (path[0] != '/') {
-		// absolute form x:/abc/def given, no first slash to take out
-		strlcpy(resolved, path, sizeof(realpath));
-	}
-	else
-		strlcpy(resolved, path + 1, sizeof(realpath));
-
-	backslashconvert(resolved);
-	PathCanonicalizeA(realpath, resolved);
-	slashconvert(realpath);
-
-	/*
-	* Store terminating slash in 'X:/' on Windows.
-	*/
-
-	if (realpath[1] == ':' && realpath[2] == 0)
-	{
-		realpath[2] = '/';
-		realpath[3] = 0;
-	}
-
-	strncpy(resolved, realpath, sizeof(realpath));
-	return resolved;
-}
-
-BOOL ResolveLink(wchar_t * tLink, wchar_t *ret, DWORD * plen, DWORD Flags)
-{
-	HANDLE   fileHandle;
-	BYTE     reparseBuffer[MAX_REPARSE_SIZE];
-	PBYTE    reparseData;
-	PREPARSE_GUID_DATA_BUFFER reparseInfo = (PREPARSE_GUID_DATA_BUFFER)reparseBuffer;
-	PREPARSE_DATA_BUFFER msReparseInfo = (PREPARSE_DATA_BUFFER)reparseBuffer;
-	DWORD   returnedLength;
-
-	if (Flags & FILE_ATTRIBUTE_DIRECTORY)
-	{
-		fileHandle = CreateFileW(tLink, 0,
-			FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-			OPEN_EXISTING,
-			FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, 0);
-
-	}
-	else {
-
-		//    
-		// Open the file    
-		//    
-		fileHandle = CreateFileW(tLink, 0,
-			FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-			OPEN_EXISTING,
-			FILE_FLAG_OPEN_REPARSE_POINT, 0);
-	}
-	if (fileHandle == INVALID_HANDLE_VALUE)
-	{
-		swprintf_s(ret, *plen, L"%ls", tLink);
-		return TRUE;
-	}
-
-	if (GetFileAttributesW(tLink) & FILE_ATTRIBUTE_REPARSE_POINT) {
-
-		if (DeviceIoControl(fileHandle, FSCTL_GET_REPARSE_POINT,
-			NULL, 0, reparseInfo, sizeof(reparseBuffer),
-			&returnedLength, NULL)) {
-
-			if (IsReparseTagMicrosoft(reparseInfo->ReparseTag)) {
-
-				switch (reparseInfo->ReparseTag) {
-				case 0x80000000 | IO_REPARSE_TAG_SYMBOLIC_LINK:
-				case IO_REPARSE_TAG_MOUNT_POINT:
-					if (*plen >= msReparseInfo->MountPointReparseBuffer.SubstituteNameLength)
-					{
-						reparseData = (PBYTE)&msReparseInfo->SymbolicLinkReparseBuffer.PathBuffer;
-						WCHAR temp[1024];
-						wcsncpy_s(temp, 1024,
-							(PWCHAR)(reparseData + msReparseInfo->MountPointReparseBuffer.SubstituteNameOffset),
-							(size_t)msReparseInfo->MountPointReparseBuffer.SubstituteNameLength);
-						temp[msReparseInfo->MountPointReparseBuffer.SubstituteNameLength] = 0;
-						swprintf_s(ret, *plen, L"%ls", &temp[4]);
-					}
-					else
-					{
-						swprintf_s(ret, *plen, L"%ls", tLink);
-						return FALSE;
-					}
-
-					break;
-				default:
-					break;
-				}
-			}
-		}
-	}
-	else {
-		swprintf_s(ret, *plen, L"%ls", tLink);
-	}
-
-	CloseHandle(fileHandle);
-	return TRUE;
-}
-char	*xstrdup(const char *);
-char * get_inside_path(char * opath, BOOL bResolve, BOOL bMustExist)
-{
-	char * ipath;
-	char * temp_name;
-	wchar_t temp[1024];
-	DWORD templen = 1024;
-	WIN32_FILE_ATTRIBUTE_DATA  FileInfo;
-
-	wchar_t* opath_w = utf8_to_utf16(opath);
-	if (!GetFileAttributesExW(opath_w, GetFileExInfoStandard, &FileInfo) && bMustExist)
-	{
-		free(opath_w);
-		return NULL;
-	}
-
-	if (bResolve)
-	{
-		ResolveLink(opath_w, temp, &templen, FileInfo.dwFileAttributes);
-		ipath = utf16_to_utf8(temp);
-	}
-	else
-	{
-		ipath = xstrdup(opath);
-	}
-
-	free(opath_w);
-	return ipath;
-}
-
-// if file is symbolic link, copy its link into "link" .
-int readlink(const char *path, char *link, int linklen)
-{
-	// Skip the first '/' in the pathname
-	char resolvedPathName[MAX_PATH];
-	realpathWin32i(path, resolvedPathName);
-
-	strcpy_s(link, linklen, resolvedPathName);
-	return 0;
 }

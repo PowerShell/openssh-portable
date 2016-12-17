@@ -205,7 +205,7 @@ sshkey_perm_ok(int fd, const char *filename)
 		error("This private key will be ignored.");
 		return SSH_ERR_KEY_BAD_PERMISSIONS;
 	}
-#endif /* ifndef WINDOWS */
+#endif /* !WINDOWS */
 	return 0;
 }
 

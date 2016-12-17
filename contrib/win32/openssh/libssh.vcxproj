@@ -285,6 +285,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)sandbox-pledge.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)utf8.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\ttymodes_windows.c" />
+    <ClCompile Include="..\..\..\digest-openssl.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(OpenSSH-Src-Path)crypto-wrap.h" />

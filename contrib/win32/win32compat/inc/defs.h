@@ -94,3 +94,4 @@ struct winsize {
         unsigned short ws_xpixel;       /* horizontal size, pixels */
         unsigned short ws_ypixel;       /* vertical size, pixels */
 };
+

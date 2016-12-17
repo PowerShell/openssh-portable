@@ -182,11 +182,6 @@ enum
 # define S_IRWXU			0000700	/* read, write, execute */
 # define S_IRWXG			0000070	/* read, write, execute */
 # define S_IRWXO			0000007	/* read, write, execute */
-#ifdef WINDOWS
-/* TODO - is this the right place for these defs ?*/
-# define S_ISUID            0x800 
-# define S_ISGID            0x400
-#endif /* WINDOWS */
 #endif /* S_IXUSR */
 
 #if !defined(MAP_ANON) && defined(MAP_ANONYMOUS)

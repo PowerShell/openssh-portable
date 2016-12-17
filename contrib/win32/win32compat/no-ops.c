@@ -123,3 +123,7 @@ int
 setsid(void) {
         return 0;
 }
+
+int startup_handler(void) {
+	return 0;
+}

@@ -432,33 +432,11 @@ char *
 colon(char *cp)
 {
 	int flag = 0;
-    int len = 0;
+	int len = 0;
 
 	if (*cp == ':')		/* Leading colon is part of file name. */
 		return NULL;
 
-#ifdef WINDOWS
-	/* TODO - Why is this required ?*/
-    for (; *cp; ++cp) {
-        len++;
-
-        if (*cp == '[')
-            flag = 1;
-
-        if (flag && *cp != ']')
-            continue;
-
-        if (*cp == ']')
-            flag = 0;
-		/* avoid x: format for drive letter in Windows */
-        if (*cp == ':') {
-            if (len != 2) { 
-                return (cp);
-            }
-        }
-    }
-    return NULL;
-#else /* !WINDOWS */
 	if (*cp == '[')
 		flag = 1;
 
@@ -473,7 +451,6 @@ colon(char *cp)
 			return NULL;
 	}
 	return NULL;
-#endif /* !WINDOWS */
 }
 
 /*
@@ -1283,7 +1260,7 @@ bind_permitted(int port, uid_t uid)
 
 /* returns 1 if process is already daemonized, 0 otherwise */
 #ifdef WINDOWS
-/* TODO - what does this do ? */
+/* This should go away once sshd platform specific startup code is refactored */
 int 
 daemonized(void)
 {

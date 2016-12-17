@@ -46,4 +46,5 @@ int w32_unlink(const char *path);
 int w32_rmdir(const char *pathname);
 int w32_chdir(const char *dirname);
 char *w32_getcwd(char *buffer, int maxlen);
+int readlink(const char *path, char *link, int linklen);
 #endif

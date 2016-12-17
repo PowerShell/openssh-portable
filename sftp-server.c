@@ -51,8 +51,6 @@
 #include "sftp.h"
 #include "sftp-common.h"
 
-
-
 /* Our verbosity */
 static LogLevel log_level = SYSLOG_LEVEL_ERROR;
 
@@ -826,8 +824,6 @@ process_do_stat(u_int32_t id, int do_lstat)
 	
 	if ((r = sshbuf_get_cstring(iqueue, &name, NULL)) != 0)
 		fatal("%s: buffer error: %s", __func__, ssh_err(r));
-
-
 	
 	r = do_lstat ? lstat(name, &st) : stat(name, &st);
 
@@ -1022,20 +1018,7 @@ process_opendir(u_int32_t id)
 	if ((r = sshbuf_get_cstring(iqueue, &path, NULL)) != 0)
 		fatal("%s: buffer error: %s", __func__, ssh_err(r));
 
-#ifdef WIN32_FIXME
-	char resolvedname[MAXPATHLEN];
-	char * ipath;
-	if (realpathWin32i(path, resolvedname))
-	{
-		free(path);
-		path = strdup(resolvedname);
-	}
-	ipath = get_inside_path(path, TRUE, TRUE);
-	dirp = opendir(ipath);
-	free(ipath);
-#else
 	dirp = opendir(path);
-#endif
 	
 	debug3("request %u: opendir", id);
 	logit("opendir \"%s\"", path);
@@ -1183,57 +1166,10 @@ process_realpath(u_int32_t id)
 	if ((r = sshbuf_get_cstring(iqueue, &path, NULL)) != 0)
 		fatal("%s: buffer error: %s", __func__, ssh_err(r));
 
-#ifndef WIN32_FIXME
 	if (path[0] == '\0') {
 		free(path);
 		path = xstrdup(".");
 	}
-#else
-	if ( (path[0] == '\0') || ( strcmp(path, ".")== 0 ) ) {
-		free(path);
-		// add an extra / in front of paths to make them sftp spec compliant
-		// c:/users/test1 will become /c:/users/test1
-		resolvedname[0] = '/';
-
-		_getcwd(&resolvedname[1], sizeof(resolvedname));
-		// convert back slashes to forward slashes to be compatibale with unix naming
-		char *cptr = resolvedname;
-		while (*cptr) {
-			if (*cptr == '\\')
-				*cptr = '/' ;
-			cptr++;
-		}
-		path = strdup(resolvedname);
-	}
-	else {
-		// see if we were given rooted form /dir or /x:/home/x:/dir
-		if (path[2] != ':') {
-			// absolute form given /dir
-			// no drive letter, so was given in absolute form like cd /debug and we got "/debug" to process
-			// we have to attach current drive letter in front
-			resolvedname[0] = '/';
-			resolvedname[1] = _getdrive() + 'A' - 1; // convert current drive letter to Windows driver Char
-			resolvedname[2] = ':';
-			strcpy(&resolvedname[3], path);
-			free(path);
-			path = strdup(resolvedname);
-		}
-		else {
-			char *pch = strchr(path, ':');
-			if (pch != NULL && (pch = strrchr(pch+1, ':')) ) {
-				if (path[0] == '/') { // it was /x:/home/x:/dir form, use last drive letter part
-					pch--;
-					resolvedname[0] = '/';
-					strcpy(resolvedname+1, pch);
-					free(path);
-					path = strdup(resolvedname);
-				}
-			}
-		}
-
-	}
-
-#endif
 
 	debug3("request %u: realpath", id);
 	verbose("realpath \"%s\"", path);
@@ -1264,7 +1200,6 @@ process_rename(u_int32_t id)
 	status = SSH2_FX_FAILURE;
 	if (lstat(oldpath, &sb) == -1)
 		status = errno_to_portable(errno);
-#ifndef WIN32_FIXME
 	else if (S_ISREG(sb.st_mode)) {
 		/* Race-free rename of regular files */
 		if (link(oldpath, newpath) == -1) {
@@ -1299,7 +1234,6 @@ process_rename(u_int32_t id)
 		} else
 			status = SSH2_FX_OK;
 	} 
-#endif
 	else if (stat(newpath, &sb) == -1) {
 		if (rename(oldpath, newpath) == -1)
 			status = errno_to_portable(errno);
@@ -1412,9 +1346,7 @@ process_extended_fstatvfs(u_int32_t id)
 		send_status(id, SSH2_FX_FAILURE);
 		return;
 	}
-#ifdef WINDOWS
-	/* Should fstatvfs return 0? */
-#endif
+
 	if (statvfs(handle_to_name(handle), &st) != 0)
 		if (fstatvfs(fd, &st) != 0)
 			send_status(id, errno_to_portable(errno));
@@ -1598,12 +1530,7 @@ sftp_server_main(int argc, char **argv, struct passwd *user_pw)
 	ssize_t len, olen, set_size;
 	SyslogFacility log_facility = SYSLOG_FACILITY_AUTH;
 	
-	#ifdef WIN32_FIXME
-	char *cp, *homedir = NULL, buf[32768];
-	#else
-	char *cp, *homedir = NULL, buf[4*4096];
-	#endif
-	
+	char *cp, *homedir = NULL, buf[4*4096];	
 	long mask;
 
 	extern char *optarg;

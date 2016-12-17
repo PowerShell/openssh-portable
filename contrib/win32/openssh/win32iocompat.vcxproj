@@ -24,6 +24,7 @@
     <RootNamespace>win32iocompat</RootNamespace>
     <Keyword>Win32Proj</Keyword>
     <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <ProjectName>posix_compat</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
@@ -154,6 +155,11 @@
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\win32_dirent.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\no-ops.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\win32_zlib.c" />
+    <ClCompile Include="..\win32compat\ansiprsr.c" />
+    <ClCompile Include="..\win32compat\conio.c" />
+    <ClCompile Include="..\win32compat\console.c" />
+    <ClCompile Include="..\win32compat\tncon.c" />
+    <ClCompile Include="..\win32compat\tnnet.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\w32fd.h" />
