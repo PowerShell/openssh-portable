@@ -1511,6 +1511,19 @@ parse_dispatch_command(struct sftp_conn *conn, const char *cmd, char **pwd,
 	glob_t g;
 
 	path1 = path2 = NULL;
+#ifdef WINDOWS
+	/* 
+	 * convert '/' to '\' in Windows styled paths. 
+	 * else they get treated as escape sequence in makeargv 
+	 */
+	{
+		char *s1 = cmd, *s2;
+		while ((s2 = strchr(s1, '\\')) != NULL) {
+			*s2 = '/';
+			s1 = s2 + 1;
+		}
+	}
+#endif
 	cmdnum = parse_args(&cmd, &ignore_errors, &aflag, &fflag, &hflag,
 	    &iflag, &lflag, &pflag, &rflag, &sflag, &n_arg, &path1, &path2);
 	if (ignore_errors != 0)
