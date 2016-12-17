@@ -235,6 +235,7 @@ long long strtonum(const char *, long long, long long, const char **);
 /* force our no-op nl_langinfo and mbtowc */
 # undef HAVE_NL_LANGINFO
 #ifndef WINDOWS
+/* Windows does not have wcwidth but does have mbtowc*/
 # undef HAVE_MBTOWC
 #endif  /* WINDOWS */
 # undef HAVE_LANGINFO_H

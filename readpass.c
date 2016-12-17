@@ -127,7 +127,7 @@ read_passphrase(const char *prompt, int flags)
 {
 	
 #ifdef WINDOWS
-    /* TODO - review this logic */
+	/* TODO - do flags apply on Windows? */
 	char *askpass = NULL;
 	char *ret = NULL;
 	char buf[1024] = { 0 };
@@ -138,10 +138,8 @@ read_passphrase(const char *prompt, int flags)
 
 	if (getenv(SSH_ASKPASS_ENV)) {
 		askpass = getenv(SSH_ASKPASS_ENV);
-		if ((ret = ssh_askpass(askpass, prompt)) == NULL) 	{
-			if (!(flags & RP_ALLOW_EOF))
-				return xstrdup("");
-		}
+		if ((ret = ssh_askpass(askpass, prompt)) == NULL) 
+			return xstrdup("");
 		return ret;
 	}
 

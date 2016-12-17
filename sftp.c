@@ -403,27 +403,39 @@ make_absolute(char *p, const char *pwd)
 
 	/* Derelativise */
 #ifdef WINDOWS
-        /* 
-         * For Windows - given path is absolute when 
-         *   - first character is "/"
-         *   - or second character is ":"
-         * This code is also applicable from a Linux client to Windows target
-         * Need to follow up with community if this makes sense in common code
-         */	
-    if (p && p[0] != '/' &&  (p[0] == '\0' || p[1] != ':' ) ) {		
+	/*
+	* For Windows - given path is absolute when
+	*   - first character is "/"
+	*   - or second character is ":"
+	* This code is also applicable from a Linux client to Windows target
+	* Need to follow up with community if this makes sense in common code
+	*/
+	char *s1, *s2;
+	if (p && p[0] != '/' && (p[0] == '\0' || p[1] != ':')) {
+		abs_str = path_append(pwd, p);
+		free(p);
+		p = abs_str;
+	}
+
+	/* convert '\\' tp '/' */
+	s1 = p;
+	while ((s2 = strchr(s1, '\\')) != NULL) {
+		*s2 = '/';
+		s1 = s2 + 1;
+	}
+
+	/* Append "/" if needed to the absolute windows path */	
+	if (p && p[0] != '\0' && p[1] == ':') {
+		s1 = path_append("/", p);
+		free(p);
+		p = s1;
+	}
+
 #else
 	if (p && p[0] != '/') {
-#endif
 		abs_str = path_append(pwd, p);
 		free(p);
 		return(abs_str);
-	}
-
-#ifdef WINDOWS
-	slashconvert(p); // convert '\\' to '/'
-	// Append "/" to the absolute windows path		
-	if(strlen(p) >= 2 && p[1] == ':') {
-		p = path_append("/", p);
 	}
 #endif
 	return(p);
@@ -916,13 +928,13 @@ do_ls_dir(struct sftp_conn *conn, const char *path,
 		} 
         else {
 #ifdef WINDOWS
-            /* cannot use printf_utf8 becuase of width specification */
-            /* printf_utf8 does not account for utf-16 based argument widths */
-			wchar_t buf[1024]; 
-			wchar_t* wtmp = utf8_to_utf16(fname);
-			swprintf(buf, 1024, L"%-*s", colspace, wtmp);
-			WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), buf, wcslen(buf), 0, 0);
-			free(wtmp);
+		/* cannot use printf_utf8 becuase of width specification */
+		/* printf_utf8 does not account for utf-16 based argument widths */
+		wchar_t buf[1024]; 
+		wchar_t* wtmp = utf8_to_utf16(fname);
+		swprintf(buf, 1024, L"%-*s", colspace, wtmp);
+		WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), buf, wcslen(buf), 0, 0);
+		free(wtmp);
 #else
 	        printf("%-*s", colspace, fname);
 #endif

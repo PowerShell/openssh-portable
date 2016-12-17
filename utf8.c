@@ -64,11 +64,9 @@ dangerous_locale(void) {
 	loc = nl_langinfo(CODESET);
 	return strcmp(loc, "US-ASCII") && strcmp(loc, "UTF-8");
 #else   /* !WINDOWS */
-    wchar_t loc[LOCALE_NAME_MAX_LENGTH];
-
-    GetSystemDefaultLocaleName(loc, LOCALE_NAME_MAX_LENGTH);
-
-    return wcscmp(loc, L"US-ASCII") && wcscmp(loc, L"UTF-8");
+	wchar_t loc[LOCALE_NAME_MAX_LENGTH];
+	GetSystemDefaultLocaleName(loc, LOCALE_NAME_MAX_LENGTH);
+	return wcscmp(loc, L"US-ASCII") && wcscmp(loc, L"UTF-8");
 #endif    /* !WINDOWS */
 }
 
