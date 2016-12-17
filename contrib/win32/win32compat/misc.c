@@ -624,11 +624,12 @@ w32_mkdir(const char *path_utf8, unsigned short mode) {
 void
 getrnd(u_char *s, size_t len) {
 	HCRYPTPROV hProvider;
-	CryptAcquireContextW(&hProvider, 0, 0, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT);
-	
-	CryptGenRandom(hProvider, len, s);
-	CryptReleaseContext(hProvider, 0);
-=======
+	if (CryptAcquireContextW(&hProvider, 0, 0, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT | CRYPT_SILENT) == FALSE ||
+	    CryptGenRandom(hProvider, len, s) == FALSE ||
+	    CryptReleaseContext(hProvider, 0) == FALSE)
+		DebugBreak();
+}
+
 int
 w32_stat(const char *path, struct w32_stat *buf) {
 	// Skip the first '/' in the pathname
