@@ -437,6 +437,16 @@ colon(char *cp)
 	if (*cp == ':')		/* Leading colon is part of file name. */
 		return NULL;
 
+#ifdef WINDOWS
+	/*
+	 * Account for Windows file names in the form x: or /x: 
+	 * Note: This may conflict with potential single charecter targets
+	 */
+	if ((*cp != '\0' && cp[1] == ':') ||
+	    (cp[0] == '/' && cp[1] != '\0' && cp[2] == ':'))
+		return NULL;
+#endif
+
 	if (*cp == '[')
 		flag = 1;
 

@@ -1,7 +1,8 @@
 /*
 * Author: Manoj Ampalam <manoj.ampalam@microsoft.com>
 */
-
+/* disable inclusion of compatability defitnitions in CRT headers */
+#define __STDC__ 1
 #include <fcntl.h>
 #include <sys\types.h>
 #include <sys\stat.h>

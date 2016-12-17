@@ -9,16 +9,7 @@
 #include <stdio.h>
 #include "defs.h"
 #include "utf.h"
-
-#ifndef _OFF_T_DEFINED
-#define _OFF_T_DEFINED
-
-typedef long _off_t; // file offset value
-
-#if !__STDC__
-typedef _off_t off_t;
-#endif
-#endif
+#include "sys\param.h"
 
 typedef struct w32_fd_set_ {
 	unsigned char bitmap[MAX_FDS >> 3];

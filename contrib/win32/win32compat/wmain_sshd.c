@@ -30,6 +30,8 @@
 * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+/* disable inclusion of compatability defitnitions in CRT headers */
+#define __STDC__ 1
 #include <Windows.h>
 #include <wchar.h>
 #include "inc\utf.h"
