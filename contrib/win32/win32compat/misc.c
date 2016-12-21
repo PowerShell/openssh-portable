@@ -696,8 +696,12 @@ realpath_win(const char *path, char resolved[MAX_PATH])
 {
 	char tempPath[MAX_PATH];
 	realpath(path, tempPath);
+	
+	if (tempPath[0] == '/' && tempPath[1] != '\0' && tempPath[2] == ':' )
+		strncpy(resolved, &tempPath[1], sizeof(tempPath) - 1);
+	else
+		strncpy(resolved, tempPath, sizeof(tempPath));
 
-	strncpy(resolved, &tempPath[1], sizeof(tempPath) - 1);
 	return resolved;
 }
 
