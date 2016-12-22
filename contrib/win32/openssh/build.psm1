@@ -292,7 +292,7 @@ function Clone-Win32OpenSSH
 function Copy-OpenSSLSDK
 {
     $sourcePath  = Join-Path $script:gitRoot "Win32-OpenSSH\contrib\win32\openssh\OpenSSLSDK"
-    Copy-Item -Container -Path $sourcePath -Destination $PSScriptRoot -Force -ErrorAction SilentlyContinue -ErrorVariable e
+    Copy-Item -Container -Path $sourcePath -Destination $PSScriptRoot -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable e
     if($e -ne $null)
     {
         Write-BuildMsg -AsError -ErrorAction Stop -Message "Copy OpenSSL from $sourcePath failed "
@@ -336,8 +336,8 @@ function Start-SSHBuild
 
     Start-SSHBootstrap
 
-    Copy-SSLLibs
-	Copy-OpenSSLSDK
+    Clone-Win32OpenSSH
+    Copy-OpenSSLSDK
     $msbuildCmd = "msbuild.exe"
     $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
     $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
