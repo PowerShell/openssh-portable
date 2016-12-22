@@ -3,6 +3,7 @@ Set-StrictMode -Version Latest
 [string] $script:platform = $env:PROCESSOR_ARCHITECTURE
 [string] $script:vcPath = $null
 [System.IO.DirectoryInfo] $script:OpenSSHRoot = $null
+[System.IO.DirectoryInfo] $script:gitRoot = $null
 [bool] $script:Verbose = $false
 [string] $script:BuildLogFile = $null
 
@@ -268,13 +269,12 @@ function Start-SSHBootstrap
     }
 }
 
-function Copy-SSLLibs
-{
-	$gitRoot = split-path $script:OpenSSHRoot
-    $win32OpenSSHPath = join-path $gitRoot "Win32-OpenSSH"
+function Clone-Win32OpenSSH
+{	
+    $win32OpenSSHPath = join-path $script:gitRoot "Win32-OpenSSH"
     if (Test-Path -Path $win32OpenSSHPath -PathType Container)
     {
-        Write-BuildMsg -AsInfo -Message "$win32OpenSSHPath already exists. skip copying the OpenSSL libs"
+        Write-BuildMsg -AsInfo -Message "$win32OpenSSHPath already exists. Skip clonning Win32-OpenSSH"
         return        
     }
     
@@ -286,10 +286,13 @@ function Copy-SSLLibs
     git checkout L1-Prod
     git pull
     Pop-Location
+	Pop-Location
+}
 
-    Pop-Location
-    $sourcePath  = Join-Path $gitRoot "Win32-OpenSSH\contrib\win32\openssh\OpenSSLSDK"
-    Copy-Item -Container -Path $sourcePath -Force -ErrorAction SilentlyContinue -ErrorVariable e
+function Copy-OpenSSLSDK
+{
+    $sourcePath  = Join-Path $script:gitRoot "Win32-OpenSSH\contrib\win32\openssh\OpenSSLSDK"
+    Copy-Item -Container -Path $sourcePath -Destination $PSScriptRoot -Force -ErrorAction SilentlyContinue -ErrorVariable e
     if($e -ne $null)
     {
         Write-BuildMsg -AsError -ErrorAction Stop -Message "Copy OpenSSL from $sourcePath failed "
@@ -314,6 +317,7 @@ function Start-SSHBuild
 
     # Get openssh-portable root    
     $script:OpenSSHRoot = Get-Item -Path $repositoryRoot.FullName
+	$script:gitRoot = split-path $script:OpenSSHRoot
 
 
     if($PSBoundParameters.ContainsKey("Verbose"))
@@ -333,6 +337,7 @@ function Start-SSHBuild
     Start-SSHBootstrap
 
     Copy-SSLLibs
+	Copy-OpenSSLSDK
     $msbuildCmd = "msbuild.exe"
     $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
     $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
@@ -411,4 +416,4 @@ function Get-RepositoryRoot
     throw new-object System.IO.DirectoryNotFoundException("Could not find the root of the GIT repository")
 }
 
-Export-ModuleMember -Function Start-SSHBuild, Get-RepositoryRoot, Get-BuildLogFile, Copy-SSLLibs
+Export-ModuleMember -Function Start-SSHBuild, Get-RepositoryRoot, Get-BuildLogFile, Clone-Win32OpenSSH, Copy-OpenSSLSDK
