@@ -270,12 +270,6 @@ function Start-SSHBootstrap
 
 function Copy-SSLLibs
 {
-    if (Test-Path -Path "$psscriptroot\OpenSSLSDK" -PathType Container)
-    {
-        Write-BuildMsg -AsInfo -Message ".\OpenSSLSDK already exists. skip copying the OpenSSL libs"
-        return        
-    }
-
 	$gitRoot = split-path $script:OpenSSHRoot
     $win32OpenSSHPath = join-path $gitRoot "Win32-OpenSSH"
     if (Test-Path -Path $win32OpenSSHPath -PathType Container)
@@ -417,4 +411,4 @@ function Get-RepositoryRoot
     throw new-object System.IO.DirectoryNotFoundException("Could not find the root of the GIT repository")
 }
 
-Export-ModuleMember -Function Start-SSHBuild, Get-RepositoryRoot, Get-BuildLogFile
+Export-ModuleMember -Function Start-SSHBuild, Get-RepositoryRoot, Get-BuildLogFile, Copy-SSLLibs
