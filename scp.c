@@ -432,16 +432,6 @@ do_cmd2(char *host, char *remuser, char *cmd, int fdin, int fdout)
 	return 0;
 }
 
-void charrepace(char *str, char*  old, char* new)
-{
-	char *s1, *s2;
-	s1 = str;
-	while ((s2 = strchr(str, *old)) != NULL) {
-		*s2 = *new;
-		s1 = s2 + 1;
-	}
-}
-
 typedef struct {
 	size_t cnt;
 	char *buf;
@@ -609,9 +599,8 @@ main(int argc, char **argv)
 	 */	
 	{		
 		int i;
-		for (i = 0; i < argc; i++) {
-			charrepace(argv[i], "\\", "/");
-		}		
+		for (i = 0; i < argc; i++) 
+			convertToForwardslash(argv[i]);
 	}
 #endif /* WINDOWS */
 
@@ -840,8 +829,8 @@ tolocal(int argc, char **argv)
 
 			exists = stat(argv[i], &stb) == 0;
 			/* convert '/' to '\\' 	*/
-			charrepace(argv[i], "/", "\\");
-			charrepace(argv[argc - 1], "/", "\\");
+			convertToBackslash(argv[i]);
+			convertToBackslash(argv[i - 1]);
 			if (exists && (S_ISDIR(stb.st_mode))) {
 				addargs(&alist, "%s", _PATH_XCOPY);
 				if (iamrecursive)
