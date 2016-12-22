@@ -272,26 +272,22 @@ function Start-SSHBootstrap
 function Clone-Win32OpenSSH
 {	
     $win32OpenSSHPath = join-path $script:gitRoot "Win32-OpenSSH"
-    if (Test-Path -Path $win32OpenSSHPath -PathType Container)
+    if (-not (Test-Path -Path $win32OpenSSHPath -PathType Container))
     {
-        Write-BuildMsg -AsInfo -Message "$win32OpenSSHPath already exists. Skip clonning Win32-OpenSSH"
-        return        
+        Push-Location $gitRoot
+		git clone --recursive https://github.com/PowerShell/Win32-OpenSSH
+		Pop-Location
     }
-    
-    Push-Location $gitRoot
-
-    git clone --recursive https://github.com/PowerShell/Win32-OpenSSH
-
     Push-Location $win32OpenSSHPath
-    git checkout L1-Prod
-    git pull
-    Pop-Location
+	git checkout L1-Prod
+    git pull    
 	Pop-Location
 }
 
 function Copy-OpenSSLSDK
 {
     $sourcePath  = Join-Path $script:gitRoot "Win32-OpenSSH\contrib\win32\openssh\OpenSSLSDK"
+	Write-BuildMsg -AsInfo -Message "copying $sourcePath"
     Copy-Item -Container -Path $sourcePath -Destination $PSScriptRoot -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable e
     if($e -ne $null)
     {
