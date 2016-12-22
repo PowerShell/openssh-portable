@@ -274,22 +274,22 @@ function Clone-Win32OpenSSH
     $win32OpenSSHPath = join-path $script:gitRoot "Win32-OpenSSH"
     if (-not (Test-Path -Path $win32OpenSSHPath -PathType Container))
     {
-		Write-BuildMsg -AsInfo -Message "copy repo Win32-OpenSSH"
+        Write-BuildMsg -AsInfo -Message "copy repo Win32-OpenSSH"
         Push-Location $gitRoot
-		git clone --recursive https://github.com/PowerShell/Win32-OpenSSH
-		Pop-Location
+        git clone --recursive https://github.com/PowerShell/Win32-OpenSSH
+        Pop-Location
     }
-	Write-BuildMsg -AsInfo -Message "pull latest from repo Win32-OpenSSH"
+    Write-BuildMsg -AsInfo -Message "pull latest from repo Win32-OpenSSH"
     Push-Location $win32OpenSSHPath
-	git checkout L1-Prod
+    git checkout L1-Prod
     git pull    
-	Pop-Location
+    Pop-Location
 }
 
 function Copy-OpenSSLSDK
 {
     $sourcePath  = Join-Path $script:gitRoot "Win32-OpenSSH\contrib\win32\openssh\OpenSSLSDK"
-	Write-BuildMsg -AsInfo -Message "copying $sourcePath"
+    Write-BuildMsg -AsInfo -Message "copying $sourcePath"
     Copy-Item -Container -Path $sourcePath -Destination $PSScriptRoot -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable e
     if($e -ne $null)
     {
