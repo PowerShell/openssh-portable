@@ -274,15 +274,15 @@ function Clone-Win32OpenSSH
     $win32OpenSSHPath = join-path $script:gitRoot "Win32-OpenSSH"
     if (-not (Test-Path -Path $win32OpenSSHPath -PathType Container))
     {
-        Write-BuildMsg -AsInfo -Message "copy repo Win32-OpenSSH"
+        Write-BuildMsg -AsInfo -Message "clone repo Win32-OpenSSH"
         Push-Location $gitRoot
-        git clone --recursive https://github.com/PowerShell/Win32-OpenSSH
+        git clone -q --recursive https://github.com/PowerShell/Win32-OpenSSH.git $win32OpenSSHPath
         Pop-Location
     }
     Write-BuildMsg -AsInfo -Message "pull latest from repo Win32-OpenSSH"
     Push-Location $win32OpenSSHPath
-    git checkout L1-Prod
-    git pull    
+	git fetch -q origin
+    git checkout -qf L1-Prod        
     Pop-Location
 }
 
