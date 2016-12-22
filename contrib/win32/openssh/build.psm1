@@ -270,20 +270,20 @@ function Start-SSHBootstrap
 
 function Copy-SSLLibs
 {
-    if (Test-Path -Path ".\OpenSSLSDK" -PathType Container)
+    if (Test-Path -Path "$psscriptroot\OpenSSLSDK" -PathType Container)
     {
         Write-BuildMsg -AsInfo -Message ".\OpenSSLSDK already exists. skip copying the OpenSSL libs"
         return        
     }
 
+	$gitRoot = split-path $script:OpenSSHRoot
     $win32OpenSSHPath = join-path $gitRoot "Win32-OpenSSH"
     if (Test-Path -Path $win32OpenSSHPath -PathType Container)
     {
         Write-BuildMsg -AsInfo -Message "$win32OpenSSHPath already exists. skip copying the OpenSSL libs"
         return        
     }
-
-    $gitRoot = split-path $script:OpenSSHRoot
+    
     Push-Location $gitRoot
 
     git clone --recursive https://github.com/PowerShell/Win32-OpenSSH
