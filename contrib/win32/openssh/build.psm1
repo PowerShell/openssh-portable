@@ -268,6 +268,40 @@ function Start-SSHBootstrap
     }
 }
 
+function Copy-SSLLibs
+{
+    if (Test-Path -Path ".\OpenSSLSDK" -PathType Container)
+    {
+        Write-BuildMsg -AsInfo -Message ".\OpenSSLSDK already exists. skip copying the OpenSSL libs"
+        return        
+    }
+
+    $win32OpenSSHPath = join-path $gitRoot "Win32-OpenSSH"
+    if (Test-Path -Path $win32OpenSSHPath -PathType Container)
+    {
+        Write-BuildMsg -AsInfo -Message "$win32OpenSSHPath already exists. skip copying the OpenSSL libs"
+        return        
+    }
+
+    $gitRoot = split-path $script:OpenSSHRoot
+    Push-Location $gitRoot
+
+    git clone --recursive https://github.com/PowerShell/Win32-OpenSSH
+
+    Push-Location $win32OpenSSHPath
+    git checkout L1-Prod
+    git pull
+    Pop-Location
+
+    Pop-Location
+    $sourcePath  = Join-Path $gitRoot "Win32-OpenSSH\contrib\win32\openssh\OpenSSLSDK"
+    Copy-Item -Container -Path $sourcePath -Force -ErrorAction SilentlyContinue -ErrorVariable e
+    if($e -ne $null)
+    {
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "Copy OpenSSL from $sourcePath failed "
+    }
+}
+
 function Start-SSHBuild
 {
     [CmdletBinding(SupportsShouldProcess=$false)]    
@@ -287,6 +321,7 @@ function Start-SSHBuild
     # Get openssh-portable root    
     $script:OpenSSHRoot = Get-Item -Path $repositoryRoot.FullName
 
+
     if($PSBoundParameters.ContainsKey("Verbose"))
     {
         $script:Verbose =  ($PSBoundParameters['Verbose']).IsPresent
@@ -302,6 +337,8 @@ function Start-SSHBuild
     Write-BuildMsg -AsInfo -Message "Build Log: $($script:BuildLogFile)"
 
     Start-SSHBootstrap
+
+    Copy-SSLLibs
     $msbuildCmd = "msbuild.exe"
     $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
     $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
