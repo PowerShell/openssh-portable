@@ -741,7 +741,8 @@ int statvfs(const char *path, struct statvfs *buf) {
 	DWORD freeClusters;
 	DWORD totalClusters;
 
-	if (GetDiskFreeSpaceW(utf8_to_utf16(sanitized_path(path)), &sectorsPerCluster, &bytesPerSector,
+	wchar_t* path_utf16 = utf8_to_utf16(sanitized_path(path));
+	if (GetDiskFreeSpaceW(path_utf16, &sectorsPerCluster, &bytesPerSector,
 		&freeClusters, &totalClusters) == TRUE)
 	{
 		debug3("path              : [%s]", path);
@@ -763,6 +764,7 @@ int statvfs(const char *path, struct statvfs *buf) {
 		buf->f_flag = 0;
 		buf->f_namemax = MAX_PATH - 1;
 
+		free(path_utf16);
 		return 0;
 	}
 	else
@@ -770,6 +772,7 @@ int statvfs(const char *path, struct statvfs *buf) {
 		debug3("ERROR: Cannot get free space for [%s]. Error code is : %d.\n",
 			path, GetLastError());
 
+		free(path_utf16);
 		return -1;
 	}
 }
