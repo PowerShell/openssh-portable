@@ -480,10 +480,16 @@ strmode(mode_t mode, char *p)
 }
 
 int 
-w32_chmod(const char *pathname, mode_t mode) {
-    /* TODO - implement this */
-	errno = EOPNOTSUPP;
-    return -1;
+w32_chmod(const char *pathname, mode_t mode) {	
+	int ret;
+	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(sanitized_path(pathname));
+	if (resolvedPathName_utf16 == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+	ret = _wchmod(resolvedPathName_utf16, mode);
+	free(resolvedPathName_utf16);
+	return ret;
 }
 
 int 
