@@ -596,8 +596,7 @@ fileio_fdopen(struct w32_io* pio, const char *mode) {
 	int fd_flags = 0;
 	debug2("fdopen - io:%p", pio);
 
-	/* logic below doesn't work with overlapped file HANDLES */	
-
+	/* logic below doesn't work with overlapped file HANDLES */		
 	if (mode[1] == '\0') {
 		switch (*mode) {
 		case 'r':

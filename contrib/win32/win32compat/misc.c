@@ -511,7 +511,7 @@ w32_utimes(const char *filename, struct timeval *tvp) {
 		errno = ENOMEM;
 		return -1;
 	}
-
+	/* _utime only set time for filename; TODO - need a different logic to set times for directory*/
 	ret = _wutime(resolvedPathName_utf16, &ub);
 	free(resolvedPathName_utf16);
 	return ret;
@@ -615,8 +615,12 @@ w32_mkdir(const char *path_utf8, unsigned short mode) {
 		return -1;
 	}
 	int returnStatus = _wmkdir(path_utf16);
+	if (returnStatus < 0) {
+		return -1;
+	}
+	returnStatus = _wchmod(path_utf16, mode);
 	free(path_utf16);
-
+	/*TODO: to match the linux version to set the mode*/
 	return returnStatus;
 }
 
