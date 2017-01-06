@@ -599,7 +599,7 @@ fileio_fdopen(struct w32_io* pio, const char *mode) {
 	/* logic below doesn't work with overlapped file HANDLES */
 	errno = ENOTSUP;
 	return NULL;
-	
+
 	if (mode[1] == '\0') {
 		switch (*mode) {
 		case 'r':
