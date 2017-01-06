@@ -620,7 +620,7 @@ w32_mkdir(const char *path_utf8, unsigned short mode) {
 	}
 	returnStatus = _wchmod(path_utf16, mode);
 	free(path_utf16);
-	/*TODO: to match the linux version to set the mode*/
+	/*TODO: map mode*/
 	return returnStatus;
 }
 
