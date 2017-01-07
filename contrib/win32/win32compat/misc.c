@@ -455,7 +455,8 @@ w32_chown(const char *pathname, unsigned int owner, unsigned int group) {
 	return -1;
 }
 
-void UnixTimeToFileTime(ULONG t, LPFILETIME pft) {
+void
+UnixTimeToFileTime(ULONG t, LPFILETIME pft) {
 	
 	ULONGLONG ull;
 	ull = UInt32x32To64(t, 10000000) + 116444736000000000;
@@ -464,22 +465,22 @@ void UnixTimeToFileTime(ULONG t, LPFILETIME pft) {
 	pft->dwHighDateTime = (DWORD)(ull >> 32);
 }
 
-
-
-int w32_settimes(wchar_t * path, FILETIME *cretime, FILETIME *acttime, FILETIME *modtime)
-{
+int
+w32_settimes(wchar_t * path, FILETIME *cretime, FILETIME *acttime, FILETIME *modtime) {
 	HANDLE handle;
 	handle = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_WRITE,
 		NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
 
 	if (handle == INVALID_HANDLE_VALUE) {
 		errno = GetLastError;
-		debug("open - CreateFileW ERROR:%d", errno);
+		debug("w32_settimes - CreateFileW ERROR:%d", errno);
 		return -1;
 	}
 
 	if (SetFileTime(handle, cretime, acttime, modtime) == 0)
 	{
+		errno = GetLastError;
+		debug("w32_settimes - SetFileTime ERROR:%d", errno);
 		CloseHandle(handle);
 		return -1;
 	}
