@@ -606,16 +606,12 @@ w32_mkdir(const char *path_utf8, unsigned short mode) {
 	}
 	int returnStatus = _wmkdir(path_utf16);
 	if (returnStatus < 0) {
+		free(path_utf16);
 		return -1;
 	}
-	returnStatus = _wchmod(path_utf16, mode & 0x180);
-	if (returnStatus < 0) {
-		return -1;
-	}
-
 	returnStatus = _wchmod(path_utf16, mode);
 	free(path_utf16);
-	/*TODO: map mode*/
+	/*TODO: check mode mapping*/
 	return returnStatus;
 }
 
