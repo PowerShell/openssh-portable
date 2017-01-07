@@ -457,7 +457,6 @@ w32_chown(const char *pathname, unsigned int owner, unsigned int group) {
 
 void UnixTimeToFileTime(ULONG t, LPFILETIME pft) {
 	
-	// Note that LONGLONG is a 64-bit value
 	ULONGLONG ull;
 	ull = UInt32x32To64(t, 10000000) + 116444736000000000;
 
