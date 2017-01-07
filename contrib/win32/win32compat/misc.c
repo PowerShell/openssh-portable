@@ -455,20 +455,55 @@ w32_chown(const char *pathname, unsigned int owner, unsigned int group) {
 	return -1;
 }
 
+void UnixTimeToFileTime(ULONG t, LPFILETIME pft) {
+	
+	// Note that LONGLONG is a 64-bit value
+	ULONGLONG ull;
+	ull = UInt32x32To64(t, 10000000) + 116444736000000000;
+
+	pft->dwLowDateTime = (DWORD)ull;
+	pft->dwHighDateTime = (DWORD)(ull >> 32);
+}
+
+
+
+int w32_settimes(wchar_t * path, FILETIME *cretime, FILETIME *acttime, FILETIME *modtime)
+{
+	HANDLE handle;
+	handle = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_WRITE,
+		NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+
+	if (handle == INVALID_HANDLE_VALUE) {
+		errno = GetLastError;
+		debug("open - CreateFileW ERROR:%d", errno);
+		return -1;
+	}
+
+	if (SetFileTime(handle, cretime, acttime, modtime) == 0)
+	{
+		CloseHandle(handle);
+		return -1;
+	}
+
+	CloseHandle(handle);
+	return 0;
+}
+
 int
 w32_utimes(const char *filename, struct timeval *tvp) {
-	struct utimbuf ub;
-	ub.actime = tvp[0].tv_sec;
-	ub.modtime = tvp[1].tv_sec;
 	int ret;
-
+	FILETIME acttime, modtime;
 	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(sanitized_path(filename));
 	if (resolvedPathName_utf16 == NULL) {
 		errno = ENOMEM;
 		return -1;
 	}
-	/* _utime only set time for filename; TODO - need a different logic to set times for directory*/
-	ret = _wutime(resolvedPathName_utf16, &ub);
+	memset(&acttime, 0, sizeof(FILETIME));
+	memset(&modtime, 0, sizeof(FILETIME));
+
+	UnixTimeToFileTime((ULONG)tvp[0].tv_sec, &acttime);
+	UnixTimeToFileTime((ULONG)tvp[1].tv_sec, &modtime);
+	ret = w32_settimes(resolvedPathName_utf16, NULL, &acttime, &modtime);
 	free(resolvedPathName_utf16);
 	return ret;
 }
@@ -574,6 +609,11 @@ w32_mkdir(const char *path_utf8, unsigned short mode) {
 	if (returnStatus < 0) {
 		return -1;
 	}
+	returnStatus = _wchmod(path_utf16, mode & 0x180);
+	if (returnStatus < 0) {
+		return -1;
+	}
+
 	returnStatus = _wchmod(path_utf16, mode);
 	free(path_utf16);
 	/*TODO: map mode*/
