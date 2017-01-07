@@ -609,9 +609,13 @@ w32_mkdir(const char *path_utf8, unsigned short mode) {
 		free(path_utf16);
 		return -1;
 	}
-	returnStatus = _wchmod(path_utf16, mode);
+	
+	mode_t curmask = _umask(0);
+	_umask(curmask);
+	
+	returnStatus = _wchmod(path_utf16, mode & ~curmask & (_S_IREAD | _S_IWRITE));
 	free(path_utf16);
-	/*TODO: check mode mapping*/
+	
 	return returnStatus;
 }
 
