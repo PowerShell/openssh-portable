@@ -456,7 +456,7 @@ w32_chown(const char *pathname, unsigned int owner, unsigned int group) {
 }
 
 void
-UnixTimeToFileTime(ULONG t, LPFILETIME pft) {
+unix_time_to_file_time(ULONG t, LPFILETIME pft) {
 	
 	ULONGLONG ull;
 	ull = UInt32x32To64(t, 10000000) + 116444736000000000;
@@ -465,8 +465,8 @@ UnixTimeToFileTime(ULONG t, LPFILETIME pft) {
 	pft->dwHighDateTime = (DWORD)(ull >> 32);
 }
 
-int
-w32_settimes(wchar_t * path, FILETIME *cretime, FILETIME *acttime, FILETIME *modtime) {
+static int
+settimes(wchar_t * path, FILETIME *cretime, FILETIME *acttime, FILETIME *modtime) {
 	HANDLE handle;
 	handle = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_WRITE,
 		NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
@@ -501,9 +501,9 @@ w32_utimes(const char *filename, struct timeval *tvp) {
 	memset(&acttime, 0, sizeof(FILETIME));
 	memset(&modtime, 0, sizeof(FILETIME));
 
-	UnixTimeToFileTime((ULONG)tvp[0].tv_sec, &acttime);
-	UnixTimeToFileTime((ULONG)tvp[1].tv_sec, &modtime);
-	ret = w32_settimes(resolvedPathName_utf16, NULL, &acttime, &modtime);
+	unix_time_to_file_time((ULONG)tvp[0].tv_sec, &acttime);
+	unix_time_to_file_time((ULONG)tvp[1].tv_sec, &modtime);
+	ret = settimes(resolvedPathName_utf16, NULL, &acttime, &modtime);
 	free(resolvedPathName_utf16);
 	return ret;
 }
