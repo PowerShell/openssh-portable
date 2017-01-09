@@ -455,7 +455,7 @@ w32_chown(const char *pathname, unsigned int owner, unsigned int group) {
 	return -1;
 }
 
-void
+static void
 unix_time_to_file_time(ULONG t, LPFILETIME pft) {
 	
 	ULONGLONG ull;
