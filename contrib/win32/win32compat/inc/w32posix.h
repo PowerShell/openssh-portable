@@ -161,4 +161,5 @@ explicit_bzero(void *b, size_t len);
 #define pclose _pclose
 
 void convertToBackslash(char *str);
+void convertToBackslashW(wchar_t *str);
 void convertToForwardslash(char *str);

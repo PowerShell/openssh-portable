@@ -603,6 +603,15 @@ convertToBackslash(char *str) {
 	}
 }
 
+void
+convertToBackslashW(wchar_t *str) {
+	while (*str) {
+		if (*str == L'/')
+			*str = L'\\';
+		str++;
+	}
+}
+
 // convert back slash to forward slash
 void 
 convertToForwardslash(char *str) {

@@ -11,6 +11,7 @@
 
 #include "inc\dirent.h"
 #include "inc\libgen.h"
+#include "inc\defs.h"
 #include "misc_internal.h"
 
 
@@ -27,17 +28,29 @@ DIR * opendir(const char *name)
 	struct _wfinddata_t c_file;
 	intptr_t hFile;
 	DIR *pdir;
-	wchar_t searchstr[MAX_PATH];
+	wchar_t searchstr[PATH_MAX + 8];
 	wchar_t* wname = NULL;
 	int needed;
+	size_t len;
 	
 	if ((wname = utf8_to_utf16(sanitized_path(name))) == NULL) {
 		errno = ENOMEM;
 		return NULL;
 	}
+	convertToBackslashW(wname);
+	len = wcslen(wname);
+	if (len && wname[len-1] == L'\\') {
+		len--;
+		wname[len] = 0;
+	}
+	if (len >= PATH_MAX) {
+		free(wname);
+		errno = ENAMETOOLONG;
+		return NULL;
+	}
 
 	// add *.* for Windows _findfirst() search pattern
-	swprintf_s(searchstr, MAX_PATH, L"%s\\*.*", wname);
+	swprintf_s(searchstr, _ARRAYSIZE(searchstr) - 1, L"%s\\*.*", wname);
 	free(wname);
 
 	if ((hFile = _wfindfirst(searchstr, &c_file)) == -1L) 
