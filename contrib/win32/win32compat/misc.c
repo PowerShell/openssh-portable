@@ -617,23 +617,58 @@ convertToForwardslash(char *str) {
 * This method will resolves references to /./, /../ and extra '/' characters in the null-terminated string named by
 *  path to produce a canonicalized absolute pathname.
 */
-char *
-realpath(const char *path, char resolved[MAX_PATH]) {
-	char tempPath[MAX_PATH];
-		
-	if ( (strlen(path) >= 2) && (path[0] == '/') && (path[2] == ':') )
-		strncpy(resolved, path + 1, strlen(path)); // skip the first '/'
-	else
-		strncpy(resolved, path, strlen(path) + 1);
+char * realpath(const char *path, char *resolved) {
+	char *ret = NULL;
+	wchar_t *wpath = NULL;
+	wchar_t *wtmp = NULL;
+	char *tempPath = NULL;
+	char *buf = NULL;
 
-	if (_fullpath(tempPath, resolved, MAX_PATH) == NULL)
+	if (resolved)
+		*resolved = 0;
+	if (path[0] == 0)
 		return NULL;
-	
+
+	if (path[0] == '/' && path[1] && path[2] == ':')
+		path++;    // skip the first '/'
+
+	wpath = utf8_to_utf16(path);
+	if (wpath == NULL)
+		fatal("failed to convert input arguments");
+		
+	wtmp = _wfullpath(NULL, wpath, 0);
+	if (wtmp == NULL)
+		goto exit;
+
+	tempPath = utf16_to_utf8(wtmp);
+	if (tempPath == NULL)
+		fatal("failed to convert input arguments");
+
 	convertToForwardslash(tempPath);
 
-	resolved[0] = '/'; // will be our first slash in /x:/users/test1 format
-	strncpy(resolved + 1, tempPath, sizeof(tempPath) - 1);
-	return resolved;
+	if (!resolved) {
+		buf = malloc(strlen(tempPath) + 4);
+		if (!buf)
+			fatal("failed to allocate temp buffer");
+	} else {
+		if (strlen(tempPath) >= PATH_MAX - 1)
+			goto exit;
+		buf = resolved;
+	}
+	buf[0] = '/'; // will be our first slash in /x:/users/test1 format
+	strncpy(buf + 1, tempPath, strlen(tempPath) + 1);
+	ret = buf;
+
+exit:
+	if (wpath)
+		free(wpath);
+	if (wtmp)
+		free(wtmp);
+	if (tempPath)
+		free(tempPath);
+	if (!ret && !resolved && buf)
+		free(buf);
+	return ret;
 }
 
 // Maximum reparse buffer info size. The max user defined reparse 

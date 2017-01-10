@@ -7,6 +7,10 @@
 
 #include <memory.h>
 
+#ifndef PATH_MAX
+#define PATH_MAX    MAX_PATH
+#endif
+
 /* total fds that can be allotted */
 #define MAX_FDS 256  /* a 2^n number */
 
