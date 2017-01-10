@@ -638,6 +638,20 @@ char * realpath(const char *path, char *resolved) {
 	if (path[0] == 0)
 		return NULL;
 
+	if (strcmp(path, "/") == 0 || strcmp(path, "/..") == 0 ||
+	    (path[0] == '/' && isalpha(path[1]) && strcmp(path + 2, ":/..") == 0)) {
+		if (!resolved)
+			return strdup("/");
+		strncpy(resolved, "/", PATH_MAX);
+		return resolved;
+	}
+	if (path[0] == '/' && isalpha(path[1]) && strcmp(path + 2, ":") == 0) {
+		if (!resolved)
+			return strdup(path);
+		strncpy(resolved, path, PATH_MAX);
+		return resolved;
+	}
+
 	if (path[0] == '/' && path[1] && path[2] == ':')
 		path++;    // skip the first '/'
 

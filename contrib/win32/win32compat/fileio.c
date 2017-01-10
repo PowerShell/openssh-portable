@@ -568,6 +568,12 @@ fileio_stat(const char *path, struct _stat64 *buf) {
     wchar_t wpath[8];
     wchar_t* wtmp = NULL;
 
+    if (path && strcmp(path, "/") == 0) {
+        memset(buf, 0, sizeof(*buf));
+        buf->st_mode = _S_IFDIR | _S_IREAD | 0xFF;
+        buf->st_dev = USHRT_MAX;   // rootdir
+        return 0;
+    }
     if (path && isalpha(path[0]) && path[1] == ':' && path[2] == 0) {
         wpath[0] = path[0];
         wpath[1] = L':';
