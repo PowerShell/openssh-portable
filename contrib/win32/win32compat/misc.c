@@ -176,15 +176,47 @@ w32_fopen_utf8(const char *path, const char *mode) {
 }
 
 
-wchar_t*
-utf8_to_utf16(const char *utf8) {
-        int needed = 0;
-        wchar_t* utf16 = NULL;
-        if ((needed = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, NULL, 0)) == 0 ||
-                (utf16 = malloc(needed * sizeof(wchar_t))) == NULL ||
-                MultiByteToWideChar(CP_UTF8, 0, utf8, -1, utf16, needed) == 0)
-                return NULL;
-        return utf16;
+wchar_t* utf8_to_wchar(const char * fmt, ...) {
+	wchar_t* ret = NULL;
+	char * utf8 = NULL;
+	int needed = 0;
+	wchar_t* utf16 = NULL;
+	va_list ap;
+
+	va_start(ap, fmt);
+	if (fmt) {
+		int ret = vasprintf(&utf8, fmt, ap);
+		va_end(ap);
+		if (ret < 0 || !utf8)
+			return NULL;
+	} else {
+		utf8 = va_arg(ap, char *);
+		va_end(ap);
+		if (!utf8)
+			return NULL;
+		if (*utf8 == 0)
+			return wcsdup(L"");
+	}
+
+	if ((needed = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, NULL, 0)) == 0)
+		goto exit;
+
+	if ((utf16 = malloc(needed * sizeof(wchar_t))) == NULL)
+		goto exit;
+
+	if (MultiByteToWideChar(CP_UTF8, 0, utf8, -1, utf16, needed) > 0)
+		ret = utf16;
+
+exit:
+	if (fmt && utf8)
+		free(utf8);
+	if (!ret && utf16)
+		free(utf16);
+	return ret;
+}
+
+wchar_t* utf8_to_utf16(const char *utf8) {
+	return utf8_to_wchar(NULL, utf8);
 }
 
 char*
