@@ -595,12 +595,17 @@ main(int argc, char **argv)
 #ifdef WINDOWS
 	/* 
 	 * To support both Windows and Unix style paths
-	 * convert '\\' to '/' in rest of arguments 
+	 * convert '\\' to '/' in path portion of rest arguments 
 	 */	
 	{		
 		int i;
-		for (i = 0; i < argc; i++) 
-			convertToForwardslash(argv[i]);
+		char *p;
+		for (i = 0; i < argc; i++) {
+			if(p = colon(argv[i]))			
+				convertToForwardslash(p);
+			else
+				convertToForwardslash(argv[i]);			
+		}			
 	}
 #endif /* WINDOWS */
 
@@ -829,8 +834,8 @@ tolocal(int argc, char **argv)
 
 			exists = stat(argv[i], &stb) == 0;
 			/* convert '/' to '\\' 	*/
-			convertToBackslash(argv[i]);
-			convertToBackslash(argv[argc - 1]);
+			//convertToBackslash(argv[i]);
+			//convertToBackslash(argv[argc - 1]);
 			if (exists && (S_ISDIR(stb.st_mode))) {
 				addargs(&alist, "%s", _PATH_XCOPY);
 				if (iamrecursive)
