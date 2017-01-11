@@ -895,3 +895,102 @@ int fstatvfs(int fd, struct statvfs *buf) {
 	errno = ENOTSUP;
 	return -1;
 }
+
+__time64_t w32ftime_to_time64(FILETIME * ftime)
+{
+	SYSTEMTIME st;
+	FILETIME LocalFTime;
+
+	if (ftime->dwLowDateTime == 0 && ftime->dwHighDateTime == 0)
+		return 0;
+
+	if (!FileTimeToLocalFileTime(ftime, &LocalFTime))
+		return 0;
+
+	if (!FileTimeToSystemTime(&LocalFTime, &st))
+		return 0;
+
+	return __loctotime64_t(st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, -1);
+}
+
+unsigned short w32attr_to_xmode(int attr)
+{
+    unsigned short uxmode = 0;
+    unsigned short dosmode;
+
+    dosmode = attr & 0xFF;
+    uxmode |= (dosmode & FILE_ATTRIBUTE_DIRECTORY) ? (_S_IFDIR|_S_IEXEC) : _S_IFREG;
+    uxmode |= (dosmode & FILE_ATTRIBUTE_READONLY) ? _S_IREAD : (_S_IREAD|_S_IWRITE);
+
+    /* propagate user read/write/execute bits to group/other fields */
+    uxmode |= (uxmode & 0700) >> 3;
+    uxmode |= (uxmode & 0700) >> 6;
+    return(uxmode);
+}
+
+int wstat64_s(const wchar_t *path, struct _stat64 *buf)
+{
+	int ret = -1;
+	int n;
+	size_t len;
+	wchar_t * wp = NULL;
+	DWORD attr;
+	HANDLE findhandle = INVALID_HANDLE_VALUE;
+	WIN32_FIND_DATAW findbuf;
+
+	memset(buf, 0, sizeof(*buf));
+	len = wcslen(path);
+	if (len < MAX_PATH - 2)
+		return _wstat64(path, buf);
+
+	if (!iswalpha(path[0]) || path[1] != L':') {
+		errno = EINVAL;
+		goto exit;  /* this function support only full path */
+	}
+	buf->st_dev = (_dev_t)(towlower(path[0]) - L'a');  /* A=0, B=1, etc. */
+	buf->st_rdev = buf->st_dev;
+	
+	if ((wp = malloc((len + 16) * sizeof(wchar_t))) == NULL) {
+		errno = ENOMEM;
+		goto exit;
+	}
+	n = swprintf_s(wp, len + 15, L"\\\\?\\%s", path);  /* long path */
+	if (n < 0) {
+		errno = EFAULT;
+		goto exit;
+	}
+	len = n;
+	wp[len] = 0;
+	convertToBackslashW(wp);
+
+	attr = GetFileAttributesW(wp);
+	if (attr == INVALID_FILE_ATTRIBUTES) {
+		errno = ENOENT;
+		goto exit;
+	}
+	findhandle = FindFirstFileExW(wp, FindExInfoStandard, &findbuf, FindExSearchNameMatch, NULL, 0);
+	if (findhandle == INVALID_HANDLE_VALUE) {
+		errno = ENOENT;
+		goto exit;
+	}
+	FindClose(findhandle);
+
+	if ((findbuf.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) &&
+		(findbuf.dwReserved0 == IO_REPARSE_TAG_SYMLINK)) {
+		errno = ENOENT;
+		goto exit;  /* this func not support symlink */
+	}
+	buf->st_mtime = w32ftime_to_time64(&findbuf.ftLastWriteTime);
+	buf->st_atime = w32ftime_to_time64(&findbuf.ftLastAccessTime);
+	buf->st_ctime = w32ftime_to_time64(&findbuf.ftCreationTime);
+	buf->st_mode = w32attr_to_xmode(findbuf.dwFileAttributes);
+	buf->st_nlink = 1;
+	buf->st_size = ((__int64)findbuf.nFileSizeHigh) << 32;
+	buf->st_size |= findbuf.nFileSizeLow;
+	ret = 0;
+
+exit:
+	if (wp)
+		free(wp);
+	return ret;
+}
