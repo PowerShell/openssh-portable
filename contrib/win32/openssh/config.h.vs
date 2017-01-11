@@ -1678,8 +1678,6 @@
 #define __func__ __FUNCTION__
 #endif
 
-#define PATH_MAX MAX_PATH
-
 //#define IN_LOOPBACKNET INADDR_LOOPBACK
 
 #define S_IFIFO        0x1000  

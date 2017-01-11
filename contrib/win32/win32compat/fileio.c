@@ -28,6 +28,7 @@
 * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "inc/sys/param.h"
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -37,6 +38,7 @@
 #include <errno.h>
 #include <stddef.h>
 #include "inc\utf.h"
+#include "misc_internal.h"
 
 /* internal read buffer size */
 #define READ_BUFFER_SIZE 100*1024
@@ -256,12 +258,26 @@ struct w32_io*
 		return NULL;
 	}
 
-    if ((path_utf16 = utf8_to_utf16(path_utf8)) == NULL) {
-            errno = ENOMEM;
-            debug("utf8_to_utf16 failed - ERROR:%d", GetLastError());
-            return NULL;
-    }
-        
+	if ((path_utf16 = utf8_to_utf16(path_utf8)) == NULL) {
+		errno = ENOMEM;
+		debug("utf8_to_utf16 failed - ERROR:%d", GetLastError());
+		return NULL;
+	}
+	if (wcslen(path_utf16) >= MAX_PATH - 2) {
+		if (path_utf16[1] != ':') {
+			free(path_utf16);
+			errno = ENODEV;
+			return NULL;  /* support only full path */
+		}
+		free(path_utf16);
+		if ((path_utf16 = utf8_to_wchar("\\\\?\\%s", path_utf8)) == NULL) {
+			errno = ENOMEM;
+			debug("utf8_to_wchar failed - ERROR:%d", GetLastError());
+			return NULL;
+		}
+	}
+	convertToBackslashW(path_utf16);
+
 	if (createFile_flags_setup(flags, mode, &cf_flags) == -1)
 		return NULL;
 
@@ -583,7 +599,7 @@ fileio_stat(const char *path, struct _stat64 *buf) {
     }
     if ((wtmp = utf8_to_utf16(path)) == NULL)
         fatal("failed to covert input arguments");
-    ret = _wstat64(wtmp, buf);
+    ret = wstat64_s(wtmp, buf);
     free(wtmp);
     return ret;
 }

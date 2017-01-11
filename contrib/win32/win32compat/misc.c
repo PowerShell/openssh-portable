@@ -134,7 +134,7 @@ FARPROC dlsym(HMODULE handle, const char *symbol) {
 */
 FILE*
 w32_fopen_utf8(const char *path, const char *mode) {
-	wchar_t wpath[MAX_PATH], wmode[5];
+	wchar_t wpath[PATH_MAX], wmode[5];
 	FILE* f;
 	char utf8_bom[] = { 0xEF,0xBB,0xBF };
 	char first3_bytes[3];
@@ -144,7 +144,7 @@ w32_fopen_utf8(const char *path, const char *mode) {
 		return NULL;
 	}
 
-	if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, MAX_PATH) == 0 ||
+	if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, PATH_MAX) == 0 ||
 		MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, 5) == 0) {
 		errno = EFAULT;
 		debug("WideCharToMultiByte failed for %c - ERROR:%d", path, GetLastError());
@@ -876,7 +876,7 @@ int statvfs(const char *path, struct statvfs *buf) {
 		buf->f_favail = -1;
 		buf->f_fsid = 0;
 		buf->f_flag = 0;
-		buf->f_namemax = MAX_PATH - 1;
+		buf->f_namemax = NAME_MAX;
 
 		free(path_utf16);
 		return 0;
