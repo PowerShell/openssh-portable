@@ -549,13 +549,27 @@ w32_chdir(const char *dirname_utf8) {
 
 char *
 w32_getcwd(char *buffer, int maxlen) {
-	wchar_t wdirname[MAX_PATH];
+	wchar_t * wdir;
 	char* putf8 = NULL;
 
-	_wgetcwd(&wdirname[0], MAX_PATH);
+	if (buffer)
+		*buffer = 0;
 
-	if ((putf8 = utf16_to_utf8(&wdirname[0])) == NULL)
+	if ((wdir = (wchar_t *)_wgetcwd(NULL, 0)) == NULL)
+		return NULL;
+
+	if ((putf8 = utf16_to_utf8(wdir)) == NULL)
 		fatal("failed to convert input arguments");
+
+	free(wdir);
+	if (!buffer)
+		return putf8;
+
+	if (strlen(putf8) >= maxlen) {
+		free(putf8);
+		errno = ERANGE;
+		return NULL;
+	}
 	strcpy(buffer, putf8);
 	free(putf8);
 
