@@ -122,4 +122,3 @@ char *basename(char *path)
 	
 	return path; // path does not have a slash
 }
-// end of dirent functions in Windows

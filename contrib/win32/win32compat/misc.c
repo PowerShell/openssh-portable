@@ -690,7 +690,7 @@ realpath(const char *path, char resolved[PATH_MAX]) {
 		strncpy(resolved, path, strlen(path) + 1);
 	}	
 
-	if ((resolved[0]) && (resolved[1] == ':') && (resolved[2] == '\0')) { // make "x:" as "x:/"
+	if ((resolved[0]) && (resolved[1] == ':') && (resolved[2] == '\0')) { // make "x:" as "x:\\"
 		resolved[2] = '\\';
 		resolved[3] = '\0';
 	}
@@ -711,7 +711,7 @@ sanitized_path(const char *path) {
 
 	if (path[0] == '/' && path[1]) {
 		if (path[2] == ':') {
-			if (path[3] == '\0') { // make "/x:" as "x:/"
+			if (path[3] == '\0') { // make "/x:" as "x:\\"
 				strncpy(newPath, path + 1, strlen(path) - 1);
 				newPath[2] = '\\';
 				newPath[3] = '\0';
