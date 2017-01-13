@@ -222,8 +222,7 @@ function Install-TestDependencies
     if ( -not (Test-Path "$env:ProgramData\chocolatey\lib\sysinternals\tools" ) ) {        
         Write-Log -Message "sysinternals not present. Installing sysinternals."
         choco install sysinternals -y --force --limitoutput        
-    }
-    Write-Log -Message "Installing pscore..."    
+    }  
     Install-PSCoreFromGithub
 }
 <#
