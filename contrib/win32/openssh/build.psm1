@@ -207,7 +207,7 @@ function Start-SSHBootstrap
     if (-not (Test-Path -Path $nasmPath -PathType Container))
     {
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName." -Silent:$silent
-        choco install $packageName -y --force  --execution-timeout 10000 
+        choco install $packageName -y --force --limitoutput --execution-timeout 10000 
     }
     else
     {
@@ -222,7 +222,7 @@ function Start-SSHBootstrap
     {
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName."  -Silent:$silent
         $adminFilePath = "$script:OpenSSHRoot\contrib\win32\openssh\VSWithBuildTools.xml"
-        choco install $packageName -packageParameters "--AdminFile $adminFilePath" -y --force  --execution-timeout 10000
+        choco install $packageName -packageParameters "--AdminFile $adminFilePath" -y --force --limitoutput --execution-timeout 10000
     }
     else
     {
@@ -236,7 +236,7 @@ function Start-SSHBootstrap
     if (-not (Test-Path -Path $sdkPath))
     {
         Write-BuildMsg -AsInfo  -Message "Windows 8.1 SDK not present. Installing $packageName." -Silent:$silent
-        choco install $packageName -y --force
+        choco install $packageName -y --limitoutput --force
     }
     else
     {
