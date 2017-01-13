@@ -532,9 +532,11 @@ w32_rename(const char *old_name, const char *new_name) {
 		return -1;
 	}
 
-	// To be consistent with linux rename(),
-	// 1) if the new_name is file, then delete it so that _wrename will succeed.
-	// 2) if the new_name is directory and it is empty then delete it so that _wrename will succeed.
+	/*
+	 * To be consistent with linux rename(),
+	 * 1) if the new_name is file, then delete it so that _wrename will succeed.
+	 * 2) if the new_name is directory and it is empty then delete it so that _wrename will succeed.
+	 */
 	struct _stat64 st;
 	if (fileio_stat(sanitized_path(new_name), &st) != -1) {
 		if(((st.st_mode & _S_IFMT) == _S_IFREG)) {
@@ -674,22 +676,23 @@ convertToForwardslash(char *str) {
 }
 
 /*
-* This method will resolves references to /./, /../ and extra '/' characters in the null-terminated string named by
-*  path to produce a canonicalized absolute pathname.
-*/
+ * This method will resolves references to /./, /../ and extra '/' characters in the null-terminated string named by
+ *  path to produce a canonicalized absolute pathname.
+ */
 char *
 realpath(const char *path, char resolved[PATH_MAX]) {
 	char tempPath[PATH_MAX];
 		
 	if ((path[0] == '/') && path[1] && (path[2] == ':')) {
 		strncpy(resolved, path + 1, strlen(path)); // skip the first '/'
-		if (strlen(resolved) == 2) { // make "x:" as "x:/"
-			resolved[2] = '\\';
-			resolved[3] = '\0';
-		}
 	} else {
 		strncpy(resolved, path, strlen(path) + 1);
 	}	
+
+	if ((resolved[0]) && (resolved[1] == ':') && (resolved[2] == '\0')) { // make "x:" as "x:/"
+		resolved[2] = '\\';
+		resolved[3] = '\0';
+	}
 
 	if (_fullpath(tempPath, resolved, PATH_MAX) == NULL)
 		return NULL;
@@ -703,15 +706,23 @@ realpath(const char *path, char resolved[PATH_MAX]) {
 
 char*
 sanitized_path(const char *path) {
-	char tempPath[PATH_MAX];
-	if (realpath(path, tempPath)) {
-		static char resolved[PATH_MAX];
+	static char newPath[PATH_MAX] = { '\0', };
 
-		strncpy(resolved, &tempPath[1], sizeof(tempPath) - 1);
-		return resolved;		
-	}
-	
-	return NULL;	
+	if (path[0] == '/' && path[1]) {
+		if (path[2] == ':') {
+			if (path[3] == '\0') { // make "/x:" as "x:/"
+				strncpy(newPath, path + 1, strlen(path) - 1);
+				newPath[2] = '\\';
+				newPath[3] = '\0';
+
+				return newPath;
+			} else {
+				return (char *)(path + 1); // skip the first "/"
+			}
+		}	
+	} 
+
+	return (char *)path;			
 }
 
 // Maximum reparse buffer info size. The max user defined reparse 

@@ -77,7 +77,7 @@ int closedir(DIR *dirp)
    by a later readdir call on the same DIR stream.  */
 struct dirent *readdir(void *avp)
 {
-	struct dirent *pdirentry;
+	static struct dirent pdirentry;
 	struct _wfinddata_t c_file;
 	DIR *dirp = (DIR *)avp;
 	char *tmp = NULL;
@@ -92,19 +92,18 @@ struct dirent *readdir(void *avp)
 			
 		if (wcscmp(c_file.name, L".") == 0 || wcscmp(c_file.name, L"..") == 0 )
 			continue;
-		    
-		if ((pdirentry = malloc(sizeof(struct dirent))) == NULL ||
-		    (tmp = utf16_to_utf8(c_file.name)) == NULL) {
+
+		if ((tmp = utf16_to_utf8(c_file.name)) == NULL) {
 			errno = ENOMEM;
 			return NULL;
 		}
 
-		strncpy(pdirentry->d_name, tmp, strlen(tmp) + 1);
+		strncpy(pdirentry.d_name, tmp, strlen(tmp) + 1);
 		free(tmp);
 
-		pdirentry->d_ino = 1; // a fictious one like UNIX to say it is nonzero
-		return pdirentry ;
-        }
+		pdirentry.d_ino = 1; // a fictious one like UNIX to say it is nonzero
+		return &pdirentry ;
+    }
 }
 
 // return last part of a path. The last path being a filename.
