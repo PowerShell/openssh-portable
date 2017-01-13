@@ -86,8 +86,8 @@ function Invoke-AppVeyorFull
 # Implements the AppVeyor 'build_script' step
 function Invoke-AppVeyorBuild
 {  
-      Start-SSHBuild -Configuration Debug -NativeHostArch x64
-      Start-SSHBuild -Configuration Release -NativeHostArch x86
+      Start-SSHBuild -Configuration Release -NativeHostArch x64
+      Start-SSHBuild -Configuration Debug -NativeHostArch x86
 }
 
 <#
@@ -527,7 +527,7 @@ function Publish-Artifact
     Add-Artifact  -artifacts $artifacts -FileToAdd "$script:logFile"
 
     # Get the build.log file for each build configuration        
-    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Debug -NativeHostArch x64)
+    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName)
 
     foreach ($artifact in $artifacts)
     {
@@ -624,7 +624,7 @@ function Run-OpenSSHTests
       [string] $testInstallFolder = "$env:SystemDrive\OpenSSH"      
   )  
 
-  Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder -Configuration Debug -NativeHostArch x64
+  Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder
 
   # Run all pester tests.
   Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile

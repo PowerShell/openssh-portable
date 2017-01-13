@@ -17,7 +17,7 @@ build_script:
 after_build:
   - ps: |
       Import-Module $env:APPVEYOR_BUILD_FOLDER\contrib\win32\openssh\AppVeyor.psm1 -WarningAction SilentlyContinue
-      Install-OpenSSH -Configuration Debug -NativeHostArch x64
+      Install-OpenSSH
   - ps: Write-Verbose "Restart computer ..."
   - ps: Restart-Computer -ComputerName localhost -Force
   - ps: Start-Sleep -s 5 # Needs to be proceeded with -ps: as it's interpreted by AppVeyor

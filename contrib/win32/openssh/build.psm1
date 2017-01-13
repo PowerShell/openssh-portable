@@ -368,7 +368,7 @@ function Get-BuildLogFile
         [string]$NativeHostArch = "x64",
                 
         [ValidateSet('Debug', 'Release', '')]
-        [string]$Configuration = "Debug"
+        [string]$Configuration = "Release"
         
     )    
     return Join-Path -Path $root -ChildPath "contrib\win32\openssh\OpenSSH$($Configuration)$($NativeHostArch).log"
