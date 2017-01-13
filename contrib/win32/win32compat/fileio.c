@@ -69,6 +69,33 @@ errno_from_Win32Error(int win32_error)
 /* used to name named pipes used to implement pipe() */
 static int pipe_counter = 0;
 
+/* fstat() implemetation */
+int
+fileio_fstat(struct w32_io* pio, struct _stat64 *buf) {
+
+	int fd = _open_osfhandle((intptr_t)pio->handle, 0);
+	debug2("fstat - pio:%p", pio);
+	if (fd == -1) {
+		errno = EOTHER;
+		return -1;
+	}
+
+	return _fstat64(fd, buf);
+}
+
+int
+fileio_stat(const char *path, struct _stat64 *buf) {
+	wchar_t wpath[PATH_MAX];
+	wchar_t* wtmp = NULL;
+
+	if ((wtmp = utf8_to_utf16(path)) == NULL)
+		fatal("failed to covert input arguments");
+	wcscpy(&wpath[0], wtmp);
+	free(wtmp);
+
+	return _wstat64(wpath, buf);
+}
+
 /*
  * pipe() implementation. Creates an inbound named pipe, uses CreateFile to connect
  * to it. These handles are associated with read end and write end of the pipe
@@ -547,33 +574,6 @@ fileio_write(struct w32_io* pio, const void *buf, unsigned int max) {
 	debug2("write - reporting %d bytes written, io:%p", bytes_copied, pio);
 	return bytes_copied;
 
-}
-
-/* fstat() implemetation */
-int
-fileio_fstat(struct w32_io* pio, struct _stat64 *buf) {
-
-	int fd = _open_osfhandle((intptr_t)pio->handle, 0);
-	debug2("fstat - pio:%p", pio);
-	if (fd == -1) {
-		errno = EOTHER;
-		return -1;
-	}
-
-	return _fstat64(fd, buf);
-}
-
-int
-fileio_stat(const char *path, struct _stat64 *buf) {
-    wchar_t wpath[PATH_MAX];
-    wchar_t* wtmp = NULL;
-
-    if ((wtmp = utf8_to_utf16(path)) == NULL)
-        fatal("failed to covert input arguments");
-    wcscpy(&wpath[0], wtmp);
-    free(wtmp);
-
-    return _wstat64(wpath, buf);
 }
 
 long

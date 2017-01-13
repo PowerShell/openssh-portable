@@ -472,7 +472,7 @@ settimes(wchar_t * path, FILETIME *cretime, FILETIME *acttime, FILETIME *modtime
 	handle = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_WRITE,
 		NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
 
-	if (handle == INVALID_HANDLE_VALUE) {		
+	if (handle == INVALID_HANDLE_VALUE) {
 		errno = GetLastError;
 		debug("w32_settimes - CreateFileW ERROR:%d", errno);
 		return -1;
@@ -533,14 +533,13 @@ w32_rename(const char *old_name, const char *new_name) {
 	}
 
 	// To be consistent with linux rename(),
-	// 1) if the new_name is file, then delete it so that _wrename will not fail.
-	// 2) if the new_name is directory and it is empty then delete it so that _wrename will not fail.
-	struct stat sb;
-	if (w32_stat(new_name, &sb) != -1) {
-		if(((sb.st_mode & _S_IFMT) == _S_IFREG)) {
+	// 1) if the new_name is file, then delete it so that _wrename will succeed.
+	// 2) if the new_name is directory and it is empty then delete it so that _wrename will succeed.
+	struct _stat64 st;
+	if (fileio_stat(sanitized_path(new_name), &st) != -1) {
+		if(((st.st_mode & _S_IFMT) == _S_IFREG)) {
 			w32_unlink(new_name);
-		}
-		else {
+		} else {
 			DIR *dirp = opendir(new_name);
 			if (NULL != dirp) {
 				struct dirent *dp = readdir(dirp);
