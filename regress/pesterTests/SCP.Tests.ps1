@@ -222,7 +222,7 @@ Describe "Tests for scp command" -Tags "CI" {
         It 'Directory recursive copy with -p and -v options: <Title> ' -TestCases:$testData1 {
             param([string]$Title, $Source, $Destination)               
 
-            .\scp -r -v $Source $Destination            
+            .\scp -r -p -v $Source $Destination            
             $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
             $equal | Should Be $true
                         
