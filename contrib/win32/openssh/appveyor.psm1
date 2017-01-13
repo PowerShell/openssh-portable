@@ -524,11 +524,11 @@ function Publish-Artifact
     }
 
     Add-Artifact  -artifacts $artifacts -FileToAdd "$packageFolder\Win32OpenSSH*.zip"
-    Add-Artifact  -artifacts $artifacts -FileToAdd "$packageFolder\OpenSSH\UnitTestResults.txt"
+    Add-Artifact  -artifacts $artifacts -FileToAdd "$env:SystemDrive\OpenSSH\UnitTestResults.txt"
     Add-Artifact  -artifacts $artifacts -FileToAdd "$script:logFile"
 
     # Get the build.log file for each build configuration        
-    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Release -NativeHostArch x64)
+    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Debug -NativeHostArch x64)
 
     foreach ($artifact in $artifacts)
     {
@@ -551,7 +551,7 @@ function Run-OpenSSHPesterTest
     Write-Log -Message "Running OpenSSH Pester tests..."    
     $testFolders = Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique 
    
-    Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile  $outputXml -Tag 'CI'
+    Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $outputXml -Tag 'CI'
     Pop-Location
 }
 
@@ -656,6 +656,5 @@ function Upload-OpenSSHTestResults
   if ($env:APPVEYOR_JOB_ID)
   {
       (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", (Resolve-Path $testResultsFile))      
-  }
- 
+  } 
 }
