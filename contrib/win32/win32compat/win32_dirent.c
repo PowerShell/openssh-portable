@@ -27,7 +27,7 @@ DIR * opendir(const char *name)
 	struct _wfinddata_t c_file;
 	intptr_t hFile;
 	DIR *pdir;
-	wchar_t searchstr[MAX_PATH];
+	wchar_t searchstr[PATH_MAX];
 	wchar_t* wname = NULL;
 	int needed;
 	
@@ -37,7 +37,7 @@ DIR * opendir(const char *name)
 	}
 
 	// add *.* for Windows _findfirst() search pattern
-	swprintf_s(searchstr, MAX_PATH, L"%s\\*.*", wname);
+	swprintf_s(searchstr, PATH_MAX, L"%s\\*.*", wname);
 	free(wname);
 
 	if ((hFile = _wfindfirst(searchstr, &c_file)) == -1L) 
