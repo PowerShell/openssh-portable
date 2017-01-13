@@ -4,12 +4,12 @@
 * Win32 renamed POSIX APIs
 */
 #pragma once
+#include "sys\param.h"
 #include <WinSock2.h>
 #include <WS2tcpip.h>
 #include <stdio.h>
 #include "defs.h"
 #include "utf.h"
-#include "sys\param.h"
 
 typedef struct w32_fd_set_ {
 	unsigned char bitmap[MAX_FDS >> 3];
@@ -161,4 +161,5 @@ explicit_bzero(void *b, size_t len);
 #define pclose _pclose
 
 void convertToBackslash(char *str);
+void convertToBackslashW(wchar_t *str);
 void convertToForwardslash(char *str);

@@ -28,6 +28,7 @@
 * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "inc/sys/param.h"
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -37,6 +38,7 @@
 #include <errno.h>
 #include <stddef.h>
 #include "inc\utf.h"
+#include "misc_internal.h"
 
 /* internal read buffer size */
 #define READ_BUFFER_SIZE 100*1024
@@ -256,12 +258,26 @@ struct w32_io*
 		return NULL;
 	}
 
-    if ((path_utf16 = utf8_to_utf16(path_utf8)) == NULL) {
-            errno = ENOMEM;
-            debug("utf8_to_utf16 failed - ERROR:%d", GetLastError());
-            return NULL;
-    }
-        
+	if ((path_utf16 = utf8_to_utf16(path_utf8)) == NULL) {
+		errno = ENOMEM;
+		debug("utf8_to_utf16 failed - ERROR:%d", GetLastError());
+		return NULL;
+	}
+	if (wcslen(path_utf16) >= MAX_PATH - 2) {
+		if (path_utf16[1] != ':') {
+			free(path_utf16);
+			errno = ENODEV;
+			return NULL;  /* support only full path */
+		}
+		free(path_utf16);
+		if ((path_utf16 = utf8_to_wchar("\\\\?\\%s", path_utf8)) == NULL) {
+			errno = ENOMEM;
+			debug("utf8_to_wchar failed - ERROR:%d", GetLastError());
+			return NULL;
+		}
+	}
+	convertToBackslashW(path_utf16);
+
 	if (createFile_flags_setup(flags, mode, &cf_flags) == -1)
 		return NULL;
 
@@ -564,15 +580,28 @@ fileio_fstat(struct w32_io* pio, struct _stat64 *buf) {
 
 int
 fileio_stat(const char *path, struct _stat64 *buf) {
-    wchar_t wpath[MAX_PATH];
+    int ret = -1;
+    wchar_t wpath[8];
     wchar_t* wtmp = NULL;
 
+    if (path && strcmp(path, "/") == 0) {
+        memset(buf, 0, sizeof(*buf));
+        buf->st_mode = _S_IFDIR | _S_IREAD | 0xFF;
+        buf->st_dev = USHRT_MAX;   // rootdir
+        return 0;
+    }
+    if (path && isalpha(path[0]) && path[1] == ':' && path[2] == 0) {
+        wpath[0] = path[0];
+        wpath[1] = L':';
+        wpath[2] = L'\\';  // WINAPI support only as "x:\"
+        wpath[3] = 0;
+        return _wstat64(wpath, buf);
+    }
     if ((wtmp = utf8_to_utf16(path)) == NULL)
         fatal("failed to covert input arguments");
-    wcscpy(&wpath[0], wtmp);
+    ret = wstat64_s(wtmp, buf);
     free(wtmp);
-
-    return _wstat64(wpath, buf);
+    return ret;
 }
 
 long

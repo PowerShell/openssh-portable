@@ -6,6 +6,7 @@
 #ifndef UTF_H
 #define UTF_H 1
 
+wchar_t* utf8_to_wchar(const char * fmt, ...);
 wchar_t* utf8_to_utf16(const char *);
 char* utf16_to_utf8(const wchar_t*);
 

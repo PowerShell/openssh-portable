@@ -134,7 +134,7 @@ FARPROC dlsym(HMODULE handle, const char *symbol) {
 */
 FILE*
 w32_fopen_utf8(const char *path, const char *mode) {
-	wchar_t wpath[MAX_PATH], wmode[5];
+	wchar_t wpath[PATH_MAX], wmode[5];
 	FILE* f;
 	char utf8_bom[] = { 0xEF,0xBB,0xBF };
 	char first3_bytes[3];
@@ -144,7 +144,7 @@ w32_fopen_utf8(const char *path, const char *mode) {
 		return NULL;
 	}
 
-	if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, MAX_PATH) == 0 ||
+	if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, PATH_MAX) == 0 ||
 		MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, 5) == 0) {
 		errno = EFAULT;
 		debug("WideCharToMultiByte failed for %c - ERROR:%d", path, GetLastError());
@@ -176,15 +176,47 @@ w32_fopen_utf8(const char *path, const char *mode) {
 }
 
 
-wchar_t*
-utf8_to_utf16(const char *utf8) {
-        int needed = 0;
-        wchar_t* utf16 = NULL;
-        if ((needed = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, NULL, 0)) == 0 ||
-                (utf16 = malloc(needed * sizeof(wchar_t))) == NULL ||
-                MultiByteToWideChar(CP_UTF8, 0, utf8, -1, utf16, needed) == 0)
-                return NULL;
-        return utf16;
+wchar_t* utf8_to_wchar(const char * fmt, ...) {
+	wchar_t* ret = NULL;
+	char * utf8 = NULL;
+	int needed = 0;
+	wchar_t* utf16 = NULL;
+	va_list ap;
+
+	va_start(ap, fmt);
+	if (fmt) {
+		int ret = vasprintf(&utf8, fmt, ap);
+		va_end(ap);
+		if (ret < 0 || !utf8)
+			return NULL;
+	} else {
+		utf8 = va_arg(ap, char *);
+		va_end(ap);
+		if (!utf8)
+			return NULL;
+		if (*utf8 == 0)
+			return wcsdup(L"");
+	}
+
+	if ((needed = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, NULL, 0)) == 0)
+		goto exit;
+
+	if ((utf16 = malloc(needed * sizeof(wchar_t))) == NULL)
+		goto exit;
+
+	if (MultiByteToWideChar(CP_UTF8, 0, utf8, -1, utf16, needed) > 0)
+		ret = utf16;
+
+exit:
+	if (fmt && utf8)
+		free(utf8);
+	if (!ret && utf16)
+		free(utf16);
+	return ret;
+}
+
+wchar_t* utf8_to_utf16(const char *utf8) {
+	return utf8_to_wchar(NULL, utf8);
 }
 
 char*
@@ -585,13 +617,27 @@ w32_chdir(const char *dirname_utf8) {
 
 char *
 w32_getcwd(char *buffer, int maxlen) {
-	wchar_t wdirname[MAX_PATH];
+	wchar_t * wdir;
 	char* putf8 = NULL;
 
-	_wgetcwd(&wdirname[0], MAX_PATH);
+	if (buffer)
+		*buffer = 0;
 
-	if ((putf8 = utf16_to_utf8(&wdirname[0])) == NULL)
+	if ((wdir = (wchar_t *)_wgetcwd(NULL, 0)) == NULL)
+		return NULL;
+
+	if ((putf8 = utf16_to_utf8(wdir)) == NULL)
 		fatal("failed to convert input arguments");
+
+	free(wdir);
+	if (!buffer)
+		return putf8;
+
+	if (strlen(putf8) >= maxlen) {
+		free(putf8);
+		errno = ERANGE;
+		return NULL;
+	}
 	strcpy(buffer, putf8);
 	free(putf8);
 
@@ -644,6 +690,15 @@ convertToBackslash(char *str) {
 	}
 }
 
+void
+convertToBackslashW(wchar_t *str) {
+	while (*str) {
+		if (*str == L'/')
+			*str = L'\\';
+		str++;
+	}
+}
+
 // convert back slash to forward slash
 void 
 convertToForwardslash(char *str) {
@@ -658,23 +713,72 @@ convertToForwardslash(char *str) {
 * This method will resolves references to /./, /../ and extra '/' characters in the null-terminated string named by
 *  path to produce a canonicalized absolute pathname.
 */
-char *
-realpath(const char *path, char resolved[MAX_PATH]) {
-	char tempPath[MAX_PATH];
-		
-	if ( (strlen(path) >= 2) && (path[0] == '/') && (path[2] == ':') )
-		strncpy(resolved, path + 1, strlen(path)); // skip the first '/'
-	else
-		strncpy(resolved, path, strlen(path) + 1);
+char * realpath(const char *path, char *resolved) {
+	char *ret = NULL;
+	wchar_t *wpath = NULL;
+	wchar_t *wtmp = NULL;
+	char *tempPath = NULL;
+	char *buf = NULL;
 
-	if (_fullpath(tempPath, resolved, MAX_PATH) == NULL)
+	if (resolved)
+		*resolved = 0;
+	if (path[0] == 0)
 		return NULL;
-	
+
+	if (strcmp(path, "/") == 0 || strcmp(path, "/..") == 0 ||
+	    (path[0] == '/' && isalpha(path[1]) && strcmp(path + 2, ":/..") == 0)) {
+		if (!resolved)
+			return strdup("/");
+		strncpy(resolved, "/", PATH_MAX);
+		return resolved;
+	}
+	if (path[0] == '/' && isalpha(path[1]) && strcmp(path + 2, ":") == 0) {
+		if (!resolved)
+			return strdup(path);
+		strncpy(resolved, path, PATH_MAX);
+		return resolved;
+	}
+
+	if (path[0] == '/' && path[1] && path[2] == ':')
+		path++;    // skip the first '/'
+
+	wpath = utf8_to_utf16(path);
+	if (wpath == NULL)
+		fatal("failed to convert input arguments");
+		
+	wtmp = _wfullpath(NULL, wpath, 0);
+	if (wtmp == NULL)
+		goto exit;
+
+	tempPath = utf16_to_utf8(wtmp);
+	if (tempPath == NULL)
+		fatal("failed to convert input arguments");
+
 	convertToForwardslash(tempPath);
 
-	resolved[0] = '/'; // will be our first slash in /x:/users/test1 format
-	strncpy(resolved + 1, tempPath, sizeof(tempPath) - 1);
-	return resolved;
+	if (!resolved) {
+		buf = malloc(strlen(tempPath) + 4);
+		if (!buf)
+			fatal("failed to allocate temp buffer");
+	} else {
+		if (strlen(tempPath) >= PATH_MAX - 1)
+			goto exit;
+		buf = resolved;
+	}
+	buf[0] = '/'; // will be our first slash in /x:/users/test1 format
+	strncpy(buf + 1, tempPath, strlen(tempPath) + 1);
+	ret = buf;
+
+exit:
+	if (wpath)
+		free(wpath);
+	if (wtmp)
+		free(wtmp);
+	if (tempPath)
+		free(tempPath);
+	if (!ret && !resolved && buf)
+		free(buf);
+	return ret;
 }
 
 // Maximum reparse buffer info size. The max user defined reparse 
@@ -813,7 +917,7 @@ int statvfs(const char *path, struct statvfs *buf) {
 		buf->f_favail = -1;
 		buf->f_fsid = 0;
 		buf->f_flag = 0;
-		buf->f_namemax = MAX_PATH - 1;
+		buf->f_namemax = NAME_MAX;
 
 		free(path_utf16);
 		return 0;
@@ -831,4 +935,103 @@ int statvfs(const char *path, struct statvfs *buf) {
 int fstatvfs(int fd, struct statvfs *buf) {
 	errno = ENOTSUP;
 	return -1;
+}
+
+__time64_t w32ftime_to_time64(FILETIME * ftime)
+{
+	SYSTEMTIME st;
+	FILETIME LocalFTime;
+
+	if (ftime->dwLowDateTime == 0 && ftime->dwHighDateTime == 0)
+		return 0;
+
+	if (!FileTimeToLocalFileTime(ftime, &LocalFTime))
+		return 0;
+
+	if (!FileTimeToSystemTime(&LocalFTime, &st))
+		return 0;
+
+	return __loctotime64_t(st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, -1);
+}
+
+unsigned short w32attr_to_xmode(int attr)
+{
+    unsigned short uxmode = 0;
+    unsigned short dosmode;
+
+    dosmode = attr & 0xFF;
+    uxmode |= (dosmode & FILE_ATTRIBUTE_DIRECTORY) ? (_S_IFDIR|_S_IEXEC) : _S_IFREG;
+    uxmode |= (dosmode & FILE_ATTRIBUTE_READONLY) ? _S_IREAD : (_S_IREAD|_S_IWRITE);
+
+    /* propagate user read/write/execute bits to group/other fields */
+    uxmode |= (uxmode & 0700) >> 3;
+    uxmode |= (uxmode & 0700) >> 6;
+    return(uxmode);
+}
+
+int wstat64_s(const wchar_t *path, struct _stat64 *buf)
+{
+	int ret = -1;
+	int n;
+	size_t len;
+	wchar_t * wp = NULL;
+	DWORD attr;
+	HANDLE findhandle = INVALID_HANDLE_VALUE;
+	WIN32_FIND_DATAW findbuf;
+
+	memset(buf, 0, sizeof(*buf));
+	len = wcslen(path);
+	if (len < MAX_PATH - 2)
+		return _wstat64(path, buf);
+
+	if (!iswalpha(path[0]) || path[1] != L':') {
+		errno = EINVAL;
+		goto exit;  /* this function support only full path */
+	}
+	buf->st_dev = (_dev_t)(towlower(path[0]) - L'a');  /* A=0, B=1, etc. */
+	buf->st_rdev = buf->st_dev;
+	
+	if ((wp = malloc((len + 16) * sizeof(wchar_t))) == NULL) {
+		errno = ENOMEM;
+		goto exit;
+	}
+	n = swprintf_s(wp, len + 15, L"\\\\?\\%s", path);  /* long path */
+	if (n < 0) {
+		errno = EFAULT;
+		goto exit;
+	}
+	len = n;
+	wp[len] = 0;
+	convertToBackslashW(wp);
+
+	attr = GetFileAttributesW(wp);
+	if (attr == INVALID_FILE_ATTRIBUTES) {
+		errno = ENOENT;
+		goto exit;
+	}
+	findhandle = FindFirstFileExW(wp, FindExInfoStandard, &findbuf, FindExSearchNameMatch, NULL, 0);
+	if (findhandle == INVALID_HANDLE_VALUE) {
+		errno = ENOENT;
+		goto exit;
+	}
+	FindClose(findhandle);
+
+	if ((findbuf.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) &&
+		(findbuf.dwReserved0 == IO_REPARSE_TAG_SYMLINK)) {
+		errno = ENOENT;
+		goto exit;  /* this func not support symlink */
+	}
+	buf->st_mtime = w32ftime_to_time64(&findbuf.ftLastWriteTime);
+	buf->st_atime = w32ftime_to_time64(&findbuf.ftLastAccessTime);
+	buf->st_ctime = w32ftime_to_time64(&findbuf.ftCreationTime);
+	buf->st_mode = w32attr_to_xmode(findbuf.dwFileAttributes);
+	buf->st_nlink = 1;
+	buf->st_size = ((__int64)findbuf.nFileSizeHigh) << 32;
+	buf->st_size |= findbuf.nFileSizeLow;
+	ret = 0;
+
+exit:
+	if (wp)
+		free(wp);
+	return ret;
 }
