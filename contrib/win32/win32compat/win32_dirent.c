@@ -99,12 +99,12 @@ struct dirent *readdir(void *avp)
 			return NULL;
 		}
 
-		strncpy(pdirentry->d_name, tmp, strlen(tmp) + 1);
+		strncpy(pdirentry->d_name, tmp, sizeof(pdirentry->d_name));
 		free(tmp);
 
 		pdirentry->d_ino = 1; // a fictious one like UNIX to say it is nonzero
 		return pdirentry ;
-        }
+	}
 }
 
 // return last part of a path. The last path being a filename.
