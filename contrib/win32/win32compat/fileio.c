@@ -564,15 +564,22 @@ fileio_fstat(struct w32_io* pio, struct _stat64 *buf) {
 
 int
 fileio_stat(const char *path, struct _stat64 *buf) {
-    wchar_t wpath[MAX_PATH];
+    int ret = -1;
+    wchar_t wpath[8];
     wchar_t* wtmp = NULL;
 
+    if (path && isalpha(path[0]) && path[1] == ':' && path[2] == 0) {
+        wpath[0] = path[0];
+        wpath[1] = L':';
+        wpath[2] = L'\\';  // WINAPI support only as "x:\"
+        wpath[3] = 0;
+        return _wstat64(wpath, buf);
+    }
     if ((wtmp = utf8_to_utf16(path)) == NULL)
         fatal("failed to covert input arguments");
-    wcscpy(&wpath[0], wtmp);
+    ret = _wstat64(wtmp, buf);
     free(wtmp);
-
-    return _wstat64(wpath, buf);
+    return ret;
 }
 
 long
