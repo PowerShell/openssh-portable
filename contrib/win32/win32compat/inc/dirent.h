@@ -16,10 +16,11 @@ struct dirent {
 	char           d_name[256]; /* Null-terminated filename */
 };
 
+/* opaque DIR handle */
 typedef struct DIR_ DIR;
 
-DIR * opendir(const char *name);
-int closedir(DIR *dirp);
-struct dirent *readdir(void *avp);
+DIR * opendir(const char*);
+int closedir(DIR*);
+struct dirent *readdir(void*);
 
 #endif
