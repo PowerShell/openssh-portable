@@ -121,7 +121,7 @@ get_passwd(const char *user_utf8, LPWSTR user_sid) {
 
         if (user_sid == NULL) {
             NET_API_STATUS status;
-            if ( (status = NetUserGetInfo(udom_utf16, uname_utf16, 23, &user_info)) != NERR_Success) {
+            if ((status = NetUserGetInfo(udom_utf16, uname_utf16, 23, &user_info)) != NERR_Success) {
                 debug("NetUserGetInfo() failed with error: %d \n", status);
 
                 DWORD dsStatus;
