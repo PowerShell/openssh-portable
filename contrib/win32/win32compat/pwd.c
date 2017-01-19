@@ -130,20 +130,20 @@ get_passwd(const char *user_utf8, LPWSTR user_sid) {
                         debug("NetUserGetInfo() with domainController failed with error: %d \n", status);
 
                         if (ConvertSidToStringSidW(((LPUSER_INFO_23)user_info)->usri23_user_sid, &user_sid_local) == FALSE) {
-                            debug("ConvertSidToStringSidW() failed with error: %d\n", GetLastError());
+							error("ConvertSidToStringSidW() failed with error: %d\n", GetLastError());
 
                             errno = ENOMEM; //??
                             goto done;
                         }
                     }
                 } else {
-                    debug("DsGetDcNameW() failed with error: %d \n", dsStatus);
+					error("DsGetDcNameW() failed with error: %d \n", dsStatus);
                     errno = ENOMEM; //??
                     goto done;
                 }
             } else {
                 if (ConvertSidToStringSidW(((LPUSER_INFO_23)user_info)->usri23_user_sid, &user_sid_local) == FALSE) {
-                    debug("NetUserGetInfo() Succeded but ConvertSidToStringSidW() failed with error: %d\n", GetLastError());
+					error("NetUserGetInfo() Succeded but ConvertSidToStringSidW() failed with error: %d\n", GetLastError());
                     errno = ENOMEM; //??
                     goto done;
                 }
