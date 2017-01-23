@@ -296,19 +296,16 @@ help(void)
 /* printf version to account for utf-8 input */
 /* TODO - merge this with vfmprint */
 static void printf_utf8(char *fmt,  ... ) {
-        /* TODO - is 1024 sufficient */
-        char buf[1024];
-        wchar_t* wtmp;
-        va_list valist;
-        va_start(valist, fmt);
+    /* TODO - is 1024 sufficient */
+    char buf[1024];        
+	int length = 0;
+	va_list valist;
+    va_start(valist, fmt);
 
-        vsnprintf(buf, 1024, fmt, valist);
-        va_end(valist);
+    length = vsnprintf(buf, 1024, fmt, valist);
+    va_end(valist);
 
-        if ((wtmp = utf8_to_utf16(buf)) == NULL)
-                fatal("unable to allocate memory");
-        WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
-        free(wtmp);
+    write(STDOUT_FILENO, buf, length);        
 }
 
 /* override mprintf */
@@ -934,8 +931,14 @@ do_ls_dir(struct sftp_conn *conn, const char *path,
 			wchar_t buf[1024]; 
 			wchar_t* wtmp = utf8_to_utf16(fname);
 			swprintf(buf, 1024, L"%-*s", colspace, wtmp);
-			WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), buf, wcslen(buf), 0, 0);
+
+			char *p = NULL;
+			if ((p = utf16_to_utf8(buf)) == NULL)
+				continue;
+			
+			write(STDOUT_FILENO, p, strlen(p));			
 			free(wtmp);
+			free(p);
 #else
 			mprintf("%-*s", colspace, fname);
 #endif
@@ -1028,8 +1031,13 @@ do_globbed_ls(struct sftp_conn *conn, const char *path,
 			wchar_t buf[1024];
 			wchar_t* wtmp = utf8_to_utf16(fname);
 			swprintf(buf, 1024, L"%-*s", colspace, wtmp);
-			WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), buf, wcslen(buf), 0, 0);
+			char *p = NULL;
+			if ((p = utf16_to_utf8(buf)) == NULL)
+				continue;
+
+			write(STDOUT_FILENO, p, strlen(p));			
 			free(wtmp);
+			free(p);
 #else
 			mprintf("%-*s", colspace, fname);
 #endif

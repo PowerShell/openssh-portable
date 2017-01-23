@@ -72,6 +72,7 @@ typedef struct _SCREEN_RECORD{
 }SCREEN_RECORD,*PSCREEN_RECORD;
 
 PSCREEN_RECORD pSavedScreenRec = NULL;
+int in_raw_mode = 0;
 
 /* ************************************************************ */
 /* Function: ConInit         									*/
@@ -121,6 +122,7 @@ int ConInit( DWORD OutputHandle, BOOL fSmartInit )
     if (GetConsoleScreenBufferInfo(hOutputConsole, &csbi))
         SavedViewRect = csbi.srWindow;
 
+	in_raw_mode = 1;
     return 0;
 }
 
@@ -133,6 +135,7 @@ int ConUnInit( void )
 {
     CONSOLE_SCREEN_BUFFER_INFO ConsoleInfo;
 
+	in_raw_mode = 0;
     if ( hOutputConsole == NULL )
         return 0;
 
