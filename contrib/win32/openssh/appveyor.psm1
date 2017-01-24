@@ -598,9 +598,7 @@ function Publish-Artifact
 #>
 function Run-OpenSSHPesterTest
 {
-    param($testRoot, $outputXml)
-
-    
+    param($testRoot, $outputXml)    
      
    # Discover all CI tests and run them.
     Push-Location $testRoot
@@ -682,9 +680,7 @@ function Run-OpenSSHTests
   )  
 
   Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder
-
   Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
-
   # Run all pester tests.
   Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile
 

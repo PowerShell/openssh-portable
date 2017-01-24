@@ -206,7 +206,7 @@ function Start-SSHBootstrap
 
     if (-not (Test-Path -Path $nasmPath -PathType Container))
     {
-        Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName."
+        Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName." -Silent:$silent
         choco install $packageName -y --force --limitoutput --execution-timeout 10000 2>&1 > $script:BuildLogFile
     }
     else
@@ -353,7 +353,7 @@ function Start-SSHBuild
         Write-BuildMsg -AsError -ErrorAction Stop -Message "Build failed for OpenSSH.`nExitCode: $error."
     }    
 
-    Write-BuildMsg -AsInfo -Message "SSH build passed."
+    Write-BuildMsg -AsInfo -Message "SSH build passed." -Silent:$silent
 }
 
 function Get-BuildLogFile
