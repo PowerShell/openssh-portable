@@ -139,7 +139,8 @@ static DWORD WINAPI WriteThread(
 		free(t);
 		write_status.transferred = write_status.to_transfer;
     } else {
-        telProcessNetwork(pio->write_details.buf, write_status.to_transfer, &respbuf, &resplen); // console mode
+		/* console mode */
+        telProcessNetwork(pio->write_details.buf, write_status.to_transfer, &respbuf, &resplen);
         /*TODO - respbuf is not null in some cases, this needs to be returned back via read stream*/
         write_status.transferred = write_status.to_transfer;
     }

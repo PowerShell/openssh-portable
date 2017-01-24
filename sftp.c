@@ -928,11 +928,11 @@ do_ls_dir(struct sftp_conn *conn, const char *path,
 #ifdef WINDOWS
 			/* cannot use printf_utf8 becuase of width specification */
 			/* printf_utf8 does not account for utf-16 based argument widths */
+			char *p = NULL;
 			wchar_t buf[1024]; 
 			wchar_t* wtmp = utf8_to_utf16(fname);
 			swprintf(buf, 1024, L"%-*s", colspace, wtmp);
-
-			char *p = NULL;
+			
 			if ((p = utf16_to_utf8(buf)) == NULL)
 				continue;
 			
@@ -1028,10 +1028,11 @@ do_globbed_ls(struct sftp_conn *conn, const char *path,
 #ifdef WINDOWS
 			/* cannot use printf_utf8 becuase of width specification */
 			/* printf_utf8 does not account for utf-16 based argument widths */
+			char *p = NULL;
 			wchar_t buf[1024];
 			wchar_t* wtmp = utf8_to_utf16(fname);
 			swprintf(buf, 1024, L"%-*s", colspace, wtmp);
-			char *p = NULL;
+			
 			if ((p = utf16_to_utf8(buf)) == NULL)
 				continue;
 
