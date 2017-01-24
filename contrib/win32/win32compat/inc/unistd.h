@@ -5,6 +5,7 @@
 */
 #pragma once
 #include "sys\types.h"
+#include "fcntl.h"
 
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
@@ -17,9 +18,6 @@ int w32_ftruncate(int, off_t);
 
 #define pipe w32_pipe
 int w32_pipe(int *pfds);
-
-#define open w32_open
-int w32_open(const char *pathname, int flags, ...);
 
 #define read w32_read
 int w32_read(int fd, void *dst, size_t max);

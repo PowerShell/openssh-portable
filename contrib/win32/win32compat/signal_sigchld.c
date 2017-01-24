@@ -132,7 +132,7 @@ int
 w32_kill(int pid, int sig) {
 	int child_index, i;
 	if (pid == GetCurrentProcessId())
-		return sw_raise(sig);
+		return w32_raise(sig);
 
 	/*  for child processes - only SIGTERM supported*/
 	child_index = -1;

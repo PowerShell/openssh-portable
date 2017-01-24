@@ -58,7 +58,6 @@
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\sys\statvfs.h">
       <Filter>inc\sys</Filter>
     </ClInclude>
-    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\syslog.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\signal_internal.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\sys\param.h">
       <Filter>inc\sys</Filter>
@@ -121,7 +120,6 @@
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\string.h">
       <Filter>inc</Filter>
     </ClInclude>
-    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\strings.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\pwd.h">
       <Filter>inc</Filter>
     </ClInclude>
@@ -133,6 +131,12 @@
     </ClInclude>
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\sys\types.h">
       <Filter>inc\sys</Filter>
+    </ClInclude>
+    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\strings.h">
+      <Filter>inc</Filter>
+    </ClInclude>
+    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\syslog.h">
+      <Filter>inc</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

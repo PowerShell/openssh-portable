@@ -36,3 +36,5 @@
 int w32_fcntl(int fd, int cmd, ... /* arg */);
 #define fcntl(a,b,...)		w32_fcntl((a), (b),  __VA_ARGS__)
 
+#define open w32_open
+int w32_open(const char *pathname, int flags, ...);

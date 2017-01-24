@@ -209,7 +209,7 @@ sw_process_pending_signals() {
 	for (i = 0; i < (sizeof(exp) / sizeof(exp[0])); i++) {
 		if (sigismember(&pending_tmp, exp[i])) {
 			if (sig_handlers[exp[i]] != W32_SIG_IGN) {
-				sw_raise(exp[i]);
+				w32_raise(exp[i]);
 				/* dont error EINTR for SIG_ALRM, */
 				/* sftp client is not expecting it */
 				if (exp[i] != W32_SIGALRM)
