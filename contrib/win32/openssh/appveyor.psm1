@@ -70,9 +70,8 @@ function Invoke-AppVeyorFull
     try {        
         Invoke-AppVeyorBuild
         Install-OpenSSH
-        Install-TestDependencies
-        & "%psPath%" -Command {Import-Module $($repoRoot.FullName)\contrib\win32\openssh\AppVeyor.psm1 -WarningAction SilentlyContinue;Run-OpenSSHTests}
-        &  "$env:psPath -NoLogo -Command \"Import-module $($repoRoot.FullName)\contrib\win32\openssh\appveyor.psm1 -warningAction SilentlyContinue;Run-OpenSSHTests\""        
+        Install-TestDependencies        
+        &  "$env:psPath" -NoLogo -Command {Import-module $($repoRoot.FullName)\contrib\win32\openssh\appveyor.psm1 -warningAction SilentlyContinue;Run-OpenSSHTests}
         Publish-Artifact
     }
     finally {
@@ -681,7 +680,7 @@ function Run-OpenSSHTests
   )  
 
   Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder
-  #Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
+  Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
   # Run all pester tests.
   Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile
 
