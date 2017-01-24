@@ -151,7 +151,7 @@ function Start-SSHBootstrap
     else
     {
         Write-BuildMsg -AsInfo -Message "Chocolatey not present. Installing chocolatey." -Silent:$silent
-        Invoke-Expression ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1')) 2>&1 > $script:BuildLogFile
+        Invoke-Expression ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1')) 2>&1 >> $script:BuildLogFile
 
         if (-not ($machinePath.ToLower().Contains($chocolateyPath.ToLower())))
         {
@@ -207,7 +207,7 @@ function Start-SSHBootstrap
     if (-not (Test-Path -Path $nasmPath -PathType Container))
     {
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName." -Silent:$silent
-        choco install $packageName -y --force --limitoutput --execution-timeout 10000 2>&1 > $script:BuildLogFile
+        choco install $packageName -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
     }
     else
     {
@@ -222,7 +222,7 @@ function Start-SSHBootstrap
     {
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName."
         $adminFilePath = "$script:OpenSSHRoot\contrib\win32\openssh\VSWithBuildTools.xml"
-        choco install $packageName -packageParameters "--AdminFile $adminFilePath" -y --force --limitoutput --execution-timeout 10000 2>&1 > $script:BuildLogFile
+        choco install $packageName -packageParameters "--AdminFile $adminFilePath" -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
     }
     else
     {
@@ -236,7 +236,7 @@ function Start-SSHBootstrap
     if (-not (Test-Path -Path $sdkPath))
     {
         Write-BuildMsg -AsInfo  -Message "Windows 8.1 SDK not present. Installing $packageName."
-        choco install $packageName -y --limitoutput --force 2>&1 > $script:BuildLogFile
+        choco install $packageName -y --limitoutput --force 2>&1 >> $script:BuildLogFile
     }
     else
     {

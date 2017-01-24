@@ -217,16 +217,16 @@ function Install-TestDependencies
     if (-not ($isModuleAvailable))
     {      
       Write-Log -Message "Installing Pester..." 
-      choco install Pester -y --force --limitoutput 2>&1 > $script:logFile
+      choco install Pester -y --force --limitoutput 2>&1 >> $script:logFile
     }
 
     if ( -not (Test-Path "$env:ProgramData\chocolatey\lib\sysinternals\tools" ) ) {        
         Write-Log -Message "sysinternals not present. Installing sysinternals."
-        choco install sysinternals -y --force --limitoutput 2>&1 > $script:logFile
+        choco install sysinternals -y --force --limitoutput 2>&1 >> $script:logFile
     }
     <#if ( (-not (Test-Path "${env:ProgramFiles(x86)}\Windows Kits\8.1\Debuggers\" )) -and (-not (Test-Path "${env:ProgramFiles(x86)}\Windows Kits\10\Debuggers\" ))) {        
         Write-Log -Message "debugger not present. Installing windbg."
-        choco install windbg --force  --limitoutput -y 2>&1 > $script:logFile
+        choco install windbg --force  --limitoutput -y 2>&1 >> $script:logFile
     }#>
     Install-PSCoreFromGithub
 	$psCorePath = GetLocalPSCorePath
@@ -373,7 +373,7 @@ function Build-Win32OpenSSHPackage
     if (-not (Test-Path -Path $rktoolsPath))
     {        
         Write-Log -Message "$packageName not present. Installing $packageName."
-        choco install $packageName -y --force 2>&1 > $script:logFile
+        choco install $packageName -y --force 2>&1 >> $script:logFile
         if (-not (Test-Path -Path $rktoolsPath))
         {
             throw "failed to download $packageName"
@@ -578,15 +578,16 @@ function Publish-Artifact
     }
 
     Add-Artifact  -artifacts $artifacts -FileToAdd "$packageFolder\Win32OpenSSH*.zip"
-    Add-Artifact  -artifacts $artifacts -FileToAdd "$env:SystemDrive\OpenSSH\UnitTestResults.txt"
-    Add-Artifact  -artifacts $artifacts -FileToAdd "$script:logFile"
+    Add-Artifact  -artifacts $artifacts -FileToAdd "$env:SystemDrive\OpenSSH\UnitTestResults.txt"    
 
     # Get the build.log file for each build configuration        
     Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName)
 
+    Add-Artifact  -artifacts $artifacts -FileToAdd "$script:logFile"
+
     foreach ($artifact in $artifacts)
     {
-        Write-Output "Publishing $artifact as Appveyor artifact"
+        Write-Log -Message "Publishing $artifact as Appveyor artifact"
         # NOTE: attempt to publish subsequent artifacts even if the current one fails
         Push-AppveyorArtifact $artifact -ErrorAction "Continue"
     }
@@ -631,7 +632,7 @@ function Run-OpenSSHUnitTest
     {        
         $unitTestFiles | % {
             Write-Log -Message "Running OpenSSH unit $($_.FullName)..."            
-            & $_.FullName >>  $unitTestOutputFile
+            & $_.FullName 2>&1 >> $unitTestOutputFile
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
             {
@@ -680,10 +681,9 @@ function Run-OpenSSHTests
   )  
 
   Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder
-  
+  #Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
   # Run all pester tests.
   Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile
-  Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
 
   $xml = [xml](Get-Content -raw $testResultsFile) 
   if ([int]$xml.'test-results'.failures -gt 0) 
