@@ -296,16 +296,16 @@ help(void)
 /* printf version to account for utf-8 input */
 /* TODO - merge this with vfmprint */
 static void printf_utf8(char *fmt,  ... ) {
-    /* TODO - is 1024 sufficient */
-    char buf[1024];        
+	/* TODO - is 1024 sufficient */
+	char buf[1024];
 	int length = 0;
+	
 	va_list valist;
-    va_start(valist, fmt);
+	va_start(valist, fmt);
+	length = vsnprintf(buf, 1024, fmt, valist);
+	va_end(valist);
 
-    length = vsnprintf(buf, 1024, fmt, valist);
-    va_end(valist);
-
-    write(STDOUT_FILENO, buf, length);        
+	write(STDOUT_FILENO, buf, length);
 }
 
 /* override mprintf */
