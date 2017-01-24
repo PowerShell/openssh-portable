@@ -138,6 +138,12 @@
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\syslog.h">
       <Filter>inc</Filter>
     </ClInclude>
+    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\stdlib.h">
+      <Filter>inc</Filter>
+    </ClInclude>
+    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\ctype.h">
+      <Filter>inc</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="inc">

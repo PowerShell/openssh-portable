@@ -11,8 +11,6 @@
 #define STDOUT_FILENO 1
 #define STDERR_FILENO 2
 
-#define environ _environ
-
 int w32_ftruncate(int, off_t);
 #define ftruncate(a, b) w32_ftruncate((a), (b))
 
