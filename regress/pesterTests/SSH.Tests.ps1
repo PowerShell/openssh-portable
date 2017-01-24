@@ -14,9 +14,9 @@ Describe "Tests for ssh command" -Tags "CI" {
 
         $testData = @(
             @{
-                Title = 'Simple logon -v option';                
+                Title = 'Simple logon no option';                
                 LogonStr = "$($server.localAdminUserName)@$($server.MachineName)"
-                Options = "-v"
+                Options = ""
             },
             @{
                 Title = 'Simple logon using -C -l option'
