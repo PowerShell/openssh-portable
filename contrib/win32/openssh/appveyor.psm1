@@ -634,8 +634,7 @@ function Run-OpenSSHUnitTest
             & $_.FullName >> $unitTestOutputFile
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
-            {
-                Set-BuildVariable -Name TestPassed -Value False                
+            {                
                 Write-Host -ForegroundColor Red "$($_.FullName) test failed for OpenSSH.`nExitCode: $error"
             }
         }
@@ -682,9 +681,7 @@ function Run-OpenSSHTests
   $xml = [xml](Get-Content -raw $testResultsFile) 
   if ([int]$xml.'test-results'.failures -gt 0) 
   { 
-     Write-Host -ForegroundColor Red "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
-     Set-BuildVariable -Name TestPassed -Value False
-
+     Write-Host -ForegroundColor Red "$($xml.'test-results'.failures) tests in regress\pesterTests failed"    
   }
 
   # Writing out warning when the $Error.Count is non-zero. Tests Should clean $Error after success.
