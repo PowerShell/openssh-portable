@@ -631,7 +631,7 @@ function Run-OpenSSHUnitTest
     {        
         $unitTestFiles | % {
             Write-Log -Message "Running OpenSSH unit $($_.FullName)..."            
-            & $_.FullName 2>&1 >>  $unitTestOutputFile
+            & $_.FullName >>  $unitTestOutputFile
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
             {
