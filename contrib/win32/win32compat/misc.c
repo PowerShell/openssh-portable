@@ -39,6 +39,8 @@
 #include "misc_internal.h"
 #include "inc\dlfcn.h"
 #include "inc\dirent.h"
+#include "inc\sys\types.h"
+#include "inc\sys\ioctl.h"
 
 int usleep(unsigned int useconds)
 {

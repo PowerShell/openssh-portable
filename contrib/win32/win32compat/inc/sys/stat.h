@@ -5,8 +5,7 @@
 * instead of the one in Windows SDK. 
 */
 #pragma once
-#include "..\fcntl.h"
-#include "param.h"
+#include "types.h"
 
 /* flags COPIED FROM STAT.H
  */
@@ -37,9 +36,17 @@
 # define S_ISUID            0x800 
 # define S_ISGID            0x400
 
+int w32_fstat(int fd, struct w32_stat *buf);
+#define fstat(a,b)	w32_fstat((a), (b))
+
+int w32_stat(const char *path, struct w32_stat *buf);
 #define stat w32_stat
 #define lstat w32_stat
+
+int w32_mkdir(const char *pathname, unsigned short mode);
 #define mkdir w32_mkdir
+
+int w32_chmod(const char *, mode_t);
 #define chmod w32_chmod
 
 struct w32_stat {
@@ -56,9 +63,6 @@ struct w32_stat {
 	__int64    st_ctime;   /* time of last status change */
 };
 
-typedef unsigned short _mode_t;
-typedef _mode_t mode_t;
 
 void strmode(mode_t mode, char *p);
-int w32_chmod(const char *, mode_t);
-int w32_mkdir(const char *pathname, unsigned short mode);
+

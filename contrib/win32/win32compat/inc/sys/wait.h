@@ -16,4 +16,7 @@
 #define WNOHANG 1
 #define WUNTRACED 2
 
+/* wait pid options */
+#define WNOHANG 1
+
 int waitpid(int pid, int *status, int options);

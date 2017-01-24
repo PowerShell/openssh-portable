@@ -2,6 +2,16 @@
 
 #pragma once
 
+/*fcntl commands*/
+#define F_GETFL 0x1
+#define F_SETFL 0x2
+#define F_GETFD 0x4
+#define F_SETFD 0x8
+
+/*fd flags*/
+#define FD_CLOEXEC 0x1
+
+
 #define O_RDONLY      0x0000  // open for reading only
 #define O_WRONLY      0x0001  // open for writing only
 #define O_RDWR        0x0002  // open for reading and writing
@@ -21,3 +31,8 @@
 #define O_NOCTTY      0x80000 /* TODO - implement this if it makes sense on Windows*/
 
 #define F_OK 0
+
+
+int w32_fcntl(int fd, int cmd, ... /* arg */);
+#define fcntl(a,b,...)		w32_fcntl((a), (b),  __VA_ARGS__)
+

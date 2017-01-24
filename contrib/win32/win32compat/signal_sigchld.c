@@ -29,6 +29,7 @@
 */
 
 #include "signal_internal.h"
+#include "inc\sys\wait.h"
 
 struct _children children;
 
@@ -128,7 +129,7 @@ sw_child_to_zombie(DWORD index) {
 }
 
 int
-sw_kill(int pid, int sig) {
+w32_kill(int pid, int sig) {
 	int child_index, i;
 	if (pid == GetCurrentProcessId())
 		return sw_raise(sig);
