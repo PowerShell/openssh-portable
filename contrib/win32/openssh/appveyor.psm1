@@ -105,10 +105,10 @@ function Invoke-AppVeyorFull
 # Implements the AppVeyor 'build_script' step
 function Invoke-AppVeyorBuild
 {
-      Set-BuildVariable TestPassed True
+      Set-BuildVariable TestPassed True    
       Start-SSHBuild -Configuration Release -NativeHostArch x64
-      Start-SSHBuild -Configuration Debug -NativeHostArch x86
-      Write-BuildMessage -Message "Build passed!" -Category Informatoin
+      Start-SSHBuild -Configuration Debug -NativeHostArch x86        
+      Write-BuildMessage -Message "Build passed!" -Category Information
 }
 
 <#
@@ -679,7 +679,7 @@ function Run-OpenSSHUnitTest
         Remove-Item -Path $unitTestOutputFile -Force -ErrorAction SilentlyContinue
     }
 
-    $unitTestFiles = Get-ChildItem -Path "$testRoot\unittest*.exe"
+    $unitTestFiles = Get-ChildItem -Path "$testRoot\unittest*.exe" -Exclude unittest-kex.exe
     $testfailed = $false
     if ($unitTestFiles -ne $null)
     {        
