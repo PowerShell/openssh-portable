@@ -1,5 +1,5 @@
 ﻿$ErrorActionPreference = 'Stop'
-Import-Module $PSScriptRoot\build.psm1 -Force -WarningAction SilentlyContinue
+Import-Module $PSScriptRoot\build.psm1 -Force -DisableNameChecking
 $repoRoot = Get-RepositoryRoot
 $script:logFile = join-path $repoRoot.FullName "appveyor.log"
 $script:testfailed = $false
