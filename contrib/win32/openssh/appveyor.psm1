@@ -107,7 +107,7 @@ function Invoke-AppVeyorBuild
 {
       Set-BuildVariable TestPassed True    
       Start-SSHBuild -Configuration Release -NativeHostArch x64
-      Start-SSHBuild -Configuration Debug -NativeHostArch x86        
+      Start-SSHBuild -Configuration Debug -NativeHostArch x86
       Write-BuildMessage -Message "Build passed!" -Category Information
 }
 
@@ -383,13 +383,12 @@ function Build-Win32OpenSSHPackage
     {
         $RealConfiguration = $Configuration
     }
-    
 
     [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
     $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$RealConfiguration"
     Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHDir -Include *.exe,*.dll -Exclude *unittest*.* -Force -ErrorAction Stop
     $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "contrib\win32\openssh"
-    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHDir -Include *.ps1,sshd_config -Exclude AnalyzeCodeDiff.ps1 -Force -ErrorAction Stop    
+    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHDir -Include *.ps1,sshd_config -Exclude AnalyzeCodeDiff.ps1 -Force -ErrorAction Stop
         
     $packageName = "rktools.2003"
     $rktoolsPath = "${env:ProgramFiles(x86)}\Windows Resource Kits\Tools\ntrights.exe"
@@ -399,8 +398,12 @@ function Build-Win32OpenSSHPackage
         choco install $packageName -y --force 2>&1 >> $script:logFile
         if (-not (Test-Path -Path $rktoolsPath))
         {
-            Write-BuildMessage "Installation dependencies: failed to download $packageName" -Category Error
-            throw "failed to download $packageName"
+            choco install $packageName -y --force 2>&1 >> $script:logFile
+            if (-not (Test-Path -Path $rktoolsPath))
+            {
+                Write-BuildMessage "Installation dependencies: failed to download $packageName. try again please." -Category Error
+                throw "failed to download $packageName"
+            }
         }
     }
 
