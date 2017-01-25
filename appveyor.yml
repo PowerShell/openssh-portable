@@ -18,7 +18,7 @@ after_build:
   - ps: |
       Install-OpenSSH
   - ps: Write-Verbose "Restart computer ..."
-  - ps: Restart-Computer -ComputerName localhost -Force
+  - ps: Restart-Computer -Force
   - ps: Start-Sleep -s 5 # Needs to be proceeded with -ps: as it's interpreted by AppVeyor
   - ps: Write-Verbose "Restart computer completed"
 

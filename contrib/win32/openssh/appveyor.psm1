@@ -84,8 +84,7 @@ function Invoke-AppVeyorFull
 
 # Implements the AppVeyor 'build_script' step
 function Invoke-AppVeyorBuild
-{
-      Set-BuildVariable -Name TestPassed -Value True
+{      
       Start-SSHBuild -Configuration Release -NativeHostArch x64
       Start-SSHBuild -Configuration Debug -NativeHostArch x86      
 }
@@ -567,7 +566,7 @@ function Add-Artifact
 #>
 function Publish-Artifact
 {
-    Write-Output "Publishing project artifacts"
+    Write-Host -ForegroundColor Yellow "Publishing project artifacts"
     [System.Collections.ArrayList] $artifacts = [System.Collections.ArrayList]::new()
     
     $packageFolder = $env:SystemDrive
@@ -683,8 +682,7 @@ function Run-OpenSSHTests
   $xml = [xml](Get-Content -raw $testResultsFile) 
   if ([int]$xml.'test-results'.failures -gt 0) 
   { 
-     Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
-	 Write-Host -ForegroundColor Yellow "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
+     Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"	 
      $script:testfailed = $true  
   }
 
