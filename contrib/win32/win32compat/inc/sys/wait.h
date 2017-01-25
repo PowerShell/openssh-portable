@@ -1,5 +1,4 @@
 #pragma once
-#include "..\w32posix.h"
 
 //#define _W_INT(w)	(*(int*)&(w))	/* convert union wait to int */
 //#define WIFEXITED(w)	(!((_W_INT(w)) & 0377))
