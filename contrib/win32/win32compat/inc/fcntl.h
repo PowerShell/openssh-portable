@@ -38,3 +38,6 @@ int w32_fcntl(int fd, int cmd, ... /* arg */);
 
 #define open w32_open
 int w32_open(const char *pathname, int flags, ...);
+
+void* w32_fd_to_handle(int fd);
+int w32_allocate_fd_for_handle(void* h, int is_sock);

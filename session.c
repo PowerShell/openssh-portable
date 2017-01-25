@@ -548,9 +548,9 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		si.cbReserved2 = 0;
 		si.lpReserved2 = 0;
 
-		si.hStdInput = (HANDLE)sfd_to_handle(pipein[0]);
-		si.hStdOutput = (HANDLE)sfd_to_handle(pipeout[1]);
-		si.hStdError = (HANDLE)sfd_to_handle(pipeerr[1]);
+		si.hStdInput = (HANDLE)w32_fd_to_handle(pipein[0]);
+		si.hStdOutput = (HANDLE)w32_fd_to_handle(pipeout[1]);
+		si.hStdError = (HANDLE)w32_fd_to_handle(pipeerr[1]);
 		si.lpDesktop = NULL;
 
 		hToken = s->authctxt->methoddata;
@@ -605,7 +605,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 
 		CloseHandle(pi.hThread);
 		s->pid = pi.dwProcessId;
-		sw_add_child(pi.hProcess, pi.dwProcessId);
+		register_child(pi.hProcess, pi.dwProcessId);
 	}
 	/*
 	* Set interactive/non-interactive mode.

@@ -19,7 +19,7 @@ struct _children {
 
 
 int sw_initialize();
-int sw_add_child(HANDLE child, DWORD pid);
+int register_child(HANDLE child, DWORD pid);
 int sw_remove_child_at_index(DWORD index);
 int sw_child_to_zombie(DWORD index);
 void sw_cleanup_child_zombies();

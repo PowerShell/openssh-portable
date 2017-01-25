@@ -34,7 +34,7 @@
 struct _children children;
 
 int
-sw_add_child(HANDLE child, DWORD pid) {
+register_child(HANDLE child, DWORD pid) {
 	DWORD first_zombie_index;
 
 	debug("Register child %p pid %d, %d zombies of %d", child, pid,

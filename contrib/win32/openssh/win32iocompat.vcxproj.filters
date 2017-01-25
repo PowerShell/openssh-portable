@@ -34,9 +34,6 @@
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\sys\time.h">
       <Filter>inc\sys</Filter>
     </ClInclude>
-    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\defs.h">
-      <Filter>inc</Filter>
-    </ClInclude>
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\fcntl.h">
       <Filter>inc</Filter>
     </ClInclude>

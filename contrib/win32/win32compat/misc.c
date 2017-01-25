@@ -30,7 +30,6 @@
 
 #include <Windows.h>
 #include <stdio.h>
-#include "inc\defs.h"
 #include "sys\stat.h"
 #include "inc\sys\statvfs.h"
 #include "inc\sys\time.h"
@@ -316,7 +315,7 @@ spawn_child(char* cmd, int in, int out, int err, DWORD flags) {
 	b = CreateProcessW(NULL, cmd_utf16, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
 
 	if (b) {
-		if (sw_add_child(pi.hProcess, pi.dwProcessId) == -1) {
+		if (register_child(pi.hProcess, pi.dwProcessId) == -1) {
 			TerminateProcess(pi.hProcess, 0);
 			CloseHandle(pi.hProcess);
 			pi.dwProcessId = -1;

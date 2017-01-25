@@ -33,7 +33,6 @@
 #include <sys/types.h>
 #include <io.h>
 #include "w32fd.h"
-#include "inc/defs.h"
 #include <errno.h>
 #include <stddef.h>
 #include "inc\utf.h"

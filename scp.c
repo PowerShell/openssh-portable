@@ -387,7 +387,7 @@ do_cmd2(char *host, char *remuser, char *cmd, int fdin, int fdout)
 		size_t cmdlen = 0;
 		char** list = args.list;
 
-		cmdlen = strlen(w32_programdir()) + 2;
+		cmdlen = strlen(w32_programdir()) + 2; XXX - remove
 		while (*list)
 			cmdlen += strlen(*list++) + 1;
 
