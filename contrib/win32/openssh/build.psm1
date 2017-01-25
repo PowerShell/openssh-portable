@@ -341,7 +341,14 @@ function Start-SSHBuild
     Copy-OpenSSLSDK
     $msbuildCmd = "msbuild.exe"
     $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
-    $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/noconlog", "/nologo", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
+    if($env:AppVeyor)
+    {
+        $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/noconlog", "/logger:`"$env:ProgramFiles\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll`"", "/nologo", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
+    }
+    else
+    {
+        $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/noconlog", "/nologo", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
+    }
 
     & $msbuildCmd $cmdMsg
     $errorCode = $LASTEXITCODE
