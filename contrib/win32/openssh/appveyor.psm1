@@ -23,6 +23,23 @@ function Write-Log
 }
 
 # Sets a build variable
+Function Write-BuildMessage
+{
+	param(
+        [Parameter(Mandatory=$true)]
+        [string] $Message)
+
+	if($env:AppVeyor -and (Get-Command Add-AppveyorMessage -ErrorAction Ignore) -ne $null)
+    {
+        Add-AppveyorMessage -Message $Message
+    }
+	elseif($env:AppVeyor)
+	{
+		appveyor AddMessage $Message
+	}
+}
+
+# Sets a build variable
 Function Set-BuildVariable
 {
     param(
@@ -35,7 +52,7 @@ Function Set-BuildVariable
         $Value
     )
 
-    if($env:AppVeyor)
+    if($env:AppVeyor -and (Get-Command Set-AppveyorBuildVariable -ErrorAction Ignore) -ne $null)
     {
         Set-AppveyorBuildVariable @PSBoundParameters
     }
@@ -84,9 +101,11 @@ function Invoke-AppVeyorFull
 
 # Implements the AppVeyor 'build_script' step
 function Invoke-AppVeyorBuild
-{      
+{
+      Set-BuildVariable TestPassed True
       Start-SSHBuild -Configuration Release -NativeHostArch x64
-      Start-SSHBuild -Configuration Debug -NativeHostArch x86      
+      Start-SSHBuild -Configuration Debug -NativeHostArch x86
+	  Write-BuildMessage -Message "Build passed!"
 }
 
 <#
@@ -229,6 +248,7 @@ function Install-TestDependencies
     Install-PSCoreFromGithub
 	$psCorePath = GetLocalPSCorePath
 	Set-BuildVariable -Name psPath -Value $psCorePath
+	Write-BuildMessage -Message "TestDependencies installed!"
 }
 
 <#
@@ -277,6 +297,7 @@ function Install-OpenSSH
     Start-Service sshd
 
     Pop-Location
+	Write-BuildMessage -Message "OpenSSH installed!"
 }
 
 <#
@@ -637,6 +658,8 @@ function Run-OpenSSHUnitTest
             {
                 $script:testfailed = $true
                 Write-Warning "$($_.FullName) test failed for OpenSSH.`nExitCode: $error"
+				Write-BuildMessage -Message "$($_.FullName) test failed for OpenSSH.`nExitCode: $error!"
+                Set-BuildVariable TestPassed False
             }
         }
     }
@@ -652,17 +675,9 @@ function Run-OpenSSHUnitTest
       The name of the xml file to write pester results.
       The default value is '.\testResults.xml'
 
-      .Parameter uploadResults
-      Uploads the tests results.      
-
       .Example
       .\RunTests.ps1 
       Runs the tests and creates the default 'testResults.xml'
-
-      .Example
-      .\RunTests.ps1 -uploadResults
-      Runs the tests and creates teh default 'testResults.xml' and uploads it to appveyor.
-
   #>
 function Run-OpenSSHTests
 {  
@@ -682,7 +697,9 @@ function Run-OpenSSHTests
   $xml = [xml](Get-Content -raw $testResultsFile) 
   if ([int]$xml.'test-results'.failures -gt 0) 
   { 
-     Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"	 
+     Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
+	 Write-BuildMessage -Message "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
+     Set-BuildVariable TestPassed False
      $script:testfailed = $true  
   }
 
@@ -690,11 +707,7 @@ function Run-OpenSSHTests
   if ($Error.Count -gt 0) 
   { 
       $Error| Out-File "$testInstallFolder\TestError.txt" -Append
-  }
-  if($script:testfailed)
-  {
-    throw "One or more tests failed!"
-  }
+  }  
 }
 
 function Upload-OpenSSHTestResults
@@ -707,7 +720,9 @@ function Upload-OpenSSHTestResults
   
     if ($env:APPVEYOR_JOB_ID)
     {
-        (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", (Resolve-Path $testResultsFile))      
+		$resultFile = (Resolve-Path $testResultsFile)
+		Write-Host -ForegroundColor Yellow "Upload-File: $resultFile.Path"
+        (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", $resultFile)      
     }
 
     if ($env:DebugMode)
