@@ -31,11 +31,11 @@ Function Write-BuildMessage
 
 	if($env:AppVeyor -and (Get-Command Add-AppveyorMessage -ErrorAction Ignore) -ne $null)
     {
-        Add-AppveyorMessage -Message $Message
+        Add-AppveyorMessage -Message $Message -Category Information
     }
 	elseif($env:AppVeyor)
 	{
-		appveyor AddMessage $Message
+		appveyor AddMessage $Message -Category Information
 	}
 }
 
@@ -658,7 +658,7 @@ function Run-OpenSSHUnitTest
             {
                 $script:testfailed = $true
                 Write-Warning "$($_.FullName) test failed for OpenSSH.`nExitCode: $error"
-				Write-BuildMessage -Message "$($_.FullName) test failed for OpenSSH.`nExitCode: $error!"
+                appveyor AddMessage "$($_.FullName) test failed for OpenSSH.`nExitCode: $error!" -Category Error
                 Set-BuildVariable TestPassed False
             }
         }
@@ -698,9 +698,8 @@ function Run-OpenSSHTests
   if ([int]$xml.'test-results'.failures -gt 0) 
   { 
      Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
-	 Write-BuildMessage -Message "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
-     Set-BuildVariable TestPassed False
-     $script:testfailed = $true  
+	 appveyor AddMessage "$($xml.'test-results'.failures) tests in regress\pesterTests failed" -Category Error
+     Set-BuildVariable TestPassed False      
   }
 
   # Writing out warning when the $Error.Count is non-zero. Tests Should clean $Error after success.
@@ -729,6 +728,12 @@ function Upload-OpenSSHTestResults
     {
         Remove-Item $env:DebugMode	    
     }
+
+	if(-not ($env:TestPassed))
+	{
+		Write-Error "Build failed!"
+		Add-AppveyorMessage -Message "Build failed!" -Category Error
+	}
 }
 
 Export-ModuleMember -Function Set-BuildVariable, Invoke-AppVeyorBuild, Install-OpenSSH, Install-TestDependencies, GetLocalPSCorePath, Upload-OpenSSHTestResults, Run-OpenSSHTests, Publish-Artifact
