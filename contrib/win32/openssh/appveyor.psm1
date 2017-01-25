@@ -25,18 +25,18 @@ function Write-Log
 # Sets a build variable
 Function Write-BuildMessage
 {
-	param(
+    param(
         [Parameter(Mandatory=$true)]
         [string] $Message)
 
-	if($env:AppVeyor -and (Get-Command Add-AppveyorMessage -ErrorAction Ignore) -ne $null)
+    if($env:AppVeyor -and (Get-Command Add-AppveyorMessage -ErrorAction Ignore) -ne $null)
     {
         Add-AppveyorMessage -Message $Message -Category Information
     }
-	elseif($env:AppVeyor)
-	{
-		appveyor AddMessage $Message -Category Information
-	}
+    elseif($env:AppVeyor)
+    {
+        appveyor AddMessage $Message -Category Information
+    }
 }
 
 # Sets a build variable
@@ -56,9 +56,13 @@ Function Set-BuildVariable
     {
         Set-AppveyorBuildVariable @PSBoundParameters
     }
-    else 
+    elseif($env:AppVeyor)
     {
-        Set-Item env:$name -Value $Value
+        appveyor SetVariable -Name $Name -Value $Value
+    } 
+    else
+    {
+        Set-Item env:$Name -Value $Value
     }
 }
 
@@ -105,7 +109,7 @@ function Invoke-AppVeyorBuild
       Set-BuildVariable TestPassed True
       Start-SSHBuild -Configuration Release -NativeHostArch x64
       Start-SSHBuild -Configuration Debug -NativeHostArch x86
-	  Write-BuildMessage -Message "Build passed!"
+      Write-BuildMessage -Message "Build passed!"
 }
 
 <#
@@ -246,9 +250,9 @@ function Install-TestDependencies
         choco install windbg --force  --limitoutput -y 2>&1 >> $script:logFile
     }#>
     Install-PSCoreFromGithub
-	$psCorePath = GetLocalPSCorePath
-	Set-BuildVariable -Name psPath -Value $psCorePath
-	Write-BuildMessage -Message "TestDependencies installed!"
+    $psCorePath = GetLocalPSCorePath
+    Set-BuildVariable -Name psPath -Value $psCorePath
+    Write-BuildMessage -Message "TestDependencies installed!"
 }
 
 <#
@@ -257,14 +261,14 @@ function Install-TestDependencies
 #>
 function GetLocalPSCorePath {
     $psPath = Get-ChildItem "$env:ProgramFiles\PowerShell\*\powershell.exe" -Recurse -ErrorAction SilentlyContinue
-	if($psPath.Count -eq 0)
-	{
-		""
-	}
-	else
-	{
-		$psPath[-1].FullName		
-	}
+    if($psPath.Count -eq 0)
+    {
+        ""
+    }
+    else
+    {
+        $psPath[-1].FullName		
+    }
 }
 <#
     .Synopsis
@@ -494,24 +498,24 @@ function Deploy-OpenSSHTests
         throw "$OpenSSHTestDir\sshd_config is missing in the folder"
     }
 
-	if ($env:DebugMode)
+    if ($env:DebugMode)
     {
         $strToReplace = "#LogLevel INFO"
-	    (Get-Content $sshdConfigFile).Replace($strToReplace,"LogLevel Debug3") | Set-Content $sshdConfigFile
+        (Get-Content $sshdConfigFile).Replace($strToReplace,"LogLevel Debug3") | Set-Content $sshdConfigFile
     }	
 
     $strToReplace = "Subsystem	sftp	C:/Program Files/OpenSSH/sftp-server.exe"
-	if($env:psPath)
-	{
-		    $strNewsubSystem = @"
+    if($env:psPath)
+    {
+        $strNewsubSystem = @"
 Subsystem	sftp	$OpenSSHTestDir\sftp-server.exe
 Subsystem	powershell	$env:psPath
 "@
-	}
-	else
-	{
-	    $strNewsubSystem = "Subsystem	sftp	$OpenSSHTestDir\sftp-server.exe"
-	}
+    }
+    else
+    {
+        $strNewsubSystem = "Subsystem	sftp	$OpenSSHTestDir\sftp-server.exe"
+    }
 
     (Get-Content $sshdConfigFile).Replace($strToReplace, $strNewsubSystem) | Set-Content $sshdConfigFile
 }
@@ -698,8 +702,8 @@ function Run-OpenSSHTests
   if ([int]$xml.'test-results'.failures -gt 0) 
   { 
      Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
-	 appveyor AddMessage "$($xml.'test-results'.failures) tests in regress\pesterTests failed" -Category Error
-     Set-BuildVariable TestPassed False      
+     appveyor AddMessage "$($xml.'test-results'.failures) tests in regress\pesterTests failed" -Category Error
+     Set-BuildVariable TestPassed False 
   }
 
   # Writing out warning when the $Error.Count is non-zero. Tests Should clean $Error after success.
@@ -719,8 +723,8 @@ function Upload-OpenSSHTestResults
   
     if ($env:APPVEYOR_JOB_ID)
     {
-		$resultFile = (Resolve-Path $testResultsFile)
-		Write-Host -ForegroundColor Yellow "Upload-File: $resultFile.Path"
+        $resultFile = (Resolve-Path $testResultsFile)
+        Write-Host -ForegroundColor Yellow "Upload-File: $resultFile.Path"
         (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", $resultFile)      
     }
 
@@ -728,12 +732,12 @@ function Upload-OpenSSHTestResults
     {
         Remove-Item $env:DebugMode	    
     }
-
-	if(-not ($env:TestPassed))
-	{
-		Write-Error "Build failed!"
-		Add-AppveyorMessage -Message "Build failed!" -Category Error
-	}
+    Write-Host "TestPassed: $env:TestPassed"
+    if(-not ($env:TestPassed))
+    {
+        Write-Error "Build failed!"
+        Add-AppveyorMessage -Message "Build failed!" -Category Error
+    }
 }
 
 Export-ModuleMember -Function Set-BuildVariable, Invoke-AppVeyorBuild, Install-OpenSSH, Install-TestDependencies, GetLocalPSCorePath, Upload-OpenSSHTestResults, Run-OpenSSHTests, Publish-Artifact
