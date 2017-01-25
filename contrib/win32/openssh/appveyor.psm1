@@ -2,7 +2,7 @@
 Import-Module $PSScriptRoot\build.psm1 -Force -DisableNameChecking
 $repoRoot = Get-RepositoryRoot
 $script:logFile = join-path $repoRoot.FullName "appveyor.log"
-$script:testfailed = $false
+$testfailed = $false
 
 <#
     Called by Write-BuildMsg to write to the build log, if it exists. 
@@ -28,53 +28,14 @@ Function Write-BuildMessage
     param(
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
-        [string] $Message,
+        [string] $Message,        
+        $Category,
+        [string]  $Details)
 
-        [Parameter(ParameterSetName='Info')]
-        [switch] $AsInfo,
-        
-        [Parameter(ParameterSetName='Warning')]
-        [switch] $AsWarning,
-
-        [Parameter(ParameterSetName='Error')]
-        [switch] $AsError)
-
-    if($env:AppVeyor -and (Get-Command Add-AppveyorMessage -ErrorAction Ignore) -ne $null)
+    if($env:AppVeyor)
     {
-        if ($AsInfo)
-        {
-            Add-AppveyorMessage -Message $Message -Category Information
-            return
-        }
-        if ($AsWarning)
-        {
-            Add-AppveyorMessage -Message $Message -Category Warning
-            return
-        }
-        if ($AsError)
-        {
-            Add-AppveyorMessage -Message $Message -Category Error
-            return
-        }
-    }
-    elseif($env:AppVeyor)
-    {
-        if ($AsInfo)
-        {
-            appveyor AddMessage $Message -Category Information
-            return
-        }
-        if ($AsWarning)
-        {
-            appveyor AddMessage $Message -Category Warning
-            return
-        }
-        if ($AsError)
-        {
-            appveyor AddMessage $Message -Category Error
-            return
-        }        
-    }
+        Add-AppveyorMessage @PSBoundParameters
+    }    
 }
 
 # Sets a build variable
@@ -130,7 +91,7 @@ function Invoke-AppVeyorFull
         Invoke-AppVeyorBuild
         Install-OpenSSH
         Install-TestDependencies
-        &  "$env:psPath" -NoLogo -Command {Import-module $($repoRoot.FullName)\contrib\win32\openssh\appveyor.psm1 -warningAction SilentlyContinue;Run-OpenSSHTests}
+        Run-OpenSSHTests
         Publish-Artifact
     }
     finally {
@@ -147,7 +108,7 @@ function Invoke-AppVeyorBuild
       Set-BuildVariable TestPassed True
       Start-SSHBuild -Configuration Release -NativeHostArch x64
       Start-SSHBuild -Configuration Debug -NativeHostArch x86
-      Write-BuildMessage -Message "Build passed!"
+      Write-BuildMessage -Message "Build passed!" -Category Informatoin
 }
 
 <#
@@ -253,6 +214,7 @@ function Download-PSCoreMSI
 
     if ($v)
     {
+        Write-BuildMessage -Message "Failed to download PSCore MSI package from $url" -Category Error
         throw "Failed to download PSCore MSI package from $url"
     }
     else
@@ -290,7 +252,7 @@ function Install-TestDependencies
     Install-PSCoreFromGithub
     $psCorePath = GetLocalPSCorePath
     Set-BuildVariable -Name psPath -Value $psCorePath
-    Write-BuildMessage -Message "TestDependencies installed!"
+    Write-BuildMessage -Message "All testDependencies installed!" -Category Error
 }
 
 <#
@@ -339,7 +301,7 @@ function Install-OpenSSH
     Start-Service sshd
 
     Pop-Location
-	Write-BuildMessage -Message "OpenSSH installed!"
+	Write-BuildMessage -Message "OpenSSH installed!" -Category Information
 }
 
 <#
@@ -437,6 +399,7 @@ function Build-Win32OpenSSHPackage
         choco install $packageName -y --force 2>&1 >> $script:logFile
         if (-not (Test-Path -Path $rktoolsPath))
         {
+            Write-BuildMessage "Installation dependencies: failed to download $packageName" -Category Error
             throw "failed to download $packageName"
         }
     }
@@ -533,6 +496,7 @@ function Deploy-OpenSSHTests
     $sshdConfigFile = "$OpenSSHTestDir\sshd_config"
     if (-not (Test-Path -Path $sshdConfigFile -PathType Leaf))
     {
+        Write-BuildMessage "Installation dependencies: $OpenSSHTestDir\sshd_config is missing in the folder" -Category Error
         throw "$OpenSSHTestDir\sshd_config is missing in the folder"
     }
 
@@ -540,7 +504,12 @@ function Deploy-OpenSSHTests
     {
         $strToReplace = "#LogLevel INFO"
         (Get-Content $sshdConfigFile).Replace($strToReplace,"LogLevel Debug3") | Set-Content $sshdConfigFile
-    }	
+    }
+    if(-not ($env:psPath))
+    {
+        $psCorePath = GetLocalPSCorePath
+        Set-BuildVariable -Name psPath -Value $psCorePath
+    }    
 
     $strToReplace = "Subsystem	sftp	C:/Program Files/OpenSSH/sftp-server.exe"
     if($env:psPath)
@@ -666,9 +635,31 @@ function Run-OpenSSHPesterTest
    # Discover all CI tests and run them.
     Push-Location $testRoot
     Write-Log -Message "Running OpenSSH Pester tests..."    
-    $testFolders = Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique 
-   
-    Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $outputXml -Tag 'CI'
+    $testFolders = Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique
+    
+    $psCorePath = GetLocalPSCorePath
+    & "$psCorePath" -Command "& {Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $outputXml -Tag 'CI'} "
+    
+    if (-not (Test-Path $outputXml))
+    {
+        Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
+        Write-BuildMessage -Message "Test result file $outputXml not found after tests." -Category Error
+        Set-BuildVariable TestPassed False 
+    }
+    $xml = [xml](Get-Content -raw $outputXml)
+    if ([int]$xml.'test-results'.failures -gt 0) 
+    { 
+        Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
+        Write-BuildMessage -Message "$($xml.'test-results'.failures) tests in regress\pesterTests failed" -Category Error
+        Set-BuildVariable TestPassed False
+    }
+
+    # Writing out warning when the $Error.Count is non-zero. Tests Should clean $Error after success.
+    if ($Error.Count -gt 0) 
+    {
+        Write-BuildMessage -Message "Tests Should clean $Error after success." -Category Warning
+        $Error| Out-File "$testInstallFolder\TestError.txt" -Append
+    }
     Pop-Location
 }
 
@@ -689,20 +680,24 @@ function Run-OpenSSHUnitTest
     }
 
     $unitTestFiles = Get-ChildItem -Path "$testRoot\unittest*.exe"
-    $script:testfailed = $false
+    $testfailed = $false
     if ($unitTestFiles -ne $null)
     {        
         $unitTestFiles | % {
-            Write-Output "Running OpenSSH unit $($_.FullName)..."            
+            Write-Output "Running OpenSSH unit $($_.FullName)..."
             & $_.FullName >> $unitTestOutputFile
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
             {
-                $script:testfailed = $true
+                $testfailed = $true
                 Write-Warning "$($_.FullName) test failed for OpenSSH.`nExitCode: $error"
-                Write-BuildMessage -Message "$($_.FullName) test failed for OpenSSH.`nExitCode: $error" -AsError
+                Write-BuildMessage -Message "$($_.FullName) test failed for OpenSSH.`nExitCode: $error" -Category Error
                 Set-BuildVariable TestPassed False
             }
+        }
+        if(-not $testfailed)
+        {
+            Write-BuildMessage -Message "All Unit tests passed" -Category Information
         }
     }
     
@@ -728,27 +723,13 @@ function Run-OpenSSHTests
   (    
       [string] $testResultsFile = "$env:SystemDrive\OpenSSH\TestResults.xml",
       [string] $unitTestResultsFile = "$env:SystemDrive\OpenSSH\UnitTestResults.txt",
-      [string] $testInstallFolder = "$env:SystemDrive\OpenSSH"      
+      [string] $testInstallFolder = "$env:SystemDrive\OpenSSH"
   )  
 
   Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder
   Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
   # Run all pester tests.
-  Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile
-
-  $xml = [xml](Get-Content -raw $testResultsFile) 
-  if ([int]$xml.'test-results'.failures -gt 0) 
-  { 
-     Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
-     Write-BuildMessage -Message "$($xml.'test-results'.failures) tests in regress\pesterTests failed" -AsError
-     Set-BuildVariable TestPassed False 
-  }
-
-  # Writing out warning when the $Error.Count is non-zero. Tests Should clean $Error after success.
-  if ($Error.Count -gt 0) 
-  { 
-      $Error| Out-File "$testInstallFolder\TestError.txt" -Append
-  }  
+  Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile   
 }
 
 function Upload-OpenSSHTestResults
@@ -760,9 +741,13 @@ function Upload-OpenSSHTestResults
     )
   
     if ($env:APPVEYOR_JOB_ID)
-    {        
-        (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", (Resolve-Path $testResultsFile))
-        Write-BuildMessage -Message "Upload Test results" -AsInfo
+    {
+        $resultFile = Resolve-Path $testResultsFile -ErrorAction Ignore
+        if($resultFile)
+        {
+            (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", $resultFile)
+            Write-BuildMessage -Message "Test results uploaded!" -Category Error
+        }
     }
 
     if ($env:DebugMode)
@@ -772,8 +757,12 @@ function Upload-OpenSSHTestResults
     Write-Host "TestPassed: $env:TestPassed"
     if(-not ($env:TestPassed))
     {
-        Write-BuildMessage -Message "Build failed!" -AsError
+        Write-BuildMessage -Message "Build failed!" -Category Error
         throw "Build failed!"        
+    }
+    else
+    {
+        Write-BuildMessage -Message "Build success!" -Category Information
     }
 }
 
