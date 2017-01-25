@@ -97,7 +97,6 @@ static VOID WINAPI service_handler(DWORD dwControl)
 	ReportSvcStatus(service_status.dwCurrentState, NO_ERROR, 0);
 }
 
-char* w32_programdir();
 int sshd_main(int argc, wchar_t **wargv) {
 	char** argv = NULL;
 	int i, r;

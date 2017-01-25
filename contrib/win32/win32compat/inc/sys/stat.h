@@ -1,26 +1,9 @@
-/*
-* Author: Manoj Ampalam <manoj.ampalam@microsoft.com>
-*
-* private stat.h (all code relying on POSIX wrapper should include this version
-* instead of the one in Windows SDK. 
-*/
 #pragma once
-#include "types.h"
+#include "..\crtheaders.h"
+#include SYS_STAT_H
 
-/* flags COPIED FROM STAT.H
- */
-#define _S_IFMT   0xF000 // File type mask
-#define _S_IFDIR  0x4000 // Directory
-#define _S_IFCHR  0x2000 // Character special
-#define _S_IFIFO  0x1000 // Pipe
-#define _S_IFREG  0x8000 // Regular
-#define _S_IREAD  0x0100 // Read permission, owner
-#define _S_IWRITE 0x0080 // Write permission, owner
-#define _S_IEXEC  0x0040 // Execute/search permission, owner
 #define _S_IFLNK  0xA000 // symbolic link
 #define _S_IFSOCK 0xC000 // socket
-
-#define S_ISLNK(mode)	(((mode) & S_IFMT) == S_IFLNK)
 
 #define S_IFMT   _S_IFMT
 #define S_IFDIR  _S_IFDIR
@@ -32,7 +15,6 @@
 #define S_IFLNK  _S_IFLNK
 #define S_IFSOCK _S_IFSOCK
 
- /* TODO - is this the right place for these defs ?*/
 # define S_ISUID            0x800 
 # define S_ISGID            0x400
 
@@ -65,4 +47,3 @@ struct w32_stat {
 
 
 void strmode(mode_t mode, char *p);
-

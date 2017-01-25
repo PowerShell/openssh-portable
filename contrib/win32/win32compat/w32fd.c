@@ -130,9 +130,6 @@ fd_table_clear(int index)
 	FD_CLR(index, &(fd_table.occupied));
 }
 
-// TODO:XXX - remove this
-char* w32_programdir();
-
 void
 w32posix_initialize() {
 	if ((fd_table_initialize() != 0)

@@ -82,4 +82,3 @@ int link(const char *oldpath, const char *newpath);
 int readlink(const char *path, char *link, int linklen);
 
 int spawn_child(char* cmd, int in, int out, int err, unsigned long flags);
-int register_child(void* child, unsigned long pid);

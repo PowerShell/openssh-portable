@@ -40,6 +40,8 @@
 #include "inc\dirent.h"
 #include "inc\sys\types.h"
 #include "inc\sys\ioctl.h"
+#include "inc\fcntl.h"
+#include "signal_internal.h"
 
 int usleep(unsigned int useconds)
 {
@@ -255,7 +257,6 @@ int w32_ioctl(int d, int request, ...) {
         }
 }
 
-HANDLE w32_fd_to_handle(int fd);
 int 
 spawn_child(char* cmd, int in, int out, int err, DWORD flags) {
 	PROCESS_INFORMATION pi;

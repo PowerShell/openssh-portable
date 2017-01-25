@@ -450,6 +450,9 @@ void setup_session_vars(Session* s)
 	free(pw_dir_w);
 }
 
+char* w32_programdir();
+int register_child(void* child, unsigned long pid);
+
 int do_exec_windows(Session *s, const char *command, int pty) {
 	int pipein[2], pipeout[2], pipeerr[2], r;
 	char *exec_command = NULL, *progdir = w32_programdir();
