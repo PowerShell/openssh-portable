@@ -269,7 +269,7 @@ function Install-OpenSSH
     Build-Win32OpenSSHPackage @PSBoundParameters
 
     Push-Location $OpenSSHDir 
-    &( "$OpenSSHDir\install-sshd.ps1")
+    & ( "$OpenSSHDir\install-sshd.ps1") 
     .\ssh-keygen.exe -A
     Start-Service ssh-agent
     &( "$OpenSSHDir\install-sshlsa.ps1")
@@ -633,7 +633,7 @@ function Run-OpenSSHUnitTest
     {        
         $unitTestFiles | % {
             Write-Output "Running OpenSSH unit $($_.FullName)..."            
-            & $_.FullName 2>&1 >> $unitTestOutputFile
+            & $_.FullName >> $unitTestOutputFile
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
             {
