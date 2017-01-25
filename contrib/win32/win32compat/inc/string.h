@@ -1,5 +1,6 @@
 #include "crtheaders.h"
 #include STRING_H
+#include "utf.h"
 
 /* string.h overrides */
 #define strcasecmp _stricmp
