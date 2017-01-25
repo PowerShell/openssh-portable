@@ -4,7 +4,6 @@ $repoRoot = Get-RepositoryRoot
 $script:logFile = join-path $repoRoot.FullName "appveyor.log"
 $script:testfailed = $false
 
-
 <#
     Called by Write-BuildMsg to write to the build log, if it exists. 
 #>
