@@ -27,15 +27,53 @@ Function Write-BuildMessage
 {
     param(
         [Parameter(Mandatory=$true)]
-        [string] $Message)
+        [ValidateNotNullOrEmpty()]
+        [string] $Message,
+
+        [Parameter(ParameterSetName='Info')]
+        [switch] $AsInfo,
+        
+        [Parameter(ParameterSetName='Warning')]
+        [switch] $AsWarning,
+
+        [Parameter(ParameterSetName='Error')]
+        [switch] $AsError)
 
     if($env:AppVeyor -and (Get-Command Add-AppveyorMessage -ErrorAction Ignore) -ne $null)
     {
-        Add-AppveyorMessage -Message $Message -Category Information
+        if ($AsInfo)
+        {
+            Add-AppveyorMessage -Message $Message -Category Information
+            return
+        }
+        if ($AsWarning)
+        {
+            Add-AppveyorMessage -Message $Message -Category Warning
+            return
+        }
+        if ($AsError)
+        {
+            Add-AppveyorMessage -Message $Message -Category Error
+            return
+        }
     }
     elseif($env:AppVeyor)
     {
-        appveyor AddMessage $Message -Category Information
+        if ($AsInfo)
+        {
+            appveyor AddMessage $Message -Category Information
+            return
+        }
+        if ($AsWarning)
+        {
+            appveyor AddMessage $Message -Category Warning
+            return
+        }
+        if ($AsError)
+        {
+            appveyor AddMessage $Message -Category Error
+            return
+        }        
     }
 }
 
@@ -662,7 +700,7 @@ function Run-OpenSSHUnitTest
             {
                 $script:testfailed = $true
                 Write-Warning "$($_.FullName) test failed for OpenSSH.`nExitCode: $error"
-                appveyor AddMessage "$($_.FullName) test failed for OpenSSH.`nExitCode: $error!" -Category Error
+                Write-BuildMessage -Message "$($_.FullName) test failed for OpenSSH.`nExitCode: $error" -AsError
                 Set-BuildVariable TestPassed False
             }
         }
@@ -702,7 +740,7 @@ function Run-OpenSSHTests
   if ([int]$xml.'test-results'.failures -gt 0) 
   { 
      Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
-     appveyor AddMessage "$($xml.'test-results'.failures) tests in regress\pesterTests failed" -Category Error
+     Write-BuildMessage -Message "$($xml.'test-results'.failures) tests in regress\pesterTests failed" -AsError
      Set-BuildVariable TestPassed False 
   }
 
@@ -722,21 +760,20 @@ function Upload-OpenSSHTestResults
     )
   
     if ($env:APPVEYOR_JOB_ID)
-    {
-        $resultFile = (Resolve-Path $testResultsFile)
-        Write-Host -ForegroundColor Yellow "Upload-File: $resultFile.Path"
-        (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", $resultFile)      
+    {        
+        (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", (Resolve-Path $testResultsFile))
+        Write-BuildMessage -Message "Upload Test results" -AsInfo
     }
 
     if ($env:DebugMode)
     {
-        Remove-Item $env:DebugMode	    
+        Remove-Item $env:DebugMode
     }
     Write-Host "TestPassed: $env:TestPassed"
     if(-not ($env:TestPassed))
     {
-        Write-Error "Build failed!"
-        Add-AppveyorMessage -Message "Build failed!" -Category Error
+        Write-BuildMessage -Message "Build failed!" -AsError
+        throw "Build failed!"        
     }
 }
 
