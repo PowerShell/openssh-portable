@@ -43,9 +43,6 @@
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\unistd.h">
       <Filter>inc</Filter>
     </ClInclude>
-    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\w32posix.h">
-      <Filter>inc</Filter>
-    </ClInclude>
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\poll.h">
       <Filter>inc</Filter>
     </ClInclude>
