@@ -2,6 +2,7 @@
 Import-Module $PSScriptRoot\build.psm1 -Force -WarningAction SilentlyContinue
 $repoRoot = Get-RepositoryRoot
 $script:logFile = join-path $repoRoot.FullName "appveyor.log"
+$script:testfailed = $false
 
 
 <#
@@ -545,7 +546,7 @@ function Add-Artifact
     (
         [ValidateNotNull()]
         [System.Collections.ArrayList] $artifacts,
-        [string] $FileToAdd = "$env:SystemDrive\Win32OpenSSH*.zip"
+        [string] $FileToAdd
     )    
     
     $files = Get-ChildItem -Path $FileToAdd -ErrorAction Ignore
@@ -557,7 +558,7 @@ function Add-Artifact
     }
     else
     {
-        Write-Warning "Skip publishing package artifacts. $FileToAdd does not exist"
+        Write-Output "Skip publishing package artifacts. $FileToAdd does not exist"
     }
 }
 
@@ -577,7 +578,8 @@ function Publish-Artifact
     }
 
     Add-Artifact  -artifacts $artifacts -FileToAdd "$packageFolder\Win32OpenSSH*.zip"
-    Add-Artifact  -artifacts $artifacts -FileToAdd "$env:SystemDrive\OpenSSH\UnitTestResults.txt"    
+    Add-Artifact  -artifacts $artifacts -FileToAdd "$env:SystemDrive\OpenSSH\UnitTestResults.txt"
+    Add-Artifact  -artifacts $artifacts -FileToAdd "$env:SystemDrive\OpenSSH\TestError.txt"    
 
     # Get the build.log file for each build configuration        
     Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName)
@@ -626,7 +628,7 @@ function Run-OpenSSHUnitTest
     }
 
     $unitTestFiles = Get-ChildItem -Path "$testRoot\unittest*.exe"
-    
+    $script:testfailed = $false
     if ($unitTestFiles -ne $null)
     {        
         $unitTestFiles | % {
@@ -634,8 +636,9 @@ function Run-OpenSSHUnitTest
             & $_.FullName >> $unitTestOutputFile
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
-            {                
-                Write-Host -ForegroundColor Red "$($_.FullName) test failed for OpenSSH.`nExitCode: $error"
+            {
+                $script:testfailed = $true
+                Write-Error "$($_.FullName) test failed for OpenSSH.`nExitCode: $error"
             }
         }
     }
@@ -674,14 +677,15 @@ function Run-OpenSSHTests
   )  
 
   Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder
-  #Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
+  Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
   # Run all pester tests.
   Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile
 
   $xml = [xml](Get-Content -raw $testResultsFile) 
   if ([int]$xml.'test-results'.failures -gt 0) 
   { 
-     Write-Host -ForegroundColor Red "$($xml.'test-results'.failures) tests in regress\pesterTests failed"    
+     Write-Error "$($xml.'test-results'.failures) tests in regress\pesterTests failed" 
+     $script:testfailed = $true  
   }
 
   # Writing out warning when the $Error.Count is non-zero. Tests Should clean $Error after success.
