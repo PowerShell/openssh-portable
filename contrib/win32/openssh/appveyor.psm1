@@ -558,7 +558,7 @@ function Add-Artifact
     }
     else
     {
-        Write-Log -Message "Skip publishing package artifacts. $FileToAdd does not exist"
+        Write-Warning "Skip publishing package artifacts. $FileToAdd does not exist"
     }
 }
 
