@@ -65,3 +65,11 @@ void w32_freeaddrinfo(struct addrinfo *);
 int w32_getaddrinfo(const char *, const char *,
 	const struct addrinfo *, struct addrinfo **);
 #define getaddrinfo         w32_getaddrinfo
+
+struct w32_pollfd {
+	int  fd;
+	short   events;
+	short   revents;
+};
+#define pollfd w32_pollfd
+
