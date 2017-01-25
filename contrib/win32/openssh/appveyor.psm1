@@ -558,7 +558,7 @@ function Add-Artifact
     }
     else
     {
-        Write-Output "Skip publishing package artifacts. $FileToAdd does not exist"
+        Write-Log -Message "Skip publishing package artifacts. $FileToAdd does not exist"
     }
 }
 
@@ -633,7 +633,7 @@ function Run-OpenSSHUnitTest
     {        
         $unitTestFiles | % {
             Write-Output "Running OpenSSH unit $($_.FullName)..."            
-            & $_.FullName >> $unitTestOutputFile
+            & $_.FullName 2>&1 >> $unitTestOutputFile
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
             {
