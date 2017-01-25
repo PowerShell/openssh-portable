@@ -28,7 +28,7 @@ Function Write-BuildMessage
     param(
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
-        [string] $Message,        
+        [string] $Message,
         $Category,
         [string]  $Details)
 
@@ -688,13 +688,14 @@ function Run-OpenSSHUnitTest
     {        
         $unitTestFiles | % {
             Write-Output "Running OpenSSH unit $($_.FullName)..."
-            & $_.FullName >> $unitTestOutputFile
+            cmd /c "$_.FullName 1>> $unitTestOutputFile 2> nul"
+            #& $_.FullName >> $unitTestOutputFile
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
             {
                 $testfailed = $true
-                Write-Warning "$($_.FullName) test failed for OpenSSH.`nExitCode: $error"
-                Write-BuildMessage -Message "$($_.FullName) test failed for OpenSSH.`nExitCode: $error" -Category Error
+                Write-Warning "$($_.FullName) test failed for OpenSSH.`nExitCode: $errorCode"
+                Write-BuildMessage -Message "$($_.FullName) test failed for OpenSSH.`nExitCode: $errorCode" -Category Error
                 Set-BuildVariable TestPassed False
             }
         }
