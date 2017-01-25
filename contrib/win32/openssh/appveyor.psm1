@@ -632,13 +632,13 @@ function Run-OpenSSHUnitTest
     if ($unitTestFiles -ne $null)
     {        
         $unitTestFiles | % {
-            Write-Log -Message "Running OpenSSH unit $($_.FullName)..."            
+            Write-Output "Running OpenSSH unit $($_.FullName)..."            
             & $_.FullName >> $unitTestOutputFile
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
             {
                 $script:testfailed = $true
-                Write-Error "$($_.FullName) test failed for OpenSSH.`nExitCode: $error"
+                Write-Warning "$($_.FullName) test failed for OpenSSH.`nExitCode: $error"
             }
         }
     }
@@ -684,7 +684,7 @@ function Run-OpenSSHTests
   $xml = [xml](Get-Content -raw $testResultsFile) 
   if ([int]$xml.'test-results'.failures -gt 0) 
   { 
-     Write-Error "$($xml.'test-results'.failures) tests in regress\pesterTests failed" 
+     Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed" 
      $script:testfailed = $true  
   }
 
@@ -692,7 +692,11 @@ function Run-OpenSSHTests
   if ($Error.Count -gt 0) 
   { 
       $Error| Out-File "$testInstallFolder\TestError.txt" -Append
-  }  
+  }
+  if($script:testfailed)
+  {
+    throw "One or more tests failed!"
+  }
 }
 
 function Upload-OpenSSHTestResults
