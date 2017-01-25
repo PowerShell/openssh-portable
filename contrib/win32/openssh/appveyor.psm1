@@ -557,7 +557,7 @@ function Add-Artifact
     }
     else
     {
-        Write-Warning "Skip publishing package artifacts. $FileToAdd does not exist"
+        Write-Log -Message "Skip publishing package artifacts. $FileToAdd does not exist"
     }
 }
 
@@ -683,7 +683,8 @@ function Run-OpenSSHTests
   $xml = [xml](Get-Content -raw $testResultsFile) 
   if ([int]$xml.'test-results'.failures -gt 0) 
   { 
-     Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed" 
+     Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
+	 Write-Host -ForegroundColor Yellow "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
      $script:testfailed = $true  
   }
 
