@@ -733,7 +733,7 @@ function Run-OpenSSHTests
   Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder
   Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
   # Run all pester tests.
-  Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile   
+  Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile
 }
 
 function Upload-OpenSSHTestResults
@@ -770,4 +770,4 @@ function Upload-OpenSSHTestResults
     }
 }
 
-Export-ModuleMember -Function Set-BuildVariable, Invoke-AppVeyorBuild, Install-OpenSSH, Install-TestDependencies, GetLocalPSCorePath, Upload-OpenSSHTestResults, Run-OpenSSHTests, Publish-Artifact
+Export-ModuleMember -Function Set-BuildVariable, Invoke-AppVeyorBuild, Install-OpenSSH, Install-TestDependencies, GetLocalPSCorePath, Upload-OpenSSHTestResults, Run-OpenSSHTests, Publish-Artifact, Start-SSHBuild

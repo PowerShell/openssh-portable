@@ -38,3 +38,4 @@ after_test:
 on_finish:
   - ps: |
       Publish-Artifact
+      $blockRdp = $true
