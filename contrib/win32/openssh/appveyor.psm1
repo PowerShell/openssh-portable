@@ -2,6 +2,7 @@
 Import-Module $PSScriptRoot\build.psm1 -Force -DisableNameChecking
 $repoRoot = Get-RepositoryRoot
 $script:logFile = join-path $repoRoot.FullName "appveyor.log"
+$script:messageFile = join-path $repoRoot.FullName "BuildMessage.log"
 $testfailed = $false
 
 <#
@@ -35,7 +36,13 @@ Function Write-BuildMessage
     if($env:AppVeyor)
     {
         Add-AppveyorMessage @PSBoundParameters
-    }    
+    }
+
+    # write it to the log file, if present.
+    if (-not ([string]::IsNullOrEmpty($script:messageFile)))
+    {
+        Add-Content -Path $script:messageFile -Value "$Category$Message"
+    }
 }
 
 # Sets a build variable
@@ -252,7 +259,7 @@ function Install-TestDependencies
     Install-PSCoreFromGithub
     $psCorePath = GetLocalPSCorePath
     Set-BuildVariable -Name psPath -Value $psCorePath
-    Write-BuildMessage -Message "All testDependencies installed!" -Category Error
+    Write-BuildMessage -Message "All testDependencies installed!" -Category Information
 }
 
 <#
@@ -587,7 +594,7 @@ function Add-Artifact
     {        
         $files | % {
             $null = $artifacts.Add($_.FullName)             
-         }        
+         }
     }
     else
     {
@@ -612,12 +619,13 @@ function Publish-Artifact
 
     Add-Artifact  -artifacts $artifacts -FileToAdd "$packageFolder\Win32OpenSSH*.zip"
     Add-Artifact  -artifacts $artifacts -FileToAdd "$env:SystemDrive\OpenSSH\UnitTestResults.txt"
-    Add-Artifact  -artifacts $artifacts -FileToAdd "$env:SystemDrive\OpenSSH\TestError.txt"    
+    Add-Artifact  -artifacts $artifacts -FileToAdd "$env:SystemDrive\OpenSSH\TestError.txt"
 
     # Get the build.log file for each build configuration        
     Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName)
 
     Add-Artifact  -artifacts $artifacts -FileToAdd "$script:logFile"
+    Add-Artifact  -artifacts $artifacts -FileToAdd "$script:messageFile"
 
     foreach ($artifact in $artifacts)
     {
@@ -633,16 +641,21 @@ function Publish-Artifact
 #>
 function Run-OpenSSHPesterTest
 {
-    param($testRoot, $outputXml)    
+    param($testRoot, $outputXml)
      
    # Discover all CI tests and run them.
     Push-Location $testRoot
     Write-Log -Message "Running OpenSSH Pester tests..."    
     $testFolders = Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique
     
-    $psCorePath = GetLocalPSCorePath
-    & "$psCorePath" -Command "& {Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $outputXml -Tag 'CI'} "
-    
+    Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $outputXml -Tag 'CI'
+    #& "$psCorePath" -Command "& {Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $outputXml -Tag 'CI'} "
+    Pop-Location
+}
+
+function Check-PesterTestResult
+{
+    param($outputXml = "$env:SystemDrive\OpenSSH\TestResults.xml")
     if (-not (Test-Path $outputXml))
     {
         Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
@@ -663,7 +676,6 @@ function Run-OpenSSHPesterTest
         Write-BuildMessage -Message "Tests Should clean $Error after success." -Category Warning
         $Error| Out-File "$testInstallFolder\TestError.txt" -Append
     }
-    Pop-Location
 }
 
 <#
@@ -675,7 +687,7 @@ function Run-OpenSSHUnitTest
     param($testRoot, $unitTestOutputFile)
      
    # Discover all CI tests and run them.
-    Push-Location $testRoot    
+    Push-Location $testRoot
     Write-Log -Message "Running OpenSSH unit tests..."
     if (Test-Path $unitTestOutputFile)    
     {
@@ -688,7 +700,6 @@ function Run-OpenSSHUnitTest
     {        
         $unitTestFiles | % {
             Write-Output "Running OpenSSH unit $($_.FullName)..."
-            #cmd /c "$_.FullName 1>> $unitTestOutputFile 2> nul"
             & $_.FullName >> $unitTestOutputFile
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
@@ -704,7 +715,6 @@ function Run-OpenSSHUnitTest
             Write-BuildMessage -Message "All Unit tests passed" -Category Information
         }
     }
-    
     Pop-Location
 }
 
@@ -732,8 +742,7 @@ function Run-OpenSSHTests
 
   Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder
   Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
-  # Run all pester tests.
-  Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile
+  # Run all pester tests.  
 }
 
 function Upload-OpenSSHTestResults
@@ -770,4 +779,4 @@ function Upload-OpenSSHTestResults
     }
 }
 
-Export-ModuleMember -Function Set-BuildVariable, Invoke-AppVeyorBuild, Install-OpenSSH, Install-TestDependencies, GetLocalPSCorePath, Upload-OpenSSHTestResults, Run-OpenSSHTests, Publish-Artifact, Start-SSHBuild
+Export-ModuleMember -Function Set-BuildVariable, Invoke-AppVeyorBuild, Install-OpenSSH, Install-TestDependencies, GetLocalPSCorePath, Upload-OpenSSHTestResults, Run-OpenSSHTests, Publish-Artifact, Start-SSHBuild, Deploy-OpenSSHTests, Run-OpenSSHUnitTest,Run-OpenSSHPesterTest,Check-PesterTestResult
