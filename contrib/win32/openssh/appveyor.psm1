@@ -688,8 +688,8 @@ function Run-OpenSSHUnitTest
     {        
         $unitTestFiles | % {
             Write-Output "Running OpenSSH unit $($_.FullName)..."
-            cmd /c "$_.FullName 1>> $unitTestOutputFile 2> nul"
-            #& $_.FullName >> $unitTestOutputFile
+            #cmd /c "$_.FullName 1>> $unitTestOutputFile 2> nul"
+            & $_.FullName >> $unitTestOutputFile
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
             {
