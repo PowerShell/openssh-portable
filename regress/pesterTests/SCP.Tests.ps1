@@ -137,7 +137,7 @@ Describe "Tests for scp command" -Tags "CI" {
         It 'File copy with -i option and private key: <Title> ' -TestCases:$testData {
             param([string]$Title, $Source, $Destination)
             .\scp -i $privateKeyFile $Source $Destination
-            #$LASTEXITCODE | Should Be 0
+            $LASTEXITCODE | Should Be 0
 
             #validate file content. DestPath is the path to the file.
             CheckTarget -target $DestinationFilePath | Should Be $true
@@ -149,7 +149,7 @@ Describe "Tests for scp command" -Tags "CI" {
             param([string]$Title, $Source, $Destination)            
 
             .\scp -r -i $privateKeyFile $Source $Destination
-            #$LASTEXITCODE | Should Be 0
+            $LASTEXITCODE | Should Be 0
             CheckTarget -target (join-path $DestinationDir $SourceDirName) | Should Be $true
             
             $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length).Length -eq 0
@@ -177,7 +177,7 @@ Describe "Tests for scp command" -Tags "CI" {
 
         It 'File copy with -S -v option (positive)' {
             .\scp -S .\ssh.exe -v $SourceFilePath "$($server.localAdminUserName)@$($server.MachineName):$DestinationFilePath"
-            #$LASTEXITCODE | Should Be 0
+            $LASTEXITCODE | Should Be 0
             #validate file content. DestPath is the path to the file.
             CheckTarget -target $DestinationFilePath | Should Be $true
             $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length).Length -eq 0
@@ -188,7 +188,7 @@ Describe "Tests for scp command" -Tags "CI" {
             param([string]$Title, $Source, $Destination)
             
             .\scp -p -c aes128-ctr -C $Source $Destination
-            #$LASTEXITCODE | Should Be 0
+            $LASTEXITCODE | Should Be 0
             #validate file content. DestPath is the path to the file.
             CheckTarget -target $DestinationFilePath | Should Be $true
             $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
@@ -199,7 +199,7 @@ Describe "Tests for scp command" -Tags "CI" {
             param([string]$Title, $Source, $Destination)                        
             
             .\scp -r -p -c aes128-ctr $Source $Destination
-            #$LASTEXITCODE | Should Be 0
+            $LASTEXITCODE | Should Be 0
             CheckTarget -target (join-path $DestinationDir $SourceDirName) | Should Be $true
             $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
             $equal | Should Be $true
@@ -218,7 +218,7 @@ Describe "Tests for scp command" -Tags "CI" {
             param([string]$Title, $Source, $Destination)
 
             .\scp -i $identifyFile -C -q $Source $Destination
-            #$LASTEXITCODE | Should Be 0
+            $LASTEXITCODE | Should Be 0
             #validate file content. DestPath is the path to the file.
             CheckTarget -target $DestinationFilePath | Should Be $true
             $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length).Length -eq 0
@@ -229,7 +229,7 @@ Describe "Tests for scp command" -Tags "CI" {
             param([string]$Title, $Source, $Destination)               
 
             .\scp -i $identifyFile -C -r -q $Source $Destination
-            #$LASTEXITCODE | Should Be 0
+            $LASTEXITCODE | Should Be 0
             CheckTarget -target (join-path $DestinationDir $SourceDirName) | Should Be $true
             $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length).Length -eq 0
             $equal | Should Be $true
@@ -252,7 +252,7 @@ Describe "Tests for scp command" -Tags "CI" {
             param([string]$Title, $Source, $Destination)
 
             .\scp -p $Source $Destination
-            #$LASTEXITCODE | Should Be 0
+            $LASTEXITCODE | Should Be 0
             #validate file content. DestPath is the path to the file.
             CheckTarget -target $DestinationFilePath | Should Be $true
             $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
@@ -263,7 +263,7 @@ Describe "Tests for scp command" -Tags "CI" {
             param([string]$Title, $Source, $Destination)               
 
             .\scp -r -p $Source $Destination
-            #$LASTEXITCODE | Should Be 0
+            $LASTEXITCODE | Should Be 0
             CheckTarget -target (join-path $DestinationDir $SourceDirName) | Should Be $true
             $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
             $equal | Should Be $true

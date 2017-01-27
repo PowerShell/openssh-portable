@@ -112,7 +112,7 @@ function Invoke-AppVeyorFull
 # Implements the AppVeyor 'build_script' step
 function Invoke-AppVeyorBuild
 {
-      Set-BuildVariable TestPassed True    
+      Set-BuildVariable TestPassed True
       Start-SSHBuild -Configuration Release -NativeHostArch x64
       Start-SSHBuild -Configuration Debug -NativeHostArch x86
       Write-BuildMessage -Message "Build passed!" -Category Information
@@ -521,17 +521,13 @@ function Deploy-OpenSSHTests
         Set-BuildVariable -Name psPath -Value $psCorePath
     }    
 
-    $strToReplace = "Subsystem	sftp	C:/Program Files/OpenSSH/sftp-server.exe"
+    $strToReplace = "Subsystem	sftp	sftp-server.exe"
     if($env:psPath)
     {
         $strNewsubSystem = @"
-Subsystem	sftp	$OpenSSHTestDir\sftp-server.exe
+Subsystem	sftp	sftp-server.exe
 Subsystem	powershell	$env:psPath
 "@
-    }
-    else
-    {
-        $strNewsubSystem = "Subsystem	sftp	$OpenSSHTestDir\sftp-server.exe"
     }
 
     (Get-Content $sshdConfigFile).Replace($strToReplace, $strNewsubSystem) | Set-Content $sshdConfigFile
@@ -659,7 +655,7 @@ function Check-PesterTestResult
     {
         Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
         Write-BuildMessage -Message "Test result file $outputXml not found after tests." -Category Error
-        Set-BuildVariable TestPassed False 
+        Set-BuildVariable TestPassed False
     }
     $xml = [xml](Get-Content -raw $outputXml)
     if ([int]$xml.'test-results'.failures -gt 0) 
@@ -714,7 +710,7 @@ function Run-OpenSSHUnitTest
         }
         if(-not $testfailed)
         {
-            Write-BuildMessage -Message "All Unit tests passed" -Category Information
+            Write-BuildMessage -Message "All Unit tests passed!" -Category Information
         }
     }
     Pop-Location
@@ -770,15 +766,15 @@ function Upload-OpenSSHTestResults
     {
         Remove-Item $env:DebugMode
     }
-    Write-Host "TestPassed: $env:TestPassed"
-    if(-not ($env:TestPassed))
+    
+    if($env:TestPassed -ieq 'True')
     {
-        Write-BuildMessage -Message "Build failed!" -Category Error
-        throw "Build failed!"
+        Write-BuildMessage -Message "The checkin success!"
     }
     else
     {
-        Write-BuildMessage -Message "Build success!" -Category Information
+        Write-BuildMessage -Message "The checkin failed!" -Category Error
+        throw "The checkin failed!"
     }
 }
 
