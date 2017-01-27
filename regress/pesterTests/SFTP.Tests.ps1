@@ -1,6 +1,6 @@
 using module .\PlatformAbstractLayer.psm1
 
-Describe "Tests for SFTP" -Tags "CI" {
+Describe "SFTP Testcases" -Tags "CI" {
     BeforeAll {
         $rootDirectory = $TestDrive
         
