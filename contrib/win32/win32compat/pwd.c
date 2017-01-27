@@ -119,7 +119,10 @@ get_passwd(const char *user_utf8, LPWSTR user_sid) {
 
         if (user_sid == NULL) {
             if (NetUserGetInfo(udom_utf16, uname_utf16, 23, &user_info) != NERR_Success) {
-                if (DsGetDcNameW(NULL, udom_utf16, NULL, NULL, DS_DIRECTORY_SERVICE_PREFERRED, &pdc) == ERROR_SUCCESS) {
+                DWORD flags = 0;
+                if (wcschr(udom_utf16, L'.'))
+                    flags = DS_IS_DNS_NAME;
+                if (DsGetDcNameW(NULL, udom_utf16, NULL, NULL, flags | DS_RETURN_FLAT_NAME, &pdc) == ERROR_SUCCESS) {
                     if (NetUserGetInfo(pdc->DomainControllerName, uname_utf16, 23, &user_info) != NERR_Success ||
                         ConvertSidToStringSidW(((LPUSER_INFO_23)user_info)->usri23_user_sid, &user_sid_local) == FALSE) {
                         errno = ENOMEM; //??
