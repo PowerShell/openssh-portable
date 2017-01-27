@@ -648,9 +648,7 @@ function Run-OpenSSHPesterTest
     Push-Location $testRoot
     Write-Log -Message "Running OpenSSH Pester tests..."    
     $testFolders = Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique
-    #$psCorePath = GetLocalPSCorePath
     Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $outputXml -Tag 'CI'
-    #& "$psCorePath" -Command "& {Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $outputXml -Tag 'CI'} "
     Pop-Location
 }
 
@@ -665,9 +663,10 @@ function Check-PesterTestResult
     }
     $xml = [xml](Get-Content -raw $outputXml)
     if ([int]$xml.'test-results'.failures -gt 0) 
-    { 
-        Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
-        Write-BuildMessage -Message "$($xml.'test-results'.failures) tests in regress\pesterTests failed" -Category Error
+    {
+        $errorMessage = "$($xml.'test-results'.failures) tests in regress\pesterTests failed. Detail test log is at TestResults.xml."
+        Write-Warning $errorMessage
+        Write-BuildMessage -Message $errorMessage -Category Error
         Set-BuildVariable TestPassed False
     }
 
@@ -707,8 +706,9 @@ function Run-OpenSSHUnitTest
             if ($errorCode -ne 0)
             {
                 $testfailed = $true
-                Write-Warning "$($_.FullName) test failed for OpenSSH.`nExitCode: $errorCode"
-                Write-BuildMessage -Message "$($_.FullName) test failed for OpenSSH.`nExitCode: $errorCode" -Category Error
+                $errorMessage = "$($_.FullName) test failed for OpenSSH.`nExitCode: $errorCode. Detail test log is at UnitTestResults.txt."
+                Write-Warning $errorMessage
+                Write-BuildMessage -Message $errorMessage -Category Error
                 Set-BuildVariable TestPassed False
             }
         }
@@ -762,7 +762,7 @@ function Upload-OpenSSHTestResults
         if($resultFile)
         {
             (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", $resultFile)
-            Write-BuildMessage -Message "Test results uploaded!" -Category Error
+             Write-BuildMessage -Message "Test results uploaded!" -Category Information
         }
     }
 
@@ -774,7 +774,7 @@ function Upload-OpenSSHTestResults
     if(-not ($env:TestPassed))
     {
         Write-BuildMessage -Message "Build failed!" -Category Error
-        throw "Build failed!"        
+        throw "Build failed!"
     }
     else
     {
