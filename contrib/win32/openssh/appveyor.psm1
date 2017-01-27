@@ -641,7 +641,8 @@ function Publish-Artifact
 #>
 function Run-OpenSSHPesterTest
 {
-    param($testRoot, $outputXml)
+    param($testRoot = "$env:SystemDrive\OpenSSH", 
+        $outputXml = "$env:SystemDrive\OpenSSH\TestResults.xml")
      
    # Discover all CI tests and run them.
     Push-Location $testRoot
@@ -684,7 +685,8 @@ function Check-PesterTestResult
 #>
 function Run-OpenSSHUnitTest
 {
-    param($testRoot, $unitTestOutputFile)
+    param($testRoot = "$env:SystemDrive\OpenSSH",
+         $unitTestOutputFile = "$env:SystemDrive\OpenSSH\UnitTestResults.txt")
      
    # Discover all CI tests and run them.
     Push-Location $testRoot
