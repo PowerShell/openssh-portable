@@ -11,8 +11,6 @@ init:
 
 build_script:
   - ps: |
-      (Get-Command Write-BuildMessage).Source
-      (Get-Command Set-BuildVariable).Source
       Import-Module $env:APPVEYOR_BUILD_FOLDER\contrib\win32\openssh\AppVeyor.psm1 -DisableNameChecking
       Invoke-AppVeyorBuild
 
@@ -31,7 +29,7 @@ before_test:
 
 test_script:
   - cmd: |
-       "%ProgramFiles%\PowerShell\6.0.0.14\powershell.exe" -Command "Import-Module \"%APPVEYOR_BUILD_FOLDER%\contrib\win32\openssh\AppVeyor.psm1\" -DisableNameChecking;Run-OpenSSHTests"
+       "%ProgramFiles%\PowerShell\6.0.0.14\powershell.exe" -Command "Import-Module build-worker-api;Import-Module \"%APPVEYOR_BUILD_FOLDER%\contrib\win32\openssh\AppVeyor.psm1\" -DisableNameChecking;Run-OpenSSHTests"
   - ps: |
       Check-PesterTestResult
 

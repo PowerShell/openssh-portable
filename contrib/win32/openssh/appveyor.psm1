@@ -647,7 +647,7 @@ function Run-OpenSSHPesterTest
     Push-Location $testRoot
     Write-Log -Message "Running OpenSSH Pester tests..."    
     $testFolders = Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique
-    
+    #$psCorePath = GetLocalPSCorePath
     Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $outputXml -Tag 'CI'
     #& "$psCorePath" -Command "& {Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $outputXml -Tag 'CI'} "
     Pop-Location
@@ -742,7 +742,8 @@ function Run-OpenSSHTests
 
   Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder
   Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
-  # Run all pester tests.  
+  # Run all pester tests.
+  Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile
 }
 
 function Upload-OpenSSHTestResults
