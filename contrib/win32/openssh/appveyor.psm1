@@ -773,7 +773,7 @@ function Upload-OpenSSHTestResults
     }
     else
     {
-        Write-BuildMessage -Message "The checkin failed!" -Category Error
+        Write-BuildMessage -Message "The checkin validation failed!" -Category Error
         throw "The checkin validation failed!"
     }
 }
