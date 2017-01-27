@@ -41,7 +41,7 @@ Function Write-BuildMessage
     # write it to the log file, if present.
     if (-not ([string]::IsNullOrEmpty($script:messageFile)))
     {
-        Add-Content -Path $script:messageFile -Value "$Category$Message"
+        Add-Content -Path $script:messageFile -Value "$Category--$Message"
     }
 }
 
