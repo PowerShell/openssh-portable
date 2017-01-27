@@ -115,7 +115,7 @@ function Invoke-AppVeyorBuild
       Set-BuildVariable TestPassed True
       Start-SSHBuild -Configuration Release -NativeHostArch x64
       Start-SSHBuild -Configuration Debug -NativeHostArch x86
-      Write-BuildMessage -Message "Build passed!" -Category Information
+      Write-BuildMessage -Message "OpenSSH binaries build success!" -Category Information
 }
 
 <#
@@ -769,12 +769,12 @@ function Upload-OpenSSHTestResults
     
     if($env:TestPassed -ieq 'True')
     {
-        Write-BuildMessage -Message "The checkin success!"
+        Write-BuildMessage -Message "The checkin validation success!"
     }
     else
     {
         Write-BuildMessage -Message "The checkin failed!" -Category Error
-        throw "The checkin failed!"
+        throw "The checkin validation failed!"
     }
 }
 
