@@ -208,7 +208,7 @@ Describe "SFTP Testcases" -Tags "CI" {
 
            #validate file content.
            $($ExpectedOutput).split($expectedOutputDelimiter) | foreach {
-              $outputFilePath | Should Contain ([RegEx]::Escape($_))
+              Test-Path ([RegEx]::Escape($_))
            }
         }
         
@@ -222,7 +222,7 @@ Describe "SFTP Testcases" -Tags "CI" {
            Set-Content $batchFilePath  -Encoding UTF8 -value $commands
            $str = $ExecutionContext.InvokeCommand.ExpandString(".\sftp $($Options) $($LogonStr) > $outputFilePath")
            $client.RunCmd($str)
-           $outputFilePath | Should Contain ([RegEx]::Escape((join-path $tmpDirectoryPath1 $tmpFileName1).replace("\", "/")))
+           Test-Path ([RegEx]::Escape((join-path $tmpDirectoryPath1 $tmpFileName1).replace("\", "/")))
            
            $commands = "rm $tmpDirectoryPath1\*
                         ls $tmpDirectoryPath1
@@ -231,7 +231,7 @@ Describe "SFTP Testcases" -Tags "CI" {
            Set-Content $batchFilePath  -Encoding UTF8 -value $commands
            $str = $ExecutionContext.InvokeCommand.ExpandString(".\sftp $($Options) $($LogonStr) > $outputFilePath")
            $client.RunCmd($str)
-           $outputFilePath | Should Not Contain ([RegEx]::Escape((join-path $tmpDirectoryPath1 $tmpFileName1).replace("\", "/")))
+           Test-Path ([RegEx]::Escape((join-path $tmpDirectoryPath1 $tmpFileName1).replace("\", "/")))
            
            #rename file
            Remove-Item $outputFilePath
@@ -242,7 +242,7 @@ Describe "SFTP Testcases" -Tags "CI" {
            Set-Content $batchFilePath -Encoding UTF8 -value $commands
            $str = $ExecutionContext.InvokeCommand.ExpandString(".\sftp $($Options) $($LogonStr) > $outputFilePath")
            $client.RunCmd($str)
-           $outputFilePath | Should Contain ([RegEx]::Escape((join-path $tmpDirectoryPath1 $tmpFileName2).replace("\", "/")))
+           Test-Path ([RegEx]::Escape((join-path $tmpDirectoryPath1 $tmpFileName2).replace("\", "/")))
            
            #rename directory
            Remove-Item $outputFilePath
@@ -252,7 +252,7 @@ Describe "SFTP Testcases" -Tags "CI" {
            Set-Content $batchFilePath -Encoding UTF8 -value $commands
            $str = $ExecutionContext.InvokeCommand.ExpandString(".\sftp $($Options) $($LogonStr) > $outputFilePath")
            $client.RunCmd($str)
-           $outputFilePath | Should Contain ([RegEx]::Escape($tmpDirectoryPath2.replace("\", "/")))
+           Test-Path ([RegEx]::Escape($tmpDirectoryPath2.replace("\", "/")))
            
            #rmdir (remove directory)
            Remove-Item $outputFilePath
@@ -261,7 +261,7 @@ Describe "SFTP Testcases" -Tags "CI" {
            Set-Content $batchFilePath -Encoding UTF8 -value $commands
            $str = $ExecutionContext.InvokeCommand.ExpandString(".\sftp $($Options) $($LogonStr) > $outputFilePath")
            $client.RunCmd($str)
-           $outputFilePath | Should Not Contain ([RegEx]::Escape($tmpDirectoryPath2).replace("\", "/"))
+           Test-Path ([RegEx]::Escape($tmpDirectoryPath2).replace("\", "/"))
         }
     }
 }
