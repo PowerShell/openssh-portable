@@ -818,17 +818,17 @@ w32_ftruncate(int fd, off_t length) {
 
 	memset(&new_postion, 0, sizeof(new_postion));
 	new_postion.QuadPart = length;
-    if (!SetFilePointerEx(w32_fd_to_handle(fd), new_postion, 0, FILE_BEGIN))
-        return -1;
-    if (!SetEndOfFile(w32_fd_to_handle(fd)))
-        return -1;
+	if (!SetFilePointerEx(w32_fd_to_handle(fd), new_postion, 0, FILE_BEGIN))
+		return -1;
+	if (!SetEndOfFile(w32_fd_to_handle(fd)))
+		return -1;
 
-    return 0;
+	return 0;
 }
 
 int 
 w32_fsync(int fd) {
-    CHECK_FD(fd);
+	CHECK_FD(fd);
 
-    return FlushFileBuffers(w32_fd_to_handle(fd));
+	return FlushFileBuffers(w32_fd_to_handle(fd));
 }
