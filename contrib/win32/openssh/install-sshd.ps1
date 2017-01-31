@@ -40,7 +40,7 @@ Pop-Location
 
 if(-not (test-path $logsdir -PathType Container))
 {
-    New-Item $logsdir -Force -ErrorAction Stop
+    $null = New-Item $logsdir -ItemType Directory -Force -ErrorAction Stop
 }
 $rights = [System.Security.AccessControl.FileSystemRights]"Read, Write"
 $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($account, $rights, "ContainerInherit,ObjectInherit", "None", "Allow")
