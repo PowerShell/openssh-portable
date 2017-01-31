@@ -812,9 +812,10 @@ int w32_allocate_fd_for_handle(HANDLE h, BOOL is_sock) {
 
 int 
 w32_ftruncate(int fd, off_t length) {
-    CHECK_FD(fd);
-
 	LARGE_INTEGER new_postion;
+
+	CHECK_FD(fd);
+
 	memset(&new_postion, 0, sizeof(new_postion));
 	new_postion.QuadPart = length;
     if (!SetFilePointerEx(w32_fd_to_handle(fd), new_postion, 0, FILE_BEGIN))
