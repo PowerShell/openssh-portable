@@ -308,29 +308,29 @@ xauth_valid_string(const char *s)
                 SetEnvironmentVariableW(evn_variable, path);                    \
                 CoTaskMemFree(path);                                            \
        }                                                                        \
-} while (0)    
+} while (0)
+
+#define UTF8_TO_UTF16_FATAL(o, i) do {				\
+	if (o != NULL) free(o);					\
+	if ((o = utf8_to_utf16(i)) == NULL)			\
+		fatal("%s, out of memory", __func__);		\
+} while (0)
 
 void setup_session_vars(Session* s)
 {
-	wchar_t* pw_dir_w;
-	wchar_t* tmp;
+	wchar_t *pw_dir_w = NULL, *tmp = NULL;
 	char buf[128];
 	char* laddr;
 
 	struct ssh *ssh = active_state; /* XXX */
 
-	if ((pw_dir_w = utf8_to_utf16(s->pw->pw_dir)) == NULL)
-		fatal("%s: out of memory");
-
-	if ((tmp = utf8_to_utf16(s->pw->pw_name)) == NULL)
-		fatal("%s, out of memory");
+	UTF8_TO_UTF16_FATAL(pw_dir_w, s->pw->pw_dir);
+	UTF8_TO_UTF16_FATAL(tmp, s->pw->pw_name);
 	SetEnvironmentVariableW(L"USERNAME", tmp);
-	free(tmp);
-
-	if (s->display)
-		SetEnvironmentVariableA("DISPLAY", s->display);
-
-
+	if (s->display) {
+		UTF8_TO_UTF16_FATAL(tmp, s->display);
+		SetEnvironmentVariableW(L"DISPLAY", tmp);
+	}
 	SetEnvironmentVariableW(L"HOMEPATH", pw_dir_w);
 	SetEnvironmentVariableW(L"USERPROFILE", pw_dir_w);
 
@@ -355,12 +355,14 @@ void setup_session_vars(Session* s)
 
 	SetEnvironmentVariableA("SSH_CONNECTION", buf);
 
-	if (original_command)
-		SetEnvironmentVariableA("SSH_ORIGINAL_COMMAND", original_command);
+	if (original_command) {
+		UTF8_TO_UTF16_FATAL(tmp, original_command);
+		SetEnvironmentVariableW(L"SSH_ORIGINAL_COMMAND", tmp);
+	}
 
 
 	if ((s->term) && (s->term[0]))
-		SetEnvironmentVariable("TERM", s->term);
+		SetEnvironmentVariableA("TERM", s->term);
 
 	if (!s->is_subsystem) {
 		snprintf(buf, sizeof buf, "%s@%s $P$G", s->pw->pw_name, getenv("COMPUTERNAME"));
@@ -448,6 +450,7 @@ void setup_session_vars(Session* s)
 	}
 
 	free(pw_dir_w);
+	free(tmp);
 }
 
 char* w32_programdir();
@@ -459,7 +462,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 	wchar_t *exec_command_w = NULL, *pw_dir_w;
 
 	if (s->is_subsystem >= SUBSYSTEM_INT_SFTP_ERROR) {
-		error("sub system not supported, exiting\n");
+		error("sub system not supported, exiting");
 		fflush(NULL);
 		exit(1);
 	}
@@ -469,7 +472,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		fatal("%s: cannot create pipe: %.100s", __func__, strerror(errno));
 
 	if ((pw_dir_w = utf8_to_utf16(s->pw->pw_dir)) == NULL)
-		fatal("%s: out of memory");
+		fatal("%s: out of memory", __func__);
 
 
 	set_nonblock(pipein[0]);
@@ -494,7 +497,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		else {/*relative*/
 			exec_command = malloc(strlen(progdir) + 1 + strlen(command));
 			if (exec_command == NULL)
-				fatal("%s, out of memory");
+				fatal("%s, out of memory", __func__);
 			memcpy(exec_command, progdir, strlen(progdir));
 			exec_command[strlen(progdir)] = '\\';
 			memcpy(exec_command + strlen(progdir) + 1, command, strlen(command) + 1);
@@ -503,7 +506,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		char *shell_host = pty ? "ssh-shellhost.exe " : "ssh-shellhost.exe -nopty ", *c;
 		exec_command = malloc(strlen(progdir) + 1 + strlen(shell_host) + (command ? strlen(command) : 0) + 1);
 		if (exec_command == NULL)
-			fatal("%s, out of memory");
+			fatal("%s, out of memory", __func__);
 		c = exec_command;
 		memcpy(c, progdir, strlen(progdir));
 		c += strlen(progdir);
