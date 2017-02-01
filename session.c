@@ -320,6 +320,7 @@ void setup_session_vars(Session* s)
 {
 	wchar_t *pw_dir_w = NULL, *tmp = NULL;
 	char buf[128];
+	wchar_t wbuf[128];
 	char* laddr;
 
 	struct ssh *ssh = active_state; /* XXX */
@@ -343,16 +344,12 @@ void setup_session_vars(Session* s)
 
 	snprintf(buf, sizeof buf, "%.50s %d %d",
 		ssh->remote_ipaddr, ssh->remote_port, ssh->local_port);
-
 	SetEnvironmentVariableA("SSH_CLIENT", buf);
 
 	laddr = get_local_ipaddr(packet_get_connection_in());
-
 	snprintf(buf, sizeof buf, "%.50s %d %.50s %d",
 		ssh->remote_ipaddr, ssh->remote_port, laddr, ssh->local_port);
-
 	free(laddr);
-
 	SetEnvironmentVariableA("SSH_CONNECTION", buf);
 
 	if (original_command) {
@@ -360,48 +357,25 @@ void setup_session_vars(Session* s)
 		SetEnvironmentVariableW(L"SSH_ORIGINAL_COMMAND", tmp);
 	}
 
-
 	if ((s->term) && (s->term[0]))
 		SetEnvironmentVariableA("TERM", s->term);
 
 	if (!s->is_subsystem) {
-		snprintf(buf, sizeof buf, "%s@%s $P$G", s->pw->pw_name, getenv("COMPUTERNAME"));
-		SetEnvironmentVariableA("PROMPT", buf);
+		UTF8_TO_UTF16_FATAL(tmp, s->pw->pw_name);
+		_snwprintf(wbuf, sizeof buf, L"%s@%s $P$G", tmp, _wgetenv("COMPUTERNAME"));
+		SetEnvironmentVariableW(L"PROMPT", wbuf);
 	}
 
-	/*set user environment variables*/
+	/* set user environment variables from user profile */
 	{
-		UCHAR InfoBuffer[1000];
-		PTOKEN_USER pTokenUser = (PTOKEN_USER)InfoBuffer;
-		DWORD dwInfoBufferSize, tmp_len;
-		LPWSTR sid_str = NULL;
-		wchar_t reg_path[MAX_PATH];
-		HKEY reg_key = 0;
-		HANDLE token = s->authctxt->methoddata;
-     
-		tmp_len = MAX_PATH;
-		if (GetTokenInformation(token, TokenUser, InfoBuffer,
-		    1000, &dwInfoBufferSize) == FALSE ||
-		    ConvertSidToStringSidW(pTokenUser->User.Sid, &sid_str) == FALSE ||
-		    swprintf(reg_path, MAX_PATH, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\%ls", sid_str) == MAX_PATH ||
-		    RegOpenKeyExW(HKEY_LOCAL_MACHINE, reg_path, 0, STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &reg_key) != 0 ||
-		    RegQueryValueExW(reg_key, L"ProfileImagePath", 0, NULL, (LPBYTE)pw_dir_w, &tmp_len) != 0) {
-		/* one of the above failed */
-		debug("cannot retirve profile path - perhaps user profile is not created yet");
-		}
-
-		if (sid_str)
-			LocalFree(sid_str);
-
-		if (reg_key)
-			RegCloseKey(reg_key);
-		
 		/* retrieve and set env variables. */
 		{ 
 #define MAX_VALUE_LEN  1000
 #define MAX_DATA_LEN   2000
 #define MAX_EXPANDED_DATA_LEN 5000
 			/* TODO - Get away with fixed limits and dynamically allocate required memory, cleanup this logic*/
+			HKEY reg_key = 0;
+			HANDLE token = s->authctxt->methoddata;
 			wchar_t *path;
 			wchar_t value_name[MAX_VALUE_LEN];
 			wchar_t value_data[MAX_DATA_LEN], value_data_expanded[MAX_EXPANDED_DATA_LEN], *to_apply;
