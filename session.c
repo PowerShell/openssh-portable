@@ -316,11 +316,90 @@ xauth_valid_string(const char *s)
 		fatal("%s, out of memory", __func__);		\
 } while (0)
 
-void setup_session_vars(Session* s)
+static void setup_session_user_vars(Session* s)	/* set user environment variables from user profile */
 {
+	/* retrieve and set env variables. */
+	HKEY reg_key = 0;
+	HANDLE token = s->authctxt->methoddata;
+	wchar_t *path;
+	wchar_t name[256];
+	wchar_t *data = NULL, *data_expanded = NULL, *path_value = NULL, *to_apply;
+	DWORD type, name_chars = 256, data_chars = 0, data_expanded_chars = 0, required, i = 0;
+	LONG ret;
+
+	if (ImpersonateLoggedOnUser(token) == FALSE)
+		debug("Failed to impersonate user token, %d", GetLastError());
+	SET_USER_ENV(FOLDERID_LocalAppData, L"LOCALAPPDATA");
+	SET_USER_ENV(FOLDERID_Profile, L"USERPROFILE");
+	SET_USER_ENV(FOLDERID_RoamingAppData, L"APPDATA");
+
+	ret = RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE, &reg_key);
+	if (ret != ERROR_SUCCESS)
+		error("Error retrieving user environment variables. RegOpenKeyExW returned %d", ret);
+	else while (1) {
+		to_apply = NULL;
+		required = data_chars * 2;
+		name_chars = 256;
+		ret = RegEnumValueW(reg_key, i++, name, &name_chars, 0, &type, (LPBYTE)data, &required);
+		if (ret == ERROR_NO_MORE_ITEMS)
+			break;
+		else if (ret != ERROR_SUCCESS) {
+			error("Error retrieving user environment variables. RegEnumValueW returned %d", ret);
+			break;
+		}
+		else if (required > data_chars * 2) {
+			if (data != NULL)
+				free(data);
+			data = xmalloc(required);
+			data_chars = required/2;
+			i--;
+			continue;
+		}
+
+		if (type == REG_SZ)
+			to_apply = data;
+		else if (type == REG_EXPAND_SZ) {
+			required = ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+			if (required > data_expanded_chars) {
+				if (data_expanded)
+					free(data_expanded);
+				data_expanded = xmalloc(required * 2);
+				data_expanded_chars = required;
+				ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+			}
+			to_apply = data_expanded;
+		}
+
+		if (wcsicmp(name, L"PATH") == 0) {
+			if ((required = GetEnvironmentVariableW(L"PATH", NULL, 0)) != ERROR_ENVVAR_NOT_FOUND) {
+				/* above does not include null term */
+				path_value = xmalloc((wcslen(to_apply) + 1 + required + 1)*2);
+				memcpy(path_value + required + 1, to_apply, (wcslen(to_apply) + 1) * 2);
+				GetEnvironmentVariableW(L"PATH", path_value, required + 1);
+				path_value[required]  = L';';
+				to_apply = path_value;
+			}
+
+		}
+		if (to_apply)
+			SetEnvironmentVariableW(name, to_apply);
+	}
+	if (reg_key)
+		RegCloseKey(reg_key);
+	if (data)
+		free(data);
+	if (data_expanded)
+		free(data_expanded);
+	if (path_value)
+		free(path_value);
+	RevertToSelf();
+	
+}
+
+static void setup_session_vars(Session* s) {
 	wchar_t *pw_dir_w = NULL, *tmp = NULL;
-	char buf[128];
-	wchar_t wbuf[128];
+	char buf[256];
+	wchar_t wbuf[256];
 	char* laddr;
 
 	struct ssh *ssh = active_state; /* XXX */
@@ -362,67 +441,11 @@ void setup_session_vars(Session* s)
 
 	if (!s->is_subsystem) {
 		UTF8_TO_UTF16_FATAL(tmp, s->pw->pw_name);
-		_snwprintf(wbuf, sizeof buf, L"%s@%s $P$G", tmp, _wgetenv("COMPUTERNAME"));
+		_snwprintf(wbuf, sizeof(wbuf)/2, L"%ls@%ls $P$G", tmp, _wgetenv(L"COMPUTERNAME"));
 		SetEnvironmentVariableW(L"PROMPT", wbuf);
 	}
 
-	/* set user environment variables from user profile */
-	{
-		/* retrieve and set env variables. */
-		{ 
-#define MAX_VALUE_LEN  1000
-#define MAX_DATA_LEN   2000
-#define MAX_EXPANDED_DATA_LEN 5000
-			/* TODO - Get away with fixed limits and dynamically allocate required memory, cleanup this logic*/
-			HKEY reg_key = 0;
-			HANDLE token = s->authctxt->methoddata;
-			wchar_t *path;
-			wchar_t value_name[MAX_VALUE_LEN];
-			wchar_t value_data[MAX_DATA_LEN], value_data_expanded[MAX_EXPANDED_DATA_LEN], *to_apply;
-			DWORD value_type, name_len, data_len;
-			int i;
-			LONG ret;
-
-			if (ImpersonateLoggedOnUser(token) == FALSE)
-				debug("Failed to impersonate user token, %d", GetLastError());
-			SET_USER_ENV(FOLDERID_LocalAppData, L"LOCALAPPDATA");
-			SET_USER_ENV(FOLDERID_Profile, L"USERPROFILE");
-			SET_USER_ENV(FOLDERID_RoamingAppData, L"APPDATA");
-			reg_key = 0;
-			if (RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE, &reg_key) == ERROR_SUCCESS) {
-				i = 0;
-				while (1) {
-					name_len = MAX_VALUE_LEN * 2;
-					data_len = MAX_DATA_LEN * 2;
-					to_apply = NULL;
-					if (RegEnumValueW(reg_key, i++, value_name, &name_len, 0, &value_type, (LPBYTE)&value_data, &data_len) != ERROR_SUCCESS)
-						break;
-					if (value_type == REG_SZ)
-						to_apply = value_data;
-					else if (value_type == REG_EXPAND_SZ) {
-						ExpandEnvironmentStringsW(value_data, value_data_expanded, MAX_EXPANDED_DATA_LEN);
-						to_apply = value_data_expanded;
-					}
-
-					if (wcsicmp(value_name, L"PATH") == 0) {
-						DWORD size;
-						if ((size = GetEnvironmentVariableW(L"PATH", NULL, 0)) != ERROR_ENVVAR_NOT_FOUND) {
-							memcpy(value_data_expanded + size, to_apply, (wcslen(to_apply) + 1) * 2);
-							GetEnvironmentVariableW(L"PATH", value_data_expanded, MAX_EXPANDED_DATA_LEN);
-							value_data_expanded[size - 1] = L';';
-							to_apply = value_data_expanded;
-						}
-
-					}
-					if (to_apply)
-						SetEnvironmentVariableW(value_name, to_apply);
-				}
-				RegCloseKey(reg_key);
-			}
-			RevertToSelf();
-		}
-	}
-
+	setup_session_user_vars(s);
 	free(pw_dir_w);
 	free(tmp);
 }
@@ -2366,9 +2389,9 @@ static int
 session_env_req(Session *s)
 {
 	char *name, *val;
-	u_int name_len, val_len, i;
+	u_int name_chars, val_len, i;
 
-	name = packet_get_cstring(&name_len);
+	name = packet_get_cstring(&name_chars);
 	val = packet_get_cstring(&val_len);
 	packet_check_eom();
 
