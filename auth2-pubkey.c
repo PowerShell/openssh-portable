@@ -194,7 +194,7 @@ userauth_pubkey(Authctxt *authctxt)
 					(r = sshbuf_put_cstring(msg, "pubkey")) != 0 ||
 					(r = sshkey_to_blob(key, &blob, &blen)) != 0 ||
 					(r = sshbuf_put_string(msg, blob, blen)) != 0 ||
-					(r = sshbuf_put_cstring(msg, authctxt->pw->pw_name)) != 0 ||
+					(r = sshbuf_put_cstring(msg, authctxt->user)) != 0 ||
 					(r = sshbuf_put_string(msg, sig, slen)) != 0 ||
 					(r = sshbuf_put_string(msg, buffer_ptr(&b), buffer_len(&b))) != 0 ||
 					(r = ssh_request_reply(auth_sock, msg, msg)) != 0 ||

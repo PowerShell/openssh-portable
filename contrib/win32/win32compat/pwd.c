@@ -151,14 +151,14 @@ get_passwd(const char *user_utf8, LPWSTR user_sid) {
         }
 
         if (swprintf(reg_path, PATH_MAX, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\%ls", user_sid) == PATH_MAX ||
-                RegOpenKeyExW(HKEY_LOCAL_MACHINE, reg_path, 0, STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &reg_key) != 0 ||
-                RegQueryValueExW(reg_key, L"ProfileImagePath", 0, NULL, (LPBYTE)profile_home, &tmp_len) != 0)
+            RegOpenKeyExW(HKEY_LOCAL_MACHINE, reg_path, 0, STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &reg_key) != 0 ||
+            RegQueryValueExW(reg_key, L"ProfileImagePath", 0, NULL, (LPBYTE)profile_home, &tmp_len) != 0)
                 GetWindowsDirectoryW(profile_home, PATH_MAX);
 
-        if ((uname_utf8 = _strdup(user_utf8)) == NULL ||
-                (pw_home_utf8 = utf16_to_utf8(profile_home)) == NULL) {
-                errno = ENOMEM;
-                goto done;
+        if ((uname_utf8 = utf16_to_utf8(uname_utf16)) == NULL ||
+            (pw_home_utf8 = utf16_to_utf8(profile_home)) == NULL) {
+            errno = ENOMEM;
+            goto done;
         }
         
         pw.pw_name = uname_utf8;
