@@ -371,12 +371,12 @@ static void setup_session_user_vars(Session* s)	/* set user environment variable
 		}
 
 		if (wcsicmp(name, L"PATH") == 0) {
-			if ((required = GetEnvironmentVariableW(L"PATH", NULL, 0)) != ERROR_ENVVAR_NOT_FOUND) {
-				/* above does not include null term */
-				path_value = xmalloc((wcslen(to_apply) + 1 + required + 1)*2);
-				memcpy(path_value + required + 1, to_apply, (wcslen(to_apply) + 1) * 2);
-				GetEnvironmentVariableW(L"PATH", path_value, required + 1);
-				path_value[required]  = L';';
+			if ((required = GetEnvironmentVariableW(L"PATH", NULL, 0)) != 0) {
+				/* "required" includes null term */
+				path_value = xmalloc((wcslen(to_apply) + 1 + required)*2);
+				GetEnvironmentVariableW(L"PATH", path_value, required);
+				path_value[required - 1] = L';';
+				memcpy(path_value + required, to_apply, (wcslen(to_apply) + 1) * 2);
 				to_apply = path_value;
 			}
 
@@ -393,7 +393,6 @@ static void setup_session_user_vars(Session* s)	/* set user environment variable
 	if (path_value)
 		free(path_value);
 	RevertToSelf();
-	
 }
 
 static void setup_session_vars(Session* s) {
@@ -519,38 +518,24 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 
 	/* setup Environment varibles */
 	setup_session_vars(s);
+	
 	extern int debug_flag;
 
+	/* start the process */
 	{
 		PROCESS_INFORMATION pi;
 		STARTUPINFOW si;
-
 		BOOL b;
-
 		HANDLE hToken = INVALID_HANDLE_VALUE;
 
-
-		/*
-		* Assign sockets to StartupInfo
-		*/
-
 		memset(&si, 0, sizeof(STARTUPINFO));
-
 		si.cb = sizeof(STARTUPINFO);
-		si.lpReserved = 0;
-		si.lpTitle = NULL; /* NULL means use exe name as title */
-		si.dwX = 0;
-		si.dwY = 0;
 		si.dwXSize = 5;
 		si.dwYSize = 5;
 		si.dwXCountChars = s->col;
 		si.dwYCountChars = s->row;
-		si.dwFillAttribute = 0;
 		si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESIZE | STARTF_USECOUNTCHARS;
-		si.wShowWindow = 0; // FALSE ;
-		si.cbReserved2 = 0;
-		si.lpReserved2 = 0;
-
+		
 		si.hStdInput = (HANDLE)w32_fd_to_handle(pipein[0]);
 		si.hStdOutput = (HANDLE)w32_fd_to_handle(pipeout[1]);
 		si.hStdError = (HANDLE)w32_fd_to_handle(pipeerr[1]);
@@ -559,29 +544,20 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		hToken = s->authctxt->methoddata;
 
 		debug("Executing command: %s", exec_command);
-
-		/* Create the child process     */
-
-		exec_command_w = utf8_to_utf16(exec_command);
-
+		UTF8_TO_UTF16_FATAL(exec_command_w, exec_command);
+		
+		/* in debug mode launch using sshd.exe user context */
 		if (debug_flag)
 			b = CreateProcessW(NULL, exec_command_w, NULL, NULL, TRUE,
 				DETACHED_PROCESS, NULL, pw_dir_w,
 				&si, &pi);
-		else
+		else /* launch as client user context */
 			b = CreateProcessAsUserW(hToken, NULL, exec_command_w, NULL, NULL, TRUE,
 				DETACHED_PROCESS , NULL, pw_dir_w,
 				&si, &pi);
 
 		if (!b)
-		{
-			debug("ERROR. Cannot create process (%u).\n", GetLastError());
-					free(pw_dir_w);
-					free(exec_command_w);
-			CloseHandle(hToken);
-
-			exit(1);
-		}
+			fatal("ERROR. Cannot create process (%u).\n", GetLastError());
 		else if (pty) { /*attach to shell console */
 			FreeConsole();
 			if (!debug_flag)
@@ -610,6 +586,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		s->pid = pi.dwProcessId;
 		register_child(pi.hProcess, pi.dwProcessId);
 	}
+
 	/*
 	* Set interactive/non-interactive mode.
 	*/
@@ -625,16 +602,14 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 	* Enter the interactive session.  Note: server_loop must be able to
 	* handle the case that fdin and fdout are the same.
 	*/
-
 	if (s->ttyfd == -1)
 		session_set_fds(s, pipein[1], pipeout[0], pipeerr[0], s->is_subsystem, 0);
 	else
-		session_set_fds(s, pipein[1], pipeout[0], pipeerr[0], s->is_subsystem, 1); // tty interactive session
+		session_set_fds(s, pipein[1], pipeout[0], pipeerr[0], s->is_subsystem, 1); /* tty interactive session */
 
 		free(pw_dir_w);
 		free(exec_command_w);
 	return 0;
-
 }
 
 int
