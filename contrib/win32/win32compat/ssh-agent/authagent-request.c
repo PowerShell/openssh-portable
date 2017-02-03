@@ -99,9 +99,22 @@ LoadProfile(struct agent_connection* con, wchar_t* user, wchar_t* domain) {
         EnablePrivilege("SeRestorePrivilege", 0);
 }
 
+wchar_t* get_user_with_domain(wchar_t* user, wchar_t* domain) {
+	wchar_t* user_with_domain = (wchar_t*) malloc(wcslen(user) + wcslen(domain) + 1);
+	
+	if (NULL == user_with_domain)
+		fatal("out of memory exception");
+
+	wcscpy(user_with_domain, user);
+	wcscat(user_with_domain, L"@");
+	wcscat(user_with_domain, domain);
+	
+	return user_with_domain;
+}
+
 #define MAX_USER_LEN 256
 static HANDLE 
-generate_user_token(wchar_t* user) {
+generate_user_token(wchar_t* user, wchar_t* domain) {
         HANDLE lsa_handle = 0, token = 0;
         LSA_OPERATIONAL_MODE mode;
         ULONG auth_package_id;
@@ -115,33 +128,8 @@ generate_user_token(wchar_t* user) {
         QUOTA_LIMITS quotas;
         DWORD cbProfile;
         BOOL domain_user;
-        wchar_t user_copy[MAX_USER_LEN];
-        
-        /* prep user name - TODO: implment an accurate check if user is domain account*/
-        if (wcsnlen(user, MAX_USER_LEN) == MAX_USER_LEN) {
-                debug("user length is not supported");
-                goto done;
-        }
 
-        if (wcschr(user, L'\\') != NULL) {
-                wchar_t *un = NULL, *dn = NULL;
-                DWORD un_len = 0, dn_len = 0;
-                dn = user;
-                dn_len = wcschr(user, L'\\') - user;
-                un = wcschr(user, L'\\') + 1;
-                un_len = wcsnlen(user, MAX_USER_LEN) - dn_len - 1;
-                if (dn_len == 0 || un_len == 0) {
-                        debug("cannot get user token - bad user name");
-                        goto done;
-                }
-                memcpy(user_copy, un, un_len * sizeof(wchar_t));
-                user_copy[un_len] = L'@';
-                memcpy(user_copy + un_len + 1, dn, dn_len * sizeof(wchar_t));
-                user_copy[dn_len + 1 + un_len] = L'\0';
-                user = user_copy;
-        }
-        
-        domain_user = (wcschr(user, L'@') != NULL) ? TRUE : FALSE;
+        domain_user = (domain != NULL) ? TRUE : FALSE;
 
         InitLsaString(&logon_process_name, "ssh-agent");
         if (domain_user)
@@ -158,23 +146,25 @@ generate_user_token(wchar_t* user) {
 
         if (domain_user) {
                 KERB_S4U_LOGON *s4u_logon;
+				wchar_t* user_with_domain = get_user_with_domain(user, domain);
                 logon_info_size = sizeof(KERB_S4U_LOGON);
-                logon_info_size += (wcslen(user) * 2 + 2);
+                logon_info_size += (wcslen(user_with_domain) * 2 + 2);
                 logon_info = malloc(logon_info_size);
                 if (logon_info == NULL)
                         goto done;
                 s4u_logon = (KERB_S4U_LOGON*)logon_info;
                 s4u_logon->MessageType = KerbS4ULogon;
                 s4u_logon->Flags = 0;
-                s4u_logon->ClientUpn.Length = wcslen(user) * 2;
+                s4u_logon->ClientUpn.Length = wcslen(user_with_domain) * 2;
                 s4u_logon->ClientUpn.MaximumLength = s4u_logon->ClientUpn.Length;
                 s4u_logon->ClientUpn.Buffer = (WCHAR*)(s4u_logon + 1);
-                memcpy(s4u_logon->ClientUpn.Buffer, user, s4u_logon->ClientUpn.Length + 2);
+                memcpy(s4u_logon->ClientUpn.Buffer, user_with_domain, s4u_logon->ClientUpn.Length + 2);
                 s4u_logon->ClientRealm.Length = 0;
                 s4u_logon->ClientRealm.MaximumLength = 0;
                 s4u_logon->ClientRealm.Buffer = 0;
-        }
-        else {
+				
+				free(user_with_domain);
+        } else {
                 logon_info_size = (wcslen(user) + 1)*sizeof(wchar_t);
                 logon_info = malloc(logon_info_size);
                 if (logon_info == NULL)
@@ -216,46 +206,36 @@ done:
         return token;
 }
 
-#define PUBKEY_AUTH_REQUEST "pubkey"
-#define PASSWD_AUTH_REQUEST "password"
 #define MAX_USER_NAME_LEN 256
 #define MAX_PW_LEN 128
 
 int process_passwordauth_request(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con) {
-        char *user = NULL, *pwd = NULL;
-        wchar_t userW_buf[MAX_USER_NAME_LEN], pwdW_buf[MAX_PW_LEN];
-        wchar_t *userW = userW_buf, *domW = NULL, *pwdW = pwdW_buf, *tmp;
-        size_t user_len = 0, pwd_len = 0, dom_len = 0;
+        char *user = NULL, *domain = NULL, *pwd = NULL;
+        wchar_t userW_buf[MAX_USER_NAME_LEN], domainW_buf[MAX_USER_NAME_LEN], pwdW_buf[MAX_PW_LEN];
+		wchar_t *userW = userW_buf, *domW = domainW_buf, *pwdW = pwdW_buf, *tmp;
+        size_t user_len = 0, domain_len = 0, pwd_len = 0, dom_len = 0;
         int r = -1;
         HANDLE token = 0, dup_token, client_proc = 0;
         ULONG client_pid;
 
         if (sshbuf_get_cstring(request, &user, &user_len) != 0 ||
+			sshbuf_get_cstring(request, &domain, &domain_len) != 0 ||
             sshbuf_get_cstring(request, &pwd, &pwd_len) != 0 ||
             user_len == 0 ||
-            pwd_len == 0 ){
+            pwd_len == 0 ) {
                 debug("bad password auth request");
                 goto done;
         }
 
         userW[0] = L'\0';
-        if (MultiByteToWideChar(CP_UTF8, 0, user, user_len + 1, userW, MAX_USER_NAME_LEN) == 0 ||
-            MultiByteToWideChar(CP_UTF8, 0, pwd, pwd_len + 1, pwdW, MAX_PW_LEN) == 0) {
+		domW[0] = L'\0';
+        if ((MultiByteToWideChar(CP_UTF8, 0, user, user_len + 1, userW, MAX_USER_NAME_LEN) == 0) ||
+			(domain_len != 0 && MultiByteToWideChar(CP_UTF8, 0, domain, domain_len + 1, domW, MAX_USER_NAME_LEN) == 0) ||
+            (MultiByteToWideChar(CP_UTF8, 0, pwd, pwd_len + 1, pwdW, MAX_PW_LEN) == 0)) {
                 debug("unable to convert user (%s) or password to UTF-16", user);
                 goto done;
         }
         
-        if ((tmp = wcschr(userW, L'\\')) != NULL) {
-                domW = userW;
-                userW = tmp + 1;
-                *tmp = L'\0';
-
-        }
-        else if ((tmp = wcschr(userW, L'@')) != NULL) {
-                domW = tmp + 1;
-                *tmp = L'\0';
-        }
-
         if (LogonUserW(userW, domW, pwdW, LOGON32_LOGON_NETWORK, LOGON32_PROVIDER_DEFAULT, &token) == FALSE) {
                 debug("failed to logon user");
                 goto done;
@@ -284,22 +264,24 @@ done:
         if (client_proc)
                 CloseHandle(client_proc);
 
-        return r;
+		return r;
 }
 
 int process_pubkeyauth_request(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con) {
         int r = -1;
-        char *key_blob, *user, *sig, *blob;
-        size_t key_blob_len, user_len, sig_len, blob_len;
+        char *key_blob, *user, *domain, *usernameWithDomain, *sig, *blob;
+        size_t key_blob_len, user_len, domain_len, sig_len, blob_len;
         struct sshkey *key = NULL;
         HANDLE token = NULL, dup_token = NULL, client_proc = NULL;
-        wchar_t wuser[MAX_USER_NAME_LEN];
+        wchar_t wuser[MAX_USER_NAME_LEN], wdomain[MAX_USER_NAME_LEN];
         PWSTR wuser_home = NULL;
         ULONG client_pid;
 
         user = NULL;
+		domain = NULL;
         if (sshbuf_get_string_direct(request, &key_blob, &key_blob_len) != 0 ||
             sshbuf_get_cstring(request, &user, &user_len) != 0 ||
+			sshbuf_get_cstring(request, &domain, &domain_len) != 0 ||
             sshbuf_get_string_direct(request, &sig, &sig_len) != 0 ||
             sshbuf_get_string_direct(request, &blob, &blob_len) != 0 ||
             sshkey_from_blob(key_blob, key_blob_len, &key) != 0) {
@@ -308,8 +290,10 @@ int process_pubkeyauth_request(struct sshbuf* request, struct sshbuf* response, 
         }
 
         wuser[0] = L'\0';
+		wdomain[0] = L'\0';
         if (MultiByteToWideChar(CP_UTF8, 0, user, user_len + 1, wuser, MAX_USER_NAME_LEN) == 0 ||
-            (token = generate_user_token(wuser)) == 0) {
+            (domain_len != 0 && MultiByteToWideChar(CP_UTF8, 0, domain, domain_len + 1, wdomain, MAX_USER_NAME_LEN) == 0) ||
+			(token = generate_user_token(wuser, wdomain)) == 0) {
                 debug("unable to generate token for user %ls", wuser);
                 goto done;
         }
@@ -335,22 +319,7 @@ int process_pubkeyauth_request(struct sshbuf* request, struct sshbuf* response, 
                 goto done;
         }
         
-        {
-                wchar_t *tmp, *userW, *domW;
-                userW = wuser;
-                domW = NULL;
-                if ((tmp = wcschr(userW, L'\\')) != NULL) {
-                        domW = userW;
-                        userW = tmp + 1;
-                        *tmp = L'\0';
-
-                }
-                else if ((tmp = wcschr(userW, L'@')) != NULL) {
-                        domW = tmp + 1;
-                        *tmp = L'\0';
-                }
-                LoadProfile(con, userW, domW);
-        }
+		LoadProfile(con, wuser, wdomain);
 
         r = 0;
 done:
@@ -370,20 +339,19 @@ done:
 }
 
 int process_authagent_request(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con) {
-        char *opn;
-        size_t opn_len;
-        if (sshbuf_get_string_direct(request, &opn, &opn_len) != 0) {
-                debug("invalid auth request");
-                return -1;
-        }
+    char *opn;
+    size_t opn_len;
+    if (sshbuf_get_string_direct(request, &opn, &opn_len) != 0) {
+        debug("invalid auth request");
+        return -1;
+    }
 
-        if (opn_len == strlen(PUBKEY_AUTH_REQUEST) && memcmp(opn, PUBKEY_AUTH_REQUEST, opn_len) == 0)
-                return process_pubkeyauth_request(request, response, con);
-        else if (opn_len == strlen(PASSWD_AUTH_REQUEST) && memcmp(opn, PASSWD_AUTH_REQUEST, opn_len) == 0)
-                return process_passwordauth_request(request, response, con);
-        else {
-                debug("unknown auth request: %s", opn);
-                return -1;
-        }
-                
+	if (memcmp(opn, PUBKEY_AUTH_REQUEST, opn_len) == 0)
+		return process_pubkeyauth_request(request, response, con);
+    else if (memcmp(opn, PASSWD_AUTH_REQUEST, opn_len) == 0)
+        return process_passwordauth_request(request, response, con);
+    else {
+		debug("unknown auth request: %s", opn);
+		return -1;
+    }
 }

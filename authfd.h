@@ -16,6 +16,8 @@
 #ifndef AUTHFD_H
 #define AUTHFD_H
 
+//#include "config.h"
+
 /* List of identities returned by ssh_fetch_identitylist() */
 struct ssh_identitylist {
 	size_t nkeys;
@@ -88,5 +90,15 @@ int	ssh_agent_sign(int sock, struct sshkey *key,
 #define	SSH_AGENT_OLD_SIGNATURE			0x01
 #define	SSH_AGENT_RSA_SHA2_256			0x02
 #define	SSH_AGENT_RSA_SHA2_512			0x04
+
+/* In windows, the use of ssh-agent is extended.
+* ssh-agent runs in high privilege mode and it also takes care authetication.
+*/
+// TODO - BALU - Enable this only for windows / move to some common place
+//#ifdef WINDOWS
+#define SSH_AGENT_AUTHENTICATE			200
+#define PUBKEY_AUTH_REQUEST             "pubkey"
+#define PASSWD_AUTH_REQUEST             "password"
+//#endif
 
 #endif				/* AUTHFD_H */

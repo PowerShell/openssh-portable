@@ -122,6 +122,15 @@ get_passwd(const char *user_utf8, LPWSTR user_sid) {
             if ((status = NetUserGetInfo(udom_utf16, uname_utf16, 23, &user_info)) != NERR_Success) {
                 debug("NetUserGetInfo() failed with error: %d \n", status);
 
+				/* We reach here only for domain users.
+				 * If we didn't get the domain name from the end-user then we treat it as error and return.
+				 */
+				if (udom_utf16 == NULL) {
+					error("Expected domain name for the domain user: %s\n", user_utf16);
+					errno = ECONNABORTED;
+					goto done;
+				}
+
                 DWORD dsStatus;
                 if ((dsStatus = DsGetDcNameW(NULL, udom_utf16, NULL, NULL, DS_DIRECTORY_SERVICE_PREFERRED, &pdc)) == ERROR_SUCCESS) {
                     if ((status = NetUserGetInfo(pdc->DomainControllerName, uname_utf16, 23, &user_info)) != NERR_Success) {
@@ -130,19 +139,19 @@ get_passwd(const char *user_utf8, LPWSTR user_sid) {
                         if (ConvertSidToStringSidW(((LPUSER_INFO_23)user_info)->usri23_user_sid, &user_sid_local) == FALSE) {
 							error("ConvertSidToStringSidW() failed with error: %d\n", GetLastError());
 
-                            errno = ENOMEM; //??
+                            errno = ECONNABORTED;
                             goto done;
                         }
                     }
                 } else {
 					error("DsGetDcNameW() failed with error: %d \n", dsStatus);
-                    errno = ENOMEM; //??
+                    errno = ECONNABORTED;
                     goto done;
                 }
             } else {
                 if (ConvertSidToStringSidW(((LPUSER_INFO_23)user_info)->usri23_user_sid, &user_sid_local) == FALSE) {
 					error("NetUserGetInfo() Succeded but ConvertSidToStringSidW() failed with error: %d\n", GetLastError());
-                    errno = ENOMEM; //??
+                    errno = ECONNABORTED;
                     goto done;
                 }
             }
@@ -166,6 +175,7 @@ get_passwd(const char *user_utf8, LPWSTR user_sid) {
         pw.pw_dir = pw_home_utf8;
         pw_home_utf8 = NULL;
         ret = &pw;
+		pw.pw_domain = utf16_to_utf8(udom_utf16);
 done:
         if (user_utf16)
                 free(user_utf16);
