@@ -165,7 +165,7 @@ get_passwd(const char *user_utf8, LPWSTR user_sid) {
 		GetWindowsDirectoryW(profile_home, PATH_MAX);
 
 	if ((uname_utf8 = utf16_to_utf8(uname_utf16)) == NULL ||
-	    (udom_utf8 = utf16_to_utf8(udom_utf16)) == NULL ||
+	    (udom_utf16 && (udom_utf8 = utf16_to_utf8(udom_utf16)) == NULL) ||
 	    (pw_home_utf8 = utf16_to_utf8(profile_home)) == NULL ||
 	    (user_sid_utf8 = utf16_to_utf8(user_sid)) == NULL) {
 		errno = ENOMEM;
@@ -173,8 +173,9 @@ get_passwd(const char *user_utf8, LPWSTR user_sid) {
 	}
 
 	pw.pw_name = uname_utf8;
-	pw.pw_domain = udom_utf8;
 	uname_utf8 = NULL;
+	pw.pw_domain = udom_utf8;
+	udom_utf8 = NULL;
 	pw.pw_dir = pw_home_utf8;
 	pw_home_utf8 = NULL;
 	pw.pw_sid = user_sid_utf8;

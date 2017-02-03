@@ -120,7 +120,7 @@ generate_user_token(wchar_t* user, wchar_t* domain) {
 	DWORD cbProfile;
 	BOOL domain_user;
 
-	domain_user = (domain != NULL) ? TRUE : FALSE;
+	domain_user = (*domain != L'\0') ? TRUE : FALSE;
 
 	InitLsaString(&logon_process_name, "ssh-agent");
 	if (domain_user)
@@ -198,6 +198,7 @@ done:
 	return token;
 }
 
+/* TODO - SecureZeroMemory password */
 int process_passwordauth_request(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con) {
 	char *user = NULL, *domain = NULL, *pwd = NULL;
 	wchar_t userW_buf[MAX_USER_LEN], domainW_buf[MAX_FQDN_LEN], pwdW_buf[MAX_PW_LEN];
