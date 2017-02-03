@@ -83,7 +83,7 @@ static struct passwd*
 get_passwd(const char *user_utf8, LPWSTR user_sid) {
 	struct passwd *ret = NULL;
 	wchar_t *user_utf16 = NULL, *uname_utf16, *udom_utf16, *tmp;
-	char *uname_utf8 = NULL, *udom_utf8 = NULL, *pw_home_utf8 = NULL;
+	char *uname_utf8 = NULL, *udom_utf8 = NULL, *pw_home_utf8 = NULL, *user_sid_utf8 = NULL;
 	LPBYTE user_info = NULL;
 	LPWSTR user_sid_local = NULL;
 	wchar_t reg_path[PATH_MAX], profile_home[PATH_MAX];
@@ -166,7 +166,8 @@ get_passwd(const char *user_utf8, LPWSTR user_sid) {
 
 	if ((uname_utf8 = utf16_to_utf8(uname_utf16)) == NULL ||
 	    (udom_utf8 = utf16_to_utf8(udom_utf16)) == NULL ||
-	    (pw_home_utf8 = utf16_to_utf8(profile_home)) == NULL) {
+	    (pw_home_utf8 = utf16_to_utf8(profile_home)) == NULL ||
+	    (user_sid_utf8 = utf16_to_utf8(user_sid)) == NULL) {
 		errno = ENOMEM;
 		goto done;
 	}
@@ -176,6 +177,8 @@ get_passwd(const char *user_utf8, LPWSTR user_sid) {
 	uname_utf8 = NULL;
 	pw.pw_dir = pw_home_utf8;
 	pw_home_utf8 = NULL;
+	pw.pw_sid = user_sid_utf8;
+	user_sid_utf8 = NULL;
 	ret = &pw;
 
 done:
@@ -187,6 +190,8 @@ done:
 		free(udom_utf8);
 	if (pw_home_utf8)
 		free(pw_home_utf8);
+	if (user_sid_utf8)
+		free(user_sid_utf8);
 	if (user_info)
 		NetApiBufferFree(user_info);
 	if (user_sid_local)
