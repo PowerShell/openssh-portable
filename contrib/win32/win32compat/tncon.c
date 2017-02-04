@@ -127,7 +127,7 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen) {
 			break;
 
 		case FOCUS_EVENT:
-			/* FALLTHROUGH */
+		/* FALLTHROUGH */
 		case MENU_EVENT:
 			break;
 
