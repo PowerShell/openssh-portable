@@ -257,54 +257,96 @@ int w32_ioctl(int d, int request, ...) {
         }
 }
 
-int 
-spawn_child(char* cmd, int in, int out, int err, DWORD flags) {
+int spawn_child_vp(char * path, char ** argv, int in, int out, int err, DWORD flags) {
+	int hr = EFAULT;
 	PROCESS_INFORMATION pi;
 	STARTUPINFOW si;
 	BOOL b;
-	char *abs_cmd, *t;
-	wchar_t * cmd_utf16;
+	char * cmd_utf8 = NULL;
+	wchar_t * cmd_utf16 = NULL;
 	int add_module_path = 0;
+	size_t i, cmdlen = 0;
+	char * progdir = w32_programdir();
+	wchar_t * wprogdir = NULL;
+	wchar_t * wcmdline = NULL;
+	int ac = 0;
+	wchar_t ** av = NULL;
 
-	/* should module path be added */
-	do{
-		if(!cmd)
-			break;
-		t = cmd;
-		if (*t == '\"')
-			t++;
-		if (t[0] == '\0' || t[0] == '\\' || t[0] == '.' || t[1] == ':')
-			break;
-		add_module_path = 1;
-		
-	} while (0);
-
-	/* add current module path to start if needed */
-	if (add_module_path) {
-		char* ctr;
-		abs_cmd = malloc(strlen(w32_programdir()) + 1 + strlen(cmd) + 1);
-		if (abs_cmd == NULL) {
-			errno = ENOMEM;
-			return -1;
+	if (!argv) {
+		wchar_t * wname = NULL;
+		if (path) {
+			wcmdline = utf8_to_utf16(path);
+		} else {
+			wcmdline = GetCommandLineW();
 		}
-		ctr = abs_cmd;
-		memcpy(ctr, w32_programdir(), strlen(w32_programdir()));
-		ctr += strlen(w32_programdir());
-		*ctr++ = '\\';
-		memcpy(ctr, cmd, strlen(cmd) + 1);
+		GOTO_CLEANUP_IF(!wcmdline, EFAULT);
+		av = CommandLineToArgvW(wcmdline, &ac);
+		GOTO_CLEANUP_IF(!av || ac <= 0, EFAULT);
+		wname = av[0];
+		GOTO_CLEANUP_IF(*wname == L'\0', EINVAL);
+		cmdlen = 1;   /* null-terminate */
+		for (i = 0; i < ac; i++) {
+			cmdlen += 2 + wcslen(av[i]) + 1;   /* one space, two quote */
+		}
+		if (wname[0] != L'\\' && wname[0] != L'.' && wname[1] != L':') {
+			GOTO_CLEANUP_IF(!progdir, EFAULT);
+			wprogdir = utf8_to_utf16(progdir);
+			GOTO_CLEANUP_IF(!wprogdir, ENOMEM);
+			add_module_path = 1;
+			cmdlen += wcslen(wprogdir) + 1;   /* one backslash */
+		}
+		cmd_utf16 = (wchar_t *) malloc(cmdlen * sizeof(wchar_t));
+		GOTO_CLEANUP_IF(!cmd_utf16, ENOMEM);
+		wcscpy(cmd_utf16, L"\"");
+		if (add_module_path) {
+			wcscat(cmd_utf16, wprogdir);
+			wcscat(cmd_utf16, L"\\");
+		}
+		wcscat(cmd_utf16, wname);
+		wcscat(cmd_utf16, L"\"");
+		for (i = 1; i < ac; i++) {
+			wcscat(cmd_utf16, L" \"");
+			wcscat(cmd_utf16, av[i]);
+			wcscat(cmd_utf16, L"\"");
+		}
+		cmd_utf8 = utf16_to_utf8(cmd_utf16);
+		GOTO_CLEANUP_IF(!cmd_utf8, ENOMEM);
+	} else {
+		char * name;
+		if (path && path[0]) {
+			name = path;
+		} else {
+			name = argv[0];
+		}
+		GOTO_CLEANUP_IF(!name || name[0] == '\0', EINVAL);
+		cmdlen = 1;   /* null-terminate */
+		for (i = 1; argv[i]; i++) {
+			cmdlen += 2 + strlen(argv[i]) + 1;  /* one space, two quote */
+		}
+		if (name[0] != '\\' && name[0] != '.' && name[1] != ':') {
+			GOTO_CLEANUP_IF(!progdir, EFAULT);
+			add_module_path = 1;
+			cmdlen += strlen(progdir) + 1;    /* one backslash */
+		}
+		cmd_utf8 = (char *) malloc(cmdlen);
+		GOTO_CLEANUP_IF(!cmd_utf8, ENOMEM);
+		strcpy(cmd_utf8, "\"");
+		if (add_module_path) {
+			strcat(cmd_utf8, progdir);
+			strcat(cmd_utf8, "\\");
+		}
+		strcat(cmd_utf8, name);
+		strcat(cmd_utf8, "\"");
+		for (i = 1; argv[i]; i++) {
+			strcat(cmd_utf8, " \"");
+			strcat(cmd_utf8, argv[i]);
+			strcat(cmd_utf8, "\"");
+		}
+		cmd_utf16 = utf8_to_utf16(cmd_utf8);
+		GOTO_CLEANUP_IF(!cmd_utf16, ENOMEM);
 	}
-	else
-		abs_cmd = cmd;
-	   
-	debug("spawning %s", abs_cmd);
 
-	if ((cmd_utf16 = utf8_to_utf16(abs_cmd)) == NULL) {
-		errno = ENOMEM;
-		return -1;
-	}
-
-	if(abs_cmd != cmd)
-		free(abs_cmd);
+	debug("spawning %s", cmd_utf8);
 
 	memset(&si, 0, sizeof(STARTUPINFOW));
 	si.cb = sizeof(STARTUPINFOW);
@@ -314,22 +356,35 @@ spawn_child(char* cmd, int in, int out, int err, DWORD flags) {
 	si.dwFlags = STARTF_USESTDHANDLES;
 
 	b = CreateProcessW(NULL, cmd_utf16, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
+	GOTO_CLEANUP_IF(!b, ENOEXEC);
+	CloseHandle(pi.hThread);
 
-	if (b) {
-		if (register_child(pi.hProcess, pi.dwProcessId) == -1) {
-			TerminateProcess(pi.hProcess, 0);
-			CloseHandle(pi.hProcess);
-			pi.dwProcessId = -1;
-		}
-		CloseHandle(pi.hThread);
-	}
-	else {
-		errno = GetLastError();
-		pi.dwProcessId = -1;
+	if (register_child(pi.hProcess, pi.dwProcessId) == -1) {
+		TerminateProcess(pi.hProcess, 0);
+		CloseHandle(pi.hProcess);
+		hr = EFAULT;
+	} else {
+		hr = 0;
 	}
 
-	free(cmd_utf16);
-	return pi.dwProcessId;
+cleanup:
+	if (av)
+		LocalFree(av);
+	if (wcmdline)
+		free(wcmdline);
+	if (cmd_utf8)
+		free(cmd_utf8);
+	if (cmd_utf16)
+		free(cmd_utf16);
+	if (wprogdir)
+		free(wprogdir);
+
+	errno = hr;
+	return hr ? -1 : pi.dwProcessId;
+}
+
+int spawn_child(char * cmd, int in, int out, int err, DWORD flags) {
+	return spawn_child_vp(cmd, NULL, in, out, err, flags);
 }
 
 void
