@@ -1235,11 +1235,11 @@ ConDeleteChars(int n)
 
 	temp.X = 256;
 	temp.Y = 1;
-	result = ReadConsoleOutput(hOutputConsole, /* console screen buffer handle */
-		(PCHAR_INFO)chiBuffer,	/* address of buffer that receives data */
-		temp,	                /* column-row size of destination buffer */
-		ZeroCoord,		/* upper-left cell to write to */
-		&sr	                /* address of rectangle to read from */
+	result = ReadConsoleOutput(hOutputConsole,		/* console screen buffer handle */
+				   (PCHAR_INFO)chiBuffer,	/* address of buffer that receives data */
+				   temp,			/* column-row size of destination buffer */
+				   ZeroCoord,			/* upper-left cell to write to */
+				   &sr				/* address of rectangle to read from */
 	);
 	ConClearEOLine();
 
@@ -1288,11 +1288,11 @@ ConSaveScreenHandle(SCREEN_HANDLE hScreen)
 		return NULL;
 	}
 
-	result = ReadConsoleOutput(hOutputConsole,	/* console screen buffer handle */
-		(PCHAR_INFO)(pScreenRec->pScreenBuf),	/* address of buffer that receives data */ 
-		pScreenRec->ScreenSize,			/* column-row size of destination buffer */
-		ZeroCoord,				/* upper-left cell to write to */
-		&consoleInfo.srWindow			/* address of rectangle to read from */
+	result = ReadConsoleOutput(hOutputConsole,			/* console screen buffer handle */
+				   (PCHAR_INFO)(pScreenRec->pScreenBuf),/* address of buffer that receives data */ 
+				   pScreenRec->ScreenSize,		/* column-row size of destination buffer */
+				   ZeroCoord,				/* upper-left cell to write to */
+				   &consoleInfo.srWindow		/* address of rectangle to read from */
 	);
 
 	return((SCREEN_HANDLE)pScreenRec);
@@ -1329,11 +1329,11 @@ ConRestoreScreenHandle(SCREEN_HANDLE hScreen)
 		(DWORD)width*height,
 		beginOfScreen, &dwWritten);
 
-	fOkay = WriteConsoleOutput(hOutputConsole,	/* handle to a console screen buffer */
-		(PCHAR_INFO)(pScreenRec->pScreenBuf),	/* pointer to buffer with data to write  */
-		pScreenRec->ScreenSize,			/* column-row size of source buffer */
-		ZeroCoord,				/* upper-left cell to write from */
-		&consoleInfo.srWindow			/* pointer to rectangle to write to */
+	fOkay = WriteConsoleOutput(hOutputConsole,			/* handle to a console screen buffer */
+				  (PCHAR_INFO)(pScreenRec->pScreenBuf),	/* pointer to buffer with data to write  */
+				  pScreenRec->ScreenSize,		/* column-row size of source buffer */
+				  ZeroCoord,				/* upper-left cell to write from */
+				  &consoleInfo.srWindow			/* pointer to rectangle to write to */
 	);
 	
 	SetConsoleWindowInfo(hOutputConsole, TRUE, &pScreenRec->srWindowRect);
@@ -1434,8 +1434,8 @@ GetConsoleOutputHandle()
 
 	if (ConIsRedirected(hTemp))
 		hTemp = CreateFile(TEXT("CONOUT$"), GENERIC_READ | GENERIC_WRITE,
-			FILE_SHARE_WRITE | FILE_SHARE_READ,
-			&sa, OPEN_EXISTING, 0, NULL);
+				   FILE_SHARE_WRITE | FILE_SHARE_READ,
+				   &sa, OPEN_EXISTING, 0, NULL);
 
 	return hTemp;
 }
