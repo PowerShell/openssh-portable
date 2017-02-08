@@ -810,8 +810,7 @@ socketio_connect(struct w32_io* pio, const struct sockaddr* name, int namelen)
 	if (w32_io_is_blocking(pio)) {
 		/*  block until connect io is complete */
 		while (FALSE == socketio_is_io_available(pio, TRUE)) {
-			if (-1 == wait_for_any_event(&pio->write_overlapped.hEvent,
-				1, INFINITE))
+			if (-1 == wait_for_any_event(&pio->write_overlapped.hEvent, 1, INFINITE))
 				return -1;
 		}
 	} else {

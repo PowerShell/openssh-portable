@@ -85,12 +85,10 @@ muxclient(const char *path)
 }
 
 int
-innetgr(const char *netgroup, const char *host,
-	const char *user, const char *domain)
+innetgr(const char *netgroup, const char *host, const char *user, const char *domain)
 {
 	return -1;
 }
-
 
 /* groupaccess.c*/
 int
@@ -128,7 +126,6 @@ initgroups(const char *user, gid_t group)
 {
 	return -1;
 }
-
 
 /* sshd.c */
 int

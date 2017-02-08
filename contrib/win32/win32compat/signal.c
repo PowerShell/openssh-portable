@@ -289,7 +289,7 @@ wait_for_any_event(HANDLE* events, int num_events, DWORD milli_seconds)
 		} else if (ret == 0) {
 			/* timed out */
 			return 0;
-		} else { //some other error
+		} else { /* some other error */
 			errno = EOTHER;
 			debug("ERROR: unxpected SleepEx error: %d", ret);
 			return -1;
