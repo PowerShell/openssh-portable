@@ -566,6 +566,9 @@ fileio_stat(const char *path, struct _stat64 *buf)
 	if ((wtmp = utf8_to_utf16(path)) == NULL)
 		fatal("failed to covert input arguments");
 
+	/* If we doesn't have sufficient permissions then _wstat4() is returning
+	 * file not found so added fileio_open() which will set the errorno correctly (access denied)	 
+	 */
 	if (NULL == (pio = fileio_open(path, O_RDONLY, 0)))
 		return -1;
 	
