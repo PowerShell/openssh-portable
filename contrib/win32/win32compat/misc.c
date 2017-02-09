@@ -174,6 +174,10 @@ nanosleep(const struct timespec *req, struct timespec *rem)
 /* Difference in us between UNIX Epoch and Win32 Epoch */
 #define EPOCH_DELTA_US  11644473600000000ULL
 
+/* This routine is contributed by  * Author: NoMachine <developers@nomachine.com>
+ * Copyright (c) 2009, 2010 NoMachine
+ * All rights reserved
+ */
 int
 gettimeofday(struct timeval *tv, void *tz)
 {
