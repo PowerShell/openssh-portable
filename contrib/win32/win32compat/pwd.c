@@ -77,13 +77,10 @@ reset_pw() {
 		free(pw.pw_name);
 	if (pw.pw_dir)
 		free(pw.pw_dir);
-	if (pw.pw_domain)
-		free(pw.pw_domain);
 	if (pw.pw_sid)
 		free(pw.pw_sid);
 	pw.pw_name = NULL;
 	pw.pw_dir = NULL;
-	pw.pw_domain = NULL;
 	pw.pw_sid = NULL;
 }
 
@@ -91,14 +88,14 @@ static struct passwd*
 get_passwd(const char *user_utf8, LPWSTR user_sid) {
 	struct passwd *ret = NULL;
 	wchar_t *user_utf16 = NULL, *uname_utf16, *udom_utf16, *tmp;
-	char *uname_utf8 = NULL, *uname_upn = NULL; *udom_utf8 = NULL, *pw_home_utf8 = NULL, *user_sid_utf8 = NULL;
+	char *uname_utf8 = NULL, *uname_upn = NULL, *udom_utf8 = NULL, *pw_home_utf8 = NULL, *user_sid_utf8 = NULL;
 	LPBYTE user_info = NULL;
 	LPWSTR user_sid_local = NULL;
 	wchar_t reg_path[PATH_MAX], profile_home[PATH_MAX];
 	HKEY reg_key = 0;
 	int tmp_len = PATH_MAX;
 	PDOMAIN_CONTROLLER_INFOW pdc = NULL;
-	DWORD dsStatus;
+	DWORD dsStatus, uname_upn_len = 0;;
 
 	errno = 0;
 	reset_pw();
@@ -158,15 +155,26 @@ get_passwd(const char *user_utf8, LPWSTR user_sid) {
 	if ((uname_utf8 = utf16_to_utf8(uname_utf16)) == NULL ||
 	    (udom_utf16 && (udom_utf8 = utf16_to_utf8(udom_utf16)) == NULL) ||
 	    (pw_home_utf8 = utf16_to_utf8(profile_home)) == NULL ||
-	    (user_sid_utf8 = utf16_to_utf8(user_sid)) == NULL ||
-	    ((uname_upn = malloc(strlen(uname_utf8) + strlen(udom_utf8) + 2) == NULL) {
+	    (user_sid_utf8 = utf16_to_utf8(user_sid)) == NULL) {
 		errno = ENOMEM;
 		goto done;
 	}
 
-	memcpy(uname_upn, uname_utf8, strlen(uname_utf8));
-	uname_upn[strlen(uname_utf8)] = "@";
-	memcpy(uname_upn + strlen(uname_utf8) + 1, udom_utf8, strlen(udom_utf8) + 1);
+	uname_upn_len = strlen(uname_utf8) + 1;
+	if (udom_utf8)
+		uname_upn_len += strlen(udom_utf8);
+
+	if ((uname_upn = malloc(uname_upn_len) == NULL) {
+		errno = ENOMEM;
+		goto done;
+	}
+
+	memcpy(uname_upn, uname_utf8, strlen(uname_utf8) + 1);
+	if (udom_utf8) {
+		/* TODO - get domain FQDN */
+		uname_upn[strlen(uname_utf8)] = '@';
+		memcpy(uname_upn + strlen(uname_utf8) + 1, udom_utf8, strlen(udom_utf8) + 1);
+	}
 	pw.pw_name = uname_upn;
 	uname_upn = NULL;
 	pw.pw_dir = pw_home_utf8;
@@ -180,6 +188,8 @@ done:
 		free(user_utf16);
 	if (uname_utf8)
 		free(uname_utf8);
+	if (uname_upn)
+		free(uname_upn);
 	if (udom_utf8)
 		free(udom_utf8);
 	if (pw_home_utf8)
