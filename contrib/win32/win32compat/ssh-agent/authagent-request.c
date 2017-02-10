@@ -214,7 +214,8 @@ int process_passwordauth_request(struct sshbuf* request, struct sshbuf* response
 		goto done;
 	}
 
-	if ((userW = utf8_to_utf16(user)) == NULL) {
+	if ((userW = utf8_to_utf16(user)) == NULL ||
+	    (pwdW = utf8_to_utf16(pwd)) == NULL) {
 		debug("out of memory");
 		goto done;
 	}
@@ -225,7 +226,7 @@ int process_passwordauth_request(struct sshbuf* request, struct sshbuf* response
 	}
 
 	if (LogonUserW(userW, domW, pwdW, LOGON32_LOGON_NETWORK, LOGON32_PROVIDER_DEFAULT, &token) == FALSE) {
-		debug("failed to logon user");
+		debug("failed to logon user: %ls domain: %ls", userW, domW);
 		goto done;
 	}
 
@@ -251,6 +252,8 @@ done:
 		free(pwd);
 	if (userW)
 		free(userW);
+	if (pwdW)
+		free(pwdW);
 	if (client_proc)
 		CloseHandle(client_proc);
 
