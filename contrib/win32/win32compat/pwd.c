@@ -91,7 +91,7 @@ static struct passwd*
 get_passwd(const char *user_utf8, LPWSTR user_sid) {
 	struct passwd *ret = NULL;
 	wchar_t *user_utf16 = NULL, *uname_utf16, *udom_utf16, *tmp;
-	char *uname_utf8 = NULL, *udom_utf8 = NULL, *pw_home_utf8 = NULL, *user_sid_utf8 = NULL;
+	char *uname_utf8 = NULL, *uname_upn = NULL; *udom_utf8 = NULL, *pw_home_utf8 = NULL, *user_sid_utf8 = NULL;
 	LPBYTE user_info = NULL;
 	LPWSTR user_sid_local = NULL;
 	wchar_t reg_path[PATH_MAX], profile_home[PATH_MAX];
@@ -158,15 +158,17 @@ get_passwd(const char *user_utf8, LPWSTR user_sid) {
 	if ((uname_utf8 = utf16_to_utf8(uname_utf16)) == NULL ||
 	    (udom_utf16 && (udom_utf8 = utf16_to_utf8(udom_utf16)) == NULL) ||
 	    (pw_home_utf8 = utf16_to_utf8(profile_home)) == NULL ||
-	    (user_sid_utf8 = utf16_to_utf8(user_sid)) == NULL) {
+	    (user_sid_utf8 = utf16_to_utf8(user_sid)) == NULL ||
+	    ((uname_upn = malloc(strlen(uname_utf8) + strlen(udom_utf8) + 2) == NULL) {
 		errno = ENOMEM;
 		goto done;
 	}
 
-	pw.pw_name = uname_utf8;
-	uname_utf8 = NULL;
-	pw.pw_domain = udom_utf8;
-	udom_utf8 = NULL;
+	memcpy(uname_upn, uname_utf8, strlen(uname_utf8));
+	uname_upn[strlen(uname_utf8)] = "@";
+	memcpy(uname_upn + strlen(uname_utf8) + 1, udom_utf8, strlen(udom_utf8) + 1);
+	pw.pw_name = uname_upn;
+	uname_upn = NULL;
 	pw.pw_dir = pw_home_utf8;
 	pw_home_utf8 = NULL;
 	pw.pw_sid = user_sid_utf8;

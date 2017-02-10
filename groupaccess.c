@@ -33,11 +33,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#ifdef WINDOWS
+#include <lm.h>
+#endif
 
 #include "xmalloc.h"
 #include "groupaccess.h"
 #include "match.h"
 #include "log.h"
+#include "misc.h"
 
 static int ngroups;
 static char **groups_byname;
@@ -49,8 +53,58 @@ static char **groups_byname;
 int
 ga_init(const char *user, gid_t base)
 {
-	gid_t *groups_bygid;
-	int i, j;
+	DWORD i, j;
+#ifdef WINDOWS
+	LPLOCALGROUP_USERS_INFO_0 local_groups_info = NULL, tmp_groups_info;
+	wchar_t *user_utf16 = NULL;
+	char *group_utf8;
+	DWORD entries_read = 0, total_entries = 0;
+	NET_API_STATUS nStatus;
+	
+	if (ngroups > 0)
+		ga_free();
+
+	user_utf16 = utf8_to_utf16(user);
+	nStatus = NetUserGetLocalGroups(NULL,
+		user_utf16,
+		0,
+		LG_INCLUDE_INDIRECT,
+		(LPBYTE *)&local_groups_info,
+		MAX_PREFERRED_LENGTH,
+		&entries_read,
+		&total_entries);
+
+	if (NERR_Success != nStatus) {
+		error("NetUserGetLocalGroups() failed with error: %u",
+			nStatus);
+		errno = ENOENT;
+		goto done;
+	}
+
+	if (entries_read != total_entries) {
+		error("NetUserGetLocalGroups: entries_read (%u) is not equal to "
+		    "total_entries (%u) for user %.100s", entries_read, total_entries, user);
+		errno = ENOENT;
+		goto done;
+	}
+
+	if ((tmp_groups_info = local_groups_info) != NULL) {
+		groups_byname = xcalloc(entries_read, sizeof(*groups_byname));
+		for (i = 0, j = 0; i < total_entries; i++)
+		{
+			groups_byname[j++] = utf16_to_utf8(tmp_groups_info->lgrui0_name);
+			tmp_groups_info++;
+		}
+	}
+
+done:
+	if(user_utf16 !=NULL)
+		free(user_utf16);
+	if (local_groups_info != NULL)
+		NetApiBufferFree(local_groups_info);
+
+#else /* !WINDOWS */
+	gid_t *groups_bygid;	
 	struct group *gr;
 
 	if (ngroups > 0)
@@ -70,7 +124,9 @@ ga_init(const char *user, gid_t base)
 		if ((gr = getgrgid(groups_bygid[i])) != NULL)
 			groups_byname[j++] = xstrdup(gr->gr_name);
 	free(groups_bygid);
+#endif /* !WINDOWS */
 	return (ngroups = j);
+
 }
 
 /*
