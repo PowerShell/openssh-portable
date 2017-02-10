@@ -164,7 +164,7 @@ get_passwd(const char *user_utf8, LPWSTR user_sid) {
 	if (udom_utf8)
 		uname_upn_len += strlen(udom_utf8);
 
-	if ((uname_upn = malloc(uname_upn_len) == NULL) {
+	if ((uname_upn = malloc(uname_upn_len)) == NULL) {
 		errno = ENOMEM;
 		goto done;
 	}
