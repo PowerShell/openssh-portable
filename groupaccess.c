@@ -41,7 +41,6 @@
 #include "groupaccess.h"
 #include "match.h"
 #include "log.h"
-#include "misc.h"
 
 static int ngroups;
 static char **groups_byname;
@@ -53,20 +52,34 @@ static char **groups_byname;
 int
 ga_init(const char *user, gid_t base)
 {
-	DWORD i, j;
 #ifdef WINDOWS
+	DWORD i = 0, j = 0;
 	LPLOCALGROUP_USERS_INFO_0 local_groups_info = NULL, tmp_groups_info;
-	wchar_t *user_utf16 = NULL;
-	char *group_utf8;
-	DWORD entries_read = 0, total_entries = 0;
+	wchar_t *user_utf16 = NULL, *full_name_utf16 = NULL, *udom_utf16 = NULL, *tmp;
+	DWORD entries_read = 0, total_entries = 0, full_name_len = 0, index = 0;
 	NET_API_STATUS nStatus;
 	
 	if (ngroups > 0)
 		ga_free();
 
 	user_utf16 = utf8_to_utf16(user);
+	full_name_len = wcslen(user_utf16) + 1;
+	if ((full_name_utf16 = malloc(full_name_len * sizeof(wchar_t))) == NULL) {
+		errno = ENOMEM;
+		goto done;
+	}
+	
+	if ((tmp = wcschr(user_utf16, L'@')) != NULL) {
+		udom_utf16 = tmp + 1;
+		*tmp = L'\0';
+		index = wcslen(udom_utf16) + 1;
+		wmemcpy(full_name_utf16, udom_utf16, index);
+		full_name_utf16[wcslen(udom_utf16)] = L'\\';
+	}
+	wmemcpy(full_name_utf16 + index, user_utf16, wcslen(user_utf16) + 1);
+
 	nStatus = NetUserGetLocalGroups(NULL,
-		user_utf16,
+		full_name_utf16,
 		0,
 		LG_INCLUDE_INDIRECT,
 		(LPBYTE *)&local_groups_info,
@@ -98,13 +111,16 @@ ga_init(const char *user, gid_t base)
 	}
 
 done:
-	if(user_utf16 !=NULL)
+	if(user_utf16 != NULL)
 		free(user_utf16);
+	if(full_name_utf16 != NULL)
+		free(full_name_utf16);
 	if (local_groups_info != NULL)
 		NetApiBufferFree(local_groups_info);
 
 #else /* !WINDOWS */
-	gid_t *groups_bygid;	
+	gid_t *groups_bygid;
+	int i, j;
 	struct group *gr;
 
 	if (ngroups > 0)

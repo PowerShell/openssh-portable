@@ -199,7 +199,7 @@ done:
 int process_passwordauth_request(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con) {
 	char *user = NULL, *domain = NULL, *pwd = NULL;
 	size_t user_len, pwd_len;
-	wchar_t *userW = NULL, *domW = NULL, *pwdW = NULL, *tmp;
+	wchar_t *user_utf16 = NULL, *udom_utf16 = NULL, *pwd_utf16 = NULL, *tmp;
 	int r = -1;
 	HANDLE token = 0, dup_token, client_proc = 0;
 	ULONG client_pid;
@@ -214,19 +214,19 @@ int process_passwordauth_request(struct sshbuf* request, struct sshbuf* response
 		goto done;
 	}
 
-	if ((userW = utf8_to_utf16(user)) == NULL ||
-	    (pwdW = utf8_to_utf16(pwd)) == NULL) {
+	if ((user_utf16 = utf8_to_utf16(user)) == NULL ||
+	    (pwd_utf16 = utf8_to_utf16(pwd)) == NULL) {
 		debug("out of memory");
 		goto done;
 	}
 
-	if ((tmp = wcschr(userW, L'@') ) != NULL ) {
-		domW = tmp + 1;
+	if ((tmp = wcschr(user_utf16, L'@') ) != NULL ) {
+		udom_utf16 = tmp + 1;
 		*tmp = L'\0';
 	}
 
-	if (LogonUserW(userW, domW, pwdW, LOGON32_LOGON_NETWORK, LOGON32_PROVIDER_DEFAULT, &token) == FALSE) {
-		debug("failed to logon user: %ls domain: %ls", userW, domW);
+	if (LogonUserW(user_utf16, udom_utf16, pwd_utf16, LOGON32_LOGON_NETWORK, LOGON32_PROVIDER_DEFAULT, &token) == FALSE) {
+		debug("failed to logon user: %ls domain: %ls", user_utf16, udom_utf16);
 		goto done;
 	}
 
@@ -239,7 +239,7 @@ int process_passwordauth_request(struct sshbuf* request, struct sshbuf* response
 	}
 
 	con->auth_token = token;
-	LoadProfile(con, userW, domW);
+	LoadProfile(con, user_utf16, udom_utf16);
 	r = 0;
 done:
 	/* TODO Fix this hacky protocol*/
@@ -250,10 +250,10 @@ done:
 		free(user);
 	if (pwd)
 		free(pwd);
-	if (userW)
-		free(userW);
-	if (pwdW)
-		free(pwdW);
+	if (user_utf16)
+		free(user_utf16);
+	if (pwd_utf16)
+		free(pwd_utf16);
 	if (client_proc)
 		CloseHandle(client_proc);
 
@@ -266,7 +266,7 @@ int process_pubkeyauth_request(struct sshbuf* request, struct sshbuf* response, 
 	size_t key_blob_len, user_len, sig_len, blob_len;
 	struct sshkey *key = NULL;
 	HANDLE token = NULL, restricted_token = NULL, dup_token = NULL, client_proc = NULL;
-	wchar_t *userW = NULL, *domW = NULL, *tmp;
+	wchar_t *user_utf16 = NULL, *udom_utf16 = NULL, *tmp;
 	PWSTR wuser_home = NULL;
 	ULONG client_pid;
 	LUID_AND_ATTRIBUTES priv_to_delete[1];
@@ -282,13 +282,13 @@ int process_pubkeyauth_request(struct sshbuf* request, struct sshbuf* response, 
 		goto done;
 	}
 
-	if ((userW = utf8_to_utf16(user)) == NULL) {
+	if ((user_utf16 = utf8_to_utf16(user)) == NULL) {
 		debug("out of memory");
 		goto done;
 	}
 
-	if ((token = generate_user_token(userW)) == 0) {
-		debug("unable to generate token for user %ls", userW);
+	if ((token = generate_user_token(user_utf16)) == 0) {
+		debug("unable to generate token for user %ls", user_utf16);
 		goto done;
 	}
 
@@ -300,8 +300,8 @@ int process_pubkeyauth_request(struct sshbuf* request, struct sshbuf* response, 
 	}
 	
 	if (SHGetKnownFolderPath(&FOLDERID_Profile, 0, restricted_token, &wuser_home) != S_OK ||
-	    pubkey_allowed(key, userW, wuser_home) != 1) {
-		debug("unable to verify public key for user %ls (profile:%ls)", userW, wuser_home);
+	    pubkey_allowed(key, user_utf16, wuser_home) != 1) {
+		debug("unable to verify public key for user %ls (profile:%ls)", user_utf16, wuser_home);
 		goto done;
 	}
 
@@ -320,11 +320,11 @@ int process_pubkeyauth_request(struct sshbuf* request, struct sshbuf* response, 
 
 	con->auth_token = restricted_token; 
 	restricted_token = NULL;
-	if ((tmp = wcschr(userW, L'@')) != NULL) {
-		domW = tmp + 1;
+	if ((tmp = wcschr(user_utf16, L'@')) != NULL) {
+		udom_utf16 = tmp + 1;
 		*tmp = L'\0';
 	}
-	LoadProfile(con, userW, domW);
+	LoadProfile(con, user_utf16, udom_utf16);
 
 	r = 0;
 done:
@@ -334,8 +334,8 @@ done:
 
 	if (user)
 		free(user);
-	if (userW)
-		free(userW);
+	if (user_utf16)
+		free(user_utf16);
 	if (key)
 		sshkey_free(key);
 	if (wuser_home)
