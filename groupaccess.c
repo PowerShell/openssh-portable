@@ -55,7 +55,7 @@ ga_init(const char *user, gid_t base)
 #ifdef WINDOWS
 	DWORD i = 0, j = 0;
 	LPLOCALGROUP_USERS_INFO_0 local_groups_info = NULL, tmp_groups_info;
-	wchar_t *user_utf16 = NULL, *full_name_utf16 = NULL, *udom_utf16 = NULL, *tmp;
+	wchar_t *user_utf16 = NULL, *full_name_utf16 = NULL, *udom_utf16 = NULL, *tmp, *group_utf16 = NULL;
 	DWORD entries_read = 0, total_entries = 0, full_name_len = 0, index = 0;
 	NET_API_STATUS nStatus;
 	
@@ -63,6 +63,10 @@ ga_init(const char *user, gid_t base)
 		ga_free();
 
 	user_utf16 = utf8_to_utf16(user);
+	if ((user_utf16 = utf8_to_utf16(user)) == NULL) {
+		errno = ENOMEM;
+		goto done;
+	}
 	full_name_len = wcslen(user_utf16) + 1;
 	if ((full_name_utf16 = malloc(full_name_len * sizeof(wchar_t))) == NULL) {
 		errno = ENOMEM;
@@ -105,7 +109,11 @@ ga_init(const char *user, gid_t base)
 		groups_byname = xcalloc(entries_read, sizeof(*groups_byname));
 		for (i = 0, j = 0; i < total_entries; i++)
 		{
-			groups_byname[j++] = utf16_to_utf8(tmp_groups_info->lgrui0_name);
+			if ((group_utf16 = utf16_to_utf8(tmp_groups_info->lgrui0_name)) == NULL) {
+				errno = ENOMEM;
+				goto done;
+			}
+			groups_byname[j++] = utf16_to_utf8(group_utf16);
 			tmp_groups_info++;
 		}
 	}
