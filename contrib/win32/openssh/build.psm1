@@ -152,17 +152,6 @@ function Start-SSHBootstrap
     {
         Write-BuildMsg -AsInfo -Message "Chocolatey not present. Installing chocolatey." -Silent:$silent
         Invoke-Expression ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1')) 2>&1 >> $script:BuildLogFile
-
-        if (-not ($machinePath.ToLower().Contains($chocolateyPath.ToLower())))
-        {
-            Write-BuildMsg -AsVerbose -Message "Adding $chocolateyPath to Path environment variable" -Silent:$silent
-            $newMachineEnvironmentPath += ";$chocolateyPath"
-            $env:Path += ";$chocolateyPath"
-        }
-        else
-        {
-            Write-BuildMsg -AsVerbose -Message "$chocolateyPath already present in Path environment variable" -Silent:$silent
-        }
     }
 
     # Add git\cmd to the path

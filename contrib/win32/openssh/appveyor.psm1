@@ -3,7 +3,6 @@ Import-Module $PSScriptRoot\build.psm1 -Force -DisableNameChecking
 $repoRoot = Get-RepositoryRoot
 $script:logFile = join-path $repoRoot.FullName "appveyor.log"
 $script:messageFile = join-path $repoRoot.FullName "BuildMessage.log"
-$testfailed = $false
 
 <#
     Called by Write-BuildMsg to write to the build log, if it exists. 
@@ -234,13 +233,20 @@ function Download-PSCoreMSI
       .SYNOPSIS
       This function installs the tools required by our tests
       1) Pester for running the tests  
-      2) sysinternals required by the tests on windows.    
+      2) sysinternals required by the tests on windows.
   #>
 function Install-TestDependencies
 {
     [CmdletBinding()]
     param ()
-    
+
+    # Install chocolatey
+    if(-not (Get-Command "choco" -ErrorAction SilentlyContinue))
+    {
+        Write-Log -Message "Chocolatey not present. Installing chocolatey."
+        Invoke-Expression ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1')) 2>&1 >> $script:logFile
+    }
+
     $isModuleAvailable = Get-Module 'Pester' -ListAvailable
     if (-not ($isModuleAvailable))
     {      
@@ -499,22 +505,8 @@ function Deploy-OpenSSHTests
     $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "regress\pesterTests"
     Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Include *.ps1,*.psm1, sshd_config -Force -ErrorAction Stop
 
-    $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$RealConfiguration"    
+    $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$RealConfiguration"
     Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Exclude ssh-agent.exe, sshd.exe -Force -ErrorAction Stop
-
-
-    $sshdConfigFile = "$OpenSSHTestDir\sshd_config"
-    if (-not (Test-Path -Path $sshdConfigFile -PathType Leaf))
-    {
-        Write-BuildMessage "Installation dependencies: $OpenSSHTestDir\sshd_config is missing in the folder" -Category Error
-        throw "$OpenSSHTestDir\sshd_config is missing in the folder"
-    }
-
-    if ($env:DebugMode)
-    {
-        $strToReplace = "#LogLevel INFO"
-        (Get-Content $sshdConfigFile).Replace($strToReplace,"LogLevel Debug3") | Set-Content $sshdConfigFile
-    }
 
     Restart-Service sshd
 }
