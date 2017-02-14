@@ -90,12 +90,6 @@ innetgr(const char *netgroup, const char *host, const char *user, const char *do
 	return -1;
 }
 
-void
-ga_free(void)
-{
-	return;
-}
-
 int
 chroot(const char *path)
 {
