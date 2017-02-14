@@ -95,7 +95,7 @@ ga_init(const char *user, gid_t base)
 	}
 
 	if (entries_read != total_entries) {
-		error("NetUserGetLocalGroups: entries_read (%u) is not equal to "
+		error("NetUserGetLocalGroups(): entries_read (%u) is not equal to "
 		    "total_entries (%u) for user %.100s", entries_read, total_entries, user);
 		errno = ENOENT;
 		goto done;
