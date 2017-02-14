@@ -816,10 +816,10 @@ ProcessPipes(LPVOID p)
 		ZeroMemory(buf, 128);
 		DWORD rd = 0, wr = 0, i = -1;
 
-		GOTO_CLEANUP_ON_FALSE(ReadFile(pipe_in, buf, 127, &rd, NULL));
-		bStartup = FALSE;		
+		GOTO_CLEANUP_ON_FALSE(ReadFile(pipe_in, buf, 127, &rd, NULL)); /* read bufsize-1 */
+		bStartup = FALSE;
 		while (++i < rd) {
-			INPUT_RECORD ir;			
+			INPUT_RECORD ir;
 			if (buf[i] == 3) { /*Ctrl+C - Raise Ctrl+C*/
 				GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
 				continue;
