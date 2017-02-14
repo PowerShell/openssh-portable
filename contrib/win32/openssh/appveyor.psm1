@@ -360,18 +360,18 @@ function Build-Win32OpenSSHPackage
         $folderName = $NativeHostArch
         if($NativeHostArch -ieq 'x86')
         {
-            $folderName = "Win32"            
+            $folderName = "Win32"
         }
     }
     else
     {
         if($platform -ieq "AMD64")
         {
-            $folderName = "x64"            
+            $folderName = "x64"
         }
         else
         {
-            $folderName = "Win32"            
+            $folderName = "Win32"
         }
     }
     
@@ -430,7 +430,7 @@ function Build-Win32OpenSSHPackage
     }
 
     Add-Type -assemblyname System.IO.Compression.FileSystem
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($OpenSSHDir, $package)    
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($OpenSSHDir, $package)
 }
 
 <#
@@ -494,10 +494,10 @@ function Deploy-OpenSSHTests
     }
     
 
-    [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot    
+    [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
     
     $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "regress\pesterTests"
-    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Include *.ps1,*.psm1 -Force -ErrorAction Stop
+    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Include *.ps1,*.psm1, sshd_config -Force -ErrorAction Stop
 
     $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$RealConfiguration"    
     Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Exclude ssh-agent.exe, sshd.exe -Force -ErrorAction Stop
@@ -515,22 +515,8 @@ function Deploy-OpenSSHTests
         $strToReplace = "#LogLevel INFO"
         (Get-Content $sshdConfigFile).Replace($strToReplace,"LogLevel Debug3") | Set-Content $sshdConfigFile
     }
-    if(-not ($env:psPath))
-    {
-        $psCorePath = GetLocalPSCorePath
-        Set-BuildVariable -Name psPath -Value $psCorePath
-    }    
 
-    $strToReplace = "Subsystem	sftp	sftp-server.exe"
-    if($env:psPath)
-    {
-        $strNewsubSystem = @"
-Subsystem	sftp	sftp-server.exe
-Subsystem	powershell	$env:psPath
-"@
-    }
-
-    (Get-Content $sshdConfigFile).Replace($strToReplace, $strNewsubSystem) | Set-Content $sshdConfigFile
+    Restart-Service sshd
 }
 
 
