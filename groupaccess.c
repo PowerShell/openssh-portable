@@ -113,7 +113,7 @@ ga_init(const char *user, gid_t base)
 				errno = ENOMEM;
 				goto done;
 			}
-			groups_byname[j++] = utf16_to_utf8(group_utf16);
+			groups_byname[j++] = group_utf16;
 			tmp_groups_info++;
 		}
 	}
