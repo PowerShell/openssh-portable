@@ -42,6 +42,7 @@
 #include "inc\sys\types.h"
 #include "inc\sys\ioctl.h"
 #include "inc\fcntl.h"
+#include "inc\utf.h"
 #include "signal_internal.h"
 
 static char* s_programdir = NULL;
