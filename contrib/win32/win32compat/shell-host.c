@@ -1204,6 +1204,7 @@ wmain(int ac, wchar_t **av)
 	if (cmd_b64) {
 		char *cmd_b64_utf8, *cmd_utf8;
 		if ((cmd_b64_utf8 = utf16_to_utf8(cmd_b64)) == NULL ||
+		    /* strlen(b64) should be sufficient for decoded length */
 		    (cmd_utf8 = malloc(strlen(cmd_b64_utf8))) == NULL ||
 		    b64_pton(cmd_b64_utf8, cmd_utf8, strlen(cmd_b64_utf8)) == -1 ||
 		    (cmd = utf8_to_utf16(cmd_utf8)) == NULL) {

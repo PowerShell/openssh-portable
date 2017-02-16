@@ -185,6 +185,7 @@
       <AdditionalDependencies>openbsd_compat.lib;kernel32.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <FullProgramDatabaseFile>true</FullProgramDatabaseFile>
       <StripPrivateSymbols>No</StripPrivateSymbols>
+      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(OpenSSL-x64-Release-Path)lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

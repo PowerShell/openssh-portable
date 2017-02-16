@@ -508,6 +508,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		char *command_b64 = NULL;
 		size_t command_b64_len = 0;
 		if (command) {
+			/* accomodate bas64 encoding bloat and null terminator */
 			command_b64_len = ((strlen(command) + 2) / 3) * 4 + 1;
 			if ((command_b64 = malloc(command_b64_len)) == NULL ||
 			    b64_ntop(command, strlen(command), command_b64, command_b64_len) == -1)
