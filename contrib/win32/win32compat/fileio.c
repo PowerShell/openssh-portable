@@ -76,7 +76,8 @@ errno_from_Win32Error(int win32_error)
 }
 
 struct w32_io*
-fileio_afunix_socket() {
+fileio_afunix_socket() 
+{
 	struct w32_io* ret = (struct w32_io*)malloc(sizeof(struct w32_io));
 	if (ret == NULL) {
 		errno = ENOMEM;
@@ -88,14 +89,15 @@ fileio_afunix_socket() {
 }
 
 int
-fileio_connect(struct w32_io* pio, char* name) {
+fileio_connect(struct w32_io* pio, char* name) 
+{
 	wchar_t* name_w = NULL;
 	wchar_t pipe_name[PATH_MAX];
 	HANDLE h = INVALID_HANDLE_VALUE;
 	int ret = 0;
 
 	if (pio->handle != 0 && pio->handle != INVALID_HANDLE_VALUE) {
-		debug("fileio_connect called in unexpected state");
+		debug("fileio_connect called in unexpected state, pio = %p", pio);
 		errno = EOTHER;
 		ret = -1;
 		goto cleanup;
@@ -124,7 +126,13 @@ fileio_connect(struct w32_io* pio, char* name) {
 		goto cleanup;
 	}
 
-	SetHandleInformation(h, HANDLE_FLAG_INHERIT, pio->fd_flags & FD_CLOEXEC? 0 : HANDLE_FLAG_INHERIT);
+	if (SetHandleInformation(h, HANDLE_FLAG_INHERIT,
+	    pio->fd_flags & FD_CLOEXEC ? 0 : HANDLE_FLAG_INHERIT) == FALSE) {
+		errno = errno_from_Win32LastError();
+		debug("SetHandleInformation failed, error = %d, pio = %p", GetLastError(), pio);
+		ret = -1;
+		goto cleanup;
+	}
 	
 	pio->handle = h;
 	h = NULL;
@@ -726,6 +734,7 @@ fileio_close(struct w32_io* pio)
 {
 	debug2("fileclose - pio:%p", pio);
 
+	/* handle can be null on AF_UNIX sockets that are not yet connected */
 	if (WINHANDLE(pio) == 0 || WINHANDLE(pio) == INVALID_HANDLE_VALUE) {
 		free(pio);
 		return 0;
