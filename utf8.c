@@ -1,4 +1,4 @@
-/* $OpenBSD: utf8.c,v 1.4 2017/02/02 10:54:25 jsg Exp $ */
+/* $OpenBSD: utf8.c,v 1.5 2017/02/19 00:10:57 djm Exp $ */
 /*
  * Copyright (c) 2016 Ingo Schwarze <schwarze@openbsd.org>
  *
@@ -41,53 +41,6 @@
 
 #include "utf8.h"
 
-#ifdef WINDOWS
-
-int	 mprintf(const char *fmt, ...) {
-	/* TODO - is 1024 sufficient */
-	char buf[1024];
-	int length = 0;
-
-	va_list valist;
-	va_start(valist, fmt);
-	length = vsnprintf(buf, 1024, fmt, valist);
-	va_end(valist);
-
-	w32_write(STDOUT_FILENO, buf, length);
-	return 0;
-}
-
-int	 fmprintf(FILE *f, const char *fmt, ...) {
-	/* TODO - is 1024 sufficient */
-	char buf[1024];
-	int length = 0;
-
-	va_list valist;
-	va_start(valist, fmt);
-	length = vsnprintf(buf, 1024, fmt, valist);
-	va_end(valist);
-
-	write(STDERR_FILENO, buf, length);
-	return 0;
-}
-int	 vfmprintf(FILE *f, const char *fmt, va_list list) {
-	return vfprintf(f, fmt, list);
-}
-int	 snmprintf(char *buf, size_t len, int *written, const char *fmt, ...) {
-	int num;
-	va_list valist;
-	va_start(valist, fmt);
-	num = vsnprintf(buf, len, fmt, valist);
-	va_end(valist);
-
-	*written = num;
-	return 0;
-}
-void	 msetlocale(void) {
-
-}
-
-#else
 static int	 dangerous_locale(void);
 static int	 grow_dst(char **, size_t *, size_t, char **, size_t);
 static int	 vasnmprintf(char **, size_t, int *, const char *, va_list);
@@ -104,16 +57,11 @@ static int	 vasnmprintf(char **, size_t, int *, const char *, va_list);
 
 static int
 dangerous_locale(void) {
-#ifdef WINDOWS
-	wchar_t loc[LOCALE_NAME_MAX_LENGTH];
-	GetSystemDefaultLocaleName(loc, LOCALE_NAME_MAX_LENGTH);
-	return wcscmp(loc, L"US-ASCII") && wcscmp(loc, L"UTF-8");
-#else   /* !WINDOWS */
 	char	*loc;
 
 	loc = nl_langinfo(CODESET);
-	return strcmp(loc, "US-ASCII") && strcmp(loc, "UTF-8");
-#endif    /* !WINDOWS */
+	return strcmp(loc, "US-ASCII") != 0 && strcmp(loc, "UTF-8") != 0 &&
+	    strcmp(loc, "ANSI_X3.4-1968") != 0;
 }
 
 static int
@@ -385,4 +333,3 @@ msetlocale(void)
 	setlocale(LC_CTYPE, "");
 }
 
-#endif

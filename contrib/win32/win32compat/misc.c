@@ -279,7 +279,7 @@ w32_fopen_utf8(const char *path, const char *mode)
 /* fgets to support Unicode input */
 char*
  w32_fgets(char *str, int n, FILE *stream) {
-	HANDLE h = _get_osfhandle(_fileno(stream));
+	HANDLE h = (HANDLE)_get_osfhandle(_fileno(stream));
 	wchar_t* str_w = NULL;
 	char *ret = NULL, *str_tmp = NULL;
 
@@ -295,7 +295,7 @@ char*
 			goto cleanup;
 		}
 		/* prepare for Unicode input */
-		_setmode(_fileno(stdin), O_U16TEXT); 
+		_setmode(_fileno(stream), O_U16TEXT); 
 		if (fgetws(str_w, n/4, stream) == NULL)
 			goto cleanup;
 		if ((str_tmp = utf16_to_utf8(str_w)) == NULL) {
@@ -323,6 +323,13 @@ cleanup:
 /* Account for differences between Unix's and Windows versions of setvbuf */
 int 
 w32_setvbuf(FILE *stream, char *buffer, int mode, size_t size) {
+	
+	/* BUG: setvbuf on console stream interferes with Unicode I/O*/
+	HANDLE h = (HANDLE)_get_osfhandle(_fileno(stream));
+	
+	if (h != NULL && h != INVALID_HANDLE_VALUE
+	    && GetFileType(h) == FILE_TYPE_CHAR)
+		return 0;
 	/*
 	 * if size is 0, set no buffering. 
 	 * Windows does not differentiate __IOLBF and _IOFBF
