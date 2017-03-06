@@ -324,12 +324,17 @@ cleanup:
 int 
 w32_setvbuf(FILE *stream, char *buffer, int mode, size_t size) {
 	
-	/* BUG: setvbuf on console stream interferes with Unicode I/O*/
+	/* BUG: setvbuf on console stream interferes with Unicode I/O	*/
 	HANDLE h = (HANDLE)_get_osfhandle(_fileno(stream));
 	
 	if (h != NULL && h != INVALID_HANDLE_VALUE
 	    && GetFileType(h) == FILE_TYPE_CHAR)
 		return 0;
+
+	/* BUG: setvbuf on file stream is interfering with w32_fopen */
+	/* short circuit for now*/
+	return 0;
+
 	/*
 	 * if size is 0, set no buffering. 
 	 * Windows does not differentiate __IOLBF and _IOFBF
