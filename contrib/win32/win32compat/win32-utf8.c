@@ -13,21 +13,23 @@ vfmprintf(FILE *f, const char *fmt, va_list list)
 int
 mprintf(const char *fmt, ...) 
 {
+	int ret = 0;
 	va_list valist;
 	va_start(valist, fmt);
-	vfmprintf(stdout, fmt, valist);
+	ret = vfmprintf(stdout, fmt, valist);
 	va_end(valist);
-	return 0;
+	return ret;
 }
 
 int
 fmprintf(FILE *f, const char *fmt, ...) 
 {
+	int ret = 0;
 	va_list valist;
 	va_start(valist, fmt);
-	vfmprintf(f, fmt, valist);
+	ret = vfmprintf(f, fmt, valist);
 	va_end(valist);
-	return 0;
+	return ret;
 }
 
 int
