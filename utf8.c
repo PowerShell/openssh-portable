@@ -1,4 +1,4 @@
-/* $OpenBSD: utf8.c,v 1.4 2017/02/02 10:54:25 jsg Exp $ */
+/* $OpenBSD: utf8.c,v 1.5 2017/02/19 00:10:57 djm Exp $ */
 /*
  * Copyright (c) 2016 Ingo Schwarze <schwarze@openbsd.org>
  *
@@ -63,8 +63,8 @@ dangerous_locale(void) {
 	char	*loc;
 
 	loc = nl_langinfo(CODESET);
-	return strcmp(loc, "US-ASCII") && strcmp(loc, "UTF-8");
-#endif    /* !WINDOWS */
+	return strcmp(loc, "US-ASCII") != 0 && strcmp(loc, "UTF-8") != 0 &&
+	    strcmp(loc, "ANSI_X3.4-1968") != 0;
 }
 
 static int
@@ -380,3 +380,4 @@ msetlocale(void)
 	/* We can handle this locale */
 	setlocale(LC_CTYPE, "");
 }
+
