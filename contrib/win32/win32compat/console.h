@@ -90,7 +90,7 @@ HANDLE GetConsoleInputHandle();
 BOOL ConSetScreenRect( int xSize, int ySize );
 BOOL ConSetScreenSize( int X, int Y );
 BOOL ConRestoreScreen( void );
-BOOL ConSaveScreen( void );
+void ConSaveScreen( void );
 void ConSetAttribute( int *iParam, int iParamCount );
 int	ConScreenSizeX();
 int	ConSetScreenX();
@@ -136,5 +136,7 @@ void ConDeleteChars(int n);
 void ConSaveWindowsState(void);
 void MoveVisibleScreenWindow();
 int is_cursor_at_lastline_of_visible_screen();
-
+void ConSaveCursorPos();
+void ConRestoreLastCursorPos();
+void ConGetCursorPosition(int *x, int *y);
 #endif

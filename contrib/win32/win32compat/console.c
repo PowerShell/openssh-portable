@@ -52,7 +52,7 @@ int ScrollTop;
 int ScrollBottom;
 int LastCursorX;
 int LastCursorY;
-BOOL bAnsiParsing = FALSE;
+BOOL isAnsiParsingRequired = FALSE;
 char *pSavedScreen = NULL;
 static COORD ZeroCoord = { 0,0 };
 COORD SavedScreenSize = { 0,0 };
@@ -68,7 +68,8 @@ typedef struct _SCREEN_RECORD {
 }SCREEN_RECORD, *PSCREEN_RECORD;
 
 PSCREEN_RECORD pSavedScreenRec = NULL;
-int in_raw_mode = 0;
+int in_raw_mode = 1;
+char *consoleTitle = "Microsoft openSSH client";
 
 /* Used to Initialize the Console for output */
 int 
@@ -97,6 +98,8 @@ ConInit(DWORD OutputHandle, BOOL fSmartInit)
 		return dwRet;
 	}
 
+	SetConsoleTitle(consoleTitle);
+
 	dwAttributes = dwSavedAttributes;
 	dwAttributes &= ~(ENABLE_LINE_INPUT |
 		ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT | ENABLE_MOUSE_INPUT);
@@ -117,26 +120,38 @@ ConInit(DWORD OutputHandle, BOOL fSmartInit)
 	dwAttributes |= (DWORD)ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 
 	if (!SetConsoleMode(hOutputConsole, dwAttributes)) /* Windows NT */
-		bAnsiParsing = TRUE;
+		isAnsiParsingRequired = TRUE;
+	
+	GetConsoleScreenBufferInfo(hOutputConsole, &csbi);
+	ConMoveCurosorTop(csbi);
 
 	ConSetScreenX();
 	ConSetScreenY();
 	ScrollTop = 0;
-	ScrollBottom = ConVisibleScreenHeight();
-
-	if (GetConsoleScreenBufferInfo(hOutputConsole, &csbi))
-		SavedViewRect = csbi.srWindow;
-
+	ScrollBottom = ConVisibleScreenHeight();		
+	
 	in_raw_mode = 1;
+
 	return 0;
+}
+
+int
+ConMoveCurosorTop(CONSOLE_SCREEN_BUFFER_INFO csbi)
+{
+	int cursorOffset = csbi.dwCursorPosition.Y - csbi.srWindow.Top;
+	
+	SMALL_RECT srWindow = { csbi.srWindow.Left,  csbi.srWindow.Top + cursorOffset,  csbi.srWindow.Right,  csbi.srWindow.Bottom + cursorOffset };
+	SetConsoleWindowInfo(hOutputConsole, TRUE, &srWindow);
+
+	ConSaveViewRect();
 }
 
 /* Used to Uninitialize the Console */
 int 
-ConUnInit(void)
+ConUnInit()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
-	in_raw_mode = 0;
+	in_raw_mode = 1;
 	if (hOutputConsole == NULL)
 		return 0;
 
@@ -150,7 +165,7 @@ ConUnInit(void)
 
 /* Used to Uninitialize the Console */
 int 
-ConUnInitWithRestore(void)
+ConUnInitWithRestore()
 {
 	DWORD dwWritten;
 	COORD Coord;
@@ -837,7 +852,7 @@ ConDisplayCursor(BOOL bVisible)
 }
 
 void 
-ConClearScreen(void)
+ConClearScreen()
 {
 	DWORD dwWritten;
 	COORD Coord;
@@ -850,7 +865,7 @@ ConClearScreen(void)
 	Coord.X = 0;
 	Coord.Y = 0;
 
-	DWORD dwNumChar = (consoleInfo.srWindow.Bottom + 1) * (consoleInfo.srWindow.Right + 1);
+	DWORD dwNumChar = (consoleInfo.dwSize.Y) * (consoleInfo.dwSize.X);
 	FillConsoleOutputCharacter(hOutputConsole, ' ', dwNumChar, Coord, &dwWritten);
 	FillConsoleOutputAttribute(hOutputConsole, consoleInfo.wAttributes, dwNumChar, Coord, &dwWritten);
 	srcWindow = consoleInfo.srWindow;
@@ -1192,6 +1207,17 @@ ConChangeCursor(CONSOLE_CURSOR_INFO *pCursorInfo)
 	return SetConsoleCursorInfo(hOutputConsole, pCursorInfo);
 }
 
+void
+ConGetCursorPosition(int *x, int *y)
+{
+	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
+
+	if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo)) {
+		*x = consoleInfo.dwCursorPosition.X;
+		*y = consoleInfo.dwCursorPosition.Y;
+	}
+}
+
 int 
 ConGetCursorX()
 {
@@ -1218,17 +1244,6 @@ is_cursor_at_lastline_of_visible_screen()
 	return return_val;
 }
 
-int
-my_ConGetCursorY()
-{
-	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
-
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
-		return 0;
-
-	return consoleInfo.dwCursorPosition.Y;
-}
-
 int 
 ConGetCursorY()
 {
@@ -1236,9 +1251,8 @@ ConGetCursorY()
 
 	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
 		return 0;
-
-	consoleInfo.dwCursorPosition.Y;
-	//return (consoleInfo.dwCursorPosition.Y - consoleInfo.srWindow.Top); /* todo - this logic is wrong, its not the current cursor*/
+			
+	return (consoleInfo.dwCursorPosition.Y - consoleInfo.srWindow.Top);
 }
 
 int 
@@ -1457,28 +1471,65 @@ ConDeleteScreenHandle(SCREEN_HANDLE hScreen)
 
 /* Restores Previous Saved screen info and buffer */
 BOOL
-ConRestoreScreen(void)
+ConRestoreScreen()
 {
 	return ConRestoreScreenHandle(pSavedScreenRec);
 }
 
-/* Saves current screen info and buffer */
-BOOL
-ConSaveScreen(void)
-{
-	pSavedScreenRec = (PSCREEN_RECORD)ConSaveScreenHandle(pSavedScreenRec);
-	return TRUE;
-}
-
 void
-ConSaveViewRect(void)
+ConSaveCursorPos()
 {
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &csbi))
-		return;
+	if (GetConsoleScreenBufferInfo(hOutputConsole, &csbi))
+		SavedScreenCursor = csbi.dwCursorPosition;
+}
 
-	SavedViewRect = csbi.srWindow;
+void
+ConRestoreLastCursorPos()
+{
+	ConMoveCursorPosition(SavedScreenCursor.X, SavedScreenCursor.Y);
+}
+
+/* Saves current screen info and buffer */
+void
+ConSaveScreen()
+{
+	pSavedScreenRec = (PSCREEN_RECORD)ConSaveScreenHandle(pSavedScreenRec);	
+}
+
+void
+ConSaveViewRect()
+{
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+
+	if (GetConsoleScreenBufferInfo(hOutputConsole, &csbi)) {
+		SavedViewRect = csbi.srWindow;
+	}		
+}
+
+void
+ConRestoreViewRect()
+{
+	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
+	HWND hwnd = FindWindow(NULL, consoleTitle);
+
+	if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo) &&
+	    ((consoleInfo.srWindow.Top != SavedViewRect.Top ||
+	      consoleInfo.srWindow.Bottom != SavedViewRect.Bottom))) {
+	      		
+		if (SavedViewRect.Right - SavedViewRect.Left > consoleInfo.dwSize.X) {
+			COORD coordScreen;
+			coordScreen.X = SavedViewRect.Right - SavedViewRect.Left;
+			coordScreen.Y = consoleInfo.dwSize.Y;
+			SetConsoleScreenBufferSize(hOutputConsole, coordScreen);			
+			
+			ShowWindow(hwnd, SW_SHOWMAXIMIZED);
+		} else
+			ShowWindow(hwnd, SW_RESTORE);
+
+		SetConsoleWindowInfo(hOutputConsole, TRUE, &SavedViewRect);
+	}
 }
 
 BOOL
@@ -1527,7 +1578,7 @@ GetConsoleInputHandle()
 }
 
 void
-ConSaveWindowsState(void)
+ConSaveWindowsState()
 {
 	CONSOLE_SCREEN_BUFFER_INFOEX csbiex;
 	csbiex.cbSize = sizeof(CONSOLE_SCREEN_BUFFER_INFOEX);

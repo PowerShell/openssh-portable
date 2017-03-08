@@ -48,7 +48,7 @@ extern int ScreenX;
 extern int ScreenY;
 extern int ScrollTop;
 extern int ScrollBottom;
-extern BOOL bAnsiParsing;
+extern BOOL isAnsiParsingRequired;
 
 bool gbVTAppMode = false;
 /* private message for port printing to */
@@ -142,8 +142,10 @@ BufConvertToG2(char * pszBuffer, int length)
 void
 GoToNextLine()
 {
-	int currentX = ConGetCursorX();
-	int currentY = my_ConGetCursorY();
+	int currentX = 0;
+	int currentY = 0;
+	
+	ConGetCursorPosition(&currentX, &currentY);
 
 	/* If the cursor is the last line of the visible screen */
 	if (is_cursor_at_lastline_of_visible_screen()) {		
@@ -174,7 +176,7 @@ ParseBuffer(unsigned char* pszBuffer, unsigned char* pszBufferEnd, unsigned char
 			unsigned char * pszCurrent = pszBuffer + 1;
 			unsigned char * pszNewCurrent = pszCurrent;
 
-			if (term_mode == TERM_ANSI && bAnsiParsing)
+			if (term_mode == TERM_ANSI && isAnsiParsingRequired)
 				pszNewCurrent = ParseANSI(pszCurrent, pszBufferEnd, respbuf, resplen);
 
 			/* Pointer didn't move inside Parse function */

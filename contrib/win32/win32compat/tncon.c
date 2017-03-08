@@ -113,9 +113,10 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 	unsigned char szResponse[50];
 	unsigned char octets[20];
 	char aChar = 0;
+	INPUT_RECORD InputRecords[128];
 	INPUT_RECORD InputRecord;
 	BOOL bCapsOn = FALSE;
-	BOOL bShift = FALSE;
+	BOOL bShift = FALSE;	
 
 	glob_out = destin;
 	glob_space = destinlen;
@@ -123,458 +124,465 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 	while (DataAvailable(hInput)) {
 		if (glob_outlen >= destinlen)
 			return glob_outlen;
-		ReadConsoleInput(hInput, &InputRecord, 1, &dwInput);
-		switch (InputRecord.EventType) {
-		case WINDOW_BUFFER_SIZE_EVENT:
-			queue_terminal_window_change_event();
-			break;
+		ReadConsoleInput(hInput, &InputRecords, 128, &dwInput);
+		for (int i = 0; i < dwInput; i++) {
+			InputRecord = InputRecords[i];
 
-		case FOCUS_EVENT:
-		/* FALLTHROUGH */
-		case MENU_EVENT:
-			break;
+			switch (InputRecord.EventType) {
+			case WINDOW_BUFFER_SIZE_EVENT:
+				queue_terminal_window_change_event();
+				break;
 
-		case KEY_EVENT:
-			bCapsOn = (InputRecord.Event.KeyEvent.dwControlKeyState & CAPSLOCK_ON);
-			bShift = (InputRecord.Event.KeyEvent.dwControlKeyState & SHIFT_PRESSED);
-			dwControlKeyState = InputRecord.Event.KeyEvent.dwControlKeyState &
-				~(CAPSLOCK_ON | ENHANCED_KEY | NUMLOCK_ON | SCROLLLOCK_ON);
-			if (InputRecord.Event.KeyEvent.bKeyDown) {
-				int n = WideCharToMultiByte(
-					CP_UTF8,
-					0,
-					&(InputRecord.Event.KeyEvent.uChar.UnicodeChar),
-					1,
-					(LPSTR)octets,
-					20,
-					NULL,
-					NULL);
+			case FOCUS_EVENT:
+				/* FALLTHROUGH */
+			case MENU_EVENT:
+				break;
 
-				if (pParams->fLocalEcho)
-					ConWriteString((char *)octets, n);
+			case MOUSE_EVENT:
+				break;
 
-				switch (InputRecord.Event.KeyEvent.uChar.UnicodeChar) {
-				case 0xd:
-					if (pParams->nReceiveCRLF == ENUM_LF)
-						NetWriteString2(pParams->Socket, "\r", 1, 0);
-					else
-						NetWriteString2(pParams->Socket, "\r\n", 2, 0);
-					break;
+			case KEY_EVENT:
+				bCapsOn = (InputRecord.Event.KeyEvent.dwControlKeyState & CAPSLOCK_ON);
+				bShift = (InputRecord.Event.KeyEvent.dwControlKeyState & SHIFT_PRESSED);
+				dwControlKeyState = InputRecord.Event.KeyEvent.dwControlKeyState &
+					~(CAPSLOCK_ON | ENHANCED_KEY | NUMLOCK_ON | SCROLLLOCK_ON);
+				if (InputRecord.Event.KeyEvent.bKeyDown) {					
+					int n = WideCharToMultiByte(
+						CP_UTF8,
+						0,
+						&(InputRecord.Event.KeyEvent.uChar.UnicodeChar),
+						1,
+						(LPSTR)octets,
+						20,
+						NULL,
+						NULL);
 
-				case VK_ESCAPE:
-					NetWriteString2(pParams->Socket, (char *)ESCAPE_KEY, 1, 0);
-					break;
+					if (pParams->fLocalEcho)
+						ConWriteString((char *)octets, n);
 
-				default:
-					switch (InputRecord.Event.KeyEvent.wVirtualKeyCode) {
-					case VK_UP:
-						NetWriteString2(pParams->Socket, (char *)(gbVTAppMode ? APP_UP_ARROW : UP_ARROW), 3, 0);
-						break;
-					case VK_DOWN:
-						NetWriteString2(pParams->Socket, (char *)(gbVTAppMode ? APP_DOWN_ARROW : DOWN_ARROW), 3, 0);
-						break;
-					case VK_RIGHT:
-						NetWriteString2(pParams->Socket, (char *)(gbVTAppMode ? APP_RIGHT_ARROW : RIGHT_ARROW), 3, 0);
-						break;
-					case VK_LEFT:
-						NetWriteString2(pParams->Socket, (char *)(gbVTAppMode ? APP_LEFT_ARROW : LEFT_ARROW), 3, 0);
-						break;
-					case VK_END:
-						NetWriteString2(pParams->Socket, (char *)SELECT_KEY, 4, 0);
-						break;
-					case VK_HOME:
-						NetWriteString2(pParams->Socket, (char *)FIND_KEY, 4, 0);
-						break;
-					case VK_INSERT:
-						NetWriteString2(pParams->Socket, (char *)INSERT_KEY, 4, 0);
-						break;
-					case VK_DELETE:
-						NetWriteString2(pParams->Socket, (char *)REMOVE_KEY, 4, 0);
-						break;
-					case VK_BACK:
-						NetWriteString2(pParams->Socket, (char *)BACKSPACE_KEY, 1, 0);
-						break;
-					case VK_TAB:
-						if (dwControlKeyState == SHIFT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)SHIFT_TAB_KEY, 3, 0);
+					switch (InputRecord.Event.KeyEvent.uChar.UnicodeChar) {
+					case 0xd:
+						if (pParams->nReceiveCRLF == ENUM_LF)
+							NetWriteString2(pParams->Socket, "\r", 1, 0);
 						else
-							NetWriteString2(pParams->Socket, (char *)octets, n, 0);
+							NetWriteString2(pParams->Socket, "\r\n", 2, 0);
 						break;
+
 					case VK_ESCAPE:
 						NetWriteString2(pParams->Socket, (char *)ESCAPE_KEY, 1, 0);
 						break;
-					case VK_SHIFT:
-					case VK_CONTROL:
-					case VK_CAPITAL:
-						break; /* NOP on these */
-					case VK_F1:
-						if (dwControlKeyState == 0)
-							NetWriteString2(pParams->Socket, (char *)PF1_KEY, strlen(PF1_KEY), 0);
-						
-						else if (dwControlKeyState == SHIFT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)SHIFT_PF1_KEY, strlen(SHIFT_PF1_KEY), 0);
-						
-						else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)CTRL_PF1_KEY, strlen(CTRL_PF1_KEY), 0);
-						
-						else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)ALT_PF1_KEY, strlen(ALT_PF1_KEY), 0);
-						
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF1_KEY, strlen(SHIFT_ALT_CTRL_PF1_KEY), 0);
-						
-						else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
-							((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF1_KEY, strlen(ALT_CTRL_PF1_KEY), 0);
-						
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF1_KEY, strlen(SHIFT_ALT_PF1_KEY), 0);
-						
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF1_KEY, strlen(SHIFT_CTRL_PF1_KEY), 0);
-						
-						break;
-					case VK_F2:
-						if (dwControlKeyState == 0)
-							NetWriteString2(pParams->Socket, (char *)PF2_KEY, strlen(PF2_KEY), 0);
-						
-						else if (dwControlKeyState == SHIFT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)SHIFT_PF2_KEY, strlen(SHIFT_PF2_KEY), 0);
-						
-						else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)CTRL_PF2_KEY, strlen(CTRL_PF2_KEY), 0);
 
-						else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)ALT_PF2_KEY, strlen(ALT_PF2_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF2_KEY, strlen(SHIFT_ALT_CTRL_PF2_KEY), 0);
-						
-						else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
-							((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF2_KEY, strlen(ALT_CTRL_PF2_KEY), 0);
-						
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF2_KEY, strlen(SHIFT_ALT_PF2_KEY), 0);
-						
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF2_KEY, strlen(SHIFT_CTRL_PF2_KEY), 0);
-						break;
-					case VK_F3:
-						if (dwControlKeyState == 0)
-							NetWriteString2(pParams->Socket, (char *)PF3_KEY, strlen(PF3_KEY), 0);
-						
-						else if (dwControlKeyState == SHIFT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)SHIFT_PF3_KEY, strlen(SHIFT_PF3_KEY), 0);
-						
-						else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)CTRL_PF3_KEY, strlen(CTRL_PF3_KEY), 0);
-						
-						else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)ALT_PF3_KEY, strlen(ALT_PF3_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF3_KEY, strlen(SHIFT_ALT_CTRL_PF3_KEY), 0);
-
-						else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
-							((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF3_KEY, strlen(ALT_CTRL_PF3_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF3_KEY, strlen(SHIFT_ALT_PF3_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF3_KEY, strlen(SHIFT_CTRL_PF3_KEY), 0);
-						break;
-					case VK_F4:
-						if (dwControlKeyState == 0)
-							NetWriteString2(pParams->Socket, (char *)PF4_KEY, strlen(PF4_KEY), 0);
-						
-						else if (dwControlKeyState == SHIFT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)SHIFT_PF4_KEY, strlen(SHIFT_PF4_KEY), 0);
-						
-						else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)CTRL_PF4_KEY, strlen(CTRL_PF4_KEY), 0);
-						
-						else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)ALT_PF4_KEY, strlen(ALT_PF4_KEY), 0);
-						
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF4_KEY, strlen(SHIFT_ALT_CTRL_PF4_KEY), 0);
-						
-						else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
-							((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF4_KEY, strlen(ALT_CTRL_PF4_KEY), 0);
-						
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF4_KEY, strlen(SHIFT_ALT_PF4_KEY), 0);
-						
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF4_KEY, strlen(SHIFT_CTRL_PF4_KEY), 0);
-						break;
-					case VK_F5:
-						if (dwControlKeyState == 0)
-							NetWriteString2(pParams->Socket, (char *)PF5_KEY, strlen(PF5_KEY), 0);
-						
-						else if (dwControlKeyState == SHIFT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)SHIFT_PF5_KEY, strlen(SHIFT_PF5_KEY), 0);
-						
-						else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)CTRL_PF5_KEY, strlen(CTRL_PF5_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)ALT_PF5_KEY, strlen(ALT_PF5_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF5_KEY, strlen(SHIFT_ALT_CTRL_PF5_KEY), 0);
-						
-						else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
-							((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF5_KEY, strlen(ALT_CTRL_PF5_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF5_KEY, strlen(SHIFT_ALT_PF5_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF5_KEY, strlen(SHIFT_CTRL_PF5_KEY), 0);
-						break;
-					case VK_F6:
-						if (dwControlKeyState == 0)
-							NetWriteString2(pParams->Socket, (char *)PF6_KEY, strlen(PF6_KEY), 0);
-
-						else if (dwControlKeyState == SHIFT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)SHIFT_PF6_KEY, strlen(SHIFT_PF6_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)CTRL_PF6_KEY, strlen(CTRL_PF6_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)ALT_PF6_KEY, strlen(ALT_PF6_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF6_KEY, strlen(SHIFT_ALT_CTRL_PF6_KEY), 0);
-
-						else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
-							((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF6_KEY, strlen(ALT_CTRL_PF6_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF6_KEY, strlen(SHIFT_ALT_PF6_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF6_KEY, strlen(SHIFT_CTRL_PF6_KEY), 0);
-						break;
-					case VK_F7:
-						if (dwControlKeyState == 0)
-							NetWriteString2(pParams->Socket, (char *)PF7_KEY, strlen(PF7_KEY), 0);
-
-						else if (dwControlKeyState == SHIFT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)SHIFT_PF7_KEY, strlen(SHIFT_PF7_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)CTRL_PF7_KEY, strlen(CTRL_PF7_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)ALT_PF7_KEY, strlen(ALT_PF7_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF7_KEY, strlen(SHIFT_ALT_CTRL_PF7_KEY), 0);
-
-						else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
-							((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF7_KEY, strlen(ALT_CTRL_PF7_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF7_KEY, strlen(SHIFT_ALT_PF7_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF7_KEY, strlen(SHIFT_CTRL_PF7_KEY), 0);
-						break;
-					case VK_F8:
-						if (dwControlKeyState == 0)
-							NetWriteString2(pParams->Socket, (char *)PF8_KEY, strlen(PF8_KEY), 0);
-
-						else if (dwControlKeyState == SHIFT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)SHIFT_PF8_KEY, strlen(SHIFT_PF8_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)CTRL_PF8_KEY, strlen(CTRL_PF8_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)ALT_PF8_KEY, strlen(ALT_PF8_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF8_KEY, strlen(SHIFT_ALT_CTRL_PF8_KEY), 0);
-
-						else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
-							((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF8_KEY, strlen(ALT_CTRL_PF8_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF8_KEY, strlen(SHIFT_ALT_PF8_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF8_KEY, strlen(SHIFT_CTRL_PF8_KEY), 0);
-						break;
-					case VK_F9:
-						if (dwControlKeyState == 0)
-							NetWriteString2(pParams->Socket, (char *)PF9_KEY, strlen(PF9_KEY), 0);
-
-						else if (dwControlKeyState == SHIFT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)SHIFT_PF9_KEY, strlen(SHIFT_PF9_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)CTRL_PF9_KEY, strlen(CTRL_PF9_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)ALT_PF9_KEY, strlen(ALT_PF9_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF9_KEY, strlen(SHIFT_ALT_CTRL_PF9_KEY), 0);
-
-						else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
-							((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF9_KEY, strlen(ALT_CTRL_PF9_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF9_KEY, strlen(SHIFT_ALT_PF9_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF9_KEY, strlen(SHIFT_CTRL_PF9_KEY), 0);
-						break;
-					case VK_F10:
-						if (dwControlKeyState == 0)
-							NetWriteString2(pParams->Socket, (char *)PF10_KEY, strlen(PF10_KEY), 0);
-
-						else if (dwControlKeyState == SHIFT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)SHIFT_PF10_KEY, strlen(SHIFT_PF10_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)CTRL_PF10_KEY, strlen(CTRL_PF10_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)ALT_PF10_KEY, strlen(ALT_PF10_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)) &&((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF10_KEY, strlen(SHIFT_ALT_CTRL_PF10_KEY), 0);
-
-						else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
-							((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF10_KEY, strlen(ALT_CTRL_PF10_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF10_KEY, strlen(SHIFT_ALT_PF10_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF10_KEY, strlen(SHIFT_CTRL_PF10_KEY), 0);
-						break;
-					case VK_F11:
-						if (dwControlKeyState == 0)
-							NetWriteString2(pParams->Socket, (char *)PF11_KEY, strlen(PF11_KEY), 0);
-
-						else if (dwControlKeyState == SHIFT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)SHIFT_PF11_KEY, strlen(SHIFT_PF11_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)CTRL_PF11_KEY, strlen(CTRL_PF11_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)ALT_PF11_KEY, strlen(ALT_PF11_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) &&((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF11_KEY, strlen(SHIFT_ALT_CTRL_PF11_KEY), 0);
-
-						else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
-							((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF11_KEY, strlen(ALT_CTRL_PF11_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF11_KEY, strlen(SHIFT_ALT_PF11_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF11_KEY, strlen(SHIFT_CTRL_PF11_KEY), 0);
-						break;
-					case VK_F12:
-						if (dwControlKeyState == 0)
-							NetWriteString2(pParams->Socket, (char *)PF12_KEY, strlen(PF12_KEY), 0);
-
-						else if (dwControlKeyState == SHIFT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)SHIFT_PF12_KEY, strlen(SHIFT_PF12_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)CTRL_PF12_KEY, strlen(CTRL_PF12_KEY), 0);
-
-						else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-							NetWriteString2(pParams->Socket, (char *)ALT_PF12_KEY, strlen(ALT_PF12_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF12_KEY, strlen(SHIFT_ALT_CTRL_PF12_KEY), 0);
-
-						else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
-							((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF12_KEY, strlen(ALT_CTRL_PF12_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
-							(dwControlKeyState & LEFT_ALT_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF12_KEY, strlen(SHIFT_ALT_PF12_KEY), 0);
-
-						else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
-							(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-							NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF12_KEY, strlen(SHIFT_CTRL_PF12_KEY), 0);
-						break;
 					default:
-						NetWriteString2(pParams->Socket, (char *)octets, n, 0);
-						break;
+						switch (InputRecord.Event.KeyEvent.wVirtualKeyCode) {
+						case VK_UP:
+							NetWriteString2(pParams->Socket, (char *)(gbVTAppMode ? APP_UP_ARROW : UP_ARROW), 3, 0);
+							break;
+						case VK_DOWN:
+							NetWriteString2(pParams->Socket, (char *)(gbVTAppMode ? APP_DOWN_ARROW : DOWN_ARROW), 3, 0);
+							break;
+						case VK_RIGHT:
+							NetWriteString2(pParams->Socket, (char *)(gbVTAppMode ? APP_RIGHT_ARROW : RIGHT_ARROW), 3, 0);
+							break;
+						case VK_LEFT:
+							NetWriteString2(pParams->Socket, (char *)(gbVTAppMode ? APP_LEFT_ARROW : LEFT_ARROW), 3, 0);
+							break;
+						case VK_END:
+							NetWriteString2(pParams->Socket, (char *)SELECT_KEY, 4, 0);
+							break;
+						case VK_HOME:
+							NetWriteString2(pParams->Socket, (char *)FIND_KEY, 4, 0);
+							break;
+						case VK_INSERT:
+							NetWriteString2(pParams->Socket, (char *)INSERT_KEY, 4, 0);
+							break;
+						case VK_DELETE:
+							NetWriteString2(pParams->Socket, (char *)REMOVE_KEY, 4, 0);
+							break;
+						case VK_BACK:
+							NetWriteString2(pParams->Socket, (char *)BACKSPACE_KEY, 1, 0);
+							break;
+						case VK_TAB:
+							if (dwControlKeyState == SHIFT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)SHIFT_TAB_KEY, 3, 0);
+							else
+								NetWriteString2(pParams->Socket, (char *)octets, n, 0);
+							break;
+						case VK_ESCAPE:
+							NetWriteString2(pParams->Socket, (char *)ESCAPE_KEY, 1, 0);
+							break;
+						case VK_SHIFT:
+						case VK_CONTROL:
+						case VK_CAPITAL:
+							break; /* NOP on these */
+						case VK_F1:
+							if (dwControlKeyState == 0)
+								NetWriteString2(pParams->Socket, (char *)PF1_KEY, strlen(PF1_KEY), 0);
+
+							else if (dwControlKeyState == SHIFT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)SHIFT_PF1_KEY, strlen(SHIFT_PF1_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)CTRL_PF1_KEY, strlen(CTRL_PF1_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)ALT_PF1_KEY, strlen(ALT_PF1_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF1_KEY, strlen(SHIFT_ALT_CTRL_PF1_KEY), 0);
+
+							else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
+								((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF1_KEY, strlen(ALT_CTRL_PF1_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF1_KEY, strlen(SHIFT_ALT_PF1_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF1_KEY, strlen(SHIFT_CTRL_PF1_KEY), 0);
+
+							break;
+						case VK_F2:
+							if (dwControlKeyState == 0)
+								NetWriteString2(pParams->Socket, (char *)PF2_KEY, strlen(PF2_KEY), 0);
+
+							else if (dwControlKeyState == SHIFT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)SHIFT_PF2_KEY, strlen(SHIFT_PF2_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)CTRL_PF2_KEY, strlen(CTRL_PF2_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)ALT_PF2_KEY, strlen(ALT_PF2_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF2_KEY, strlen(SHIFT_ALT_CTRL_PF2_KEY), 0);
+
+							else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
+								((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF2_KEY, strlen(ALT_CTRL_PF2_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF2_KEY, strlen(SHIFT_ALT_PF2_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF2_KEY, strlen(SHIFT_CTRL_PF2_KEY), 0);
+							break;
+						case VK_F3:
+							if (dwControlKeyState == 0)
+								NetWriteString2(pParams->Socket, (char *)PF3_KEY, strlen(PF3_KEY), 0);
+
+							else if (dwControlKeyState == SHIFT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)SHIFT_PF3_KEY, strlen(SHIFT_PF3_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)CTRL_PF3_KEY, strlen(CTRL_PF3_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)ALT_PF3_KEY, strlen(ALT_PF3_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF3_KEY, strlen(SHIFT_ALT_CTRL_PF3_KEY), 0);
+
+							else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
+								((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF3_KEY, strlen(ALT_CTRL_PF3_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF3_KEY, strlen(SHIFT_ALT_PF3_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF3_KEY, strlen(SHIFT_CTRL_PF3_KEY), 0);
+							break;
+						case VK_F4:
+							if (dwControlKeyState == 0)
+								NetWriteString2(pParams->Socket, (char *)PF4_KEY, strlen(PF4_KEY), 0);
+
+							else if (dwControlKeyState == SHIFT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)SHIFT_PF4_KEY, strlen(SHIFT_PF4_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)CTRL_PF4_KEY, strlen(CTRL_PF4_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)ALT_PF4_KEY, strlen(ALT_PF4_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF4_KEY, strlen(SHIFT_ALT_CTRL_PF4_KEY), 0);
+
+							else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
+								((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF4_KEY, strlen(ALT_CTRL_PF4_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF4_KEY, strlen(SHIFT_ALT_PF4_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF4_KEY, strlen(SHIFT_CTRL_PF4_KEY), 0);
+							break;
+						case VK_F5:
+							if (dwControlKeyState == 0)
+								NetWriteString2(pParams->Socket, (char *)PF5_KEY, strlen(PF5_KEY), 0);
+
+							else if (dwControlKeyState == SHIFT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)SHIFT_PF5_KEY, strlen(SHIFT_PF5_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)CTRL_PF5_KEY, strlen(CTRL_PF5_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)ALT_PF5_KEY, strlen(ALT_PF5_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF5_KEY, strlen(SHIFT_ALT_CTRL_PF5_KEY), 0);
+
+							else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
+								((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF5_KEY, strlen(ALT_CTRL_PF5_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF5_KEY, strlen(SHIFT_ALT_PF5_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF5_KEY, strlen(SHIFT_CTRL_PF5_KEY), 0);
+							break;
+						case VK_F6:
+							if (dwControlKeyState == 0)
+								NetWriteString2(pParams->Socket, (char *)PF6_KEY, strlen(PF6_KEY), 0);
+
+							else if (dwControlKeyState == SHIFT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)SHIFT_PF6_KEY, strlen(SHIFT_PF6_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)CTRL_PF6_KEY, strlen(CTRL_PF6_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)ALT_PF6_KEY, strlen(ALT_PF6_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF6_KEY, strlen(SHIFT_ALT_CTRL_PF6_KEY), 0);
+
+							else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
+								((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF6_KEY, strlen(ALT_CTRL_PF6_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF6_KEY, strlen(SHIFT_ALT_PF6_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF6_KEY, strlen(SHIFT_CTRL_PF6_KEY), 0);
+							break;
+						case VK_F7:
+							if (dwControlKeyState == 0)
+								NetWriteString2(pParams->Socket, (char *)PF7_KEY, strlen(PF7_KEY), 0);
+
+							else if (dwControlKeyState == SHIFT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)SHIFT_PF7_KEY, strlen(SHIFT_PF7_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)CTRL_PF7_KEY, strlen(CTRL_PF7_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)ALT_PF7_KEY, strlen(ALT_PF7_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF7_KEY, strlen(SHIFT_ALT_CTRL_PF7_KEY), 0);
+
+							else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
+								((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF7_KEY, strlen(ALT_CTRL_PF7_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF7_KEY, strlen(SHIFT_ALT_PF7_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF7_KEY, strlen(SHIFT_CTRL_PF7_KEY), 0);
+							break;
+						case VK_F8:
+							if (dwControlKeyState == 0)
+								NetWriteString2(pParams->Socket, (char *)PF8_KEY, strlen(PF8_KEY), 0);
+
+							else if (dwControlKeyState == SHIFT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)SHIFT_PF8_KEY, strlen(SHIFT_PF8_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)CTRL_PF8_KEY, strlen(CTRL_PF8_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)ALT_PF8_KEY, strlen(ALT_PF8_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF8_KEY, strlen(SHIFT_ALT_CTRL_PF8_KEY), 0);
+
+							else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
+								((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF8_KEY, strlen(ALT_CTRL_PF8_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF8_KEY, strlen(SHIFT_ALT_PF8_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF8_KEY, strlen(SHIFT_CTRL_PF8_KEY), 0);
+							break;
+						case VK_F9:
+							if (dwControlKeyState == 0)
+								NetWriteString2(pParams->Socket, (char *)PF9_KEY, strlen(PF9_KEY), 0);
+
+							else if (dwControlKeyState == SHIFT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)SHIFT_PF9_KEY, strlen(SHIFT_PF9_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)CTRL_PF9_KEY, strlen(CTRL_PF9_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)ALT_PF9_KEY, strlen(ALT_PF9_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF9_KEY, strlen(SHIFT_ALT_CTRL_PF9_KEY), 0);
+
+							else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
+								((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF9_KEY, strlen(ALT_CTRL_PF9_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF9_KEY, strlen(SHIFT_ALT_PF9_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF9_KEY, strlen(SHIFT_CTRL_PF9_KEY), 0);
+							break;
+						case VK_F10:
+							if (dwControlKeyState == 0)
+								NetWriteString2(pParams->Socket, (char *)PF10_KEY, strlen(PF10_KEY), 0);
+
+							else if (dwControlKeyState == SHIFT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)SHIFT_PF10_KEY, strlen(SHIFT_PF10_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)CTRL_PF10_KEY, strlen(CTRL_PF10_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)ALT_PF10_KEY, strlen(ALT_PF10_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF10_KEY, strlen(SHIFT_ALT_CTRL_PF10_KEY), 0);
+
+							else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
+								((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF10_KEY, strlen(ALT_CTRL_PF10_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF10_KEY, strlen(SHIFT_ALT_PF10_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF10_KEY, strlen(SHIFT_CTRL_PF10_KEY), 0);
+							break;
+						case VK_F11:
+							if (dwControlKeyState == 0)
+								NetWriteString2(pParams->Socket, (char *)PF11_KEY, strlen(PF11_KEY), 0);
+
+							else if (dwControlKeyState == SHIFT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)SHIFT_PF11_KEY, strlen(SHIFT_PF11_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)CTRL_PF11_KEY, strlen(CTRL_PF11_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)ALT_PF11_KEY, strlen(ALT_PF11_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF11_KEY, strlen(SHIFT_ALT_CTRL_PF11_KEY), 0);
+
+							else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
+								((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF11_KEY, strlen(ALT_CTRL_PF11_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF11_KEY, strlen(SHIFT_ALT_PF11_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF11_KEY, strlen(SHIFT_CTRL_PF11_KEY), 0);
+							break;
+						case VK_F12:
+							if (dwControlKeyState == 0)
+								NetWriteString2(pParams->Socket, (char *)PF12_KEY, strlen(PF12_KEY), 0);
+
+							else if (dwControlKeyState == SHIFT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)SHIFT_PF12_KEY, strlen(SHIFT_PF12_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)CTRL_PF12_KEY, strlen(CTRL_PF12_KEY), 0);
+
+							else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
+								NetWriteString2(pParams->Socket, (char *)ALT_PF12_KEY, strlen(ALT_PF12_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_CTRL_PF12_KEY, strlen(SHIFT_ALT_CTRL_PF12_KEY), 0);
+
+							else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
+								((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)ALT_CTRL_PF12_KEY, strlen(ALT_CTRL_PF12_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
+								(dwControlKeyState & LEFT_ALT_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_ALT_PF12_KEY, strlen(SHIFT_ALT_PF12_KEY), 0);
+
+							else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
+								(dwControlKeyState & RIGHT_CTRL_PRESSED)))
+								NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF12_KEY, strlen(SHIFT_CTRL_PF12_KEY), 0);
+							break;
+						default:
+							NetWriteString2(pParams->Socket, (char *)octets, n, 0);
+							break;
+						}
 					}
 				}
+				break;
 			}
-			break;
 		}
 		break;
 	}

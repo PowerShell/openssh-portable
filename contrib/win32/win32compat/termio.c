@@ -39,11 +39,16 @@
 #include "w32fd.h"
 #include "tncon.h"
 #include "inc\utf.h"
+#include "misc_internal.h"
 
 #define TERM_IO_BUF_SIZE 2048
 
 extern int in_raw_mode;
-extern BOOL bAnsiParsing;
+extern BOOL isAnsiParsingRequired;
+static int is_windows_server;
+static int messageCount = 0;
+static int maxMessageCount = 3;
+
 
 struct io_status {
 	DWORD to_transfer;
@@ -137,6 +142,7 @@ WriteAPCProc(_In_ ULONG_PTR dwParam)
 	pio->write_overlapped.hEvent = 0;
 }
 
+
 /* Write worker thread */
 static DWORD WINAPI 
 WriteThread(_In_ LPVOID lpParameter)
@@ -146,10 +152,23 @@ WriteThread(_In_ LPVOID lpParameter)
 	size_t resplen = 0;
 	DWORD dwSavedAttributes = ENABLE_PROCESSED_INPUT;
 	debug3("TermWrite thread, io:%p", pio);
-	// in_raw_mode = 0;
-	if (in_raw_mode == 0 || false == bAnsiParsing) {
-		/* convert stream to utf16 and dump on console */
-		pio->write_details.buf[write_status.to_transfer] = '\0';
+	
+	pio->write_details.buf[write_status.to_transfer] = '\0';
+	
+	//if ((messageCount <= maxMessageCount) && (1 == in_raw_mode)) {
+	//	messageCount++;
+
+	//	if (NULL != strstr(pio->write_details.buf, "Microsoft Windows")) {
+	//		is_windows_server = 1;
+	//		//queue_terminal_window_change_event();
+	//		//ConClearScreen();
+	//	}
+	//}
+
+	ConRestoreViewRect();
+
+	if (false == isAnsiParsingRequired) {
+		/* convert stream to utf16 and dump on console */		
 		wchar_t* t = utf8_to_utf16(pio->write_details.buf);
 		WriteConsoleW(WINHANDLE(pio), t, wcslen(t), 0, 0);
 		free(t);
@@ -160,6 +179,8 @@ WriteThread(_In_ LPVOID lpParameter)
 		/* TODO - respbuf is not null in some cases, this needs to be returned back via read stream */
 		write_status.transferred = write_status.to_transfer;
 	}
+
+	ConSaveViewRect();
 
 	if (0 == QueueUserAPC(WriteAPCProc, main_thread, (ULONG_PTR)pio)) {
 		debug("TermWrite thread - ERROR QueueUserAPC failed %d, io:%p", GetLastError(), pio);
