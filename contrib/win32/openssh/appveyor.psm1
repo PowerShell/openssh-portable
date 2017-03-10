@@ -497,24 +497,18 @@ function Deploy-OpenSSHTests
     else
     {
         $RealConfiguration = $Configuration
-    }
-    
+    }    
 
     [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
     #copy all pester tests
     $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "regress\pesterTests"
     Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Include *.ps1,*.psm1, sshd_config -Force -ErrorAction Stop
     #copy all unit tests.
-    $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$RealConfiguration"
-    $sshagent = Get-Service ssh-agent -ErrorAction Ignore
-    if ($sshagent -ne $null)
-    {
-        Stop-Service ssh-agent -Force -ErrorAction Ignore
-    }
-    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Container -Include unittest*.exe, hostkeys, sshkey -Recurse -Force -ErrorAction Stop
+    $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$RealConfiguration"    
+    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Container -Include unittest-*, hostkeys, sshkey -Recurse -Force -ErrorAction Stop
     
     #restart the service to use the test copy of sshd_config
-    Start-Service sshd
+    Restart-Service sshd
 }
 
 
