@@ -123,7 +123,7 @@ ConInit(DWORD OutputHandle, BOOL fSmartInit)
 	if (NULL != getenv("USE_CUSTOM_ANSI_PARSER"))
 		isCustomAnsiParse = atoi(getenv("USE_CUSTOM_ANSI_PARSER"));
 
-	/* We use our custom ANSI parsing when
+	/* We use our custom ANSI parser when
 	 * a) User sets the environment variable "USE_CUSTOM_ANSI_PARSE" to 1
 	 * b) or when the console doesn't have the inbuilt capability to parse the ANSI/Xterm raw buffer.
 	 */	 
@@ -133,7 +133,8 @@ ConInit(DWORD OutputHandle, BOOL fSmartInit)
 	GetConsoleScreenBufferInfo(hOutputConsole, &csbi);
 	
 	/* if we are passing rawbuffer to console then we need to move the cursor to top 
-	   so that the clearscreen will not erase any lines. */
+	 *  so that the clearscreen will not erase any lines.
+	 */
 	if(TRUE == isAnsiParsingRequired)
 		SavedViewRect = csbi.srWindow;
 	else
@@ -142,7 +143,7 @@ ConInit(DWORD OutputHandle, BOOL fSmartInit)
 	ConSetScreenX();
 	ConSetScreenY();
 	ScrollTop = 0;
-	ScrollBottom = ConVisibleScreenHeight();		
+	ScrollBottom = ConVisibleWindowHeight();		
 	
 	return 0;
 }
@@ -470,9 +471,9 @@ ConScreenSizeY()
 	return (consoleInfo.srWindow.Bottom - consoleInfo.srWindow.Top + 1);
 }
 
-/* returns width of visible screen window */
+/* returns width of visible window */
 int
-ConVisibleScreenWidth()
+ConVisibleWindowWidth()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
@@ -482,9 +483,9 @@ ConVisibleScreenWidth()
 	return (consoleInfo.srWindow.Right - consoleInfo.srWindow.Left + 1);
 }
 
-/* returns height of visible screen window */
+/* returns height of visible window */
 int
-ConVisibleScreenHeight()
+ConVisibleWindowHeight()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
@@ -1080,7 +1081,7 @@ ConScrollUp(int topline, int botline)
 }
 
 void 
-MoveVisibleScreenWindow()
+MoveVisibleWindow()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 	SMALL_RECT visibleWindowRect;
@@ -1217,7 +1218,7 @@ is_cursor_at_lastline_of_visible_window()
 
 	if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo)) {
 		int cursor_linenum_in_visible_window = consoleInfo.dwCursorPosition.Y - consoleInfo.srWindow.Top;
-		if (cursor_linenum_in_visible_window >= ConVisibleScreenHeight() - 1)
+		if (cursor_linenum_in_visible_window >= ConVisibleWindowHeight() - 1)
 			return_val = 1;
 	}
 
@@ -1231,7 +1232,7 @@ ConGetCursorY()
 
 	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
 		return 0;
-			
+
 	return (consoleInfo.dwCursorPosition.Y - consoleInfo.srWindow.Top);
 }
 
@@ -1454,21 +1455,6 @@ BOOL
 ConRestoreScreen()
 {
 	return ConRestoreScreenHandle(pSavedScreenRec);
-}
-
-void
-ConSaveCursorPos()
-{
-	CONSOLE_SCREEN_BUFFER_INFO csbi;
-
-	if (GetConsoleScreenBufferInfo(hOutputConsole, &csbi))
-		SavedScreenCursor = csbi.dwCursorPosition;
-}
-
-void
-ConRestoreLastCursorPos()
-{
-	ConMoveCursorPosition(SavedScreenCursor.X, SavedScreenCursor.Y);
 }
 
 /* Saves current screen info and buffer */

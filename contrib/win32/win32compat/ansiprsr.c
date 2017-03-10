@@ -145,7 +145,7 @@ GoToNextLine()
 	
 	ConGetCursorPosition(&currentX, &currentY);
 
-	/* If the cursor is the last line of the visible screen */
+	/* If the cursor is the last line of the visible window */
 	if (is_cursor_at_lastline_of_visible_window()) {		
 		if (currentY >= ConGetBufferHeight()) {
 			/* handle the max window buffer size */
@@ -153,10 +153,10 @@ GoToNextLine()
 			ConMoveCursorPosition(-currentX, 0);		
 		} else {
 			/* max window buffer is not breached */
-			MoveVisibleScreenWindow();
+			MoveVisibleWindow();
 			ConMoveCursorPosition(-currentX, 1);
 		}
-	} else /* If the cursor is NOT the last line of the visible screen */
+	} else /* If the cursor is NOT the last line of the visible window */
 		ConMoveCursorPosition(-currentX, 1);
 	
 	bAtEOLN = FALSE;
@@ -568,10 +568,10 @@ ParseANSI(unsigned char * pszBuffer, unsigned char * pszBufferEnd, unsigned char
 			if (iParam[0]) {
 				int i;
 				for (i = 0; i < iParam[0]; i++)
-					ConScrollUp(ConGetCursorY() - 1, ScrollTop + ConVisibleScreenHeight() - 2);
+					ConScrollUp(ConGetCursorY() - 1, ScrollTop + ConVisibleWindowHeight() - 2);
 			} else {
-				if (ConGetCursorY() <= ScrollTop + ConVisibleScreenHeight() - 2)
-					ConScrollUp(ConGetCursorY() - 1, ScrollTop + ConVisibleScreenHeight() - 2);
+				if (ConGetCursorY() <= ScrollTop + ConVisibleWindowHeight() - 2)
+					ConScrollUp(ConGetCursorY() - 1, ScrollTop + ConVisibleWindowHeight() - 2);
 			}
 			fcompletion = 1;
 			bAtEOLN = FALSE;
@@ -607,7 +607,7 @@ ParseANSI(unsigned char * pszBuffer, unsigned char * pszBufferEnd, unsigned char
 				for (i = 0; i < iParam[0]; i++)
 					ConScrollUp(ConGetCursorY(), ScrollTop - ConGetCursorY());
 			} else {
-				if (ConGetCursorY() <= ScrollTop + ConVisibleScreenHeight() - 2)
+				if (ConGetCursorY() <= ScrollTop + ConVisibleWindowHeight() - 2)
 					ConScrollUp(ConGetCursorY(), ScrollTop - ConGetCursorY());
 			}
 			fcompletion = 1;
