@@ -48,14 +48,12 @@ extern int ScreenX;
 extern int ScreenY;
 extern int ScrollTop;
 extern int ScrollBottom;
-extern BOOL isAnsiParsingRequired;
 
 bool gbVTAppMode = false;
 /* private message for port printing to */
 unsigned char VT_ST[] = { 0x1b, '/', '\0' };
 static int AutoWrap = 1;
 BOOL bAtEOLN = FALSE;
-static int term_mode = TERM_ANSI;
 
 /*
  * ParseANSI globals - these need to be here, because sometimes blocks are sent
@@ -148,7 +146,7 @@ GoToNextLine()
 	ConGetCursorPosition(&currentX, &currentY);
 
 	/* If the cursor is the last line of the visible screen */
-	if (is_cursor_at_lastline_of_visible_screen()) {		
+	if (is_cursor_at_lastline_of_visible_window()) {		
 		if (currentY >= ConGetBufferHeight()) {
 			/* handle the max window buffer size */
 			ConScrollDown(0, currentY);
@@ -158,7 +156,7 @@ GoToNextLine()
 			MoveVisibleScreenWindow();
 			ConMoveCursorPosition(-currentX, 1);
 		}
-	} else /* If the cursor is NOT, the last line of the visible screen */
+	} else /* If the cursor is NOT the last line of the visible screen */
 		ConMoveCursorPosition(-currentX, 1);
 	
 	bAtEOLN = FALSE;
@@ -176,8 +174,7 @@ ParseBuffer(unsigned char* pszBuffer, unsigned char* pszBufferEnd, unsigned char
 			unsigned char * pszCurrent = pszBuffer + 1;
 			unsigned char * pszNewCurrent = pszCurrent;
 
-			if (term_mode == TERM_ANSI && isAnsiParsingRequired)
-				pszNewCurrent = ParseANSI(pszCurrent, pszBufferEnd, respbuf, resplen);
+			pszNewCurrent = ParseANSI(pszCurrent, pszBufferEnd, respbuf, resplen);
 
 			/* Pointer didn't move inside Parse function */
 			if (pszCurrent == pszNewCurrent) {
@@ -275,10 +272,8 @@ ParseBuffer(unsigned char* pszBuffer, unsigned char* pszBufferEnd, unsigned char
 			if (*pszCurrent == 27) {
 				pszNewCurrent += ConWriteString((char *)pszCurrent, 1);
 				return pszBuffer + 1;
-			} else {
-				if (term_mode == TERM_ANSI)
-					pszNewCurrent = ParseANSI(pszCurrent, pszBufferEnd, respbuf, resplen);
-			}
+			} else				
+				pszNewCurrent = ParseANSI(pszCurrent, pszBufferEnd, respbuf, resplen);
 
 			if (pszNewCurrent > pszCurrent)
 				pszBuffer = pszNewCurrent;

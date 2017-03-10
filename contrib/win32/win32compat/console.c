@@ -59,6 +59,7 @@ COORD SavedScreenSize = { 0,0 };
 COORD SavedScreenCursor = { 0, 0 };
 SMALL_RECT SavedViewRect = { 0,0,0,0 };
 CONSOLE_SCREEN_BUFFER_INFOEX SavedWindowState;
+BOOL isCustomAnsiParse = FALSE;
 
 typedef struct _SCREEN_RECORD {
 	PCHAR_INFO pScreenBuf;
@@ -68,7 +69,6 @@ typedef struct _SCREEN_RECORD {
 }SCREEN_RECORD, *PSCREEN_RECORD;
 
 PSCREEN_RECORD pSavedScreenRec = NULL;
-int in_raw_mode = 1;
 char *consoleTitle = "Microsoft openSSH client";
 
 /* Used to Initialize the Console for output */
@@ -115,23 +115,35 @@ ConInit(DWORD OutputHandle, BOOL fSmartInit)
 		dwRet = GetLastError();
 		printf("GetConsoleMode on hOutputConsole failed with %d\n", dwRet);
 		return dwRet;
+
 	}
 
 	dwAttributes |= (DWORD)ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 
-	if (!SetConsoleMode(hOutputConsole, dwAttributes)) /* Windows NT */
+	if (NULL != getenv("USE_CUSTOM_ANSI_PARSER"))
+		isCustomAnsiParse = atoi(getenv("USE_CUSTOM_ANSI_PARSER"));
+
+	/* We use our custom ANSI parsing when
+	 * a) User sets the environment variable "USE_CUSTOM_ANSI_PARSE" to 1
+	 * b) or when the console doesn't have the inbuilt capability to parse the ANSI/Xterm raw buffer.
+	 */	 
+	if (TRUE == isCustomAnsiParse || !SetConsoleMode(hOutputConsole, dwAttributes)) /* Windows NT */
 		isAnsiParsingRequired = TRUE;
-	
+			
 	GetConsoleScreenBufferInfo(hOutputConsole, &csbi);
-	ConMoveCurosorTop(csbi);
+	
+	/* if we are passing rawbuffer to console then we need to move the cursor to top 
+	   so that the clearscreen will not erase any lines. */
+	if(TRUE == isAnsiParsingRequired)
+		SavedViewRect = csbi.srWindow;
+	else
+		ConMoveCurosorTop(csbi);
 
 	ConSetScreenX();
 	ConSetScreenY();
 	ScrollTop = 0;
 	ScrollBottom = ConVisibleScreenHeight();		
 	
-	in_raw_mode = 1;
-
 	return 0;
 }
 
@@ -151,13 +163,10 @@ int
 ConUnInit()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
-	in_raw_mode = 1;
-	if (hOutputConsole == NULL)
+	
+	if (hOutputConsole == NULL || !GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
 		return 0;
-
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
-		return 0;
-
+	
 	SetConsoleMode(hOutputConsole, dwSavedAttributes);
 
 	return 0;
@@ -1144,35 +1153,6 @@ ConClearBOLine()
 }
 
 void
-ConSetCursorRelativePosition(int x, int y)
-{
-	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
-	COORD Coord;
-	int rc;
-
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
-		return;
-
-	Coord.X = (short)(consoleInfo.dwCursorPosition.X +  x);
-	Coord.Y = (short)(consoleInfo.dwCursorPosition.Y + y);
-
-	if ((y > consoleInfo.dwSize.Y - 1) && y > LastCursorY) {
-		for (int n = LastCursorY; n < y; n++)
-			GoToNextLine();
-	}
-
-	if (y >= consoleInfo.dwSize.Y) {
-		Coord.Y = consoleInfo.dwSize.Y - 1;
-	}
-
-	if (!SetConsoleCursorPosition(hOutputConsole, Coord))
-		rc = GetLastError();
-
-	LastCursorX = x;
-	LastCursorY = y;
-}
-
-void
 ConSetCursorPosition(int x, int y)
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
@@ -1230,7 +1210,7 @@ ConGetCursorX()
 }
 
 int
-is_cursor_at_lastline_of_visible_screen()
+is_cursor_at_lastline_of_visible_window()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 	int return_val = 0;
@@ -1503,9 +1483,8 @@ ConSaveViewRect()
 {
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
 
-	if (GetConsoleScreenBufferInfo(hOutputConsole, &csbi)) {
+	if (GetConsoleScreenBufferInfo(hOutputConsole, &csbi))
 		SavedViewRect = csbi.srWindow;
-	}		
 }
 
 void

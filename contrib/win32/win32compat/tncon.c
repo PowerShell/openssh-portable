@@ -116,7 +116,7 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 	INPUT_RECORD InputRecords[128];
 	INPUT_RECORD InputRecord;
 	BOOL bCapsOn = FALSE;
-	BOOL bShift = FALSE;	
+	BOOL bShift = FALSE;
 
 	glob_out = destin;
 	glob_space = destinlen;

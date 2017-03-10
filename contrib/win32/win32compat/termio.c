@@ -39,16 +39,10 @@
 #include "w32fd.h"
 #include "tncon.h"
 #include "inc\utf.h"
-#include "misc_internal.h"
 
 #define TERM_IO_BUF_SIZE 2048
 
-extern int in_raw_mode;
 extern BOOL isAnsiParsingRequired;
-static int is_windows_server;
-static int messageCount = 0;
-static int maxMessageCount = 3;
-
 
 struct io_status {
 	DWORD to_transfer;
@@ -155,32 +149,19 @@ WriteThread(_In_ LPVOID lpParameter)
 	
 	pio->write_details.buf[write_status.to_transfer] = '\0';
 	
-	//if ((messageCount <= maxMessageCount) && (1 == in_raw_mode)) {
-	//	messageCount++;
-
-	//	if (NULL != strstr(pio->write_details.buf, "Microsoft Windows")) {
-	//		is_windows_server = 1;
-	//		//queue_terminal_window_change_event();
-	//		//ConClearScreen();
-	//	}
-	//}
-
-	ConRestoreViewRect();
-
-	if (false == isAnsiParsingRequired) {
-		/* convert stream to utf16 and dump on console */		
-		wchar_t* t = utf8_to_utf16(pio->write_details.buf);
-		WriteConsoleW(WINHANDLE(pio), t, wcslen(t), 0, 0);
-		free(t);
-		write_status.transferred = write_status.to_transfer;		
-	} else {
-		/* console mode */
+	if (TRUE == isAnsiParsingRequired) {
 		telProcessNetwork(pio->write_details.buf, write_status.to_transfer, &respbuf, &resplen);
 		/* TODO - respbuf is not null in some cases, this needs to be returned back via read stream */
 		write_status.transferred = write_status.to_transfer;
-	}
-
-	ConSaveViewRect();
+	} else {
+		/* Console has the capability to parse so pass the raw buffer to console directly */
+		ConRestoreViewRect(); /* Restore the visible window, otherwise WriteConsoleW() gets messy */
+		wchar_t* t = utf8_to_utf16(pio->write_details.buf);
+		WriteConsoleW(WINHANDLE(pio), t, wcslen(t), 0, 0);
+		free(t);
+		write_status.transferred = write_status.to_transfer;
+		ConSaveViewRect();
+	}	
 
 	if (0 == QueueUserAPC(WriteAPCProc, main_thread, (ULONG_PTR)pio)) {
 		debug("TermWrite thread - ERROR QueueUserAPC failed %d, io:%p", GetLastError(), pio);

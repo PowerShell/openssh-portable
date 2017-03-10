@@ -2193,17 +2193,14 @@ session_by_pid(pid_t pid)
 }
 
 static int
-session_window_change_req(Session *s, Channel *c)
+session_window_change_req(Session *s)
 {
 	s->col = packet_get_int();
 	s->row = packet_get_int();
 	s->xpixel = packet_get_int();
 	s->ypixel = packet_get_int();
 	packet_check_eom();
-	//pty_change_window_size(s->ptyfd, s->row, s->col, s->xpixel, s->ypixel);
-
-	pty_change_window_size(c->rfd , s->row, s->col, s->xpixel, s->ypixel);
-	pty_change_window_size(c->wfd , s->row, s->col, s->xpixel, s->ypixel);	
+	pty_change_window_size(s->ptyfd, s->row, s->col, s->xpixel, s->ypixel);
 
 	return 1;
 }
@@ -2451,7 +2448,7 @@ session_input_channel_req(Channel *c, const char *rtype)
 		}
 	}
 	if (strcmp(rtype, "window-change") == 0) {
-		success = session_window_change_req(s, c);
+		success = session_window_change_req(s);
 	} else if (strcmp(rtype, "break") == 0) {
 		success = session_break_req(s);
 	}

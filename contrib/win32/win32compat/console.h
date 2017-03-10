@@ -135,7 +135,7 @@ void ConRestoreViewRect( void );
 void ConDeleteChars(int n);
 void ConSaveWindowsState(void);
 void MoveVisibleScreenWindow();
-int is_cursor_at_lastline_of_visible_screen();
+int is_cursor_at_lastline_of_visible_window();
 void ConSaveCursorPos();
 void ConRestoreLastCursorPos();
 void ConGetCursorPosition(int *x, int *y);

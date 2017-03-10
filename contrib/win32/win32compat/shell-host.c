@@ -185,7 +185,7 @@ STARTUPINFO inputSi;
 } while(0)
 
 int
-GetSRWidth()
+ConSRWidth()
 {
 	CONSOLE_SCREEN_BUFFER_INFOEX  consoleBufferInfo;
 	ZeroMemory(&consoleBufferInfo, sizeof(consoleBufferInfo));
@@ -567,8 +567,6 @@ ProcessEvent(void *p)
 		lastX = co.X;
 		lastY = co.Y;
 
-		SendSetCursor(pipe_out, co.X, co.Y);
-
 		break;
 	}
 	case EVENT_CONSOLE_UPDATE_REGION:
@@ -580,7 +578,7 @@ ProcessEvent(void *p)
 		readRect.Bottom = HIWORD(idChild);
 		readRect.Right = LOWORD(idChild);
 
-		readRect.Right = max(readRect.Right, GetSRWidth());
+		readRect.Right = max(readRect.Right, ConSRWidth());
 
 		/* Detect a "cls" (Windows) */
 		if (!bStartup &&
@@ -654,8 +652,6 @@ ProcessEvent(void *p)
 		lastLineLength = readRect.Left;
 		
 		free(pBuffer);
-
-		SendSetCursor(pipe_out, lastX + 1, lastY + 1);
 		
 		break;
 	}
@@ -670,14 +666,11 @@ ProcessEvent(void *p)
 		readRect.Top = wY;
 		readRect.Bottom = wY;
 		readRect.Left = wX;
-		readRect.Right = GetSRWidth();
-
-
+		readRect.Right = ConSRWidth();
+		
 		/* Set cursor location based on the reported location from the message */
 		CalculateAndSetCursor(pipe_out, wX, wY);
 		
-		//SendCharacter(pipe_out, wAttributes, chUpdate);
-
 		COORD coordBufSize;
 		coordBufSize.Y = readRect.Bottom - readRect.Top + 1;
 		coordBufSize.X = readRect.Right - readRect.Left + 1;
@@ -693,7 +686,6 @@ ProcessEvent(void *p)
 		/* Copy the block from the screen buffer to the temp. buffer */
 		if (!ReadConsoleOutput(child_out, pBuffer, coordBufSize, coordBufCoord, &readRect)) {
 			DWORD dwError = GetLastError();
-
 			free(pBuffer);
 			return dwError;
 		}
@@ -750,6 +742,19 @@ ProcessEvent(void *p)
 DWORD WINAPI 
 ProcessEventQueue(LPVOID p)
 {
+	if (child_in != INVALID_HANDLE_VALUE && child_in != NULL &&
+	    child_out != INVALID_HANDLE_VALUE && child_out != NULL) {
+		DWORD dwInputMode;
+		DWORD dwOutputMode;
+
+		if (GetConsoleMode(child_in, &dwInputMode) && GetConsoleMode(child_out, &dwOutputMode))
+			if (((dwOutputMode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) == ENABLE_VIRTUAL_TERMINAL_PROCESSING) &&
+			    ((dwInputMode & ENABLE_VIRTUAL_TERMINAL_INPUT) == ENABLE_VIRTUAL_TERMINAL_INPUT))
+				bAnsi = TRUE;
+			else
+				bAnsi = FALSE;
+	}
+
 	while (1) {
 		while (head) {
 			EnterCriticalSection(&criticalSection);
@@ -775,14 +780,6 @@ ProcessEventQueue(LPVOID p)
 		    child_out != INVALID_HANDLE_VALUE && child_out != NULL) {
 			DWORD dwInputMode;
 			DWORD dwOutputMode;
-
-			if (GetConsoleMode(child_in, &dwInputMode) && GetConsoleMode(child_out, &dwOutputMode)) {
-				if (((dwOutputMode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) == ENABLE_VIRTUAL_TERMINAL_PROCESSING) &&
-				    ((dwInputMode & ENABLE_VIRTUAL_TERMINAL_INPUT) == ENABLE_VIRTUAL_TERMINAL_INPUT))
-					bAnsi = TRUE;
-				else
-					bAnsi = FALSE;
-			}
 
 			ZeroMemory(&consoleInfo, sizeof(consoleInfo));
 			consoleInfo.cbSize = sizeof(consoleInfo);
