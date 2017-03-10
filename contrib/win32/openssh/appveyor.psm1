@@ -506,9 +506,15 @@ function Deploy-OpenSSHTests
     Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Include *.ps1,*.psm1, sshd_config -Force -ErrorAction Stop
     #copy all unit tests.
     $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$RealConfiguration"
-    Copy-Item -Path "$sourceDir\unittest-*" -Destination $OpenSSHTestDir -Force -ErrorAction Stop
+    $sshagent = Get-Service ssh-agent -ErrorAction Ignore
+    if ($sshagent -ne $null)
+    {
+        Stop-Service ssh-agent -Force -ErrorAction Ignore
+    }
+    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Container -Include unittest*.exe, hostkeys, sshkey -Recurse -Force -ErrorAction Stop
+    
     #restart the service to use the test copy of sshd_config
-    Restart-Service sshd
+    Start-Service sshd
 }
 
 
@@ -669,13 +675,24 @@ function Run-OpenSSHUnitTest
         Remove-Item -Path $unitTestOutputFile -Force -ErrorAction SilentlyContinue
     }
 
-    $unitTestFiles = Get-ChildItem -Path "$testRoot\unittest*.exe" -Exclude unittest-kex.exe,unittest-sshkey.exe,unittest-hostkeys.exe
+    $unitTestFiles = Get-ChildItem -Path "$testRoot\unittest*.exe" -Exclude unittest-sshkey.exe
     $testfailed = $false
     if ($unitTestFiles -ne $null)
     {        
         $unitTestFiles | % {
             Write-Output "Running OpenSSH unit $($_.FullName)..."
-            & $_.FullName >> $unitTestOutputFile
+            if($_.name.Contains("hostkeys"))
+            {
+                & $_.FullName -d $testRoot\hostkeys >> $unitTestOutputFile
+            }
+            elseif($_.name.Contains("sshkey"))
+            {
+                & $_.FullName -d $testRoot\sshkey >> $unitTestOutputFile
+            }
+            else
+            {
+                & $_.FullName >> $unitTestOutputFile
+            }
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
             {
