@@ -38,7 +38,7 @@
 
 void cray_init_job(struct passwd *);
 void cray_job_termination_handler(int);
-void cray_login_failure(char *, int );
+void cray_login_failure(char *, int);
 int cray_access_denied(char *);
 extern char cray_tmpdir[];
 
