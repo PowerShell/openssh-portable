@@ -44,6 +44,7 @@
 #include "inc\fcntl.h"
 #include "inc\utf.h"
 #include "signal_internal.h"
+#include "debug.h"
 
 static char* s_programdir = NULL;
 
@@ -249,7 +250,7 @@ w32_fopen_utf8(const char *path, const char *mode)
 	if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, PATH_MAX) == 0 ||
 	    MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, 5) == 0) {
 		errno = EFAULT;
-		debug("WideCharToMultiByte failed for %c - ERROR:%d", path, GetLastError());
+		debug3("WideCharToMultiByte failed for %c - ERROR:%d", path, GetLastError());
 		return NULL;
 	}
 
@@ -438,7 +439,7 @@ spawn_child(char* cmd, int in, int out, int err, DWORD flags)
 	} else
 		abs_cmd = cmd;
 
-	debug("spawning %s", abs_cmd);
+	debug3("spawning %s", abs_cmd);
 
 	if ((cmd_utf16 = utf8_to_utf16(abs_cmd)) == NULL) {
 		errno = ENOMEM;
@@ -616,13 +617,13 @@ settimes(wchar_t * path, FILETIME *cretime, FILETIME *acttime, FILETIME *modtime
 	if (handle == INVALID_HANDLE_VALUE) {
 		/* TODO - convert Win32 error to errno */
 		errno = GetLastError();
-		debug("w32_settimes - CreateFileW ERROR:%d", errno);
+		debug3("w32_settimes - CreateFileW ERROR:%d", errno);
 		return -1;
 	}
 
 	if (SetFileTime(handle, cretime, acttime, modtime) == 0) {
 		errno = GetLastError();
-		debug("w32_settimes - SetFileTime ERROR:%d", errno);
+		debug3("w32_settimes - SetFileTime ERROR:%d", errno);
 		CloseHandle(handle);
 		return -1;
 	}
@@ -951,12 +952,12 @@ statvfs(const char *path, struct statvfs *buf)
 	wchar_t* path_utf16 = utf8_to_utf16(sanitized_path(path));
 	if (GetDiskFreeSpaceW(path_utf16, &sectorsPerCluster, &bytesPerSector,
 	    &freeClusters, &totalClusters) == TRUE) {
-		debug3("path              : [%s]", path);
-		debug3("sectorsPerCluster : [%lu]", sectorsPerCluster);
-		debug3("bytesPerSector    : [%lu]", bytesPerSector);
-		debug3("bytesPerCluster   : [%lu]", sectorsPerCluster * bytesPerSector);
-		debug3("freeClusters      : [%lu]", freeClusters);
-		debug3("totalClusters     : [%lu]", totalClusters);
+		debug5("path              : [%s]", path);
+		debug5("sectorsPerCluster : [%lu]", sectorsPerCluster);
+		debug5("bytesPerSector    : [%lu]", bytesPerSector);
+		debug5("bytesPerCluster   : [%lu]", sectorsPerCluster * bytesPerSector);
+		debug5("freeClusters      : [%lu]", freeClusters);
+		debug5("totalClusters     : [%lu]", totalClusters);
 
 		buf->f_bsize = sectorsPerCluster * bytesPerSector;
 		buf->f_frsize = sectorsPerCluster * bytesPerSector;
@@ -973,7 +974,7 @@ statvfs(const char *path, struct statvfs *buf)
 		free(path_utf16);
 		return 0;
 	} else {
-		debug3("ERROR: Cannot get free space for [%s]. Error code is : %d.\n", path, GetLastError());
+		debug5("ERROR: Cannot get free space for [%s]. Error code is : %d.\n", path, GetLastError());
 
 		free(path_utf16);
 		return -1;

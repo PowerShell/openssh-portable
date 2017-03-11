@@ -151,7 +151,6 @@ done:
 	free(groups_bygid);
 #endif /* !WINDOWS */
 	return (ngroups = j);
-
 }
 
 /*
