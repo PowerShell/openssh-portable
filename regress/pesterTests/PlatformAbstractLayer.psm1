@@ -251,6 +251,11 @@ Class Machine
         {
             $this.SetKeys($null, $publicKeyPath, $($this.localAdminAuthorizedKeyPath))
         }        
+        # Provide Read Access to NT Service\sshd
+        $acl = get-acl $($this.localAdminAuthorizedKeyPath)
+        $ar = New-Object  System.Security.AccessControl.FileSystemAccessRule("NT Service\sshd", "Read", "Allow")
+        $acl.SetAccessRule($ar)
+        Set-Acl  $($this.localAdminAuthorizedKeyPath) $acl
     }
 
     [void] CleanupServer() {
