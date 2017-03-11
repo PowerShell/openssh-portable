@@ -669,7 +669,7 @@ function Run-OpenSSHUnitTest
         Remove-Item -Path $unitTestOutputFile -Force -ErrorAction SilentlyContinue
     }
 
-    $unitTestFiles = Get-ChildItem -Path "$testRoot\unittest*.exe" -Exclude unittest-sshkey.exe
+    $unitTestFiles = Get-ChildItem -Path "$testRoot\unittest*.exe" -Exclude unittest-sshkey.exe,unittest-kex.exe
     $testfailed = $false
     if ($unitTestFiles -ne $null)
     {        
