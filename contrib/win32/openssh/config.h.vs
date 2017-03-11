@@ -1080,7 +1080,7 @@
 #define HAVE_SYS_TYPES_H 1
 
 /* Define to 1 if you have the <sys/un.h> header file. */
-/* #undef HAVE_SYS_UN_H */
+#define HAVE_SYS_UN_H 1
 
 /* Define to 1 if you have the `tcgetpgrp' function. */
 /* #undef HAVE_TCGETPGRP */
@@ -1641,7 +1641,6 @@
 #undef HAVE_SYS_CDEFS_H
 #undef HAVE_SYS_SYSMACROS_H
 #undef HAVE_SYS_MMAN_H
-#undef HAVE_SYS_UN_H
 #define _STRUCT_WINSIZE 1
 
 #define HAVE_TCGETPGRP 1
@@ -1673,6 +1672,7 @@
 #define HAVE_DECL_HOWMANY 0
 #define HAVE_STRTOULL 1
 #define HAVE_USLEEP 1
+#define HAVE_EVP_RIPEMD160 1
 
 #if defined ( WIN32 )
 #define __func__ __FUNCTION__

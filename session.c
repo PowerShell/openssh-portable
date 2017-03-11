@@ -482,6 +482,9 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 	fcntl(pipeout[0], F_SETFD, FD_CLOEXEC);
 	fcntl(pipeerr[0], F_SETFD, FD_CLOEXEC);
 
+	/* setup Environment varibles */
+	setup_session_vars(s);
+
 	/* prepare exec - path used with CreateProcess() */
 	if (s->is_subsystem || (command && memcmp(command, "scp", 3) == 0)) {
 		/* relative or absolute */
@@ -499,8 +502,22 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 			memcpy(exec_command + strlen(progdir) + 1, command, strlen(command) + 1);
 		}
 	} else {
+		/* 
+		 * contruct %programdir%\ssh-shellhost.exe <-nopty> base64encoded(command)  
+		 * command is base64 encoded to preserve original special charecters like '"'
+		 * else they will get lost in CreateProcess translation
+		 */
 		char *shell_host = pty ? "ssh-shellhost.exe " : "ssh-shellhost.exe -nopty ", *c;
-		exec_command = malloc(strlen(progdir) + 1 + strlen(shell_host) + (command ? strlen(command) : 0) + 1);
+		char *command_b64 = NULL;
+		size_t command_b64_len = 0;
+		if (command) {
+			/* accomodate bas64 encoding bloat and null terminator */
+			command_b64_len = ((strlen(command) + 2) / 3) * 4 + 1;
+			if ((command_b64 = malloc(command_b64_len)) == NULL ||
+			    b64_ntop(command, strlen(command), command_b64, command_b64_len) == -1)
+				fatal("%s, error encoding session command");
+		}
+		exec_command = malloc(strlen(progdir) + 1 + strlen(shell_host) + (command_b64 ? strlen(command_b64): 0) + 1);
 		if (exec_command == NULL)
 			fatal("%s, out of memory", __func__);
 		c = exec_command;
@@ -509,17 +526,12 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		*c++ = '\\';
 		memcpy(c, shell_host, strlen(shell_host));
 		c += strlen(shell_host);
-		if (command) {
-			memcpy(c, command, strlen(command));
-			c += strlen(command);
+		if (command_b64) {
+			memcpy(c, command_b64, strlen(command_b64));
+			c += strlen(command_b64);
 		}
 		*c = '\0';
 	}
-
-	/* setup Environment varibles */
-	setup_session_vars(s);
-	
-	extern int debug_flag;
 
 	/* start the process */
 	{
@@ -527,6 +539,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		STARTUPINFOW si;
 		BOOL b;
 		HANDLE hToken = INVALID_HANDLE_VALUE;
+		extern int debug_flag;
 
 		memset(&si, 0, sizeof(STARTUPINFO));
 		si.cb = sizeof(STARTUPINFO);

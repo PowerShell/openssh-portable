@@ -1,28 +1,26 @@
 /*
 * Author: Manoj Ampalam <manoj.ampalam@microsoft.com>
 *
-* Converts UTF-16 arguments to UTF-8
-*
-* Copyright (c) 2015 Microsoft Corp.
+* Copyright(c) 2016 Microsoft Corp.
 * All rights reserved
 *
-* Microsoft openssh win32 port
+* UTF8 <--> UTF16 conversion routines
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions
-* are met:
+* are met :
 *
 * 1. Redistributions of source code must retain the above copyright
 * notice, this list of conditions and the following disclaimer.
 * 2. Redistributions in binary form must reproduce the above copyright
 * notice, this list of conditions and the following disclaimer in the
-* documentation and/or other materials provided with the distribution.
+* documentation and / or other materials provided with the distribution.
 *
 * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
 * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
 * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
 * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
-* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES(INCLUDING, BUT
 * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
 * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
@@ -32,27 +30,30 @@
 
 #include <Windows.h>
 #include "inc\utf.h"
-#include "misc_internal.h"
 
-int main(int, char **);
+wchar_t *
+utf8_to_utf16(const char *utf8)
+{
+	int needed = 0;
+	wchar_t* utf16 = NULL;
+	if ((needed = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, NULL, 0)) == 0 ||
+	    (utf16 = malloc(needed * sizeof(wchar_t))) == NULL ||
+	    MultiByteToWideChar(CP_UTF8, 0, utf8, -1, utf16, needed) == 0)
+		return NULL;
 
-int
-wmain(int argc, wchar_t **wargv) {
-        char** argv = NULL;
-        int i,r;
-
-        if (argc) {
-                if ((argv = malloc(argc * sizeof(char*))) == NULL)
-                        fatal("out of memory");
-                for (i = 0; i < argc; i++)
-                        argv[i] = utf16_to_utf8(wargv[i]);
-        }
-
-	if (getenv("SSH_AUTH_SOCK") == NULL)
-		_putenv("SSH_AUTH_SOCK=ssh-agent");
-
-        w32posix_initialize();
-        r = main(argc, argv);
-		w32posix_done();
-		return r;
+	return utf16;
 }
+
+char *
+utf16_to_utf8(const wchar_t* utf16)
+{
+	int needed = 0;
+	char* utf8 = NULL;
+	if ((needed = WideCharToMultiByte(CP_UTF8, 0, utf16, -1, NULL, 0, NULL, NULL)) == 0 ||
+	    (utf8 = malloc(needed)) == NULL ||
+	    WideCharToMultiByte(CP_UTF8, 0, utf16, -1, utf8, needed, NULL, NULL) == 0)
+		return NULL;
+	
+	return utf8;
+}
+

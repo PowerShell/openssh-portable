@@ -42,6 +42,7 @@
 #include "inc\sys\types.h"
 #include "inc\sys\ioctl.h"
 #include "inc\fcntl.h"
+#include "inc\utf.h"
 #include "signal_internal.h"
 
 static char* s_programdir = NULL;
@@ -275,31 +276,73 @@ w32_fopen_utf8(const char *path, const char *mode)
 	return f;
 }
 
+/* fgets to support Unicode input */
+char*
+ w32_fgets(char *str, int n, FILE *stream) {
+	HANDLE h = (HANDLE)_get_osfhandle(_fileno(stream));
+	wchar_t* str_w = NULL;
+	char *ret = NULL, *str_tmp = NULL;
 
-wchar_t *
-utf8_to_utf16(const char *utf8)
-{
-	int needed = 0;
-	wchar_t* utf16 = NULL;
-	if ((needed = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, NULL, 0)) == 0 ||
-	    (utf16 = malloc(needed * sizeof(wchar_t))) == NULL ||
-	    MultiByteToWideChar(CP_UTF8, 0, utf8, -1, utf16, needed) == 0)
-		return NULL;
-
-	return utf16;
+	if (h != NULL && h != INVALID_HANDLE_VALUE
+	    && GetFileType(h) == FILE_TYPE_CHAR) {
+		/* 
+		 * read only n/4 wide chars from console 
+		 * each UTF-16 char may bloat upto 4 utf-8 chars when converted to utf-8 
+		 * so we can fit in str[n] provided as input
+		 */
+		if ((str_w = malloc((n/4) * sizeof(wchar_t))) == NULL) {
+			errno = ENOMEM;
+			goto cleanup;
+		}
+		/* prepare for Unicode input */
+		_setmode(_fileno(stream), O_U16TEXT); 
+		if (fgetws(str_w, n/4, stream) == NULL)
+			goto cleanup;
+		if ((str_tmp = utf16_to_utf8(str_w)) == NULL) {
+			errno = ENOMEM;
+			goto cleanup;
+		}
+		if (strlen(str_tmp) > n - 1) {
+			/* shouldn't happen. but handling in case */
+			errno = EINVAL;
+			goto cleanup;
+		}
+		memcpy(str, str_tmp, strlen(str_tmp) + 1);
+		ret = str;
+	}
+	else
+		ret = fgets(str, n, stream);
+cleanup:
+	if (str_w)
+		free(str_w);
+	if (str_tmp)
+		free(str_tmp);
+	return ret;
 }
 
-char *
-utf16_to_utf8(const wchar_t* utf16)
-{
-	int needed = 0;
-	char* utf8 = NULL;
-	if ((needed = WideCharToMultiByte(CP_UTF8, 0, utf16, -1, NULL, 0, NULL, NULL)) == 0 ||
-	    (utf8 = malloc(needed)) == NULL ||
-	    WideCharToMultiByte(CP_UTF8, 0, utf16, -1, utf8, needed, NULL, NULL) == 0)
-		return NULL;
+/* Account for differences between Unix's and Windows versions of setvbuf */
+int 
+w32_setvbuf(FILE *stream, char *buffer, int mode, size_t size) {
 	
-	return utf8;
+	/* BUG: setvbuf on console stream interferes with Unicode I/O	*/
+	HANDLE h = (HANDLE)_get_osfhandle(_fileno(stream));
+	
+	if (h != NULL && h != INVALID_HANDLE_VALUE
+	    && GetFileType(h) == FILE_TYPE_CHAR)
+		return 0;
+
+	/* BUG: setvbuf on file stream is interfering with w32_fopen */
+	/* short circuit for now*/
+	return 0;
+
+	/*
+	 * if size is 0, set no buffering. 
+	 * Windows does not differentiate __IOLBF and _IOFBF
+	 */
+	if (size == 0)
+		return setvbuf(stream, NULL, _IONBF, 0);
+	else
+		return setvbuf(stream, buffer, mode, size);
 }
 
 char *
