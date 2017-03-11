@@ -632,7 +632,7 @@ rijndaelKeySetupEnc(u32 rk[/*4*(Nr + 1)*/], const u8 cipherKey[], int keyBits)
    	int i = 0;
 	u32 temp;
 
-	rk[0] = GETU32(cipherKey     );
+	rk[0] = GETU32(cipherKey    );
 	rk[1] = GETU32(cipherKey +  4);
 	rk[2] = GETU32(cipherKey +  8);
 	rk[3] = GETU32(cipherKey + 12);
