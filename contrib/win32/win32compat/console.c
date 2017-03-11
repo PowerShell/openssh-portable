@@ -1087,15 +1087,13 @@ ConMoveVisibleWindow(int offset)
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 	SMALL_RECT visibleWindowRect;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
-		return;
+	if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo)) {
+		memcpy(&visibleWindowRect, &consoleInfo.srWindow, sizeof(visibleWindowRect));
+		visibleWindowRect.Top += offset;
+		visibleWindowRect.Bottom += offset;
 
-	memcpy(&visibleWindowRect, &consoleInfo.srWindow, sizeof(visibleWindowRect));
-
-	visibleWindowRect.Top += offset;
-	visibleWindowRect.Bottom += offset;
-
-	SetConsoleWindowInfo(hOutputConsole, TRUE, &visibleWindowRect);
+		SetConsoleWindowInfo(hOutputConsole, TRUE, &visibleWindowRect);
+	}
 }
 
 void 

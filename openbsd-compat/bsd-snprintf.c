@@ -574,7 +574,7 @@ fmtint(char *buffer, size_t *currlen, size_t maxlen,
 		convert[place++] =
 			(caps? "0123456789ABCDEF":"0123456789abcdef")
 			[uvalue % (unsigned)base  ];
-		uvalue = (uvalue / (unsigned)base);
+		uvalue = (uvalue / (unsigned)base );
 	} while(uvalue && (place < 20));
 	if (place == 20) place--;
 	convert[place] = 0;
@@ -787,7 +787,7 @@ fmtfp (char *buffer, size_t *currlen, size_t maxlen,
 			my_modf(temp, &fracpart);
 			idx = (int) ((temp -fracpart +0.05)* 10.0);
 			/* idx = (int) ((((temp/10) -fracpart) +0.05) *10); */
-			/* printf ("%lf, %lf, %ld\n", temp, fracpart, idx); */
+			/* printf ("%lf, %lf, %ld\n", temp, fracpart, idx ); */
 			fconvert[fplace++] =
 			(caps? "0123456789ABCDEF":"0123456789abcdef")[idx];
 		} while(fracpart && (fplace < 311));

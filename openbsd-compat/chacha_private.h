@@ -31,7 +31,7 @@ typedef struct
 
 #define U32TO8_LITTLE(p, v) \
   do { \
-    (p)[0] = U8V((v)     ); \
+    (p)[0] = U8V((v)      ); \
     (p)[1] = U8V((v) >>  8); \
     (p)[2] = U8V((v) >> 16); \
     (p)[3] = U8V((v) >> 24); \
