@@ -88,13 +88,13 @@ ConInit(DWORD OutputHandle, BOOL fSmartInit)
 	hOutputConsole = GetStdHandle(OutputHandle);
 	if (hOutputConsole == INVALID_HANDLE_VALUE) {
 		dwRet = GetLastError();
-		printf("GetStdHandle on OutputHandle failed with %d\n", dwRet);
+		error("GetStdHandle on OutputHandle failed with %d\n", dwRet);
 		return dwRet;
 	}
 
 	if (!GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &dwSavedAttributes)) {
 		dwRet = GetLastError();
-		printf("GetConsoleMode on STD_INPUT_HANDLE failed with %d\n", dwRet);
+		error("GetConsoleMode on STD_INPUT_HANDLE failed with %d\n", dwRet);
 		return dwRet;
 	}
 
@@ -107,13 +107,13 @@ ConInit(DWORD OutputHandle, BOOL fSmartInit)
 
 	if (!SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), dwAttributes)) { /* Windows NT */
 		dwRet = GetLastError();
-		printf("SetConsoleMode on STD_INPUT_HANDLE failed with %d\n", dwRet);
+		error("SetConsoleMode on STD_INPUT_HANDLE failed with %d\n", dwRet);
 		return dwRet;
 	}
 
 	if (!GetConsoleMode(hOutputConsole, &dwAttributes)) {
 		dwRet = GetLastError();
-		printf("GetConsoleMode on hOutputConsole failed with %d\n", dwRet);
+		error("GetConsoleMode on hOutputConsole failed with %d\n", dwRet);
 		return dwRet;
 
 	}
@@ -135,10 +135,13 @@ ConInit(DWORD OutputHandle, BOOL fSmartInit)
 	/* if we are passing rawbuffer to console then we need to move the cursor to top 
 	 *  so that the clearscreen will not erase any lines.
 	 */
-	if(TRUE == isAnsiParsingRequired)
+	if (TRUE == isAnsiParsingRequired) {
 		SavedViewRect = csbi.srWindow;
-	else
+		debug("console doesn't support the ansi parsing");
+	} else {
 		ConMoveCurosorTop(csbi);
+		debug("console supports the ansi parsing");
+	}		
 
 	ConSetScreenX();
 	ConSetScreenY();
@@ -151,10 +154,8 @@ ConInit(DWORD OutputHandle, BOOL fSmartInit)
 int
 ConMoveCurosorTop(CONSOLE_SCREEN_BUFFER_INFO csbi)
 {
-	int cursorOffset = csbi.dwCursorPosition.Y - csbi.srWindow.Top;
-	
-	SMALL_RECT srWindow = { csbi.srWindow.Left,  csbi.srWindow.Top + cursorOffset,  csbi.srWindow.Right,  csbi.srWindow.Bottom + cursorOffset };
-	SetConsoleWindowInfo(hOutputConsole, TRUE, &srWindow);
+	int offset = csbi.dwCursorPosition.Y - csbi.srWindow.Top;	
+	ConMoveVisibleWindow(offset);
 
 	ConSaveViewRect();
 }
@@ -1081,7 +1082,7 @@ ConScrollUp(int topline, int botline)
 }
 
 void 
-MoveVisibleWindow()
+ConMoveVisibleWindow(int offset)
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 	SMALL_RECT visibleWindowRect;
@@ -1091,8 +1092,8 @@ MoveVisibleWindow()
 
 	memcpy(&visibleWindowRect, &consoleInfo.srWindow, sizeof(visibleWindowRect));
 
-	visibleWindowRect.Top++;
-	visibleWindowRect.Bottom++;
+	visibleWindowRect.Top += offset;
+	visibleWindowRect.Bottom += offset;
 
 	SetConsoleWindowInfo(hOutputConsole, TRUE, &visibleWindowRect);
 }

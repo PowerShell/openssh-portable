@@ -153,7 +153,7 @@ GoToNextLine()
 			ConMoveCursorPosition(-currentX, 0);		
 		} else {
 			/* max window buffer is not breached */
-			MoveVisibleWindow();
+			ConMoveVisibleWindow(1);
 			ConMoveCursorPosition(-currentX, 1);
 		}
 	} else /* If the cursor is NOT the last line of the visible window */

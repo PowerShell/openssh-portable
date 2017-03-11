@@ -561,11 +561,13 @@ ProcessEvent(void *p)
 	case EVENT_CONSOLE_CARET:
 	{
 		COORD co;
-		co.X = HIWORD(idChild);
-		co.Y = LOWORD(idChild);
-
+		co.X = LOWORD(idChild);
+		co.Y = HIWORD(idChild);
+		
 		lastX = co.X;
 		lastY = co.Y;
+
+		SendSetCursor(pipe_out, lastX + 1, lastY + 1);
 
 		break;
 	}
