@@ -575,7 +575,7 @@ sshpam_store_conv(int n, sshpam_const struct pam_message **msg,
 		case PAM_TEXT_INFO:
 			len = strlen(PAM_MSG_MEMBER(msg, i, msg));
 			buffer_append(&loginmsg, PAM_MSG_MEMBER(msg, i, msg), len);
-			buffer_append(&loginmsg, "\n", 1);
+			buffer_append(&loginmsg, "\n", 1 );
 			reply[i].resp_retcode = PAM_SUCCESS;
 			break;
 		default:
