@@ -69,7 +69,7 @@ ssh_askpass(char *askpass, const char *msg)
 #ifdef WINDOWS 
 	/* spawd child for Windows */
 	fcntl(p[0], F_SETFD, FD_CLOEXEC);
-	pid = spawn_child(askpass, p[1], p[1], STDERR_FILENO, 0);
+	pid = spawn_child(askpass, NULL, p[1], p[1], STDERR_FILENO, 0);
 	if (pid < 0) {
 #else  /* !WINDOWS */
 	if ((pid = fork()) < 0) {
