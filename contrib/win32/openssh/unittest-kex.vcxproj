@@ -87,14 +87,14 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(OpenSSH-Bin-Path)$(Platform)\$(Configuration)\</OutDir>
+    <OutDir>$(OpenSSH-Bin-Path)$(Platform)\$(Configuration)\$(TargetName)\</OutDir>
     <IntDir>$(Platform)\$(Configuration)\$(TargetName)\</IntDir>
     <TargetName>unittest-kex</TargetName>
     <IncludePath>$(OpenSSH-Src-Path)contrib\win32\win32compat\inc;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>$(OpenSSH-Bin-Path)$(Platform)\$(Configuration)\</OutDir>
+    <OutDir>$(OpenSSH-Bin-Path)$(Platform)\$(Configuration)\$(TargetName)\</OutDir>
     <IntDir>$(Platform)\$(Configuration)\$(TargetName)\</IntDir>
     <TargetName>unittest-kex</TargetName>
     <IncludePath>$(OpenSSH-Src-Path)contrib\win32\win32compat\inc;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>

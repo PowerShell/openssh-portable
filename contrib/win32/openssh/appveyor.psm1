@@ -505,7 +505,7 @@ function Deploy-OpenSSHTests
     Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Include *.ps1,*.psm1, sshd_config -Force -ErrorAction Stop
     #copy all unit tests.
     $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$RealConfiguration"    
-    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Container -Include unittest-*, hostkeys, sshkey -Recurse -Force -ErrorAction Stop
+    Copy-Item -Path "$sourceDir\*" -Destination "$OpenSSHTestDir\" -Container -Include unittest-* -Recurse -Force -ErrorAction Stop
     
     #restart the service to use the test copy of sshd_config
     Restart-Service sshd
@@ -668,25 +668,18 @@ function Run-OpenSSHUnitTest
     {
         Remove-Item -Path $unitTestOutputFile -Force -ErrorAction SilentlyContinue
     }
-
-    $unitTestFiles = Get-ChildItem -Path "$testRoot\unittest*.exe" -Exclude unittest-sshkey.exe,unittest-kex.exe
+    $testFolders = Get-ChildItem unittest-*.exe -Recurse -Exclude unittest-sshkey.exe,unittest-kex.exe | 
+                    ForEach-Object{ Split-Path $_.FullName} | 
+                    Sort-Object -Unique
     $testfailed = $false
-    if ($unitTestFiles -ne $null)
-    {        
-        $unitTestFiles | % {
-            Write-Output "Running OpenSSH unit $($_.FullName)..."
-            if($_.name.Contains("hostkeys"))
-            {
-                & $_.FullName -d $testRoot\hostkeys >> $unitTestOutputFile
-            }
-            elseif($_.name.Contains("sshkey"))
-            {
-                & $_.FullName -d $testRoot\sshkey >> $unitTestOutputFile
-            }
-            else
-            {
-                & $_.FullName >> $unitTestOutputFile
-            }
+    if ($testFolders -ne $null)
+    {
+        $testFolders | % {
+            Push-Location $_.FullName
+            $unittestFile = "$(Split-Path $_.FullName -Leaf).exe"
+            Write-Output "Running OpenSSH unit $unittestFile ..."
+            & $unittestFile >> $_.FullName\..\$unitTestOutputFile
+            
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
             {
@@ -696,6 +689,7 @@ function Run-OpenSSHUnitTest
                 Write-BuildMessage -Message $errorMessage -Category Error
                 Set-BuildVariable TestPassed False
             }
+            Pop-Location
         }
         if(-not $testfailed)
         {
