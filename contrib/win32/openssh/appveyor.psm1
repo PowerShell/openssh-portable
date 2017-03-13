@@ -752,7 +752,7 @@ function Upload-OpenSSHTestResults
     
     if($env:TestPassed -ieq 'True')
     {
-        Write-BuildMessage -Message "The checkin validation success!"
+        Write-BuildMessage -Message "The checkin validation success!" -Category Information
     }
     else
     {
