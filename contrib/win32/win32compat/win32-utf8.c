@@ -5,12 +5,14 @@
 #include <stdarg.h>
 
 int
-vfmprintf(FILE *f, const char *fmt, va_list list) {
+vfmprintf(FILE *f, const char *fmt, va_list list)
+{
 	return vfprintf(f, fmt, list);
 }
 
 int
-mprintf(const char *fmt, ...) {
+mprintf(const char *fmt, ...)
+{
 	int ret = 0;
 	va_list valist;
 	va_start(valist, fmt);
@@ -20,7 +22,8 @@ mprintf(const char *fmt, ...) {
 }
 
 int
-fmprintf(FILE *f, const char *fmt, ...) {
+fmprintf(FILE *f, const char *fmt, ...)
+{
 	int ret = 0;
 	va_list valist;
 	va_start(valist, fmt);
@@ -30,7 +33,8 @@ fmprintf(FILE *f, const char *fmt, ...) {
 }
 
 int
-snmprintf(char *buf, size_t len, int *written, const char *fmt, ...) {
+snmprintf(char *buf, size_t len, int *written, const char *fmt, ...)
+{
 	int ret;
 	va_list valist;
 	va_start(valist, fmt);
@@ -43,7 +47,8 @@ snmprintf(char *buf, size_t len, int *written, const char *fmt, ...) {
 }
 
 void
-msetlocale(void) {
+msetlocale(void)
+{
 	return;
 }
 
