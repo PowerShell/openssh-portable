@@ -36,7 +36,7 @@
 #ifndef __TNNET_H
 #define __TNNET_H
 
- size_t telProcessNetwork (char *buf, size_t len, unsigned char **respbuf, size_t *resplen);
+ size_t processBuffer (char *buf, size_t len, unsigned char **respbuf, size_t *resplen);
  
 #endif
  

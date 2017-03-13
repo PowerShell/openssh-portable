@@ -120,8 +120,8 @@ ConInit(DWORD OutputHandle, BOOL fSmartInit)
 
 	dwAttributes |= (DWORD)ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 
-	if (NULL != getenv("USE_CUSTOM_ANSI_PARSER"))
-		isCustomAnsiParse = atoi(getenv("USE_CUSTOM_ANSI_PARSER"));
+	if (NULL != getenv("SSH_INBOX_TERM_PARSER"))
+		isCustomAnsiParse = atoi(getenv("SSH_INBOX_TERM_PARSER"));
 
 	/* We use our custom ANSI parser when
 	 * a) User sets the environment variable "USE_CUSTOM_ANSI_PARSE" to 1

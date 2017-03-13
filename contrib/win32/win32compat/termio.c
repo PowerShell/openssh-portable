@@ -150,7 +150,7 @@ WriteThread(_In_ LPVOID lpParameter)
 	pio->write_details.buf[write_status.to_transfer] = '\0';
 	
 	if (TRUE == isAnsiParsingRequired) {
-		telProcessNetwork(pio->write_details.buf, write_status.to_transfer, &respbuf, &resplen);
+		processBuffer(pio->write_details.buf, write_status.to_transfer, &respbuf, &resplen);
 		/* TODO - respbuf is not null in some cases, this needs to be returned back via read stream */
 		write_status.transferred = write_status.to_transfer;
 	} else {
