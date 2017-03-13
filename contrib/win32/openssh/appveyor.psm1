@@ -668,17 +668,17 @@ function Run-OpenSSHUnitTest
     {
         Remove-Item -Path $unitTestOutputFile -Force -ErrorAction SilentlyContinue
     }
-    $testFolders = Get-ChildItem unittest-*.exe -Recurse -Exclude unittest-sshkey.exe,unittest-kex.exe | `
-                    ForEach-Object{ Split-Path $_.FullName} | `
-                    Sort-Object -Unique
+    $testFolders = Get-ChildItem unittest-*.exe -Recurse -Exclude unittest-sshkey.exe,unittest-kex.exe |
+                 ForEach-Object{ Split-Path $_.FullName} |
+                 Sort-Object -Unique
     $testfailed = $false
     if ($testFolders -ne $null)
     {
         $testFolders | % {
-            Push-Location $_.FullName
-            $unittestFile = "$(Split-Path $_.FullName -Leaf).exe"
+            Push-Location $_
+            $unittestFile = "$(Split-Path $_ -Leaf).exe"
             Write-Output "Running OpenSSH unit $unittestFile ..."
-            & $unittestFile >> $_.FullName\..\$unitTestOutputFile
+            & .\$unittestFile >> $unitTestOutputFile
             
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
