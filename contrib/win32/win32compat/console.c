@@ -59,7 +59,7 @@ COORD SavedScreenSize = { 0,0 };
 COORD SavedScreenCursor = { 0, 0 };
 SMALL_RECT SavedViewRect = { 0,0,0,0 };
 CONSOLE_SCREEN_BUFFER_INFOEX SavedWindowState;
-BOOL isCustomAnsiParse = FALSE;
+BOOL isConHostParserEnabled = TRUE;
 
 typedef struct _SCREEN_RECORD {
 	PCHAR_INFO pScreenBuf;
@@ -69,11 +69,12 @@ typedef struct _SCREEN_RECORD {
 }SCREEN_RECORD, *PSCREEN_RECORD;
 
 PSCREEN_RECORD pSavedScreenRec = NULL;
+int in_raw_mode = 0;
 char *consoleTitle = "Microsoft openSSH client";
 
-/* Used to Initialize the Console for output */
+/* Used to enter the raw mode */
 int 
-ConInit(DWORD OutputHandle, BOOL fSmartInit)
+ConEnterRawMode(DWORD OutputHandle, BOOL fSmartInit)
 {
 	OSVERSIONINFO os;
 	DWORD dwAttributes = 0;
@@ -120,14 +121,14 @@ ConInit(DWORD OutputHandle, BOOL fSmartInit)
 
 	dwAttributes |= (DWORD)ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 
-	if (NULL != getenv("SSH_INBOX_TERM_PARSER"))
-		isCustomAnsiParse = atoi(getenv("SSH_INBOX_TERM_PARSER"));
+	if (NULL != getenv("SSH_TERM_CONHOST_PARSER"))
+		isConHostParserEnabled = atoi(getenv("SSH_TERM_CONHOST_PARSER"));
 
 	/* We use our custom ANSI parser when
-	 * a) User sets the environment variable "USE_CUSTOM_ANSI_PARSE" to 1
+	 * a) User sets the environment variable "SSH_TERM_CONHOST_PARSER" to 0
 	 * b) or when the console doesn't have the inbuilt capability to parse the ANSI/Xterm raw buffer.
 	 */	 
-	if (TRUE == isCustomAnsiParse || !SetConsoleMode(hOutputConsole, dwAttributes)) /* Windows NT */
+	if (FALSE == isConHostParserEnabled || !SetConsoleMode(hOutputConsole, dwAttributes)) /* Windows NT */
 		isAnsiParsingRequired = TRUE;
 			
 	GetConsoleScreenBufferInfo(hOutputConsole, &csbi);
@@ -148,24 +149,17 @@ ConInit(DWORD OutputHandle, BOOL fSmartInit)
 	ScrollTop = 0;
 	ScrollBottom = ConVisibleWindowHeight();		
 	
+	in_raw_mode = 1;
+
 	return 0;
-}
-
-int
-ConMoveCurosorTop(CONSOLE_SCREEN_BUFFER_INFO csbi)
-{
-	int offset = csbi.dwCursorPosition.Y - csbi.srWindow.Top;	
-	ConMoveVisibleWindow(offset);
-
-	ConSaveViewRect();
 }
 
 /* Used to Uninitialize the Console */
 int 
-ConUnInit()
+ConExitRawMode()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
-	
+	in_raw_mode = 0;
 	if (hOutputConsole == NULL || !GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
 		return 0;
 	
@@ -174,7 +168,7 @@ ConUnInit()
 	return 0;
 }
 
-/* Used to Uninitialize the Console */
+/* Used to exit the raw mode */
 int 
 ConUnInitWithRestore()
 {
@@ -1478,15 +1472,19 @@ ConRestoreViewRect()
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 	HWND hwnd = FindWindow(NULL, consoleTitle);
 
+	WINDOWPLACEMENT wp;
+	wp.length = sizeof(WINDOWPLACEMENT);
+	GetWindowPlacement(hwnd, &wp);
+
 	if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo) &&
 	    ((consoleInfo.srWindow.Top != SavedViewRect.Top ||
 	      consoleInfo.srWindow.Bottom != SavedViewRect.Bottom))) {
-	      		
-		if (SavedViewRect.Right - SavedViewRect.Left > consoleInfo.dwSize.X) {
+		if ((SavedViewRect.Right - SavedViewRect.Left > consoleInfo.dwSize.X) ||
+		    (wp.showCmd == SW_SHOWMAXIMIZED)) {
 			COORD coordScreen;
 			coordScreen.X = SavedViewRect.Right - SavedViewRect.Left;
 			coordScreen.Y = consoleInfo.dwSize.Y;
-			SetConsoleScreenBufferSize(hOutputConsole, coordScreen);			
+			SetConsoleScreenBufferSize(hOutputConsole, coordScreen);
 			
 			ShowWindow(hwnd, SW_SHOWMAXIMIZED);
 		} else
@@ -1551,4 +1549,13 @@ ConSaveWindowsState()
 		return;
 
 	SavedWindowState = csbiex;
+}
+
+void
+ConMoveCurosorTop(CONSOLE_SCREEN_BUFFER_INFO csbi)
+{
+	int offset = csbi.dwCursorPosition.Y - csbi.srWindow.Top;
+	ConMoveVisibleWindow(offset);
+
+	ConSaveViewRect();
 }

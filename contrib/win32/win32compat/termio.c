@@ -39,10 +39,11 @@
 #include "w32fd.h"
 #include "tncon.h"
 #include "inc\utf.h"
+#include "tnnet.h"
 
 #define TERM_IO_BUF_SIZE 2048
 
-extern BOOL isAnsiParsingRequired;
+extern int in_raw_mode;
 
 struct io_status {
 	DWORD to_transfer;
@@ -149,19 +150,16 @@ WriteThread(_In_ LPVOID lpParameter)
 	
 	pio->write_details.buf[write_status.to_transfer] = '\0';
 	
-	if (TRUE == isAnsiParsingRequired) {
-		processBuffer(pio->write_details.buf, write_status.to_transfer, &respbuf, &resplen);
-		/* TODO - respbuf is not null in some cases, this needs to be returned back via read stream */
-		write_status.transferred = write_status.to_transfer;
-	} else {
-		/* Console has the capability to parse so pass the raw buffer to console directly */
-		ConRestoreViewRect(); /* Restore the visible window, otherwise WriteConsoleW() gets messy */
+	if (0 == in_raw_mode) {
 		wchar_t* t = utf8_to_utf16(pio->write_details.buf);
 		WriteConsoleW(WINHANDLE(pio), t, wcslen(t), 0, 0);
-		free(t);
-		write_status.transferred = write_status.to_transfer;
-		ConSaveViewRect();
-	}	
+		free(t);		
+	} else {
+		processBuffer(WINHANDLE(pio), pio->write_details.buf, write_status.to_transfer, &respbuf, &resplen);
+		/* TODO - respbuf is not null in some cases, this needs to be returned back via read stream */
+	}
+
+	write_status.transferred = write_status.to_transfer;
 
 	if (0 == QueueUserAPC(WriteAPCProc, main_thread, (ULONG_PTR)pio)) {
 		debug("TermWrite thread - ERROR QueueUserAPC failed %d, io:%p", GetLastError(), pio);
@@ -169,6 +167,7 @@ WriteThread(_In_ LPVOID lpParameter)
 		pio->write_details.error = GetLastError();
 		DebugBreak();
 	}
+
 	return 0;
 }
 

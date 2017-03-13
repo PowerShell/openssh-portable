@@ -81,9 +81,9 @@
 
 typedef void *  SCREEN_HANDLE;
 
-int ConInit(DWORD OutputHandle, BOOL fSmartInit);
+int ConEnterRawMode(DWORD OutputHandle, BOOL fSmartInit);
 int ConUnInitWithRestore();
-int ConUnInit();
+int ConExitRawMode();
 BOOL ConIsRedirected(HANDLE hInput);
 HANDLE GetConsoleOutputHandle();
 HANDLE GetConsoleInputHandle();
@@ -137,4 +137,5 @@ void ConSaveWindowsState();
 void ConMoveVisibleWindow(int offset);
 int is_cursor_at_lastline_of_visible_window();
 void ConGetCursorPosition(int *x, int *y);
+void ConMoveCurosorTop(CONSOLE_SCREEN_BUFFER_INFO csbi);
 #endif
