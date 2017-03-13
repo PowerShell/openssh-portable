@@ -668,8 +668,8 @@ function Run-OpenSSHUnitTest
     {
         Remove-Item -Path $unitTestOutputFile -Force -ErrorAction SilentlyContinue
     }
-    $testFolders = Get-ChildItem unittest-*.exe -Recurse -Exclude unittest-sshkey.exe,unittest-kex.exe | 
-                    ForEach-Object{ Split-Path $_.FullName} | 
+    $testFolders = Get-ChildItem unittest-*.exe -Recurse -Exclude unittest-sshkey.exe,unittest-kex.exe | `
+                    ForEach-Object{ Split-Path $_.FullName} | `
                     Sort-Object -Unique
     $testfailed = $false
     if ($testFolders -ne $null)
