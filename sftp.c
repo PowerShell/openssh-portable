@@ -2163,12 +2163,11 @@ interactive_loop(struct sftp_conn *conn, char *file1, char *file2)
 		free(dir);
 	}
 
-	interactive = !batchmode && isatty(STDIN_FILENO);
-	err = 0;
-
 	setvbuf(stdout, NULL, _IOLBF, 0);
 	setvbuf(infile, NULL, _IOLBF, 0);
 
+	interactive = !batchmode && isatty(STDIN_FILENO);
+	err = 0;
 	for (;;) {
 		char *cp;
 

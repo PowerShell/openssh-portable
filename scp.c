@@ -1476,4 +1476,3 @@ lostconn(int signo)
 	else
 		exit(1);
 }
-
