@@ -228,6 +228,7 @@ sys_auth_passwd(Authctxt *authctxt, const char *password)
 /*
 * Authenticate on Windows - Pass credentials to ssh-agent and retrieve token
 * upon successful authentication
+* TODO - password is sent in plain text over IPC. Consider implications. 
 */
 int sys_auth_passwd(Authctxt *authctxt, const char *password)
 {
