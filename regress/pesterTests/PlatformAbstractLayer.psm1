@@ -356,7 +356,6 @@ Class Machine
     }
 
     [void] AddPasswordSetting([string] $pass) {
-        if ($this.Platform -eq [PlatformType]::Windows) {        
             $env:SSH_ASKPASS="$($env:ComSpec) /c echo $pass"
         }
     }
