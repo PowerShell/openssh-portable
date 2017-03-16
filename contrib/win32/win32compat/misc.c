@@ -404,6 +404,16 @@ w32_ioctl(int d, int request, ...)
 	}
 }
 
+/* 
+ * spawn a child process 
+ * - specified by cmd with agruments argv
+ * - with std handles set to in, out, err
+ * - flags are passed to CreateProcess call
+ * 
+ * cmd will be internally decoarated with a set of '"'
+ * to account for any spaces within the commandline
+ * this decoration is done only when additional arguments are passed in argv
+ */
 int
 spawn_child(char* cmd, char** argv, int in, int out, int err, DWORD flags)
 {
@@ -446,22 +456,19 @@ spawn_child(char* cmd, char** argv, int in, int out, int err, DWORD flags)
 
 	/* add current module path to start if needed */
 	t = cmdline;
-	*t++ = '\"';
+	if (argv && argv[0])
+		*t++ = '\"';
 	if (add_module_path) {
 		memcpy(t, w32_programdir(), strlen(w32_programdir()));
 		t += strlen(w32_programdir());
 		*t++ = '\\';
 	}
 	
-	while (*cmd == '\"')
-		cmd++;
-
 	memcpy(t, cmd, strlen(cmd));
 	t += strlen(cmd);
 
-	while ( *(t-1) == '\"')
-		t--;
-	*t++ = '\"';
+	if (argv && argv[0])
+		*t++ = '\"';
 
 	if (argv) {
 		t1 = argv;
