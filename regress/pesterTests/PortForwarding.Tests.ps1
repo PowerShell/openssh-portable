@@ -4,6 +4,8 @@ Describe "Tests for portforwarding" -Tags "CI" {
     BeforeAll {        
         $fileName = "test.txt"
         $filePath = Join-Path ${TestDrive} $fileName
+        $logName = "log.txt"
+        $logPath = Join-Path ${TestDrive} $logName
 
         [Machine] $client = [Machine]::new([MachineRole]::Client)
         [Machine] $server = [Machine]::new([MachineRole]::Server)
@@ -41,12 +43,13 @@ Describe "Tests for portforwarding" -Tags "CI" {
 
     AfterEach {
         Remove-Item -Path $filePath -Force -ea silentlycontinue
+        Remove-Item -Path $logPath -Force -ea silentlycontinue
     }
 
     It '<Title>' -TestCases:$testData {
         param([string]$Title, $Options, $port)
            
-        $str = ".\ssh $($Options) $($server.localAdminUserName)@$($server.MachineName) powershell.exe Test-WSMan -computer 127.0.0.1 -port $port > $filePath"
+        $str = ".\ssh -E $logPath $($Options) $($server.localAdminUserName)@$($server.MachineName) powershell.exe Test-WSMan -computer 127.0.0.1 -port $port > $filePath"
         $client.RunCmd($str)
         #validate file content.           
         $content = Get-Content $filePath
