@@ -3,6 +3,8 @@ Import-Module $PSScriptRoot\build.psm1 -Force -DisableNameChecking
 $repoRoot = Get-RepositoryRoot
 $script:logFile = join-path $repoRoot.FullName "appveyor.log"
 $script:messageFile = join-path $repoRoot.FullName "BuildMessage.log"
+$OpenSSHDir_default = "$env:SystemDrive\OpenSSH"
+$OpenSSHTestDir_default = "$env:SystemDrive\OpenSSHTests"
 
 <#
     Called by Write-BuildMsg to write to the build log, if it exists. 
@@ -292,7 +294,7 @@ function Install-OpenSSH
     [CmdletBinding()]
     param
     (    
-        [string] $OpenSSHDir = "$env:SystemDrive\OpenSSH",
+        [string] $OpenSSHDir = $OpenSSHDir_default,
 
         [ValidateSet('Debug', 'Release', '')]
         [string]$Configuration = "",
@@ -308,6 +310,7 @@ function Install-OpenSSH
     .\ssh-keygen.exe -A
     Start-Service ssh-agent
     &( "$OpenSSHDir\install-sshlsa.ps1")
+    $env:Path += ';' + $OpenSSHDir
 
     Set-Service sshd -StartupType Automatic 
     Set-Service ssh-agent -StartupType Automatic
@@ -326,7 +329,7 @@ function UnInstall-OpenSSH
     [CmdletBinding()]
     param
     (    
-        [string] $OpenSSHDir = "$env:SystemDrive\OpenSSH"
+        [string] $OpenSSHDir = $OpenSSHDir_default
     )    
 
     Push-Location $OpenSSHDir
@@ -334,6 +337,7 @@ function UnInstall-OpenSSH
     Stop-Service sshd    
     &( "$OpenSSHDir\uninstall-sshd.ps1")
     &( "$OpenSSHDir\uninstall-sshlsa.ps1")
+    $env:Path = $env:Path.Replace(';' + $OpenSSHDir,'')
     Pop-Location
 }
 
@@ -346,7 +350,7 @@ function Build-Win32OpenSSHPackage
     [CmdletBinding()]
     param
     (    
-        [string] $OpenSSHDir = "$env:SystemDrive\OpenSSH",
+        [string] $OpenSSHDir = $OpenSSHDir_default,
 
         [ValidateSet('Debug', 'Release', '')]
         [string]$Configuration = "",
@@ -439,6 +443,157 @@ function Build-Win32OpenSSHPackage
     [System.IO.Compression.ZipFile]::CreateFromDirectory($OpenSSHDir, $package)
 }
 
+
+$testaccounts = "sshtest_ssouser", "sshtest_pubkeyuser", "sshtest_passwduser"
+$testaccountPassword = "P@ssw0rd_1" | ConvertTo-SecureString -AsPlainText -Force 
+    
+<#
+    .Synopsis
+    Setup-OpenSSHTestEnvironment
+#>
+function Setup-OpenSSHTestEnvironment
+{
+    [CmdletBinding()]
+    param
+    (    
+        [string] $OpenSSHDir = $OpenSSHDir_default,
+        [string] $OpenSSHTestDir = $OpenSSHTestDir_default,
+        [bool] $Quiet = $false
+    )
+
+    if ($Quiet -eq $false) {
+        Write-Host 'WARNING: Following changes will be made to OpenSSH configuration'
+        Write-Host '  - sshd_config will be backed up as sshd_config.ori'
+        Write-Host '  - will be replaced with a test sshd_config'
+        Write-Host '  - %user%\.ssh\known_hosts will be backed up as known_hosts.ori'
+        Write-Host '  - will be replaced with a test known_hosts'
+        Write-Host '  - sshd test listener will be on port 47002'
+        Write-Host '  - %userprofile%\.ssh\known_hosts will be modified with test host key entry'
+        Write-Host '  - test accounts - ssouser, pubkeyuser and passwduser will be added'
+        Write-Host 'To cleanup - Run Cleanup-OpenSSHTestEnvironment'
+    }
+
+    if (-not(Test-Path(Join-Path $OpenSSHDir ssh.exe)))
+    {
+        Throw 'cannot find OpenSSH binaries under ' + $OpenSSHDir + '. Try -OpenSSHDir parameter'
+    }
+
+    try 
+    {
+        $sshcmd = get-command ssh.exe
+    } 
+    catch [System.Exception] 
+    {
+        Throw 'Cannot find ssh.exe. Make sure OpenSSH binary path is in %PATH%'
+    }
+
+    # TODO - ensure ssh.exe is being picked from $OpenSSHDir. Multiple versions may exist
+
+    if (-not(Test-Path($OpenSSHTestDir))) {
+        Throw $OpenSSHTestDir +' does not exist. Try setting -OpenSSHTestDir parameter'
+    }
+
+    if ((Get-ChildItem $OpenSSHTestDir).Count -eq 0) {
+        Throw 'Nothing found in ' + $OpenSSHTestDir
+    }
+
+    #Backup existing OpenSSH configuration
+    if (-not(Test-Path (Join-Path $OpenSSHDir sshd_config.ori))) {
+        Copy-Item (Join-Path $OpenSSHDir sshd_config) (Join-Path $OpenSSHDir sshd_config.ori)
+    }
+    
+    # copy new sshd_config
+    Stop-Service sshd
+    Stop-Service ssh-agent
+    Copy-Item (Join-Path $OpenSSHTestDir sshd_config) (Join-Path $OpenSSHDir sshd_config)
+    Copy-Item $OpenSSHTestDir\sshtest*hostkey* $OpenSSHDir
+    Start-Service sshd
+
+    #Backup existing known_hosts and replace with test version
+    #TODO - account for custom known_hosts locations
+    if (Test-Path (Join-Path $home .ssh\known_hosts)) {
+        Copy-Item (Join-Path $home .ssh\known_hosts) (Join-Path $home .ssh\known_hosts.ori) 
+    }
+    Copy-Item (Join-Path $OpenSSHTestDir known_hosts) (Join-Path $home .ssh\known_hosts)
+
+    # create test accounts
+    foreach ($user in $testaccounts) {
+        New-LocalUser -Name $user -Password $testaccountPassword -ErrorAction SilentlyContinue
+    }
+
+    #setup single sign on for ssouser
+    #TODO - this is Windows specific. Need to be in PAL
+    $ssouser = Get-LocalUser sshtest_ssouser
+    $ssouserProfileRegistry = Join-Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList' $ssouser.SID
+    if (-not(Test-Path $ssouserProfileRegistry)) {
+        #create profile
+        if (-not($env:DISPLAY)) {$env:DISPLAY=1}
+        $env:SSH_ASKPASS="$($env:ComSpec) /c echo P@ssw0rd_1"
+        ssh -p 47002 sshtest_ssouser@localhost whoami 
+        if ($env:DISPLAY -eq 1) {Remove-Item env:\DISPLAY}
+        remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
+    }
+    $ssouserProfile = (Get-ItemProperty -Path $ssouserProfileRegistry -Name 'ProfileImagePath').ProfileImagePath
+    mkdir -Path (Join-Path $ssouserProfile .ssh) -ErrorAction SilentlyContinue
+    Copy-Item (Join-Path $OpenSSHTestDir sshtest_userssokey_ed25519.pub) (Join-Path $ssouserProfile .ssh\authorized_keys)
+    $acl = get-acl (Join-Path $ssouserProfile .ssh\authorized_keys)
+    $ar = New-Object  System.Security.AccessControl.FileSystemAccessRule("NT Service\sshd", "Read", "Allow")
+    $acl.SetAccessRule($ar)
+    Set-Acl  (Join-Path $ssouserProfile .ssh\authorized_keys) $acl
+    $ssouserpubkey = Join-Path $OpenSSHTestDir sshtest_userssokey_ed25519
+    ssh-add $ssouserpubkey
+
+}
+
+
+<#
+    .Synopsis
+    Cleanup-OpenSSHTestEnvironment
+#>
+function Cleanup-OpenSSHTestEnvironment
+{
+
+    [CmdletBinding()]
+    param
+    (    
+        [string] $OpenSSHDir = $OpenSSHDir_default,
+        [string] $OpenSSHTestDir = $OpenSSHTestDir_default
+    )
+
+    # .exe - Windows specific. TODO - PAL 
+    if (-not(Test-Path(Join-Path $OpenSSHDir ssh.exe)))
+    {
+        Throw 'cannot find OpenSSH binaries under ' + $OpenSSHDir + '. Try -OpenSSHDir parameter'
+    }
+
+    #Restore sshd_config
+    if (Test-Path (Join-Path $OpenSSHDir sshd_config.ori)) {
+        Stop-Service sshd
+        Stop-Service ssh-agent
+        Copy-Item (Join-Path $OpenSSHDir sshd_config.ori) (Join-Path $OpenSSHDir sshd_config)
+        Remove-Item (Join-Path $OpenSSHDir sshd_config.ori) -Force
+        Remove-Item $OpenSSHDir\sshtest*hostkey* -Force
+        Start-Service sshd
+    }
+    
+    #Restore known_hosts
+    if (Test-Path (Join-Path $home .ssh\known_hosts.ori)) {
+        Copy-Item (Join-Path $home .ssh\known_hosts.ori) (Join-Path $home .ssh\known_hosts)
+        Remove-Item  (Join-Path $home .ssh\known_hosts.ori) -Force
+    }
+
+    # delete accounts
+    foreach ($user in $testaccounts) {
+        Remove-LocalUser -Name $user -ErrorAction SilentlyContinue
+    }
+    
+    # remove registered keys
+    $ssouserpubkey = Join-Path $OpenSSHTestDir sshtest_userssokey_ed25519
+    ssh-add -d $ssouserpubkey       
+
+}
+
+
 <#
     .Synopsis
     After build and test run completes, upload all artifacts from the build machine.
@@ -448,7 +603,7 @@ function Deploy-OpenSSHTests
     [CmdletBinding()]
     param
     (    
-        [string] $OpenSSHTestDir = "$env:SystemDrive\OpenSSH",
+        [string] $OpenSSHTestDir = $OpenSSHTestDir_default,
 
         [ValidateSet('Debug', 'Release', '')]
         [string]$Configuration = "",
@@ -502,7 +657,7 @@ function Deploy-OpenSSHTests
     [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
     #copy all pester tests
     $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "regress\pesterTests"
-    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Include *.ps1,*.psm1, sshd_config -Force -ErrorAction Stop
+    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Include *.ps1,*.psm1, sshd_config, known_hosts, sshtest_* -Force -ErrorAction Stop
     #copy all unit tests.
     $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$RealConfiguration"    
     Copy-Item -Path "$sourceDir\*" -Destination "$OpenSSHTestDir\" -Container -Include unittest-* -Recurse -Force -ErrorAction Stop
@@ -761,4 +916,4 @@ function Upload-OpenSSHTestResults
     }
 }
 
-Export-ModuleMember -Function Set-BuildVariable, Invoke-AppVeyorBuild, Install-OpenSSH, Install-TestDependencies, GetLocalPSCorePath, Upload-OpenSSHTestResults, Run-OpenSSHTests, Publish-Artifact, Start-SSHBuild, Deploy-OpenSSHTests, Run-OpenSSHUnitTest,Run-OpenSSHPesterTest,Check-PesterTestResult
+Export-ModuleMember -Function Set-BuildVariable, Invoke-AppVeyorBuild, Install-OpenSSH, Install-TestDependencies, Setup-OpenSSHTestEnvironment, Cleanup-OpenSSHTestEnvironment, GetLocalPSCorePath, Upload-OpenSSHTestResults, Run-OpenSSHTests, Publish-Artifact, Start-SSHBuild, Deploy-OpenSSHTests, Run-OpenSSHUnitTest,Run-OpenSSHPesterTest,Check-PesterTestResult
