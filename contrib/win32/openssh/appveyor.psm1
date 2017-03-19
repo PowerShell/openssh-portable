@@ -5,6 +5,8 @@ $script:logFile = join-path $repoRoot.FullName "appveyor.log"
 $script:messageFile = join-path $repoRoot.FullName "BuildMessage.log"
 $OpenSSHDir_default = "$env:SystemDrive\OpenSSH"
 $OpenSSHTestDir_default = "$env:SystemDrive\OpenSSHTests"
+$PesterTestResultsFile_default = Join-Path $OpenSSHTestDir_default "PesterTestResults.xml"
+$UnitTestResultsFile_default = Join-Path $OpenSSHTestDir_default "UnitTestResults.txt"
 
 <#
     Called by Write-BuildMsg to write to the build log, if it exists. 
@@ -99,6 +101,8 @@ function Invoke-AppVeyorFull
         Invoke-AppVeyorBuild
         Install-OpenSSH
         Install-TestDependencies
+        Deploy-OpenSSHTests
+        Setup-OpenSSHTestEnvironment
         Run-OpenSSHTests
         Publish-Artifact
     }
@@ -543,6 +547,9 @@ function Setup-OpenSSHTestEnvironment
     $ssouserpubkey = Join-Path $OpenSSHTestDir sshtest_userssokey_ed25519
     ssh-add $ssouserpubkey
 
+    #TODO - scp tests need an admin user. This restriction should be removed
+    net localgroup Administrators sshtest_ssouser /add
+
 }
 
 
@@ -747,8 +754,8 @@ function Publish-Artifact
     }
 
     Add-Artifact  -artifacts $artifacts -FileToAdd "$packageFolder\Win32OpenSSH*.zip"
-    Add-Artifact  -artifacts $artifacts -FileToAdd "$env:SystemDrive\OpenSSH\UnitTestResults.txt"
-    Add-Artifact  -artifacts $artifacts -FileToAdd "$env:SystemDrive\OpenSSH\TestError.txt"
+    Add-Artifact  -artifacts $artifacts -FileToAdd $UnitTestResultsFile_default
+    Add-Artifact  -artifacts $artifacts -FileToAdd $PesterTestResultsFile_default
 
     # Get the build.log file for each build configuration        
     Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName)
@@ -770,27 +777,27 @@ function Publish-Artifact
 #>
 function Run-OpenSSHPesterTest
 {
-    param($testRoot = "$env:SystemDrive\OpenSSH", 
-        $outputXml = "$env:SystemDrive\OpenSSH\TestResults.xml")
+    param($OpenSSHTestDir = $OpenSSHTestDir_default, 
+        $PesterTestResultsFile = $PesterTestResultsFile_default)
      
    # Discover all CI tests and run them.
-    Push-Location $testRoot
+    Push-Location $OpenSSHTestDir
     Write-Log -Message "Running OpenSSH Pester tests..."    
-    $testFolders = Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique
-    Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $outputXml -Tag 'CI'
+    $testFolders = Get-ChildItem *.tests.ps1 -Recurse -Exclude SSHDConfig.tests.ps1, SSH.Tests.ps1 | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique
+    Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $PesterTestResultsFile -Tag 'CI'
     Pop-Location
 }
 
 function Check-PesterTestResult
 {
-    param($outputXml = "$env:SystemDrive\OpenSSH\TestResults.xml")
-    if (-not (Test-Path $outputXml))
+    param($PesterTestResultsFile = "$env:SystemDrive\OpenSSH\TestResults.xml")
+    if (-not (Test-Path $PesterTestResultsFile))
     {
         Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
-        Write-BuildMessage -Message "Test result file $outputXml not found after tests." -Category Error
+        Write-BuildMessage -Message "Test result file $PesterTestResultsFile not found after tests." -Category Error
         Set-BuildVariable TestPassed False
     }
-    $xml = [xml](Get-Content -raw $outputXml)
+    $xml = [xml](Get-Content -raw $PesterTestResultsFile)
     if ([int]$xml.'test-results'.failures -gt 0) 
     {
         $errorMessage = "$($xml.'test-results'.failures) tests in regress\pesterTests failed. Detail test log is at TestResults.xml."
@@ -813,15 +820,15 @@ function Check-PesterTestResult
 #>
 function Run-OpenSSHUnitTest
 {
-    param($testRoot = "$env:SystemDrive\OpenSSH",
-         $unitTestOutputFile = "$env:SystemDrive\OpenSSH\UnitTestResults.txt")
+    param($OpenSSHTestDir = $OpenSSHTestDir_default,
+         $UnitTestResultsFile = $UnitTestResultsFile_default)
      
    # Discover all CI tests and run them.
-    Push-Location $testRoot
+    Push-Location $OpenSSHTestDir
     Write-Log -Message "Running OpenSSH unit tests..."
     if (Test-Path $unitTestOutputFile)    
     {
-        Remove-Item -Path $unitTestOutputFile -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $UnitTestResultsFile -Force -ErrorAction SilentlyContinue
     }
     $testFolders = Get-ChildItem unittest-*.exe -Recurse -Exclude unittest-sshkey.exe,unittest-kex.exe |
                  ForEach-Object{ Split-Path $_.FullName} |
@@ -833,7 +840,7 @@ function Run-OpenSSHUnitTest
             Push-Location $_
             $unittestFile = "$(Split-Path $_ -Leaf).exe"
             Write-Output "Running OpenSSH unit $unittestFile ..."
-            & .\$unittestFile >> $unitTestOutputFile
+            & .\$unittestFile >> $UnitTestResultsFile
             
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
@@ -870,16 +877,14 @@ function Run-OpenSSHTests
 {  
   [CmdletBinding()]
   param
-  (    
-      [string] $testResultsFile = "$env:SystemDrive\OpenSSH\TestResults.xml",
-      [string] $unitTestResultsFile = "$env:SystemDrive\OpenSSH\UnitTestResults.txt",
-      [string] $testInstallFolder = "$env:SystemDrive\OpenSSH"
+  (   [string] $OpenSSHTestDir = $OpenSSHTestDir_default,
+      [string] $PesterTestResultsFile = $PesterTestResultsFile_default,
+      [string] $UnitTestResultsFile = $UnitTestResultsFile_default
   )  
 
-  Deploy-OpenSSHTests -OpenSSHTestDir $testInstallFolder
-  Run-OpenSSHUnitTest -testRoot $testInstallFolder -unitTestOutputFile $unitTestResultsFile
+  Run-OpenSSHUnitTest -OpenSSHTestDir $OpenSSHTestDir -UnitTestResultsFile $UnitTestResultsFile
   # Run all pester tests.
-  Run-OpenSSHPesterTest -testRoot $testInstallFolder -outputXml $testResultsFile
+  Run-OpenSSHPesterTest -OpenSSHTestDir $OpenSSHTestDir -PesterTestResultsFile $PesterTestResultsFile
 }
 
 function Upload-OpenSSHTestResults
