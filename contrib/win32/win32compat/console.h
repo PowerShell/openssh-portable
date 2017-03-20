@@ -79,6 +79,10 @@
 #define false FALSE
 #define bool BOOL
 
+#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING  0x4
+#endif
+
 typedef void *  SCREEN_HANDLE;
 
 int ConEnterRawMode(DWORD OutputHandle, BOOL fSmartInit);

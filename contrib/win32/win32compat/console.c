@@ -38,10 +38,6 @@
 
 #include "console.h"
 
-#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
-#define ENABLE_VIRTUAL_TERMINAL_PROCESSING  0x4
-#endif
-
 HANDLE	hOutputConsole = NULL;
 DWORD	dwSavedAttributes = 0;
 WORD	wStartingAttributes = 0;
