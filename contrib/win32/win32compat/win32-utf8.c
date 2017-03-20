@@ -1,5 +1,5 @@
 /* 
- * Temporary Windows versions of functions implemented in utf8.c
+ * Windows versions of functions implemented in utf8.c
  */
 #include <stdio.h>
 #include <stdarg.h>
