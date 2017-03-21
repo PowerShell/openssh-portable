@@ -51,6 +51,10 @@
 # include <vis.h>
 #endif
 
+#if WINDOWS
+#include <Aclapi.h>
+#endif
+
 #include "xmalloc.h"
 #include "ssh.h"
 #include "compat.h"
@@ -1728,14 +1732,35 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 	char line[4096];
 	int linenum;
 	int bad_options = 0;
+	PSECURITY_DESCRIPTOR pSD = NULL;
 
 	if (depth < 0 || depth > READCONF_MAX_DEPTH)
 		fatal("Too many recursive configuration includes");
 
-	if ((f = fopen(filename, "r")) == NULL)
+	if ((f = fopen(filename, "r")) == NULL) 
 		return 0;
+#if WINDOWS  
+	/* permission checks for Windows */
+	HANDLE h;
+	PSID owner_sid = NULL;
+	DWORD ret;
 
-#ifndef WINDOWS /* TODO - implement permission checks for Windows */
+	h = (HANDLE)_get_osfhandle(_fileno(f));
+
+	/*Get the owner SID of the file.*/
+	ret = GetSecurityInfo(
+		h,
+		SE_FILE_OBJECT,
+		OWNER_SECURITY_INFORMATION,
+		&owner_sid,
+		NULL,
+		NULL,
+		NULL,
+		&pSD);
+	if(ret != ERROR_SUCCESS) 
+		fatal("failed to retrieve the owner sid of the file %s with errorcode %d", filename, ret);
+
+#else
 	if (flags & SSHCONF_CHECKPERM) {
 		struct stat sb;
 
