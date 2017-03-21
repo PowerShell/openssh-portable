@@ -2,11 +2,39 @@
 
 
 
-# defaults of common parameters used in various functions
-$OpenSSHDir_default = "$env:SystemDrive\OpenSSH"
-$OpenSSHTestDir_default = "$env:SystemDrive\OpenSSHTests"
-$PesterTestResultsFile_default = Join-Path $OpenSSHTestDir_default "PesterTestResults.xml"
-$UnitTestResultsFile_default = Join-Path $OpenSSHTestDir_default "UnitTestResults.txt"
+# test environment parametes initialized with defaults
+$script:OpenSSHDir = "$env:SystemDrive\OpenSSH"
+$script:OpenSSHTestDir = "$env:SystemDrive\OpenSSHTests"
+$script:PesterTestResultsFile = Join-Path $script:OpenSSHTestDir "PesterTestResults.xml"
+$script:UnitTestResultsFile = Join-Path $script:OpenSSHTestDir "UnitTestResults.txt"
+$script:TestSetupLogFile = Join-Path $script:OpenSSHTestDir "TestSetupLog.txt"
+
+function Set-OpenSSHTestParams
+{
+    param
+    (    
+        [string] $OpenSSHDir = $script:OpenSSHDir,
+        [string] $OpenSSHTestDir = $script:OpenSSHTestDir,
+        [string] $PesterTestResultsFile = $script:PesterTestResultsFile,
+        [string] $UnitTestResultsFile = $script:UnitTestResultsFile,
+        [string] $TestSetupLogFile = $script:TestSetupLogFile
+    )
+
+    $script:OpenSSHDir = $OpenSSHDir
+    $script:OpenSSHTestDir = $OpenSSHTestDir
+    $script:PesterTestResultsFile = $PesterTestResultsFile
+    $script:UnitTestResultsFile = $UnitTestResultsFile
+    $script:TestSetupLogFile = $TestSetupLogFile
+}
+
+function Dump-OpenSSHTestParams
+{
+    Write-Host "OpenSSHDir:  "   $script:OpenSSHDir
+    Write-Host "OpenSSHTestDir:  "  $script:OpenSSHTestDir
+    Write-Host "PesterTestResultsFile: "  $script:PesterTestResultsFile
+    Write-Host "UnitTestResultsFile: "  $script:UnitTestResultsFile
+    Write-Host "TestSetupLogFile: " $script:TestSetupLogFile
+}
 
 
 <#
@@ -15,7 +43,7 @@ $UnitTestResultsFile_default = Join-Path $OpenSSHTestDir_default "UnitTestResult
       1) Pester for running the tests  
       2) sysinternals required by the tests on windows.
   #>
-function Install-TestDependencies
+function Install-OpenSSHTestDependencies
 {
     [CmdletBinding()]
     param ()
@@ -24,23 +52,23 @@ function Install-TestDependencies
     if(-not (Get-Command "choco" -ErrorAction SilentlyContinue))
     {
         Write-Log -Message "Chocolatey not present. Installing chocolatey."
-        Invoke-Expression ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1')) 2>&1 >> $script:logFile
+        Invoke-Expression ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1')) 2>&1 >> $script:TestSetupLogFile
     }
 
     $isModuleAvailable = Get-Module 'Pester' -ListAvailable
     if (-not ($isModuleAvailable))
     {      
       Write-Log -Message "Installing Pester..." 
-      choco install Pester -y --force --limitoutput 2>&1 >> $script:logFile
+      choco install Pester -y --force --limitoutput 2>&1 >> $script:TestSetupLogFile
     }
 
     if ( -not (Test-Path "$env:ProgramData\chocolatey\lib\sysinternals\tools" ) ) {        
         Write-Log -Message "sysinternals not present. Installing sysinternals."
-        choco install sysinternals -y --force --limitoutput 2>&1 >> $script:logFile
+        choco install sysinternals -y --force --limitoutput 2>&1 >> $script:TestSetupLogFile
     }
     <#if ( (-not (Test-Path "${env:ProgramFiles(x86)}\Windows Kits\8.1\Debuggers\" )) -and (-not (Test-Path "${env:ProgramFiles(x86)}\Windows Kits\10\Debuggers\" ))) {        
         Write-Log -Message "debugger not present. Installing windbg."
-        choco install windbg --force  --limitoutput -y 2>&1 >> $script:logFile
+        choco install windbg --force  --limitoutput -y 2>&1 >> $script:TestSetupLogFile
     }
     Install-PSCoreFromGithub
     $psCorePath = GetLocalPSCorePath
@@ -62,8 +90,6 @@ function Setup-OpenSSHTestEnvironment
     [CmdletBinding()]
     param
     (    
-        [string] $OpenSSHDir = $OpenSSHDir_default,
-        [string] $OpenSSHTestDir = $OpenSSHTestDir_default,
         [bool] $Quiet = $false
     )
 
@@ -164,10 +190,7 @@ function Cleanup-OpenSSHTestEnvironment
 
     [CmdletBinding()]
     param
-    (    
-        [string] $OpenSSHDir = $OpenSSHDir_default,
-        [string] $OpenSSHTestDir = $OpenSSHTestDir_default
-    )
+    ()
 
     # .exe - Windows specific. TODO - PAL 
     if (-not(Test-Path(Join-Path $OpenSSHDir ssh.exe)))
@@ -211,9 +234,7 @@ function Deploy-OpenSSHTests
 {
     [CmdletBinding()]
     param
-    (    
-        [string] $OpenSSHTestDir = $OpenSSHTestDir_default,
-
+    (
         [ValidateSet('Debug', 'Release', '')]
         [string]$Configuration = "",
 
@@ -282,8 +303,6 @@ function Deploy-OpenSSHTests
 #>
 function Run-OpenSSHPesterTest
 {
-    param($OpenSSHTestDir = $OpenSSHTestDir_default, 
-        $PesterTestResultsFile = $PesterTestResultsFile_default)
      
    # Discover all CI tests and run them.
     Push-Location $OpenSSHTestDir
@@ -293,9 +312,8 @@ function Run-OpenSSHPesterTest
     Pop-Location
 }
 
-function Check-PesterTestResult
+function Check-OpenSSHPesterTestResult
 {
-    param($PesterTestResultsFile = "$env:SystemDrive\OpenSSH\TestResults.xml")
     if (-not (Test-Path $PesterTestResultsFile))
     {
         Write-Warning "$($xml.'test-results'.failures) tests in regress\pesterTests failed"
@@ -325,8 +343,6 @@ function Check-PesterTestResult
 #>
 function Run-OpenSSHUnitTest
 {
-    param($OpenSSHTestDir = $OpenSSHTestDir_default,
-         $UnitTestResultsFile = $UnitTestResultsFile_default)
      
    # Discover all CI tests and run them.
     Push-Location $OpenSSHTestDir
@@ -366,4 +382,4 @@ function Run-OpenSSHUnitTest
     Pop-Location
 }
 
-Export-ModuleMember -Function Install-TestDependencies, Setup-OpenSSHTestEnvironment, Cleanup-OpenSSHTestEnvironment, Deploy-OpenSSHTests, Run-OpenSSHUnitTest, Run-OpenSSHPesterTest, Check-PesterTestResult
+Export-ModuleMember -Function Set-OpenSSHTestParams, Dump-OpenSSHTestParams, Install-OpenSSHTestDependencies, Setup-OpenSSHTestEnvironment, Cleanup-OpenSSHTestEnvironment, Deploy-OpenSSHTests, Run-OpenSSHUnitTest, Run-OpenSSHPesterTest, Check-OpenSSHPesterTestResult
