@@ -127,15 +127,12 @@ WARNING: Following changes will be made to OpenSSH configuration
     if (-not (Test-Path $backupConfigPath -PathType Leaf)) {
         Copy-Item (Join-Path $global:OpenSSHDir sshd_config) $backupConfigPath -Force
     }
-    Write-Host "M1"
+    
     # copy new sshd_config    
-    Copy-Item (Join-Path $global:OpenSSHTestDir sshd_config) (Join-Path $global:OpenSSHDir sshd_config) -Force
-    Write-Host "M2"
-    Copy-Item $global:OpenSSHTestDir\sshtest*hostkey* $global:OpenSSHDir -Force
-    Write-Host "M3"
+    Copy-Item (Join-Path $global:OpenSSHTestDir sshd_config) (Join-Path $global:OpenSSHDir sshd_config) -Force    
+    Copy-Item $global:OpenSSHTestDir\sshtest*hostkey* $global:OpenSSHDir -Force    
     Restart-Service sshd -Force
-    Write-Host "M4"
-
+   
     #Backup existing known_hosts and replace with test version
     #TODO - account for custom known_hosts locations
     $knowHostsDirectoryPath = Join-Path $home .ssh
@@ -144,11 +141,9 @@ WARNING: Following changes will be made to OpenSSH configuration
     {
         $null = New-Item -ItemType Directory -Path $knowHostsDirectoryPath -Force -ErrorAction SilentlyContinue | out-null
     }
-    Write-Host "M5"
     if (Test-Path $knowHostsFilePath -PathType Leaf) {
         Copy-Item $knowHostsFilePath (Join-Path $knowHostsDirectoryPath known_hosts.ori) -Force
     }
-    Write-Host "M6"
     Copy-Item (Join-Path $global:OpenSSHTestDir known_hosts) $knowHostsFilePath -Force
     Write-Host "after copying everything!"
 
@@ -157,7 +152,6 @@ WARNING: Following changes will be made to OpenSSH configuration
     foreach ($user in $global:OpenSSHTestAccounts)
     {
         net user $user $global:OpenSSHTestAccountsPassword /ADD 2>&1 >> $global:TestSetupLogFile
-        Write-Host "M7"
     }
 
     #setup single sign on for ssouser
@@ -165,14 +159,12 @@ WARNING: Following changes will be made to OpenSSH configuration
     $ssousersid = Get-UserSID -User sshtest_ssouser
     write-host "sid: $ssousersid"
     $ssouserProfileRegistry = Join-Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" $ssousersid
-    Write-Host "M8"
-    if (-not (Test-Path $ssouserProfileRegistry) ) {
-        Write-Host "M9"
+    if (-not (Test-Path $ssouserProfileRegistry) ) {        
         #create profile
         if (-not($env:DISPLAY)) { $env:DISPLAY = 1 }
         $env:SSH_ASKPASS="$($env:ComSpec) /c echo $($global:OpenSSHTestAccountsPassword)"
         Write-Host "M10"
-        ssh -p 47002 sshtest_ssouser@localhost whoami 
+        cmd /c "ssh -p 47002 sshtest_ssouser@localhost hostname > test.txt"
         Write-Host "M11"
         if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
         Write-Host "M12"
@@ -224,12 +216,10 @@ function Get-UserSID
         )
     if([string]::IsNullOrEmpty($Domain))
     {
-        Write-Host "Get-UserSID-user only"
         $objUser = New-Object System.Security.Principal.NTAccount($User)
     }
     else
     {
-        Write-Host "Get-UserSID-domainuser"
         $objUser = New-Object System.Security.Principal.NTAccount($Domain, $User)
     }
     $strSID = $objUser.Translate([System.Security.Principal.SecurityIdentifier])
@@ -245,7 +235,7 @@ function Cleanup-OpenSSHTestEnvironment
     # .exe - Windows specific. TODO - PAL 
     if (-not (Test-Path (Join-Path $global:OpenSSHDir ssh.exe) -PathType Leaf))
     {
-        Throw 'cannot find OpenSSH binaries under ' + $global:OpenSSHDir + '. Try -OpenSSHDir parameter'
+        Throw "Cannot find OpenSSH binaries under $($global:OpenSSHDir). Try -OpenSSHDir parameter"
     }
 
     #Restore sshd_config
@@ -271,7 +261,7 @@ function Cleanup-OpenSSHTestEnvironment
     }
     
     # remove registered keys    
-    ssh-add -d Join-Path $global:OpenSSHTestDir sshtest_userssokey_ed25519
+    ssh-add -d (Join-Path $global:OpenSSHTestDir sshtest_userssokey_ed25519)
 }
 
 <#
@@ -294,9 +284,8 @@ function Install-OpenSSH
 
     Push-Location $global:OpenSSHDir 
     & ( "$global:OpenSSHDir\install-sshd.ps1") 
-    .\ssh-keygen.exe -A
     Start-Service ssh-agent
-    &( "$global:OpenSSHDir\install-sshlsa.ps1")
+    & ( "$global:OpenSSHDir\install-sshlsa.ps1")
 
     #machine will be reboot after Install-openssh anyway
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
