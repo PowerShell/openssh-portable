@@ -544,6 +544,10 @@ function Write-Log
         [ValidateNotNullOrEmpty()]
         [string] $Message
     )
+    if(-not (Test-Path (Split-Path $script:TestSetupLogFile) -PathType Container))
+    {
+        $null = New-Item -ItemType Directory -Path (Split-Path $script:TestSetupLogFile) -Force -ErrorAction SilentlyContinue | out-null
+    }
     if (-not ([string]::IsNullOrEmpty($script:TestSetupLogFile)))
     {
         Add-Content -Path $script:TestSetupLogFile -Value $Message
