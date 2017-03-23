@@ -4,7 +4,7 @@ $global:OpenSSHDir = "$env:SystemDrive\OpenSSH"
 $global:OpenSSHTestDir = "$env:SystemDrive\OpenSSHTests"
 $global:PesterTestResultsFile = Join-Path $global:OpenSSHTestDir "PesterTestResults.xml"
 $global:UnitTestResultsFile = Join-Path $global:OpenSSHTestDir "UnitTestResults.txt"
-$script:TestSetupLogFile = Join-Path $global:OpenSSHTestDir "TestSetupLog.txt"
+$global:TestSetupLogFile = Join-Path $global:OpenSSHTestDir "TestSetupLog.txt"
 
 function Set-OpenSSHTestParams
 {
@@ -14,14 +14,14 @@ function Set-OpenSSHTestParams
         [string] $OpenSSHTestDir = $global:OpenSSHTestDir,
         [string] $PesterTestResultsFile = $global:PesterTestResultsFile,
         [string] $UnitTestResultsFile = $global:UnitTestResultsFile,
-        [string] $TestSetupLogFile = $script:TestSetupLogFile
+        [string] $TestSetupLogFile = $global:TestSetupLogFile
     )
 
     $global:OpenSSHDir = $OpenSSHDir
     $global:OpenSSHTestDir = $OpenSSHTestDir
     $global:PesterTestResultsFile = $PesterTestResultsFile
     $global:UnitTestResultsFile = $UnitTestResultsFile
-    $script:TestSetupLogFile = $TestSetupLogFile
+    $global:TestSetupLogFile = $TestSetupLogFile
 }
 
 function Dump-OpenSSHTestParams
@@ -31,7 +31,7 @@ OpenSSHDir:              $global:OpenSSHDir
 OpenSSHTestDir:          $global:OpenSSHTestDir
 PesterTestResultsFile:   $global:PesterTestResultsFile
 UnitTestResultsFile:     $global:UnitTestResultsFile
-TestSetupLogFile:        $script:TestSetupLogFile
+TestSetupLogFile:        $global:TestSetupLogFile
 "@
 
     Write-Host $out
@@ -53,19 +53,19 @@ function Install-OpenSSHTestDependencies
     if(-not (Get-Command "choco" -ErrorAction SilentlyContinue))
     {
         Write-Log -Message "Chocolatey not present. Installing chocolatey."
-        Invoke-Expression ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1')) 2>&1 >> $script:TestSetupLogFile
+        Invoke-Expression ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1')) 2>&1 >> $global:TestSetupLogFile
     }
 
     $isModuleAvailable = Get-Module 'Pester' -ListAvailable
     if (-not ($isModuleAvailable))
     {      
       Write-Log -Message "Installing Pester..." 
-      choco install Pester -y --force --limitoutput 2>&1 >> $script:TestSetupLogFile
+      choco install Pester -y --force --limitoutput 2>&1 >> $global:TestSetupLogFile
     }
 
     if ( -not (Test-Path "$env:ProgramData\chocolatey\lib\sysinternals\tools" ) ) {        
         Write-Log -Message "sysinternals not present. Installing sysinternals."
-        choco install sysinternals -y --force --limitoutput 2>&1 >> $script:TestSetupLogFile
+        choco install sysinternals -y --force --limitoutput 2>&1 >> $global:TestSetupLogFile
     }
 }
 
@@ -112,7 +112,7 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     #ensure ssh.exe is being picked from $global:OpenSSHDir. Multiple versions may exist    
     if ( (Split-Path $sshcmd.Source) -ine "$global:OpenSSHDir" ) {
-        Throw "ssh.exe is not being picked from $global:OpenSSHDir. "
+        Throw "ssh.exe is not being picked from $($sshcmd.Source) instead of $global:OpenSSHDir. "
     }    
 
     if (-not (Test-Path $global:OpenSSHTestDir -PathType Container )) {
@@ -151,7 +151,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     #TODO - this is Windows specific. Need to be in PAL
     foreach ($user in $testaccounts)
     {
-        net user $user "P@ssw0rd_1" /ADD 2>&1 >> $script:TestSetupLogFile
+        net user $user "P@ssw0rd_1" /ADD 2>&1 >> $global:TestSetupLogFile
     }
 
     #setup single sign on for ssouser
@@ -544,13 +544,13 @@ function Write-Log
         [ValidateNotNullOrEmpty()]
         [string] $Message
     )
-    if(-not (Test-Path (Split-Path $script:TestSetupLogFile) -PathType Container))
+    if(-not (Test-Path (Split-Path $global:TestSetupLogFile) -PathType Container))
     {
-        $null = New-Item -ItemType Directory -Path (Split-Path $script:TestSetupLogFile) -Force -ErrorAction SilentlyContinue | out-null
+        $null = New-Item -ItemType Directory -Path (Split-Path $global:TestSetupLogFile) -Force -ErrorAction SilentlyContinue | out-null
     }
-    if (-not ([string]::IsNullOrEmpty($script:TestSetupLogFile)))
+    if (-not ([string]::IsNullOrEmpty($global:TestSetupLogFile)))
     {
-        Add-Content -Path $script:TestSetupLogFile -Value $Message
+        Add-Content -Path $global:TestSetupLogFile -Value $Message
     }  
 }
 

@@ -177,15 +177,15 @@ function Publish-Artifact
     Write-Host -ForegroundColor Yellow "Publishing project artifacts"
     [System.Collections.ArrayList] $artifacts = [System.Collections.ArrayList]::new()   
     
-    
     Add-Artifact  -artifacts $artifacts -FileToAdd $global:UnitTestResultsFile
     Add-Artifact  -artifacts $artifacts -FileToAdd $global:PesterTestResultsFile
+    Add-Artifact  -artifacts $artifacts -FileToAdd $script:TestSetupLogFile
 
     # Get the build.log file for each build configuration        
     Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName)
 
-    Add-Artifact  -artifacts $artifacts -FileToAdd "$script:logFile"
-    Add-Artifact  -artifacts $artifacts -FileToAdd "$script:messageFile"
+    Add-Artifact  -artifacts $artifacts -FileToAdd $script:logFile
+    Add-Artifact  -artifacts $artifacts -FileToAdd $script:messageFile    
 
     foreach ($artifact in $artifacts)
     {
@@ -198,15 +198,7 @@ function Publish-Artifact
 <#
       .Synopsis
       Runs the tests for this repo
-
-      .Parameter testResultsFile
-      The name of the xml file to write pester results.
-      The default value is '.\testResults.xml'
-
-      .Example
-      .\RunTests.ps1 
-      Runs the tests and creates the default 'testResults.xml'
-  #>
+#>
 function Run-OpenSSHTests
 {
   $unitTestFailed = Run-OpenSSHUnitTest
@@ -244,7 +236,10 @@ function Run-OpenSSHTests
     }#>
 }
 
-
+<#
+      .Synopsis
+      upload OpenSSH pester test results.
+#>
 function Upload-OpenSSHTestResults
 { 
     if ($env:APPVEYOR_JOB_ID)
