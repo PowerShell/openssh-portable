@@ -104,6 +104,11 @@ function Invoke-AppVeyorBuild
       Write-BuildMessage -Message "OpenSSH binaries build success!" -Category Information
 }
 
+function Remove-Path
+{
+
+}
+
 <#
     .Synopsis
     Adds a build log to the list of published artifacts.
@@ -177,15 +182,15 @@ function Publish-Artifact
     Write-Host -ForegroundColor Yellow "Publishing project artifacts"
     [System.Collections.ArrayList] $artifacts = [System.Collections.ArrayList]::new()   
     
+    # Get the build.log file for each build configuration        
+    #Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName)
+        
     Add-Artifact  -artifacts $artifacts -FileToAdd $global:UnitTestResultsFile
     Add-Artifact  -artifacts $artifacts -FileToAdd $global:PesterTestResultsFile
-    Add-Artifact  -artifacts $artifacts -FileToAdd $script:TestSetupLogFile
-
-    # Get the build.log file for each build configuration        
-    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName)
+    Add-Artifact  -artifacts $artifacts -FileToAdd $script:TestSetupLogFile   
 
     Add-Artifact  -artifacts $artifacts -FileToAdd $script:logFile
-    Add-Artifact  -artifacts $artifacts -FileToAdd $script:messageFile    
+    Add-Artifact  -artifacts $artifacts -FileToAdd $script:messageFile   
 
     foreach ($artifact in $artifacts)
     {

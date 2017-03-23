@@ -5,6 +5,8 @@ $global:OpenSSHTestDir = "$env:SystemDrive\OpenSSHTests"
 $global:PesterTestResultsFile = Join-Path $global:OpenSSHTestDir "PesterTestResults.xml"
 $global:UnitTestResultsFile = Join-Path $global:OpenSSHTestDir "UnitTestResults.txt"
 $global:TestSetupLogFile = Join-Path $global:OpenSSHTestDir "TestSetupLog.txt"
+$global:OpenSSHTestAccounts = "sshtest_ssouser", "sshtest_pubkeyuser", "sshtest_passwduser"
+$global:OpenSSHTestAccountsPassword = "P@ssw0rd_1"
 
 function Set-OpenSSHTestParams
 {
@@ -68,10 +70,7 @@ function Install-OpenSSHTestDependencies
         choco install sysinternals -y --force --limitoutput 2>&1 >> $global:TestSetupLogFile
     }
 }
-
-$testaccounts = "sshtest_ssouser", "sshtest_pubkeyuser", "sshtest_passwduser"
-$testaccountPassword = "P@ssw0rd_1" | ConvertTo-SecureString -AsPlainText -Force
-    
+   
 <#
     .Synopsis
     Setup-OpenSSHTestEnvironment
@@ -112,7 +111,7 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     #ensure ssh.exe is being picked from $global:OpenSSHDir. Multiple versions may exist    
     if ( (Split-Path $sshcmd.Source) -ine "$global:OpenSSHDir" ) {
-        Throw "ssh.exe is not being picked from $($sshcmd.Source) instead of $global:OpenSSHDir. "
+        Throw "ssh.exe is being picked from $($sshcmd.Source) instead of $global:OpenSSHDir. "
     }    
 
     if (-not (Test-Path $global:OpenSSHTestDir -PathType Container )) {
@@ -149,9 +148,9 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     # create test accounts
     #TODO - this is Windows specific. Need to be in PAL
-    foreach ($user in $testaccounts)
+    foreach ($user in $global:OpenSSHTestAccounts)
     {
-        net user $user "P@ssw0rd_1" /ADD 2>&1 >> $global:TestSetupLogFile
+        net user $user $global:OpenSSHTestAccountsPassword /ADD 2>&1 >> $global:TestSetupLogFile
     }
 
     #setup single sign on for ssouser
@@ -161,7 +160,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     if (-not (Test-Path $ssouserProfileRegistry) ) {
         #create profile
         if (-not($env:DISPLAY)) { $env:DISPLAY = 1 }
-        $env:SSH_ASKPASS="$($env:ComSpec) /c echo P@ssw0rd_1"
+        $env:SSH_ASKPASS="$($env:ComSpec) /c echo $($global:OpenSSHTestAccountsPassword)"
         ssh -p 47002 sshtest_ssouser@localhost whoami 
         if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
         remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
@@ -239,7 +238,7 @@ function Cleanup-OpenSSHTestEnvironment
     }
 
     #Delete accounts
-    foreach ($user in $testaccounts)
+    foreach ($user in $global:OpenSSHTestAccounts)
     {
         net user $user /delete
     }
@@ -277,8 +276,8 @@ function Install-OpenSSH
     $newMachineEnvironmentPath = $machinePath
     if (-not ($machinePath.ToLower().Contains($($global:OpenSSHDir).ToLower())))
     {
-        $newMachineEnvironmentPath += ";$($global:OpenSSHDir)"
-        $env:Path += ";$($global:OpenSSHDir)"
+        $newMachineEnvironmentPath = "$($global:OpenSSHDir);$newMachineEnvironmentPath"
+        $env:Path = "$($global:OpenSSHDir);$env:Path"
     }
     # Update machine environment path
     if ($newMachineEnvironmentPath -ne $machinePath)
@@ -311,8 +310,8 @@ function UnInstall-OpenSSH
     $newMachineEnvironmentPath = $machinePath
     if ($machinePath.ToLower().Contains($($global:OpenSSHDir).ToLower()))
     {        
-        $newMachineEnvironmentPath.Replace(";$($global:OpenSSHDir)", '')
-        $env:Path = $env:Path.Replace(";$($global:OpenSSHDir)", '')
+        $newMachineEnvironmentPath.Replace("$($global:OpenSSHDir);", '')
+        $env:Path = $env:Path.Replace("$($global:OpenSSHDir);", '')
     }
 
     # Update machine environment path
