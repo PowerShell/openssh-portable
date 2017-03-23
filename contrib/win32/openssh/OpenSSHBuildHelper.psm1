@@ -1,6 +1,6 @@
 ﻿Set-StrictMode -Version Latest
 
-Import-Module .\OpenSSHCommonUtils.psm1
+Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -DisableNameChecking
 [string] $script:platform = $env:PROCESSOR_ARCHITECTURE
 [string] $script:vcPath = $null
 [System.IO.DirectoryInfo] $script:OpenSSHRoot = $null

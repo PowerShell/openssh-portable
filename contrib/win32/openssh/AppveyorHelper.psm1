@@ -1,6 +1,6 @@
 ﻿$ErrorActionPreference = 'Stop'
-Import-Module .\OpenSSHBuildHelper.psm1 -Force -DisableNameChecking
-Import-Module .\OpenSSHTestHelper.psm1 -Force -DisableNameChecking
+Import-Module $PSScriptRoot\OpenSSHBuildHelper.psm1 -Force -DisableNameChecking
+Import-Module $PSScriptRoot\OpenSSHTestHelper.psm1 -Force -DisableNameChecking
 
 $repoRoot = Get-RepositoryRoot
 $script:logFile = join-path $repoRoot.FullName "appveyor.log"

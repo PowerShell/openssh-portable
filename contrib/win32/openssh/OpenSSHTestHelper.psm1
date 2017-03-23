@@ -1,4 +1,4 @@
-﻿Import-Module .\OpenSSHCommonUtils.psm1
+﻿Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -DisableNameChecking
 # test environment parametes initialized with defaults
 $global:OpenSSHDir = "$env:SystemDrive\OpenSSH"
 $global:OpenSSHTestDir = "$env:SystemDrive\OpenSSHTests"
