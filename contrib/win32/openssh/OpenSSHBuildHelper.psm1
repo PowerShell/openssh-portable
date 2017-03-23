@@ -1,6 +1,6 @@
 ﻿Set-StrictMode -Version Latest
 
-Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -DisableNameChecking
+Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -force -DisableNameChecking
 [string] $script:platform = $env:PROCESSOR_ARCHITECTURE
 [string] $script:vcPath = $null
 [System.IO.DirectoryInfo] $script:OpenSSHRoot = $null
@@ -373,5 +373,4 @@ function Get-SolutionFile
 }
 
 
-
-Export-ModuleMember -Function Start-OpenSSHBuild, Get-RepositoryRoot, Get-BuildLogFile, Clone-Win32OpenSSH, Copy-OpenSSLSDK, Install-OpenSSH, Write-BuildMsg
+Export-ModuleMember -Function Start-OpenSSHBuild, Get-RepositoryRoot, Get-BuildLogFile, Clone-Win32OpenSSH, Copy-OpenSSLSDK, Install-OpenSSH, Write-BuildMsg, Get-RepositoryRoot, Get-BuildLogFile

@@ -104,11 +104,6 @@ function Invoke-AppVeyorBuild
       Write-BuildMessage -Message "OpenSSH binaries build success!" -Category Information
 }
 
-function Remove-Path
-{
-
-}
-
 <#
     .Synopsis
     Adds a build log to the list of published artifacts.
@@ -206,17 +201,20 @@ function Publish-Artifact
 #>
 function Run-OpenSSHTests
 {
-  $unitTestFailed = Run-OpenSSHUnitTest
+    Write-Host "Start running unit tests"
+    $unitTestFailed = Run-OpenSSHUnitTest
 
-  if($unitTestFailed)
-  {
-        Write-BuildMessage "At least one of the unit tests failed!" $errorMessage -Category Error
+    if($unitTestFailed)
+    {
+        Write-Host "At least one of the unit tests failed!" -ForegroundColor Yellow
+        Write-BuildMessage "At least one of the unit tests failed!" -Category Error
         Set-BuildVariable TestPassed False
-  }
-  else
-  {
+    }
+    else
+    {
+        Write-Host "All Unit tests passed!"
         Write-BuildMessage -Message "All Unit tests passed!" -Category Information    
-  }
+    }
   # Run all pester tests.
   <#Run-OpenSSHPesterTest
   if (-not (Test-Path $global:PesterTestResultsFile))
@@ -250,7 +248,7 @@ function Upload-OpenSSHTestResults
     if ($env:APPVEYOR_JOB_ID)
     {
         $resultFile = Resolve-Path $global:PesterTestResultsFile -ErrorAction Ignore
-        if($resultFile)
+        if( (Test-Path $global:PesterTestResultsFile) -and $resultFile)
         {
             (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", $resultFile)
              Write-BuildMessage -Message "Test results uploaded!" -Category Information
