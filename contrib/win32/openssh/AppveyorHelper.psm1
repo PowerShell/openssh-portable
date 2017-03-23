@@ -164,7 +164,7 @@ function Add-Artifact
     }
     else
     {
-        Write-Log -Message "Skip publishing package artifacts. $FileToAdd does not exist"
+        Write-Host -Message "Skip publishing package artifacts. $FileToAdd does not exist"
     }
 }
 
@@ -189,9 +189,9 @@ function Publish-Artifact
 
     foreach ($artifact in $artifacts)
     {
-        Write-Log -Message "Publishing $artifact as Appveyor artifact"
+        Write-log -Message "Publishing $artifact as Appveyor artifact"
         # NOTE: attempt to publish subsequent artifacts even if the current one fails
-        Push-AppveyorArtifact $artifact -ErrorAction "Continue"
+        Push-AppveyorArtifact $artifact -ErrorAction Continue
     }
 }
 
