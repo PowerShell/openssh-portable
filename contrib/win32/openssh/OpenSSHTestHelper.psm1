@@ -121,7 +121,6 @@ WARNING: Following changes will be made to OpenSSH configuration
     if ((Get-ChildItem $global:OpenSSHTestDir).Count -eq 0) {
         Throw "Nothing found in $global:OpenSSHTestDir. Run Deploy-OpenSSHTests to deploy tests"
     }
-    Write-Host "before copying everything!"
     #Backup existing OpenSSH configuration
     $backupConfigPath = Join-Path $global:OpenSSHDir sshd_config.ori
     if (-not (Test-Path $backupConfigPath -PathType Leaf)) {
@@ -145,7 +144,6 @@ WARNING: Following changes will be made to OpenSSH configuration
         Copy-Item $knowHostsFilePath (Join-Path $knowHostsDirectoryPath known_hosts.ori) -Force
     }
     Copy-Item (Join-Path $global:OpenSSHTestDir known_hosts) $knowHostsFilePath -Force
-    Write-Host "after copying everything!"
 
     # create test accounts
     #TODO - this is Windows specific. Need to be in PAL
@@ -157,44 +155,29 @@ WARNING: Following changes will be made to OpenSSH configuration
     #setup single sign on for ssouser
     #TODO - this is Windows specific. Need to be in PAL
     $ssousersid = Get-UserSID -User sshtest_ssouser
-    write-host "sid: $ssousersid"
     $ssouserProfileRegistry = Join-Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" $ssousersid
     if (-not (Test-Path $ssouserProfileRegistry) ) {        
         #create profile
         if (-not($env:DISPLAY)) { $env:DISPLAY = 1 }
         $env:SSH_ASKPASS="$($env:ComSpec) /c echo $($global:OpenSSHTestAccountsPassword)"
         Write-Host "M10"
-        cmd /c "ssh -p 47002 sshtest_ssouser@localhost hostname > test.txt"
-        Write-Host "M11"
+        cmd /c "ssh -p 47002 sshtest_ssouser@localhost echo %userprofile% > profile.txt"
         if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
-        Write-Host "M12"
         remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
-        Write-Host "M13"
     }
     $ssouserProfile = (Get-ItemProperty -Path $ssouserProfileRegistry -Name 'ProfileImagePath').ProfileImagePath
-    Write-Host "M14"
-    $null = New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null5
-    Write-Host "M15"
+    $null = New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
     $testPubKeyPath = Join-Path $global:OpenSSHTestDir sshtest_userssokey_ed25519.pub
-    Write-Host "M16"
     (Get-Content $testPubKeyPath -Raw).Replace("`r`n","`n") | Set-Content $testPubKeyPath -Force
-    Write-Host "M17"
-    Copy-Item $testPubKeyPath $authorizedKeyPath
-    Write-Host "M18"
+    Copy-Item $testPubKeyPath $authorizedKeyPath -Force -ErrorAction SilentlyContinue
     $acl = get-acl $authorizedKeyPath
-    Write-Host "acl: $acl"
     $ar = New-Object  System.Security.AccessControl.FileSystemAccessRule("NT Service\sshd", "Read", "Allow")
-    Write-Host "M19"
     $acl.SetAccessRule($ar)
-    Write-Host "M20"
     Set-Acl  $authorizedKeyPath $acl
-    Write-Host "M21"
     $testPriKeypath = Join-Path $global:OpenSSHTestDir sshtest_userssokey_ed25519
     (Get-Content $testPriKeypath -Raw).Replace("`r`n","`n") | Set-Content $testPriKeypath -Force
-    Write-Host "M22"
     ssh-add $testPriKeypath
-    Write-Host "M23"
 
     #TODO - scp tests need an admin user. This restriction should be removed
     <#if((Get-LocalGroupMember -SID s-1-5-32-544 -Member $ssouser -ErrorAction Ignore ) -eq $null)

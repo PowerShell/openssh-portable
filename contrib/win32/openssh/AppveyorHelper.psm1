@@ -180,16 +180,16 @@ function Publish-Artifact
     # Get the build.log file for each build configuration        
     #Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName)
         
-    Add-Artifact  -artifacts $artifacts -FileToAdd $global:UnitTestResultsFile
-    Add-Artifact  -artifacts $artifacts -FileToAdd $global:PesterTestResultsFile
-    Add-Artifact  -artifacts $artifacts -FileToAdd $script:TestSetupLogFile   
+    Add-Artifact -artifacts $artifacts -FileToAdd $global:UnitTestResultsFile
+    Add-Artifact -artifacts $artifacts -FileToAdd $global:PesterTestResultsFile
+    Add-Artifact -artifacts $artifacts -FileToAdd $script:TestSetupLogFile   
 
-    Add-Artifact  -artifacts $artifacts -FileToAdd $script:logFile
-    Add-Artifact  -artifacts $artifacts -FileToAdd $script:messageFile   
+    Add-Artifact -artifacts $artifacts -FileToAdd $script:logFile
+    Add-Artifact -artifacts $artifacts -FileToAdd $script:messageFile   
 
     foreach ($artifact in $artifacts)
     {
-        Write-log -Message "Publishing $artifact as Appveyor artifact"
+        Write-Host "Publishing $artifact as Appveyor artifact"
         # NOTE: attempt to publish subsequent artifacts even if the current one fails
         Push-AppveyorArtifact $artifact -ErrorAction Continue
     }
