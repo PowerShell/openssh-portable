@@ -1,5 +1,6 @@
-﻿
-Set-StrictMode -Version Latest
+﻿Set-StrictMode -Version Latest
+
+Import-Module .\OpenSSHCommonUtils.psm1
 [string] $script:platform = $env:PROCESSOR_ARCHITECTURE
 [string] $script:vcPath = $null
 [System.IO.DirectoryInfo] $script:OpenSSHRoot = $null
@@ -132,7 +133,7 @@ function Write-BuildMsg
 .Synopsis
     Verifies all tools and dependencies required for building Open SSH are installed on the machine.
 #>
-function Start-SSHBootstrap
+function Start-OpenSSHBootstrap
 {    
     [bool] $silent = -not $script:Verbose
 
@@ -140,7 +141,7 @@ function Start-SSHBootstrap
     Write-BuildMsg -AsInfo -Message "Checking tools and dependencies" -Silent:$silent
 
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
-    $newMachineEnvironmentPath = $machinePath    
+    $newMachineEnvironmentPath = $machinePath   
 
     # Install chocolatey
     $chocolateyPath = "$env:AllUsersProfile\chocolatey\bin"
@@ -289,7 +290,7 @@ function Copy-OpenSSLSDK
     }
 }
 
-function Start-SSHBuild
+function Start-OpenSSHBuild
 {
     [CmdletBinding(SupportsShouldProcess=$false)]    
     param
@@ -309,7 +310,6 @@ function Start-SSHBuild
     $script:OpenSSHRoot = Get-Item -Path $repositoryRoot.FullName
 	$script:gitRoot = split-path $script:OpenSSHRoot
 
-
     if($PSBoundParameters.ContainsKey("Verbose"))
     {
         $script:Verbose =  ($PSBoundParameters['Verbose']).IsPresent
@@ -324,7 +324,7 @@ function Start-SSHBuild
     
     Write-BuildMsg -AsInfo -Message "Starting Open SSH build; Build Log: $($script:BuildLogFile)"
 
-    Start-SSHBootstrap
+    Start-OpenSSHBootstrap
 
     Clone-Win32OpenSSH
     Copy-OpenSSLSDK
@@ -372,35 +372,6 @@ function Get-SolutionFile
     return Join-Path -Path $root -ChildPath "contrib\win32\openssh\Win32-OpenSSH.sln"    
 }
 
-<#
-.Synopsis
-    Finds the root of the git repository
 
-.Outputs
-    A System.IO.DirectoryInfo for the location of the root.
 
-.Inputs
-    None
-
-.Notes
-    FileNotFoundException is thrown if the current directory does not contain a CMakeLists.txt file.
-#>
-function Get-RepositoryRoot
-{
-    Set-StrictMode -Version Latest
-    $currentDir = (Get-Item -Path $PSCommandPath).Directory
-
-    while ($null -ne $currentDir.Parent)
-    {
-        $path = Join-Path -Path $currentDir.FullName -ChildPath '.git'
-        if (Test-Path -Path $path)
-        {
-            return $currentDir
-        }
-        $currentDir = $currentDir.Parent
-    }
-
-    throw new-object System.IO.DirectoryNotFoundException("Could not find the root of the GIT repository")
-}
-
-Export-ModuleMember -Function Start-SSHBuild, Get-RepositoryRoot, Get-BuildLogFile, Clone-Win32OpenSSH, Copy-OpenSSLSDK, Write-BuildMsg
+Export-ModuleMember -Function Start-OpenSSHBuild, Get-RepositoryRoot, Get-BuildLogFile, Clone-Win32OpenSSH, Copy-OpenSSLSDK, Install-OpenSSH, Write-BuildMsg
