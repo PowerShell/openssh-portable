@@ -1,4 +1,5 @@
-﻿Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -DisableNameChecking
+﻿$ErrorActionPreference = 'Stop'
+Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -DisableNameChecking
 # test environment parametes initialized with defaults
 $global:OpenSSHDir = "$env:SystemDrive\OpenSSH"
 $global:OpenSSHTestDir = "$env:SystemDrive\OpenSSHTests"
@@ -138,7 +139,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     $knowHostsFilePath = Join-Path $knowHostsDirectoryPath known_hosts
     if(-not (Test-Path $knowHostsDirectoryPath -PathType Container))
     {
-        $null = New-Item -ItemType Directory -Path $knowHostsDirectoryPath -Force -ErrorAction SilentlyContinue | out-null
+        New-Item -ItemType Directory -Path $knowHostsDirectoryPath -Force -ErrorAction SilentlyContinue | out-null
     }
     if (Test-Path $knowHostsFilePath -PathType Leaf) {
         Copy-Item $knowHostsFilePath (Join-Path $knowHostsDirectoryPath known_hosts.ori) -Force
@@ -160,13 +161,12 @@ WARNING: Following changes will be made to OpenSSH configuration
         #create profile
         if (-not($env:DISPLAY)) { $env:DISPLAY = 1 }
         $env:SSH_ASKPASS="$($env:ComSpec) /c echo $($global:OpenSSHTestAccountsPassword)"
-        Write-Host "M10"
         cmd /c "ssh -p 47002 sshtest_ssouser@localhost echo %userprofile% > profile.txt"
         if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
         remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
     }
     $ssouserProfile = (Get-ItemProperty -Path $ssouserProfileRegistry -Name 'ProfileImagePath').ProfileImagePath
-    $null = New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null
+    New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
     $testPubKeyPath = Join-Path $global:OpenSSHTestDir sshtest_userssokey_ed25519.pub
     (Get-Content $testPubKeyPath -Raw).Replace("`r`n","`n") | Set-Content $testPubKeyPath -Force
@@ -178,12 +178,6 @@ WARNING: Following changes will be made to OpenSSH configuration
     $testPriKeypath = Join-Path $global:OpenSSHTestDir sshtest_userssokey_ed25519
     (Get-Content $testPriKeypath -Raw).Replace("`r`n","`n") | Set-Content $testPriKeypath -Force
     ssh-add $testPriKeypath
-
-    #TODO - scp tests need an admin user. This restriction should be removed
-    <#if((Get-LocalGroupMember -SID s-1-5-32-544 -Member $ssouser -ErrorAction Ignore ) -eq $null)
-    {
-        Add-LocalGroupMember -SID s-1-5-32-544 -Member $ssouser
-    }#>
 }
 <#
     .Synopsis
@@ -193,8 +187,7 @@ function Get-UserSID
 {
     param
         (             
-            [string]$Domain,
-            
+            [string]$Domain,            
             [string]$User
         )
     if([string]::IsNullOrEmpty($Domain))
@@ -232,7 +225,8 @@ function Cleanup-OpenSSHTestEnvironment
     
     #Restore known_hosts
     $originKnowHostsPath = Join-Path $home .ssh\known_hosts.ori
-    if (Test-Path $originKnowHostsPath) {
+    if (Test-Path $originKnowHostsPath)
+    {
         Copy-Item $originKnowHostsPath (Join-Path $home .ssh\known_hosts) -Force -ErrorAction SilentlyContinue
         Remove-Item $originKnowHostsPath -Force -ErrorAction SilentlyContinue
     }
@@ -334,7 +328,6 @@ function Deploy-Win32OpenSSHBinaries
     (
         [ValidateSet('Debug', 'Release', '')]
         [string]$Configuration = "",
-
         [ValidateSet('x86', 'x64', '')]
         [string]$NativeHostArch = ""
     )
@@ -476,7 +469,6 @@ function Deploy-OpenSSHTests
     $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$RealConfiguration"    
     Copy-Item -Path "$sourceDir\*" -Destination "$($global:OpenSSHTestDir)\" -Container -Include unittest-* -Recurse -Force -ErrorAction Stop
 }
-
 
 <#
     .Synopsis
