@@ -258,7 +258,8 @@ function Install-OpenSSH
     Deploy-Win32OpenSSHBinaries @PSBoundParameters
 
     Push-Location $global:OpenSSHDir 
-    & ( "$global:OpenSSHDir\install-sshd.ps1") 
+    & ( "$global:OpenSSHDir\install-sshd.ps1")    
+    .\ssh-keygen.exe -A
     Start-Service ssh-agent
     & ( "$global:OpenSSHDir\install-sshlsa.ps1")
 
