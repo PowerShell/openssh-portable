@@ -157,6 +157,7 @@ function Add-Artifact
     
     if (($FileToAdd -ne $null ) -and (Test-Path $FileToAdd -PathType Leaf))
     {        
+        
         $null = $artifacts.Add($FileToAdd)
     }
     else
@@ -185,7 +186,8 @@ function Publish-Artifact
     {
         Write-Host "Publishing $artifact as Appveyor artifact"
         # NOTE: attempt to publish subsequent artifacts even if the current one fails
-        Push-AppveyorArtifact $artifact -ErrorAction Continue
+        # TODO - Fix this
+        # Push-AppveyorArtifact $artifact -ErrorAction Continue
     }
 }
 
