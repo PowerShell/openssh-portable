@@ -332,7 +332,7 @@ function Install-OpenSSH
 
     Push-Location $Script:OpenSSHDir 
     & ( "$Script:OpenSSHDir\install-sshd.ps1") 
-    Start-Service ssh-agent
+    .\ssh-keygen.exe -A
     & ( "$Script:OpenSSHDir\install-sshlsa.ps1")
 
     #machine will be reboot after Install-openssh anyway
