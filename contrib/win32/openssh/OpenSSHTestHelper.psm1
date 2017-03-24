@@ -155,17 +155,12 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     #setup single sign on for ssouser
     #TODO - this is Windows specific. Need to be in PAL
-    $ssousersid = Get-UserSID -User sshtest_ssouser
-    $ssouserProfileRegistry = Join-Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" $ssousersid
-    if (-not (Test-Path $ssouserProfileRegistry) ) {        
-        #create profile
-        if (-not($env:DISPLAY)) { $env:DISPLAY = 1 }
-        $env:SSH_ASKPASS="$($env:ComSpec) /c echo $($global:OpenSSHTestAccountsPassword)"
-        cmd /c "ssh -p 47002 sshtest_ssouser@localhost echo %userprofile% > profile.txt"
-        if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
-        remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
-    }
-    $ssouserProfile = (Get-ItemProperty -Path $ssouserProfileRegistry -Name 'ProfileImagePath').ProfileImagePath
+    if (-not ($env:DISPLAY)) { $env:DISPLAY = 1 }
+    $env:SSH_ASKPASS="$($env:ComSpec) /c echo $global:OpenSSHTestAccountsPassword"
+    cmd /c "ssh -p 47002 sshtest_ssouser@localhost echo %userprofile% > $global:OpenSSHTestDir\profiles.txt"
+    if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
+    remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
+    $ssouserProfile = Get-Content $global:OpenSSHTestDir\Profiles.txt
     New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
     $testPubKeyPath = Join-Path $global:OpenSSHTestDir sshtest_userssokey_ed25519.pub
@@ -460,7 +455,7 @@ function Deploy-OpenSSHTests
     else
     {
         $RealConfiguration = $Configuration
-    }    
+    }
 
     [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
     #copy all pester tests
