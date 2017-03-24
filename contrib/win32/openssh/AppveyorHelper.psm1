@@ -157,7 +157,6 @@ function Add-Artifact
     
     if (($FileToAdd -ne $null ) -and (Test-Path $FileToAdd -PathType Leaf))
     {        
-        
         $null = $artifacts.Add($FileToAdd)
     }
     else
