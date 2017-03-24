@@ -155,15 +155,17 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     #setup single sign on for ssouser
     #TODO - this is Windows specific. Need to be in PAL
-    #$ssousersid = Get-UserSID -User sshtest_ssouser
-    #$ssouserProfileRegistry = Join-Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" $ssousersid
-    #if (-not (Test-Path $ssouserProfileRegistry) ) {        
+    $ssousersid = Get-UserSID -User sshtest_ssouser
+    $ssouserProfileRegistry = Join-Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" $ssousersid
+    if (-not (Test-Path $ssouserProfileRegistry) ) {        
         #create profile
+        if (-not($env:DISPLAY)) { $env:DISPLAY = 1 }
         $env:SSH_ASKPASS="$($env:ComSpec) /c echo $($global:OpenSSHTestAccountsPassword)"
-        cmd /c "ssh -p 47002 sshtest_ssouser@localhost echo %userprofile% > $global:OpenSSHTestDir\profile.txt"
+        cmd /c "ssh -p 47002 sshtest_ssouser@localhost echo %userprofile% > profile.txt"
+        if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
         remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
-    #}
-    $ssouserProfile = Get-Content $global:OpenSSHTestDir\Profiles.txt
+    }
+    $ssouserProfile = (Get-ItemProperty -Path $ssouserProfileRegistry -Name 'ProfileImagePath').ProfileImagePath
     New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
     $testPubKeyPath = Join-Path $global:OpenSSHTestDir sshtest_userssokey_ed25519.pub
@@ -258,7 +260,7 @@ function Install-OpenSSH
     Deploy-Win32OpenSSHBinaries @PSBoundParameters
 
     Push-Location $global:OpenSSHDir 
-    & ( "$global:OpenSSHDir\install-sshd.ps1")    
+    & ( "$global:OpenSSHDir\install-sshd.ps1")
     .\ssh-keygen.exe -A
     Start-Service ssh-agent
     & ( "$global:OpenSSHDir\install-sshlsa.ps1")
