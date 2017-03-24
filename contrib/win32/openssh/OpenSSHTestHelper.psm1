@@ -123,7 +123,7 @@ WARNING: Following changes will be made to OpenSSH configuration
         Throw "Nothing found in $global:OpenSSHTestDir. Run Deploy-OpenSSHTests to deploy tests"
     }
     #Backup existing OpenSSH configuration
-    $backupConfigPath = Join-Path $global:OpenSSHDir sshd_config.ori
+    $backupConfigPath = Join-Path $global:OpenSSHDir sshd_config.
     if (-not (Test-Path $backupConfigPath -PathType Leaf)) {
         Copy-Item (Join-Path $global:OpenSSHDir sshd_config) $backupConfigPath -Force
     }
@@ -177,7 +177,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     Set-Acl  $authorizedKeyPath $acl
     $testPriKeypath = Join-Path $global:OpenSSHTestDir sshtest_userssokey_ed25519
     (Get-Content $testPriKeypath -Raw).Replace("`r`n","`n") | Set-Content $testPriKeypath -Force
-    ssh-add $testPriKeypath
+    ssh-add $testPriKeypath 2>&1 >> $global:TestSetupLogFile
 }
 <#
     .Synopsis
@@ -389,10 +389,10 @@ function Deploy-Win32OpenSSHBinaries
     if (-not (Test-Path -Path $rktoolsPath))
     {        
         Write-Log -Message "$packageName not present. Installing $packageName."
-        choco install $packageName -y --force 2>&1 >> $script:logFile
+        choco install $packageName -y --force 2>&1 >> $global:TestSetupLogFile
         if (-not (Test-Path -Path $rktoolsPath))
         {
-            choco install $packageName -y --force 2>&1 >> $script:logFile
+            choco install $packageName -y --force 2>&1 >> $global:TestSetupLogFile
             if (-not (Test-Path -Path $rktoolsPath))
             {                
                 throw "failed to download $packageName"
