@@ -179,9 +179,9 @@ function Publish-Artifact
     # Get the build.log file for each build configuration        
     Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName)
         
-    Add-Artifact -artifacts $artifacts -FileToAdd $global:UnitTestResultsFile
-    Add-Artifact -artifacts $artifacts -FileToAdd $global:PesterTestResultsFile
-    Add-Artifact -artifacts $artifacts -FileToAdd $global:TestSetupLogFile
+    Add-Artifact -artifacts $artifacts -FileToAdd $Global:OpenSSHTestInfo["UnitTestResultsFile"]
+    Add-Artifact -artifacts $artifacts -FileToAdd $Global:OpenSSHTestInfo["E2ETestResultsFile"]
+    Add-Artifact -artifacts $artifacts -FileToAdd $Global:OpenSSHTestInfo["TestSetupLogFile"]
     
     foreach ($artifact in $artifacts)
     {
@@ -243,8 +243,8 @@ function Upload-OpenSSHTestResults
 { 
     if ($env:APPVEYOR_JOB_ID)
     {
-        $resultFile = Resolve-Path $global:PesterTestResultsFile -ErrorAction Ignore
-        if( (Test-Path $global:PesterTestResultsFile) -and $resultFile)
+        $resultFile = Resolve-Path $Global:OpenSSHTestInfo["E2ETestResultsFile"] -ErrorAction Ignore
+        if( (Test-Path $Global:OpenSSHTestInfo["E2ETestResultsFile"]) -and $resultFile)
         {
             (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", $resultFile)
              Write-BuildMessage -Message "Test results uploaded!" -Category Information

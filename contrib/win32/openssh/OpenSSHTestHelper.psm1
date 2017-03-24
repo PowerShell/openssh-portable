@@ -20,14 +20,30 @@ $Global:OpenSSHTestInfo["PubKeyUser"]
 $Global:OpenSSHTestInfo["PasswdUser"]
 
 # common password for all test accounts
-$Global:OpenSSHTestInfo.Add["TestAccountPW"]
+$Global:OpenSSHTestInfo["TestAccountPW"]
+
+# openssh bin path
+$Global:OpenSSHTestInfo["OpenSSHDir"]
+
+# openssh tests path
+$Global:OpenSSHTestInfo["OpenSSHTestDir"]
+
+# openssh test setup log file
+$Global:OpenSSHTestInfo["TestSetupLogFile"]
+
+# openssh E2E test results file
+$Global:OpenSSHTestInfo["E2ETestResultsFile"]
+
+# openssh unittest test results file
+$Global:OpenSSHTestInfo["UnitTestResultsFile"]
+
 #>
 
 
 # test environment parameters initialized with defaults
 $Script:OpenSSHDir = "$env:SystemDrive\OpenSSH"
 $Script:OpenSSHTestDir = "$env:SystemDrive\OpenSSHTests"
-$Script:PesterTestResultsFile = Join-Path $Script:OpenSSHTestDir "PesterTestResults.xml"
+$Script:E2ETestResultsFile = Join-Path $Script:OpenSSHTestDir "E2ETestResultsFile.xml"
 $Script:UnitTestResultsFile = Join-Path $Script:OpenSSHTestDir "UnitTestResults.txt"
 $Script:TestSetupLogFile = Join-Path $Script:OpenSSHTestDir "TestSetupLog.txt"
 $Script:SSOUser = "sshtest_ssouser"
@@ -43,14 +59,14 @@ function Set-OpenSSHTestParams
     (    
         [string] $OpenSSHDir = $Script:OpenSSHDir,
         [string] $OpenSSHTestDir = $Script:OpenSSHTestDir,
-        [string] $PesterTestResultsFile = $Script:PesterTestResultsFile,
+        [string] $E2ETestResultsFile = $Script:E2ETestResultsFile,
         [string] $UnitTestResultsFile = $Script:UnitTestResultsFile,
         [string] $TestSetupLogFile = $Script:TestSetupLogFile
     )
 
     $Script:OpenSSHDir = $OpenSSHDir
     $Script:OpenSSHTestDir = $OpenSSHTestDir
-    $Script:PesterTestResultsFile = $PesterTestResultsFile
+    $Script:E2ETestResultsFile = $E2ETestResultsFile
     $Script:UnitTestResultsFile = $UnitTestResultsFile
     $Script:TestSetupLogFile = $TestSetupLogFile
 }
@@ -60,7 +76,7 @@ function Dump-OpenSSHTestParams
     $out = @"
 OpenSSHDir:              $Script:OpenSSHDir
 OpenSSHTestDir:          $Script:OpenSSHTestDir
-PesterTestResultsFile:   $Script:PesterTestResultsFile
+E2ETestResultsFile:   $Script:E2ETestResultsFile
 UnitTestResultsFile:     $Script:UnitTestResultsFile
 TestSetupLogFile:        $Script:TestSetupLogFile
 "@
@@ -221,6 +237,16 @@ WARNING: Following changes will be made to OpenSSH configuration
     $Global:OpenSSHTestInfo.Add("PasswdUser", $Script:PasswdUser)
     # common password for all test accounts
     $Global:OpenSSHTestInfo.Add("TestAccountPW", $Script:OpenSSHTestAccountsPassword)
+    # openssh bin path
+    $Global:OpenSSHTestInfo.Add("OpenSSHDir", $Script:OpenSSHDir)
+    # openssh tests path
+    $Global:OpenSSHTestInfo.Add("OpenSSHTestDir", $Script:OpenSSHTestDir)
+    # openssh test setup log file
+    $Global:OpenSSHTestInfo.Add("TestSetupLogFile", $Script:TestSetupLogFile)
+    # openssh E2E test results file
+    $Global:OpenSSHTestInfo.Add("E2ETestResultsFile", $Script:E2ETestResultsFile)
+    # openssh unittest test results file
+    $Global:OpenSSHTestInfo.Add("UnitTestResultsFile", $Script:UnitTestResultsFile)
 }
 <#
     .Synopsis
@@ -525,7 +551,7 @@ function Run-OpenSSHPesterTest
     Push-Location $Script:OpenSSHTestDir
     Write-Log -Message "Running OpenSSH Pester tests..."    
     $testFolders = Get-ChildItem *.tests.ps1 -Recurse -Exclude SSHDConfig.tests.ps1, SSH.Tests.ps1 | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique
-    Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $Script:PesterTestResultsFile -Tag 'CI'
+    Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $Script:E2ETestResultsFile -Tag 'CI'
     Pop-Location
 }
 
