@@ -123,7 +123,7 @@ WARNING: Following changes will be made to OpenSSH configuration
         Throw "Nothing found in $global:OpenSSHTestDir. Run Deploy-OpenSSHTests to deploy tests"
     }
     #Backup existing OpenSSH configuration
-    $backupConfigPath = Join-Path $global:OpenSSHDir sshd_config.
+    $backupConfigPath = Join-Path $global:OpenSSHDir sshd_config.ori
     if (-not (Test-Path $backupConfigPath -PathType Leaf)) {
         Copy-Item (Join-Path $global:OpenSSHDir sshd_config) $backupConfigPath -Force
     }
@@ -177,7 +177,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     Set-Acl  $authorizedKeyPath $acl
     $testPriKeypath = Join-Path $global:OpenSSHTestDir sshtest_userssokey_ed25519
     (Get-Content $testPriKeypath -Raw).Replace("`r`n","`n") | Set-Content $testPriKeypath -Force
-    ssh-add $testPriKeypath 2>&1 >> $global:TestSetupLogFile
+    cmd /c "ssh-add $testPriKeypath 2>&1 >> $global:TestSetupLogFile"
 }
 <#
     .Synopsis
@@ -238,7 +238,7 @@ function Cleanup-OpenSSHTestEnvironment
     }
     
     # remove registered keys    
-    ssh-add -d (Join-Path $global:OpenSSHTestDir sshtest_userssokey_ed25519)
+    cmd /c "ssh-add -d (Join-Path $global:OpenSSHTestDir sshtest_userssokey_ed25519) 2>&1 >> $global:TestSetupLogFile"
 }
 
 <#
