@@ -445,10 +445,10 @@ function Deploy-Win32OpenSSHBinaries
     if (-not (Test-Path -Path $rktoolsPath))
     {        
         Write-Log -Message "$packageName not present. Installing $packageName."
-        choco install $packageName -y --force 2>&1 >> $Script:TestSetupLogFile
+        choco install $packageName -y --force 2>&1 >> $script:BuildLogFile
         if (-not (Test-Path -Path $rktoolsPath))
         {
-            choco install $packageName -y --force 2>&1 >> $Script:TestSetupLogFile
+            choco install $packageName -y --force 2>&1 >> $script:BuildLogFile
             if (-not (Test-Path -Path $rktoolsPath))
             {                
                 throw "failed to download $packageName"
