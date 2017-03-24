@@ -27,3 +27,5 @@ function Get-RepositoryRoot
 
     throw new-object System.IO.DirectoryNotFoundException("Could not find the root of the GIT repository")
 }
+
+Export-ModuleMember -Function Get-RepositoryRoot

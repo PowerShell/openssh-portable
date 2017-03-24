@@ -1,4 +1,5 @@
 ﻿$ErrorActionPreference = 'Stop'
+Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -Force -DisableNameChecking
 Import-Module $PSScriptRoot\OpenSSHBuildHelper.psm1 -Force -DisableNameChecking
 Import-Module $PSScriptRoot\OpenSSHTestHelper.psm1 -Force -DisableNameChecking
 
@@ -98,8 +99,8 @@ function Invoke-AppVeyorFull
 function Invoke-AppVeyorBuild
 {
       Set-BuildVariable TestPassed True
-      Start-OpenSSHBuild -Configuration Release -NativeHostArch x64
-      Start-OpenSSHBuild -Configuration Debug -NativeHostArch x86
+      Build-OpenSSH -Configuration Release -NativeHostArch x64
+      Build-OpenSSH -Configuration Debug -NativeHostArch x86
       Write-BuildMessage -Message "OpenSSH binaries build success!" -Category Information
 }
 
@@ -142,8 +143,8 @@ function Add-BuildLog
     Publishes package build artifacts.    
     .Parameter artifacts
     An array list to add the fully qualified build log path
-    .Parameter packageFile
-    Path to the package
+    .Parameter FileToAdd
+    Path to the file
 #>
 function Add-Artifact
 {
@@ -152,14 +153,12 @@ function Add-Artifact
         [ValidateNotNull()]
         [System.Collections.ArrayList] $artifacts,
         [string] $FileToAdd
-    )    
+    )        
     
-    $files = Get-ChildItem -Path $FileToAdd -ErrorAction Ignore
-    if ($files -ne $null)
+    if (($FileToAdd -ne $null ) -and (Test-Path $FileToAdd -PathType Leaf))
     {        
-        $files | % {
-            $null = $artifacts.Add($_.FullName)             
-         }
+        
+        $null = $artifacts.Add($FileToAdd)
     }
     else
     {

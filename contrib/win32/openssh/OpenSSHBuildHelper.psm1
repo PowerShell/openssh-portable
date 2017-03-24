@@ -290,7 +290,7 @@ function Copy-OpenSSLSDK
     }
 }
 
-function Start-OpenSSHBuild
+function Build-OpenSSH
 {
     [CmdletBinding(SupportsShouldProcess=$false)]    
     param
@@ -372,5 +372,177 @@ function Get-SolutionFile
     return Join-Path -Path $root -ChildPath "contrib\win32\openssh\Win32-OpenSSH.sln"    
 }
 
+<#
+    .Synopsis
+    Deploy all required files to build a package and create zip file.
+#>
+function Deploy-Win32OpenSSHBinaries
+{
+    [CmdletBinding()]
+    param
+    (
+        [ValidateSet('Debug', 'Release', '')]
+        [string]$Configuration = "",
+        [ValidateSet('x86', 'x64', '')]
+        [string]$NativeHostArch = "",
+        [string]$OpenSSHDir = "$env:SystemDrive\OpenSSH"
+    )
 
-Export-ModuleMember -Function Start-OpenSSHBuild, Get-RepositoryRoot, Get-BuildLogFile, Clone-Win32OpenSSH, Copy-OpenSSLSDK, Install-OpenSSH, Write-BuildMsg, Get-RepositoryRoot, Get-BuildLogFile
+    if (-not (Test-Path -Path $OpenSSHDir -PathType Container))
+    {
+        $null = New-Item -Path $OpenSSHDir -ItemType Directory -Force -ErrorAction Stop
+    }
+
+    [string] $platform = $env:PROCESSOR_ARCHITECTURE    
+    if(-not [String]::IsNullOrEmpty($NativeHostArch))
+    {
+        $folderName = $NativeHostArch
+        if($NativeHostArch -ieq 'x86')
+        {
+            $folderName = "Win32"
+        }
+    }
+    else
+    {
+        if($platform -ieq "AMD64")
+        {
+            $folderName = "x64"
+        }
+        else
+        {
+            $folderName = "Win32"
+        }
+    }
+    
+    if([String]::IsNullOrEmpty($Configuration))
+    {
+        if( $folderName -ieq "Win32" )
+        {
+            $RealConfiguration = "Debug"
+        }
+        else
+        {
+            $RealConfiguration = "Release"
+        }
+    }
+    else
+    {
+        $RealConfiguration = $Configuration
+    }
+
+    [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
+    
+    $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$RealConfiguration"
+    if((Get-Service ssh-agent -ErrorAction Ignore) -ne $null) {
+        Stop-Service ssh-agent -Force
+    }
+    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHDir -Include *.exe,*.dll -Exclude *unittest*.* -Force -ErrorAction Stop
+    $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "contrib\win32\openssh"
+    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHDir -Include *.ps1,sshd_config -Exclude AnalyzeCodeDiff.ps1 -Force -ErrorAction Stop
+        
+    $packageName = "rktools.2003"
+    $rktoolsPath = "${env:ProgramFiles(x86)}\Windows Resource Kits\Tools\ntrights.exe"
+    if (-not (Test-Path -Path $rktoolsPath))
+    {        
+        Write-Log -Message "$packageName not present. Installing $packageName."
+        choco install $packageName -y --force 2>&1 >> $Script:TestSetupLogFile
+        if (-not (Test-Path -Path $rktoolsPath))
+        {
+            choco install $packageName -y --force 2>&1 >> $Script:TestSetupLogFile
+            if (-not (Test-Path -Path $rktoolsPath))
+            {                
+                throw "failed to download $packageName"
+            }
+        }
+    }
+
+    Copy-Item -Path $rktoolsPath -Destination $OpenSSHDir -Force -ErrorAction Stop
+}
+
+<#
+    .Synopsis
+    Deploy all required files to a location and install the binaries
+#>
+function Install-OpenSSH
+{
+    [CmdletBinding()]
+    param
+    ( 
+        [ValidateSet('Debug', 'Release', '')]
+        [string]$Configuration = "",
+
+        [ValidateSet('x86', 'x64', '')]
+        [string]$NativeHostArch = "",
+
+        [string]$OpenSSHDir = "$env:SystemDrive\OpenSSH"
+    )
+
+    Deploy-Win32OpenSSHBinaries @PSBoundParameters
+
+    Push-Location $OpenSSHDir 
+    & ( "$OpenSSHDir\install-sshd.ps1") 
+    .\ssh-keygen.exe -A
+    & ( "$OpenSSHDir\install-sshlsa.ps1")
+
+    #machine will be reboot after Install-openssh anyway
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
+    $newMachineEnvironmentPath = $machinePath
+    if (-not ($machinePath.ToLower().Contains($OpenSSHDir.ToLower())))
+    {
+        $newMachineEnvironmentPath = "$OpenSSHDir;$newMachineEnvironmentPath"
+        $env:Path = "$OpenSSHDir;$env:Path"
+    }
+    # Update machine environment path
+    if ($newMachineEnvironmentPath -ne $machinePath)
+    {
+        [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
+    }
+    
+    Set-Service sshd -StartupType Automatic 
+    Set-Service ssh-agent -StartupType Automatic
+    Start-Service sshd
+
+    Pop-Location
+    Write-Log -Message "OpenSSH installed!"
+}
+
+<#
+    .Synopsis
+    uninstalled sshd and sshla
+#>
+function UnInstall-OpenSSH
+{
+ 
+    [CmdletBinding()]
+    param
+    ( 
+        [string]$OpenSSHDir = "$env:SystemDrive\OpenSSH"
+    )
+
+    Push-Location $OpenSSHDir
+    if((Get-Service ssh-agent -ErrorAction Ignore) -ne $null) {
+        Stop-Service ssh-agent -Force
+    }
+    &( "$OpenSSHDir\uninstall-sshd.ps1")
+    &( "$OpenSSHDir\uninstall-sshlsa.ps1")
+        
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
+    $newMachineEnvironmentPath = $machinePath
+    if ($machinePath.ToLower().Contains($OpenSSHDir.ToLower()))
+    {        
+        $newMachineEnvironmentPath.Replace("$OpenSSHDir;", '')
+        $env:Path = $env:Path.Replace("$OpenSSHDir;", '')
+    }
+
+    # Update machine environment path
+    # machine will be reboot after Uninstall-OpenSSH
+    if ($newMachineEnvironmentPath -ne $machinePath)
+    {
+        [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
+    }
+
+    Pop-Location
+}
+
+
+Export-ModuleMember -Function Build-OpenSSH, Get-BuildLogFile, Install-OpenSSH, UnInstall-OpenSSH
