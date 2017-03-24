@@ -1,25 +1,25 @@
-﻿using module .\PlatformAbstractLayer.psm1
-
+﻿
 Describe "Tests for portforwarding" -Tags "CI" {
     BeforeAll {        
         $fileName = "test.txt"
         $filePath = Join-Path ${TestDrive} $fileName
         $logName = "log.txt"
         $logPath = Join-Path ${TestDrive} $logName        
-        [Machine] $client = [Machine]::new([MachineRole]::Client)
-        [Machine] $server = [Machine]::new([MachineRole]::Server)
+        $server = $OpenSSHTestInfo["Target"]
+        $port = $OpenSSHTestInfo["Port"]
+        $ssouser = $OpenSSHTestInfo["SSOUser"]
 
         $testData = @(
             @{
                 Title = "Local port forwarding"
                 Options = "-L 5432:127.0.0.1:47001"
-                Port = 5432
+                FwdedPort = 5432
 
             },
             @{
                 Title = "Remote port forwarding"
                 Options = "-R 5432:127.0.0.1:47001"
-                Port = 5432
+                FwdedPort = 5432
             }
         )      
     }
@@ -33,10 +33,11 @@ Describe "Tests for portforwarding" -Tags "CI" {
     }
 
     It '<Title>' -TestCases:$testData {
-        param([string]$Title, $Options, $port)
+        param([string]$Title, $Options, $FwdedPort)
          
-        $str = "ssh -p 47002 -E $logPath $($Options) $($server.ssouser)@$($server.MachineName) powershell.exe Test-WSMan -computer 127.0.0.1 -port $port > $filePath"
-        $client.RunCmd($str)
+        $str = "ssh -p $($port) -E $logPath $($Options) $($ssouser)@$($server) powershell.exe Test-WSMan -computer 127.0.0.1 -port $FwdedPort > $filePath"
+        # TODO - move this to PAL
+        cmd /c $str
         #validate file content.           
         $content = Get-Content $filePath
         $content -like "wsmid*" | Should Not Be $null

@@ -1,5 +1,4 @@
-﻿using module .\PlatformAbstractLayer.psm1
-
+﻿
 #covered -i -p -q -r -v -c -S -C
 #todo: -F, -l and -P should be tested over the network
 Describe "Tests for scp command" -Tags "CI" {
@@ -21,8 +20,9 @@ Describe "Tests for scp command" -Tags "CI" {
         "Test content in nested dir" | Set-content -Path $NestedSourceFilePath
         $null = New-Item $DestinationDir -ItemType directory -Force
         
-        [Machine] $client = [Machine]::new([MachineRole]::Client)
-        [Machine] $server = [Machine]::new([MachineRole]::Server)
+        $server = $OpenSSHTestInfo["Target"]
+        $port = $OpenSSHTestInfo["Port"]
+        $ssouser = $OpenSSHTestInfo["SSOUser"]
         $script:logNum = 0        
 
         $testData = @(
@@ -34,11 +34,11 @@ Describe "Tests for scp command" -Tags "CI" {
             @{
                 Title = 'Simple copy local file to remote file'
                 Source = $SourceFilePath
-                Destination = "$($server.ssouser)@$($server.MachineName):$DestinationFilePath"                
+                Destination = "$($ssouser)@$($server):$DestinationFilePath"                
             },
             @{
                 Title = 'Simple copy remote file to local file'
-                Source = "$($server.ssouser)@$($server.MachineName):$SourceFilePath"
+                Source = "$($ssouser)@$($server):$SourceFilePath"
                 Destination = $DestinationFilePath                    
             },            
             @{
@@ -49,11 +49,11 @@ Describe "Tests for scp command" -Tags "CI" {
             @{
                 Title = 'simple copy local file to remote dir'         
                 Source = $SourceFilePath
-                Destination = "$($server.ssouser)@$($server.MachineName):$DestinationDir"
+                Destination = "$($ssouser)@$($server):$DestinationDir"
             },
             @{
                 Title = 'simple copy remote file to local dir'
-                Source = "$($server.ssouser)@$($server.MachineName):$SourceFilePath"
+                Source = "$($ssouser)@$($server):$SourceFilePath"
                 Destination = $DestinationDir
             }
         )
@@ -62,7 +62,7 @@ Describe "Tests for scp command" -Tags "CI" {
             @{
                 Title = 'copy from local dir to remote dir'
                 Source = $sourceDir
-                Destination = "$($server.ssouser)@$($server.MachineName):$DestinationDir"
+                Destination = "$($ssouser)@$($server):$DestinationDir"
             },
             <#  @{
                 Title = 'copy from local dir to local dir'
@@ -71,7 +71,7 @@ Describe "Tests for scp command" -Tags "CI" {
             },#>
             @{
                 Title = 'copy from remote dir to local dir'            
-                Source = "$($server.ssouser)@$($server.MachineName):$sourceDir"
+                Source = "$($ssouser)@$($server):$sourceDir"
                 Destination = $DestinationDir
             }
         )
@@ -129,7 +129,7 @@ Describe "Tests for scp command" -Tags "CI" {
         
         It 'File copy with -i option: <Title> ' -TestCases:$testData {
             param([string]$Title, $Source, $Destination)
-            scp -P 47002 $Source $Destination
+            scp -P $port $Source $Destination
             $LASTEXITCODE | Should Be 0
 
             #validate file content. DestPath is the path to the file.
@@ -141,7 +141,7 @@ Describe "Tests for scp command" -Tags "CI" {
         It 'Directory recursive copy with -i option and private key: <Title> ' -TestCases:$testData1 {
             param([string]$Title, $Source, $Destination)            
 
-            scp -P 47002 -r $Source $Destination
+            scp -P $port -r $Source $Destination
             $LASTEXITCODE | Should Be 0
             CheckTarget -target (join-path $DestinationDir $SourceDirName) | Should Be $true
             
@@ -162,7 +162,7 @@ Describe "Tests for scp command" -Tags "CI" {
 
         It 'File copy with -S option (positive)' {
             $sshcmd = (get-command ssh).Path
-            scp -P 47002 -S $sshcmd $SourceFilePath "$($server.ssouser)@$($server.MachineName):$DestinationFilePath"
+            scp -P $port -S $sshcmd $SourceFilePath "$($ssouser)@$($server):$DestinationFilePath"
             $LASTEXITCODE | Should Be 0
             #validate file content. DestPath is the path to the file.
             CheckTarget -target $DestinationFilePath | Should Be $true
@@ -174,7 +174,7 @@ Describe "Tests for scp command" -Tags "CI" {
         It 'File copy with -p -c option: <Title> ' -TestCases:$testData {
             param([string]$Title, $Source, $Destination)
             
-            scp -P 47002 -p -c aes128-ctr -C $Source $Destination
+            scp -P $port -p -c aes128-ctr -C $Source $Destination
             $LASTEXITCODE | Should Be 0
             #validate file content. DestPath is the path to the file.
             CheckTarget -target $DestinationFilePath | Should Be $true
@@ -185,7 +185,7 @@ Describe "Tests for scp command" -Tags "CI" {
         It 'Directory recursive copy with -r -p -c option: <Title> ' -TestCases:$testData1 {
             param([string]$Title, $Source, $Destination)                        
             
-            scp -P 47002 -r -p -c aes128-ctr $Source $Destination
+            scp -P $port -r -p -c aes128-ctr $Source $Destination
             $LASTEXITCODE | Should Be 0
             CheckTarget -target (join-path $DestinationDir $SourceDirName) | Should Be $true
             $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
@@ -203,7 +203,7 @@ Describe "Tests for scp command" -Tags "CI" {
         It 'File copy with -i -C -q options: <Title> ' -TestCases:$testData{
             param([string]$Title, $Source, $Destination)
 
-            scp -P 47002  -C -q $Source $Destination
+            scp -P $port  -C -q $Source $Destination
             $LASTEXITCODE | Should Be 0
             #validate file content. DestPath is the path to the file.
             CheckTarget -target $DestinationFilePath | Should Be $true
@@ -214,7 +214,7 @@ Describe "Tests for scp command" -Tags "CI" {
         It 'Directory recursive copy with -i -C -r and -q options: <Title> ' -TestCases:$testData1 {
             param([string]$Title, $Source, $Destination)               
 
-            scp -P 47002  -C -r -q $Source $Destination
+            scp -P $port  -C -r -q $Source $Destination
             $LASTEXITCODE | Should Be 0
             CheckTarget -target (join-path $DestinationDir $SourceDirName) | Should Be $true
             $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length).Length -eq 0
