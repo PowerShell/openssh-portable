@@ -152,14 +152,10 @@ function Add-Artifact
         [ValidateNotNull()]
         [System.Collections.ArrayList] $artifacts,
         [string] $FileToAdd
-    )    
-    
-    $files = Get-ChildItem -Path $FileToAdd -ErrorAction Ignore
-    if ($files -ne $null)
-    {        
-        $files | % {
-            $null = $artifacts.Add($_.FullName)             
-         }
+    )
+    if (($FileToAdd -ne $null) -and (Test-Path $FileToAdd -leaf))
+    { 
+            $null = $artifacts.Add($FileToAdd)
     }
     else
     {
