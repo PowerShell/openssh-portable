@@ -187,9 +187,8 @@ function Publish-Artifact
     foreach ($artifact in $artifacts)
     {
         Write-Host "Publishing $artifact as Appveyor artifact"
-        # NOTE: attempt to publish subsequent artifacts even if the current one fails
-        # TODO - Fix this
-        # Push-AppveyorArtifact $artifact -ErrorAction Continue
+        # NOTE: attempt to publish subsequent artifacts even if the current one fails        
+        Push-AppveyorArtifact $artifact -ErrorAction Continue
     }
 }
 
@@ -214,7 +213,7 @@ function Run-OpenSSHTests
         Write-BuildMessage -Message "All Unit tests passed!" -Category Information    
     }
   # Run all pester tests.
-  <#Run-OpenSSHPesterTest
+  <#Run-OpenSSHE2ETest
   if (-not (Test-Path $global:PesterTestResultsFile))
     {
         Write-Warning "Test result file $global:PesterTestResultsFile not found after tests."

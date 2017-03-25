@@ -71,35 +71,7 @@ function Setup-OpenSSHTestEnvironment
         [string] $OpenSSHDir,
         [string] $OpenSSHTestDir = "$env:SystemDrive\OpenSSHTests"
     )
-
-    $warning = @"
-WARNING: Following changes will be made to OpenSSH configuration
-   - sshd_config will be backed up as sshd_config.ori
-   - will be replaced with a test sshd_config
-   - $env:USERPROFILE\.ssh\known_hosts will be backed up as known_hosts.ori
-   - will be replaced with a test known_hosts
-   - sshd test listener will be on port 47002
-   - $env:USERPROFILE\.ssh\known_hosts will be modified with test host key entry
-   - test accounts - ssouser, pubkeyuser, and passwduser will be added
-   - To cleanup - Run Cleanup-OpenSSHTestEnvironment
-"@
-
-    if (-not $Quiet) {
-        Write-Warning $warning
-        $continue = Read-Host -Prompt "Do you want to continue with these changes? Y(es)/N(o)"
-        if( ($continue -ieq "Y") -or ($continue -ieq "Yes") )
-        {            
-        }
-        elseif( ($continue -ieq "N") -or ($continue -ieq "No") )
-        {
-            Write-Host "User decided not to make the changes."
-            return
-        }
-        else
-        {
-            Throw "User entered invalid option ($continue)."
-        }
-    }
+    
     if($Global:OpenSSHTestInfo -ne $null)
     {
         $Global:OpenSSHTestInfo.Clear()
@@ -167,6 +139,35 @@ WARNING: Following changes will be made to OpenSSH configuration
     }
 
     $Global:OpenSSHTestInfo.Add("OpenSSHDir", $script:OpenSSHDir)
+
+    $warning = @"
+WARNING: Following changes will be made to OpenSSH configuration
+   - sshd_config will be backed up as sshd_config.ori
+   - will be replaced with a test sshd_config
+   - $env:USERPROFILE\.ssh\known_hosts will be backed up as known_hosts.ori
+   - will be replaced with a test known_hosts
+   - sshd test listener will be on port 47002
+   - $env:USERPROFILE\.ssh\known_hosts will be modified with test host key entry
+   - test accounts - ssouser, pubkeyuser, and passwduser will be added
+   - To cleanup - Run Cleanup-OpenSSHTestEnvironment
+"@
+
+    if (-not $Quiet) {
+        Write-Warning $warning
+        $continue = Read-Host -Prompt "Do you want to continue with the above changes? Y(es)/N(o)"
+        if( ($continue -ieq "Y") -or ($continue -ieq "Yes") )
+        {            
+        }
+        elseif( ($continue -ieq "N") -or ($continue -ieq "No") )
+        {
+            Write-Host "User decided not to make the changes."
+            return
+        }
+        else
+        {
+            Throw "User entered invalid option ($continue).Exit now."
+        }
+    }
 
     Install-OpenSSHTestDependencies
     Deploy-OpenSSHTests -OpenSSHTestDir $OpenSSHTestDir
@@ -410,11 +411,11 @@ function Deploy-OpenSSHTests
     .Synopsis
     Run OpenSSH pester tests.
 #>
-function Run-OpenSSHPesterTest
+function Run-OpenSSHE2ETest
 {     
    # Discover all CI tests and run them.
     Push-Location $Script:OpenSSHTestDir
-    Write-Log -Message "Running OpenSSH Pester tests..."    
+    Write-Log -Message "Running OpenSSH E2E tests..."    
     $testFolders = Get-ChildItem *.tests.ps1 -Recurse -Exclude SSHDConfig.tests.ps1, SSH.Tests.ps1 | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique
     Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $Script:E2ETestResultsFile -Tag 'CI'
     Pop-Location
@@ -480,4 +481,4 @@ function Write-Log
     }  
 }
 
-Export-ModuleMember -Function Setup-OpenSSHTestEnvironment, Cleanup-OpenSSHTestEnvironment, Run-OpenSSHUnitTest, Run-OpenSSHPesterTest
+Export-ModuleMember -Function Setup-OpenSSHTestEnvironment, Cleanup-OpenSSHTestEnvironment, Run-OpenSSHUnitTest, Run-OpenSSHE2ETest
