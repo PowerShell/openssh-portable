@@ -155,14 +155,13 @@ function Add-Artifact
         [string] $FileToAdd
     )        
     
-    if (($FileToAdd -ne $null ) -and (Test-Path $FileToAdd -PathType Leaf))
-    {        
-        
-        $null = $artifacts.Add($FileToAdd)
-    }
+    if ([string]::IsNullOrEmpty($FileToAdd) -or (-not (Test-Path $FileToAdd -PathType Leaf)) )
+    {            
+        Write-Host "Skip publishing package artifacts. $FileToAdd does not exist"
+    }    
     else
     {
-        Write-Host "Skip publishing package artifacts. $FileToAdd does not exist"
+        $null = $artifacts.Add($FileToAdd)
     }
 }
 
@@ -177,10 +176,13 @@ function Publish-Artifact
     
     # Get the build.log file for each build configuration        
     Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName)
-        
-    Add-Artifact -artifacts $artifacts -FileToAdd $Global:OpenSSHTestInfo["UnitTestResultsFile"]
-    Add-Artifact -artifacts $artifacts -FileToAdd $Global:OpenSSHTestInfo["E2ETestResultsFile"]
-    Add-Artifact -artifacts $artifacts -FileToAdd $Global:OpenSSHTestInfo["TestSetupLogFile"]
+
+    if($Global:OpenSSHTestInfo)
+    {
+        Add-Artifact -artifacts $artifacts -FileToAdd $Global:OpenSSHTestInfo["UnitTestResultsFile"]
+        Add-Artifact -artifacts $artifacts -FileToAdd $Global:OpenSSHTestInfo["E2ETestResultsFile"]
+        Add-Artifact -artifacts $artifacts -FileToAdd $Global:OpenSSHTestInfo["TestSetupLogFile"]
+    }
     
     foreach ($artifact in $artifacts)
     {
