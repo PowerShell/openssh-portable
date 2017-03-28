@@ -212,18 +212,18 @@ function Run-OpenSSHTests
         Write-Host "All Unit tests passed!"
         Write-BuildMessage -Message "All Unit tests passed!" -Category Information    
     }
-  # Run all pester tests.
-  <#Run-OpenSSHE2ETest
-  if (-not (Test-Path $global:PesterTestResultsFile))
+    # Run all E2E tests.
+    Run-OpenSSHE2ETest
+    if (($OpenSSHTestInfo -eq $null) -or (-not (Test-Path $OpenSSHTestInfo["E2ETestResultsFile"])))
     {
-        Write-Warning "Test result file $global:PesterTestResultsFile not found after tests."
-        Write-BuildMessage -Message "Test result file $global:PesterTestResultsFile not found after tests." -Category Error
+        Write-Warning "Test result file $OpenSSHTestInfo["E2ETestResultsFile"] not found after tests."
+        Write-BuildMessage -Message "Test result file $OpenSSHTestInfo["E2ETestResultsFile"] not found after tests." -Category Error
         Set-BuildVariable TestPassed False
     }
-    $xml = [xml](Get-Content -raw $global:PesterTestResultsFile)
+    $xml = [xml](Get-Content -raw $OpenSSHTestInfo["E2ETestResultsFile"])
     if ([int]$xml.'test-results'.failures -gt 0) 
     {
-        $errorMessage = "$($xml.'test-results'.failures) tests in regress\pesterTests failed. Detail test log is at $($global:PesterTestResultsFile)."
+        $errorMessage = "$($xml.'test-results'.failures) tests in regress\pesterTests failed. Detail test log is at $($OpenSSHTestInfo["E2ETestResultsFile"])."
         Write-Warning $errorMessage
         Write-BuildMessage -Message $errorMessage -Category Error
         Set-BuildVariable TestPassed False
@@ -233,7 +233,7 @@ function Run-OpenSSHTests
     if ($Error.Count -gt 0) 
     {
         Write-BuildMessage -Message "Tests Should clean $Error after success." -Category Warning
-    }#>
+    }
 }
 
 <#

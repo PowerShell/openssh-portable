@@ -2,7 +2,7 @@
 Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -DisableNameChecking
 
 # state object used by all tests, initialized in Setup-OpenSSHTetEnvironment
-$Global:OpenSSHTestInfo = @{}
+#$Global:OpenSSHTestInfo = @{}
 <# Hash Table definitions
 #test listener name
 $Global:OpenSSHTestInfo["Target"]
@@ -214,7 +214,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     {
         New-Item -ItemType Directory -Path $knowHostsDirectoryPath -Force -ErrorAction SilentlyContinue | out-null
     }
-    if (Test-Path $knowHostsFilePath -PathType Leaf) {
+    if ((Test-Path $knowHostsFilePath -PathType Leaf) -and (-not (Test-Path (Join-Path $knowHostsDirectoryPath known_hosts.ori) -PathType Leaf))) {
         Copy-Item $knowHostsFilePath (Join-Path $knowHostsDirectoryPath known_hosts.ori) -Force
     }
     Copy-Item (Join-Path $OpenSSHTestDir known_hosts) $knowHostsFilePath -Force

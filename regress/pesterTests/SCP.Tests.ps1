@@ -2,7 +2,12 @@
 #covered -i -p -q -r -v -c -S -C
 #todo: -F, -l and -P should be tested over the network
 Describe "Tests for scp command" -Tags "CI" {
-    BeforeAll {        
+    BeforeAll {
+        if($OpenSSHTestInfo -eq $null)
+        {
+            Throw "`$OpenSSHTestInfo is null. Please run Setup-OpenSSHTestEnvironment to setup test environment."
+        }
+
         $fileName1 = "test.txt"
         $fileName2 = "test2.txt"
         $SourceDirName = "SourceDir"
@@ -19,8 +24,8 @@ Describe "Tests for scp command" -Tags "CI" {
         "Test content111" | Set-content -Path $SourceFilePath
         "Test content in nested dir" | Set-content -Path $NestedSourceFilePath
         $null = New-Item $DestinationDir -ItemType directory -Force
-        $sshcmd = (get-command ssh).Path
-        
+        $sshcmd = (get-command ssh).Path        
+
         $server = $OpenSSHTestInfo["Target"]
         $port = $OpenSSHTestInfo["Port"]
         $ssouser = $OpenSSHTestInfo["SSOUser"]
@@ -31,7 +36,7 @@ Describe "Tests for scp command" -Tags "CI" {
                 Title = 'Simple copy local file to local file'
                 Source = $SourceFilePath                   
                 Destination = $DestinationFilePath
-                Options = ""
+                Options = "-P $port "
             },
             @{
                 Title = 'Simple copy local file to remote file'
@@ -49,7 +54,7 @@ Describe "Tests for scp command" -Tags "CI" {
                 Title = 'Simple copy local file to local dir'
                 Source = $SourceFilePath
                 Destination = $DestinationDir
-                Options = ""
+                Options = "-P $port "
             },
             @{
                 Title = 'simple copy local file to remote dir'         
@@ -61,7 +66,7 @@ Describe "Tests for scp command" -Tags "CI" {
                 Title = 'simple copy remote file to local dir'
                 Source = "$($ssouser)@$($server):$SourceFilePath"
                 Destination = $DestinationDir
-                Options = ""
+                Options = "-P $port "
             }
         )
 
@@ -76,7 +81,7 @@ Describe "Tests for scp command" -Tags "CI" {
                 Title = 'copy from local dir to local dir'
                 Source = $sourceDir
                 Destination = $DestinationDir
-                Options = ""
+                Options = "-r "
             },
             @{
                 Title = 'copy from remote dir to local dir'            
@@ -101,10 +106,20 @@ Describe "Tests for scp command" -Tags "CI" {
     }
     AfterAll {
 
-        if(($OpenSSHTestInfo -eq $null) -or ( -not $OpenSSHTestInfo['DebugMode']))
+        if($OpenSSHTestInfo -eq $null)
         {
-            Get-Item $SourceDir | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-            Get-Item $DestinationDir | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            #do nothing
+        }
+        elseif( -not $OpenSSHTestInfo['DebugMode'])
+        {
+            if(-not [string]::IsNullOrEmpty($SourceDir))
+            {
+                Get-Item $SourceDir | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            if(-not [string]::IsNullOrEmpty($DestinationDir))
+            {
+                Get-Item $DestinationDir | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            }
         }
     }
 

@@ -4,7 +4,7 @@ Run OpenSSH Pester Tests:
 #### To setup the test environment before test run:
 
 ```powershell
-Import-Module  .\openssh-portable\contrib\win32\openssh\appveyor.psm1 –Force
+Import-Module  .\openssh-portable\contrib\win32\openssh\OpenSSHTestHelper.psm1 –Force
 Setup-OpenSSHTestEnvironment
 ```
 
