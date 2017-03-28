@@ -93,25 +93,27 @@ function Setup-OpenSSHTestEnvironment
         "OpenSSHTestDir" = $OpenSSHTestDir;                    # openssh tests path
         "TestSetupLogFile" = $Script:TestSetupLogFile;         # openssh test setup log file
         "E2ETestResultsFile" = $Script:E2ETestResultsFile;     # openssh E2E test results file
-        "UnitTestResultsFile" = $Script:UnitTestResultsFile    # openssh unittest test results file
-        "DebugMode" = $DebugMode
+        "UnitTestResultsFile" = $Script:UnitTestResultsFile;   # openssh unittest test results file
+        "DebugMode" = $DebugMode                               # run openssh E2E in debug mode
         }
         
     #if user does not set path, pick it up
     if([string]::IsNullOrEmpty($OpenSSHDir))
     {
-        $sshcmd = get-command ssh.exe -ErrorAction Ignore
-        $dirToCheck = split-path $sshcmd.Source
+        $sshcmd = get-command ssh.exe -ErrorAction Ignore        
         if($sshcmd -eq $null)
         {
             Throw "Cannot find ssh.exe. Please specify -OpenSSHDir to the OpenSSH installed location."
         }
         elseif($Quiet)
         {
+            $dirToCheck = split-path $sshcmd.Path
             $script:OpenSSHDir = $dirToCheck
         }
         else
-        {   $message = "Do you want to pick up ssh.exe from $($dirToCheck)? [Yes] Y; [No] N (default is `"Y`")"
+        {
+            $dirToCheck = split-path $sshcmd.Path
+            $message = "Do you want to pick up ssh.exe from $($dirToCheck)? [Yes] Y; [No] N (default is `"Y`")"
             $response = Read-Host -Prompt $message
             if( ($response -eq "") -or ($response -ieq "Y") -or ($response -ieq "Yes") )
             {
