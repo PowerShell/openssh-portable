@@ -8,22 +8,27 @@ Describe "Tests for scp command" -Tags "CI" {
             Throw "`$OpenSSHTestInfo is null. Please run Setup-OpenSSHTestEnvironment to setup test environment."
         }
 
+        if(-not (Test-Path $OpenSSHTestInfo["TestDataPath"]))
+        {
+            $null = New-Item $OpenSSHTestInfo["TestDataPath"] -ItemType directory -Force -ErrorAction SilentlyContinue
+        }
+
         $fileName1 = "test.txt"
         $fileName2 = "test2.txt"
         $SourceDirName = "SourceDir"
-        $SourceDir = Join-Path $psscriptroot\SCP $SourceDirName
+        $SourceDir = Join-Path "$($OpenSSHTestInfo["TestDataPath"])\SCP" $SourceDirName
         $SourceFilePath = Join-Path $SourceDir $fileName1
-        $DestinationDir = Join-Path $psscriptroot\SCP "DestDir"
+        $DestinationDir = Join-Path "$($OpenSSHTestInfo["TestDataPath"])\SCP" "DestDir"
         $DestinationFilePath = Join-Path $DestinationDir $fileName1        
         $NestedSourceDir= Join-Path $SourceDir "nested"
         $NestedSourceFilePath = Join-Path $NestedSourceDir $fileName2
-        $null = New-Item $SourceDir -ItemType directory -Force
-        $null = New-Item $NestedSourceDir -ItemType directory -Force
-        $null = New-item -path $SourceFilePath -force
-        $null = New-item -path $NestedSourceFilePath -force
+        $null = New-Item $SourceDir -ItemType directory -Force -ErrorAction SilentlyContinue
+        $null = New-Item $NestedSourceDir -ItemType directory -Force -ErrorAction SilentlyContinue
+        $null = New-item -path $SourceFilePath -force -ErrorAction SilentlyContinue
+        $null = New-item -path $NestedSourceFilePath -force -ErrorAction SilentlyContinue
         "Test content111" | Set-content -Path $SourceFilePath
         "Test content in nested dir" | Set-content -Path $NestedSourceFilePath
-        $null = New-Item $DestinationDir -ItemType directory -Force
+        $null = New-Item $DestinationDir -ItemType directory -Force -ErrorAction SilentlyContinue
         $sshcmd = (get-command ssh).Path        
 
         $server = $OpenSSHTestInfo["Target"]
@@ -91,13 +96,26 @@ Describe "Tests for scp command" -Tags "CI" {
             }
         )
 
+        if ($OpenSSHTestInfo['DebugMode'])
+        {
+            Stop-Service ssh-agent -Force
+            Start-Sleep 2
+            # Fix this - pick up logs from ssh installation dir, not test directory
+            Remove-Item "$($OpenSSHTestInfo['OpenSSHDir'])\logs\ssh-agent.log" -Force -ErrorAction ignore
+            Remove-Item "$($OpenSSHTestInfo['OpenSSHDir'])\logs\sshd.log" -Force -ErrorAction ignore
+            Start-Service sshd
+        }
+
         function CheckTarget {
             param([string]$target)
             if(-not (Test-path $target))
-            {                
-                Copy-Item "$($OpenSSHTestInfo['OpenSSHDir'])\logs\ssh-agent.log" ".\logs\failedagent$script:logNum.log" -Force
-                Copy-Item "$($OpenSSHTestInfo['OpenSSHDir'])\logs\failedsshd$script:logNum.log" -Force
-                $script:logNum++
+            {
+                if( $OpenSSHTestInfo["DebugMode"])
+                {
+                    Copy-Item "$($OpenSSHTestInfo['OpenSSHDir'])\logs\ssh-agent.log" "$($OpenSSHTestInfo['OpenSSHDir'])\logs\failedagent$script:logNum.log" -Force                
+                    Copy-Item "$($OpenSSHTestInfo['OpenSSHDir'])\logs\sshd.log" "$($OpenSSHTestInfo['OpenSSHDir'])\logs\failedsshd$script:logNum.log" -Force
+                    $script:logNum++
+                }
              
                 return $false
             }
@@ -132,27 +150,49 @@ Describe "Tests for scp command" -Tags "CI" {
     }       
     
 
-    It 'File copy with -p -c option: <Title> ' -TestCases:$testData {
+    It 'File copy: <Title> ' -TestCases:$testData {
         param([string]$Title, $Source, $Destination, $Options)
             
         iex  "scp $Options $Source $Destination"
         $LASTEXITCODE | Should Be 0
         #validate file content. DestPath is the path to the file.
         CheckTarget -target $DestinationFilePath | Should Be $true
-        $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
+        if(Options.contains("-p"))
+        {
+            $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
+        }
+        else
+        {
+            $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length).Length -eq 0
+        }
         $equal | Should Be $true            
     }
                 
-    It 'Directory recursive copy with -r -p -c option: <Title> ' -TestCases:$testData1 {
+    It 'Directory recursive copy: <Title> ' -TestCases:$testData1 {
         param([string]$Title, $Source, $Destination, $Options)                        
             
         iex  "scp $Options $Source $Destination"
         $LASTEXITCODE | Should Be 0
         CheckTarget -target (join-path $DestinationDir $SourceDirName) | Should Be $true
-        $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
+        if(Options.contains("-p"))
+        {
+            $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
+        }
+        else
+        {
+            $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length).Length -eq 0
+        }
         $equal | Should Be $true
-                        
-        $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir) (Get-ChildItem -Recurse -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
+
+        if(Options.contains("-p"))
+        {
+            $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir) (Get-ChildItem -Recurse -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
+        }
+        else
+        {
+            $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir) (Get-ChildItem -Recurse -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length).Length -eq 0
+        }
+        
         $equal | Should Be $true
     }
 }   

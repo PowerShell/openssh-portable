@@ -1,45 +1,7 @@
 ﻿$ErrorActionPreference = 'Stop'
 Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -DisableNameChecking
 
-# state object used by all tests, initialized in Setup-OpenSSHTetEnvironment
-#$Global:OpenSSHTestInfo = @{}
-<# Hash Table definitions
-#test listener name
-$Global:OpenSSHTestInfo["Target"]
-
-# test listener port
-$Global:OpenSSHTestInfo["Port"]
-
-# test user with single sign on capability
-$Global:OpenSSHTestInfo["SSOUser"]
-
-# test user to be used with explicit key for key auth
-$Global:OpenSSHTestInfo["PubKeyUser"]
-
-# test user for passwd based auth
-$Global:OpenSSHTestInfo["PasswdUser"]
-
-# common password for all test accounts
-$Global:OpenSSHTestInfo["TestAccountPW"]
-
-# openssh bin path
-$Global:OpenSSHTestInfo["OpenSSHDir"]
-
-# openssh tests path
-$Global:OpenSSHTestInfo["OpenSSHTestDir"]
-
-# openssh test setup log file
-$Global:OpenSSHTestInfo["TestSetupLogFile"]
-
-# openssh E2E test results file
-$Global:OpenSSHTestInfo["E2ETestResultsFile"]
-
-# openssh unittest test results file
-$Global:OpenSSHTestInfo["UnitTestResultsFile"]
-
-#>
-
-
+[System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
 # test environment parameters initialized with defaults
 $E2ETestResultsFileName = "E2ETestResults.xml"
 $UnitTestResultsFileName = "UnitTestResults.txt"
@@ -50,12 +12,11 @@ $PasswdUser = "sshtest_passwduser"
 $OpenSSHTestAccountsPassword = "P@ssw0rd_1"
 $OpenSSHTestAccounts = $Script:SSOUser, $Script:PubKeyUser, $Script:PasswdUser
 
-$Script:OpenSSHTestDir = "$env:SystemDrive\OpenSSHTests"
-$Script:E2ETestResultsFile = Join-Path $OpenSSHTestDir $E2ETestResultsFileName
-$Script:UnitTestResultsFile = Join-Path $OpenSSHTestDir $UnitTestResultsFileName
-$Script:TestSetupLogFile = Join-Path $OpenSSHTestDir $TestSetupLogFileName
-
-
+$Script:TestDataPath = "$env:SystemDrive\OpenSSHTests"
+$Script:E2ETestResultsFile = Join-Path $TestDataPath $E2ETestResultsFileName
+$Script:UnitTestResultsFile = Join-Path $TestDataPath $UnitTestResultsFileName
+$Script:TestSetupLogFile = Join-Path $TestDataPath $TestSetupLogFileName
+$Script:E2ETestDirectory = Join-Path $repositoryRoot.FullName -ChildPath "regress\pesterTests"
    
 <#
     .Synopsis
@@ -68,8 +29,8 @@ function Setup-OpenSSHTestEnvironment
     param
     (    
         [switch] $Quiet,
-        [string] $OpenSSHDir,
-        [string] $OpenSSHTestDir = "$env:SystemDrive\OpenSSHTests",
+        [string] $OpenSSHBinPath,
+        [string] $TestDataPath = "$env:SystemDrive\OpenSSHTests",
         [Boolean] $DebugMode = $false
     )
     
@@ -78,10 +39,12 @@ function Setup-OpenSSHTestEnvironment
         $Global:OpenSSHTestInfo.Clear()
         $Global:OpenSSHTestInfo = $null
     }
-    $Script:OpenSSHTestDir = $OpenSSHTestDir;
-    $Script:E2ETestResultsFile = Join-Path $OpenSSHTestDir "E2ETestResults.xml"
-    $Script:UnitTestResultsFile = Join-Path $OpenSSHTestDir "UnitTestResults.txt"
-    $Script:TestSetupLogFile = Join-Path $OpenSSHTestDir "TestSetupLog.txt"
+    $Script:TestDataPath = $TestDataPath;
+    $Script:E2ETestResultsFile = Join-Path $TestDataPath "E2ETestResults.xml"
+    $Script:UnitTestResultsFile = Join-Path $TestDataPath "UnitTestResults.txt"
+    $Script:TestSetupLogFile = Join-Path $TestDataPath "TestSetupLog.txt"
+    $Script:UnitTestDirectory = Get-UnitTestDirectory
+    
 
     $Global:OpenSSHTestInfo = @{        
         "Target"= "localhost";                                 # test listener name
@@ -90,59 +53,61 @@ function Setup-OpenSSHTestEnvironment
         "PubKeyUser"= $PubKeyUser;                             # test user to be used with explicit key for key auth
         "PasswdUser"= $PasswdUser;                             # common password for all test accounts
         "TestAccountPW"= $OpenSSHTestAccountsPassword;         # common password for all test accounts
-        "OpenSSHTestDir" = $OpenSSHTestDir;                    # openssh tests path
+        "TestDataPath" = $TestDataPath;                    # openssh tests path
         "TestSetupLogFile" = $Script:TestSetupLogFile;         # openssh test setup log file
         "E2ETestResultsFile" = $Script:E2ETestResultsFile;     # openssh E2E test results file
         "UnitTestResultsFile" = $Script:UnitTestResultsFile;   # openssh unittest test results file
+        "E2ETestDirectory" = $Script:E2ETestDirectory          # the directory of E2E tests
+        "UnitTestDirectory" = $Script:UnitTestDirectory        # the directory of unit tests
         "DebugMode" = $DebugMode                               # run openssh E2E in debug mode
         }
         
     #if user does not set path, pick it up
-    if([string]::IsNullOrEmpty($OpenSSHDir))
+    if([string]::IsNullOrEmpty($OpenSSHBinPath))
     {
         $sshcmd = get-command ssh.exe -ErrorAction Ignore        
         if($sshcmd -eq $null)
         {
-            Throw "Cannot find ssh.exe. Please specify -OpenSSHDir to the OpenSSH installed location."
+            Throw "Cannot find ssh.exe. Please specify -OpenSSHBinPath to the OpenSSH installed location."
         }
         elseif($Quiet)
         {
             $dirToCheck = split-path $sshcmd.Path
-            $script:OpenSSHDir = $dirToCheck
+            $script:OpenSSHBinPath = $dirToCheck
         }
         else
         {
             $dirToCheck = split-path $sshcmd.Path
-            $message = "Do you want to pick up ssh.exe from $($dirToCheck)? [Yes] Y; [No] N (default is `"Y`")"
+            $message = "Do you want to test openssh installed at $($dirToCheck)? [Yes] Y; [No] N (default is `"Y`")"
             $response = Read-Host -Prompt $message
             if( ($response -eq "") -or ($response -ieq "Y") -or ($response -ieq "Yes") )
             {
-                $script:OpenSSHDir = $dirToCheck
+                $script:OpenSSHBinPath = $dirToCheck
             }
             elseif( ($response -ieq "N") -or ($response -ieq "No") )
             {
-                Write-Host "User decided not to pick up ssh.exe from $dirToCheck. Please specify -OpenSSHDir to the OpenSSH installed location."
+                Write-Host "User decided not to pick up ssh.exe from $dirToCheck. Please specify -OpenSSHBinPath to the OpenSSH installed location."
                 return
             }
             else
             {
-                Throw "User entered invalid option ($response). Please specify -OpenSSHDir to the OpenSSH installed location"
+                Throw "User entered invalid option ($response). Please specify -OpenSSHBinPath to the OpenSSH installed location"
             }
         }        
     }
     else
     {        
-        if (-not (Test-Path (Join-Path $OpenSSHDir ssh.exe) -PathType Leaf))
+        if (-not (Test-Path (Join-Path $OpenSSHBinPath ssh.exe) -PathType Leaf))
         {
-            Throw "Cannot find OpenSSH binaries under $OpenSSHDir. Please specify -OpenSSHDirto the OpenSSH installed location"
+            Throw "Cannot find OpenSSH binaries under $OpenSSHBinPath. Please specify -OpenSSHBinPathto the OpenSSH installed location"
         }
         else
         {
-            $script:OpenSSHDir = $OpenSSHDir
+            $script:OpenSSHBinPath = $OpenSSHBinPath
         }
     }
 
-    $Global:OpenSSHTestInfo.Add("OpenSSHDir", $script:OpenSSHDir)
+    $Global:OpenSSHTestInfo.Add("OpenSSHBinPath", $script:OpenSSHBinPath)
 
     $warning = @"
 WARNING: Following changes will be made to OpenSSH configuration
@@ -170,40 +135,21 @@ WARNING: Following changes will be made to OpenSSH configuration
         }
         else
         {
-            Throw "User entered invalid option ($continue).Exit now."
+            Throw "User entered invalid option ($continue). Exit now."
         }
     }
 
     Install-OpenSSHTestDependencies
-    $continue = "Y"
-    if(-not $Quiet)
-    {
-        $message = "Do you want to deploy test binaries/scripts to $OpenSSHTestDir? [Yes] Y; [No] N (default is `"Y`")"
-        $continue = Read-Host -Prompt $message
-    }    
-
-    if( ($continue -eq "") -or ($continue -ieq "Y") -or ($continue -ieq "Yes") )
-    {
-        Deploy-OpenSSHTests -OpenSSHTestDir $OpenSSHTestDir
-    }
-    elseif( ($continue -ieq "N") -or ($continue -ieq "No") )
-    {
-        Write-Host "User decided not to deploy test binaries/scripts."
-    }
-    else
-    {
-        Throw "User entered invalid option ($continue). Exit now."
-    }
     
     #Backup existing OpenSSH configuration
-    $backupConfigPath = Join-Path $script:OpenSSHDir sshd_config.ori
+    $backupConfigPath = Join-Path $script:OpenSSHBinPath sshd_config.ori
     if (-not (Test-Path $backupConfigPath -PathType Leaf)) {
-        Copy-Item (Join-Path $script:OpenSSHDir sshd_config) $backupConfigPath -Force
+        Copy-Item (Join-Path $script:OpenSSHBinPath sshd_config) $backupConfigPath -Force
     }
     
     # copy new sshd_config    
-    Copy-Item (Join-Path $OpenSSHTestDir sshd_config) (Join-Path $script:OpenSSHDir sshd_config) -Force    
-    Copy-Item $OpenSSHTestDir\sshtest*hostkey* $script:OpenSSHDir -Force    
+    Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) (Join-Path $script:OpenSSHBinPath sshd_config) -Force    
+    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force    
     Restart-Service sshd -Force
    
     #Backup existing known_hosts and replace with test version
@@ -217,7 +163,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     if ((Test-Path $knowHostsFilePath -PathType Leaf) -and (-not (Test-Path (Join-Path $knowHostsDirectoryPath known_hosts.ori) -PathType Leaf))) {
         Copy-Item $knowHostsFilePath (Join-Path $knowHostsDirectoryPath known_hosts.ori) -Force
     }
-    Copy-Item (Join-Path $OpenSSHTestDir known_hosts) $knowHostsFilePath -Force
+    Copy-Item (Join-Path $Script:E2ETestDirectory known_hosts) $knowHostsFilePath -Force
 
     # create test accounts
     #TODO - this is Windows specific. Need to be in PAL
@@ -250,7 +196,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     $ssouserProfile = (Get-ItemProperty -Path $ssouserProfileRegistry -Name 'ProfileImagePath').ProfileImagePath
     New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
-    $testPubKeyPath = Join-Path $OpenSSHTestDir sshtest_userssokey_ed25519.pub
+    $testPubKeyPath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519.pub
     #workaround for the cariggage new line added by git
     (Get-Content $testPubKeyPath -Raw).Replace("`r`n","`n") | Set-Content $testPubKeyPath -Force
     Copy-Item $testPubKeyPath $authorizedKeyPath -Force -ErrorAction SilentlyContinue
@@ -258,7 +204,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     $ar = New-Object  System.Security.AccessControl.FileSystemAccessRule("NT Service\sshd", "Read", "Allow")
     $acl.SetAccessRule($ar)
     Set-Acl  $authorizedKeyPath $acl
-    $testPriKeypath = Join-Path $OpenSSHTestDir sshtest_userssokey_ed25519
+    $testPriKeypath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519
     (Get-Content $testPriKeypath -Raw).Replace("`r`n","`n") | Set-Content $testPriKeypath -Force
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
 }
@@ -323,17 +269,17 @@ function Get-UserSID
 function Cleanup-OpenSSHTestEnvironment
 {    
     # .exe - Windows specific. TODO - PAL 
-    if (-not (Test-Path (Join-Path $script:OpenSSHDir ssh.exe) -PathType Leaf))
+    if (-not (Test-Path (Join-Path $script:OpenSSHBinPath ssh.exe) -PathType Leaf))
     {
-        Throw "Cannot find OpenSSH binaries under $script:OpenSSHDir. "
+        Throw "Cannot find OpenSSH binaries under $script:OpenSSHBinPath. "
     }
 
     #Restore sshd_config
-    $backupConfigPath = Join-Path $Script:OpenSSHDir sshd_config.ori
+    $backupConfigPath = Join-Path $Script:OpenSSHBinPath sshd_config.ori
     if (Test-Path $backupConfigPath -PathType Leaf) {        
-        Copy-Item $backupConfigPath (Join-Path $Script:OpenSSHDir sshd_config) -Force -ErrorAction SilentlyContinue
-        Remove-Item (Join-Path $Script:OpenSSHDir sshd_config.ori) -Force -ErrorAction SilentlyContinue
-        Remove-Item $Script:OpenSSHDir\sshtest*hostkey* -Force -ErrorAction SilentlyContinue
+        Copy-Item $backupConfigPath (Join-Path $Script:OpenSSHBinPath sshd_config) -Force -ErrorAction SilentlyContinue
+        Remove-Item (Join-Path $Script:OpenSSHBinPath sshd_config.ori) -Force -ErrorAction SilentlyContinue
+        Remove-Item $Script:OpenSSHBinPath\sshtest*hostkey* -Force -ErrorAction SilentlyContinue
         Restart-Service sshd
     }
     
@@ -352,7 +298,7 @@ function Cleanup-OpenSSHTestEnvironment
     }
     
     # remove registered keys    
-    cmd /c "ssh-add -d (Join-Path $Script:OpenSSHTestDir sshtest_userssokey_ed25519) 2>&1 >> $Script:TestSetupLogFile"
+    cmd /c "ssh-add -d (Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519) 2>&1 >> $Script:TestSetupLogFile"
 
     if($Global:OpenSSHTestInfo -ne $null)
     {
@@ -363,26 +309,19 @@ function Cleanup-OpenSSHTestEnvironment
 
 <#
     .Synopsis
-    After build and test run completes, upload all artifacts from the build machine.
+    Get-UnitTestDirectory.
 #>
-function Deploy-OpenSSHTests
+function Get-UnitTestDirectory
 {
     [CmdletBinding()]
     param
     (
-        [ValidateSet('Debug', 'Release', '')]
-        [string]$Configuration = "",
+        [ValidateSet('Debug', 'Release')]
+        [string]$Configuration = "Release",
 
         [ValidateSet('x86', 'x64', '')]
-        [string]$NativeHostArch = "",
-
-        [string]$OpenSSHTestDir = "$env:SystemDrive\OpenSSHTests"
+        [string]$NativeHostArch = ""
     )
-
-    if (-not (Test-Path -Path $OpenSSHTestDir -PathType Container))
-    {
-        $null = New-Item -Path $OpenSSHTestDir -ItemType Directory -Force -ErrorAction Stop
-    }
 
     [string] $platform = $env:PROCESSOR_ARCHITECTURE
     if(-not [String]::IsNullOrEmpty($NativeHostArch))
@@ -420,14 +359,8 @@ function Deploy-OpenSSHTests
     {
         $RealConfiguration = $Configuration
     }    
-
-    [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
-    #copy all pester tests
-    $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "regress\pesterTests"
-    Copy-Item -Path "$sourceDir\*" -Destination $OpenSSHTestDir -Include *.ps1,*.psm1, sshd_config, known_hosts, sshtest_* -Force -ErrorAction Stop
-    #copy all unit tests.
-    $sourceDir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$RealConfiguration"    
-    Copy-Item -Path "$sourceDir\*" -Destination "$($OpenSSHTestDir)\" -Container -Include unittest-* -Recurse -Force -ErrorAction Stop
+    $unitTestdir = Join-Path $repositoryRoot.FullName -ChildPath "bin\$folderName\$RealConfiguration"
+    $unitTestDir
 }
 
 <#
@@ -437,7 +370,7 @@ function Deploy-OpenSSHTests
 function Run-OpenSSHE2ETest
 {     
    # Discover all CI tests and run them.
-    Push-Location $Script:OpenSSHTestDir
+    Push-Location $Script:E2ETestDirectory
     Write-Log -Message "Running OpenSSH E2E tests..."    
     $testFolders = Get-ChildItem *.tests.ps1 -Recurse -Exclude SSHDConfig.tests.ps1, SSH.Tests.ps1 | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique
     Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $Script:E2ETestResultsFile -Tag 'CI'
@@ -450,8 +383,8 @@ function Run-OpenSSHE2ETest
 #>
 function Run-OpenSSHUnitTest
 {     
-   # Discover all CI tests and run them.
-    Push-Location $Script:OpenSSHTestDir
+    # Discover all CI tests and run them.
+    Push-Location $Script:UnitTestDirectory
     Write-Log -Message "Running OpenSSH unit tests..."
     if (Test-Path $Script:UnitTestResultsFile)    
     {
