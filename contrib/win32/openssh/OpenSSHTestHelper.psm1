@@ -69,7 +69,8 @@ function Setup-OpenSSHTestEnvironment
     (    
         [switch] $Quiet,
         [string] $OpenSSHDir,
-        [string] $OpenSSHTestDir = "$env:SystemDrive\OpenSSHTests"
+        [string] $OpenSSHTestDir = "$env:SystemDrive\OpenSSHTests",
+        [Boolean] $DebugMode = $false
     )
     
     if($Global:OpenSSHTestInfo -ne $null)
@@ -93,6 +94,7 @@ function Setup-OpenSSHTestEnvironment
         "TestSetupLogFile" = $Script:TestSetupLogFile;         # openssh test setup log file
         "E2ETestResultsFile" = $Script:E2ETestResultsFile;     # openssh E2E test results file
         "UnitTestResultsFile" = $Script:UnitTestResultsFile    # openssh unittest test results file
+        "DebugMode" = $DebugMode
         }
         
     #if user does not set path, pick it up
@@ -109,9 +111,9 @@ function Setup-OpenSSHTestEnvironment
             $script:OpenSSHDir = $dirToCheck
         }
         else
-        {   $message = "Do you want to pick up ssh.exe from $($dirToCheck)? Y(es)/N(o)"
+        {   $message = "Do you want to pick up ssh.exe from $($dirToCheck)? [Yes] Y; [No] N (default is `"Y`")"
             $response = Read-Host -Prompt $message
-            if( ($response -ieq "Y") -or ($response -ieq "Yes") )
+            if( ($response -eq "") -or ($response -ieq "Y") -or ($response -ieq "Yes") )
             {
                 $script:OpenSSHDir = $dirToCheck
             }
@@ -144,18 +146,19 @@ function Setup-OpenSSHTestEnvironment
 WARNING: Following changes will be made to OpenSSH configuration
    - sshd_config will be backed up as sshd_config.ori
    - will be replaced with a test sshd_config
-   - $env:USERPROFILE\.ssh\known_hosts will be backed up as known_hosts.ori
+   - $HOME\.ssh\known_hosts will be backed up as known_hosts.ori
    - will be replaced with a test known_hosts
    - sshd test listener will be on port 47002
-   - $env:USERPROFILE\.ssh\known_hosts will be modified with test host key entry
+   - $HOME\.ssh\known_hosts will be modified with test host key entry
    - test accounts - ssouser, pubkeyuser, and passwduser will be added
+   - Setup single signon for ssouser
    - To cleanup - Run Cleanup-OpenSSHTestEnvironment
 "@
 
     if (-not $Quiet) {
         Write-Warning $warning
-        $continue = Read-Host -Prompt "Do you want to continue with the above changes? Y(es)/N(o)"
-        if( ($continue -ieq "Y") -or ($continue -ieq "Yes") )
+        $continue = Read-Host -Prompt "Do you want to continue with the above changes? [Yes] Y; [No] N (default is `"Y`")"
+        if( ($continue -eq "") -or ($continue -ieq "Y") -or ($continue -ieq "Yes") )
         {            
         }
         elseif( ($continue -ieq "N") -or ($continue -ieq "No") )
@@ -170,7 +173,25 @@ WARNING: Following changes will be made to OpenSSH configuration
     }
 
     Install-OpenSSHTestDependencies
-    Deploy-OpenSSHTests -OpenSSHTestDir $OpenSSHTestDir
+    $continue = "Y"
+    if(-not $Quiet)
+    {
+        $message = "Do you want to deploy test binaries/scripts to $OpenSSHTestDir? [Yes] Y; [No] N (default is `"Y`")"
+        $continue = Read-Host -Prompt $message
+    }    
+
+    if( ($continue -eq "") -or ($continue -ieq "Y") -or ($continue -ieq "Yes") )
+    {
+        Deploy-OpenSSHTests -OpenSSHTestDir $OpenSSHTestDir
+    }
+    elseif( ($continue -ieq "N") -or ($continue -ieq "No") )
+    {
+        Write-Host "User decided not to deploy test binaries/scripts."
+    }
+    else
+    {
+        Throw "User entered invalid option ($continue). Exit now."
+    }
     
     #Backup existing OpenSSH configuration
     $backupConfigPath = Join-Path $script:OpenSSHDir sshd_config.ori
