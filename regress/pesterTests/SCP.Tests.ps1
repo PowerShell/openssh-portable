@@ -157,7 +157,7 @@ Describe "Tests for scp command" -Tags "CI" {
         $LASTEXITCODE | Should Be 0
         #validate file content. DestPath is the path to the file.
         CheckTarget -target $DestinationFilePath | Should Be $true
-        if(Options.contains("-p"))
+        if($Options.contains("-p"))
         {
             $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
         }
