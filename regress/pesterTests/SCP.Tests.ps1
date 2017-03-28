@@ -174,7 +174,7 @@ Describe "Tests for scp command" -Tags "CI" {
         iex  "scp $Options $Source $Destination"
         $LASTEXITCODE | Should Be 0
         CheckTarget -target (join-path $DestinationDir $SourceDirName) | Should Be $true
-        if(Options.contains("-p"))
+        if($Options.contains("-p"))
         {
             $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
         }
@@ -184,7 +184,7 @@ Describe "Tests for scp command" -Tags "CI" {
         }
         $equal | Should Be $true
 
-        if(Options.contains("-p"))
+        if($Options.contains("-p"))
         {
             $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir) (Get-ChildItem -Recurse -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length, LastWriteTime.DateTime).Length -eq 0
         }
