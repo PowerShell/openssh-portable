@@ -104,7 +104,7 @@ if(-not (test-path $logsdir -PathType Container))
     $null = New-Item $logsdir -ItemType Directory -Force -ErrorAction Stop
 }
 $rights = [System.Security.AccessControl.FileSystemRights]"Read, Write"
-$accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($account, $rights, "ContainerInherit,ObjectInherit", "None", "Allow")
+$accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($sshdAccount, $rights, "ContainerInherit,ObjectInherit", "None", "Allow")
 $acl = Get-Acl -Path $logsdir
 $Acl.SetAccessRule($accessRule)
 Set-Acl -Path $logsdir -AclObject $acl
