@@ -8,8 +8,9 @@ $sshdpath = Join-Path $scriptdir "sshd.exe"
 $sshagentpath = Join-Path $scriptdir "ssh-agent.exe"
 $logsdir = Join-Path $scriptdir "logs"
 
-$account = "NT SERVICE\SSHD"
+$sshdAccount = "NT SERVICE\SSHD"
 
+# 
 function Add-Privilege
 {
     param(
@@ -43,7 +44,7 @@ function Add-Privilege
 
     #Get Current policy settings
     $imported_settings = [System.IO.Path]::GetTempFileName()
-    secedit.exe /export /areas USER_RIGHTS /cfg "$($imported_settings)"
+    secedit.exe /export /areas USER_RIGHTS /cfg "$($imported_settings)" > $null
 
     if (-not(Test-Path $imported_settings)) {
         Throw "Unable to import current security policy settings"
@@ -68,7 +69,7 @@ function Add-Privilege
     }
 
     #export
-    secedit.exe /configure /db "secedit.sdb" /cfg "$($settings_to_export)" /areas USER_RIGHTS
+    secedit.exe /configure /db "secedit.sdb" /cfg "$($settings_to_export)" /areas USER_RIGHTS  > $null
 
 }
 
@@ -93,10 +94,10 @@ New-Service -Name ssh-agent -BinaryPathName $sshagentpath -Description "SSH Agen
 cmd.exe /c 'sc.exe sdset ssh-agent D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)(A;;RP;;;AU)'
 
 New-Service -Name sshd -BinaryPathName $sshdpath -Description "SSH Daemon" -StartupType Manual -DependsOn ssh-agent | Out-Null
-sc.exe config sshd obj= $account
+sc.exe config sshd obj= $sshdAccount
 
-Add-Privilege -Account $account -Privilege SeAssignPrimaryTokenPrivilege
-Add-Privilege -Account $account -Privilege SeServiceLogonRight
+Add-Privilege -Account $sshdAccount -Privilege SeAssignPrimaryTokenPrivilege
+Add-Privilege -Account $sshdAccount -Privilege SeServiceLogonRight
 
 if(-not (test-path $logsdir -PathType Container))
 {
