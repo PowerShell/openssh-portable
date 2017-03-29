@@ -7,7 +7,6 @@
 
 #include "console.h"
 
-HANDLE get_console_handle(FILE *, DWORD * );
 
 int
 vfmprintf(FILE *stream, const char *fmt, va_list ap)
