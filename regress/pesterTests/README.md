@@ -4,6 +4,7 @@ Run OpenSSH Pester Tests:
 #### To setup the test environment before test run:
 
 ```powershell
+$env:path = "<sshd.exe directory path>;$env:path"
 Import-Module  .\openssh-portable\contrib\win32\openssh\OpenSSHTestHelper.psm1 –Force
 Setup-OpenSSHTestEnvironment
 ```
@@ -27,6 +28,15 @@ Run-OpenSSHUnitTest
 C:\git\openssh-portable\regress\pesterTests\SCP.Tests.ps1
 C:\git\openssh-portable\bin\x64\Release\unittest-bitmap\unittest-bitmap.exe
 ```
+
+#### To set the debug mode and execute a particular test
+
+```powershell
+$OpenSSHTestInfo["DebugMode"] = $true
+$OpenSSHTestInfo (Verify DebugMode is set to true)
+C:\git\openssh-portable\regress\pesterTests\SCP.Tests.ps1
+```
+
 #### To revert what's done in Setup-OpenSSHTestEnvironment:
 
 ```powershell
