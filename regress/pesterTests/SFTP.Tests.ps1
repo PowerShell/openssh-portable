@@ -187,7 +187,7 @@
             Clear-Content "$($OpenSSHTestInfo['OpenSSHBinPath'])\logs\sftp-server.log" -Force -ErrorAction ignore
         }
 
-        function CopyTheDebugLogs {
+        function CopyDebugLogs {
             if($OpenSSHTestInfo["DebugMode"])
             {
                 Copy-Item "$($OpenSSHTestInfo['OpenSSHBinPath'])\logs\ssh-agent.log" "$($OpenSSHTestInfo['OpenSSHBinPath'])\logs\ssh-agent_$script:testId.log" -Force
@@ -220,7 +220,7 @@
         }
 
         AfterEach {
-            CopyTheDebugLogs
+            CopyDebugLogs
         }
 
         It '<Title>' -TestCases:$testData1 {
