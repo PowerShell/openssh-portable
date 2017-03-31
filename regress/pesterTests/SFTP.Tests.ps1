@@ -204,86 +204,84 @@
         }
     }
 
-    # Context "SFTP Test Cases" {
-        AfterAll {
-            if(!$OpenSSHTestInfo["DebugMode"])
-            {
-                Get-Item $rootDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-            }
+    AfterAll {
+        if(!$OpenSSHTestInfo["DebugMode"])
+        {
+            Get-Item $rootDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         }
+    }
 
-        BeforeEach {
-           Get-ChildItem $serverDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-           Get-ChildItem $clientDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-           Remove-Item $batchFilePath
-           Remove-Item $outputFilePath
-        }
+    BeforeEach {
+       Get-ChildItem $serverDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+       Get-ChildItem $clientDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+       Remove-Item $batchFilePath
+       Remove-Item $outputFilePath
+    }
 
-        AfterEach {
-            CopyDebugLogs
-        }
+    AfterEach {
+        CopyDebugLogs
+    }
 
-        It '<Title>' -TestCases:$testData1 {
-           param([string]$Title, $LogonStr, $Options, $Commands, $ExpectedOutput)
+    It '<Title>' -TestCases:$testData1 {
+       param([string]$Title, $LogonStr, $Options, $Commands, $ExpectedOutput)
 
-           Set-Content $batchFilePath -Encoding UTF8 -value $Commands
-           $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) -b $batchFilePath $($LogonStr) > $outputFilePath")
-           iex $str
+       Set-Content $batchFilePath -Encoding UTF8 -value $Commands
+       $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) -b $batchFilePath $($LogonStr) > $outputFilePath")
+       iex $str
 
-           #validate file content.
-           Test-Path $ExpectedOutput | Should be $true
-        }
+       #validate file content.
+       Test-Path $ExpectedOutput | Should be $true
+    }
 
-        It '<Title>' -TestCases:$testData2 {
-           param([string]$Title, $LogonStr, $Options, $tmpFileName1, $tmpFilePath1, $tmpFileName2, $tmpFilePath2, $tmpDirectoryName1, $tmpDirectoryPath1, $tmpDirectoryName2, $tmpDirectoryPath2)
+    It '<Title>' -TestCases:$testData2 {
+       param([string]$Title, $LogonStr, $Options, $tmpFileName1, $tmpFilePath1, $tmpFileName2, $tmpFilePath2, $tmpDirectoryName1, $tmpDirectoryPath1, $tmpDirectoryName2, $tmpDirectoryPath2)
 
-           #rm (remove file)
-           $commands = "mkdir $tmpDirectoryPath1
-                        put $tmpFilePath1 $tmpDirectoryPath1
-                        ls $tmpDirectoryPath1"
-           Set-Content $batchFilePath  -Encoding UTF8 -value $commands
-           $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) $($LogonStr) > $outputFilePath")
-           iex $str
-           Test-Path (join-path $tmpDirectoryPath1 $tmpFileName1) | Should be $true
+       #rm (remove file)
+       $commands = "mkdir $tmpDirectoryPath1
+                    put $tmpFilePath1 $tmpDirectoryPath1
+                    ls $tmpDirectoryPath1"
+       Set-Content $batchFilePath  -Encoding UTF8 -value $commands
+       $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) $($LogonStr) > $outputFilePath")
+       iex $str
+       Test-Path (join-path $tmpDirectoryPath1 $tmpFileName1) | Should be $true
 
-           $commands = "rm $tmpDirectoryPath1\*
-                        ls $tmpDirectoryPath1
-                        pwd
-                       "
-           Set-Content $batchFilePath  -Encoding UTF8 -value $commands
-           $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) $($LogonStr) > $outputFilePath")
-           iex $str
-           Test-Path (join-path $tmpDirectoryPath1 $tmpFileName1) | Should be $false
+       $commands = "rm $tmpDirectoryPath1\*
+                    ls $tmpDirectoryPath1
+                    pwd
+                   "
+       Set-Content $batchFilePath  -Encoding UTF8 -value $commands
+       $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) $($LogonStr) > $outputFilePath")
+       iex $str
+       Test-Path (join-path $tmpDirectoryPath1 $tmpFileName1) | Should be $false
 
-           #rename file
-           Remove-Item $outputFilePath
-           Copy-Item $tmpFilePath1 -destination $tmpDirectoryPath1
-           $commands = "rename $tmpDirectoryPath1\$tmpFileName1 $tmpDirectoryPath1\$tmpFileName2
-                        ls $tmpDirectoryPath1
-                        pwd"
-           Set-Content $batchFilePath -Encoding UTF8 -value $commands
-           $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) $($LogonStr) > $outputFilePath")
-           iex $str
-           Test-Path (join-path $tmpDirectoryPath1 $tmpFileName2) | Should be $true
+       #rename file
+       Remove-Item $outputFilePath
+       Copy-Item $tmpFilePath1 -destination $tmpDirectoryPath1
+       $commands = "rename $tmpDirectoryPath1\$tmpFileName1 $tmpDirectoryPath1\$tmpFileName2
+                    ls $tmpDirectoryPath1
+                    pwd"
+       Set-Content $batchFilePath -Encoding UTF8 -value $commands
+       $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) $($LogonStr) > $outputFilePath")
+       iex $str
+       Test-Path (join-path $tmpDirectoryPath1 $tmpFileName2) | Should be $true
 
-           #rename directory
-           Remove-Item $outputFilePath
-           $commands = "rm $tmpDirectoryPath1\*
-                        rename $tmpDirectoryPath1 $tmpDirectoryPath2
-                        ls $serverDirectory"
-           Set-Content $batchFilePath -Encoding UTF8 -value $commands
-           $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) $($LogonStr) > $outputFilePath")
-           iex $str
-           Test-Path $tmpDirectoryPath2 | Should be $true
+       #rename directory
+       Remove-Item $outputFilePath
+       $commands = "rm $tmpDirectoryPath1\*
+                    rename $tmpDirectoryPath1 $tmpDirectoryPath2
+                    ls $serverDirectory"
+       Set-Content $batchFilePath -Encoding UTF8 -value $commands
+       $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) $($LogonStr) > $outputFilePath")
+       iex $str
+       Test-Path $tmpDirectoryPath2 | Should be $true
 
-           #rmdir (remove directory)
-           Remove-Item $outputFilePath
-           $commands = "rmdir $tmpDirectoryPath2
-                        ls $serverDirectory"
-           Set-Content $batchFilePath -Encoding UTF8 -value $commands
-           $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) $($LogonStr) > $outputFilePath")
-           iex $str
-           Test-Path $tmpDirectoryPath2 | Should be $false
-        }
-    # }
+       #rmdir (remove directory)
+       Remove-Item $outputFilePath
+       $commands = "rmdir $tmpDirectoryPath2
+                    ls $serverDirectory"
+       Set-Content $batchFilePath -Encoding UTF8 -value $commands
+       $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) $($LogonStr) > $outputFilePath")
+       iex $str
+       Test-Path $tmpDirectoryPath2 | Should be $false
+    }
 }
