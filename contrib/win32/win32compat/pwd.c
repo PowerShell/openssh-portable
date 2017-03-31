@@ -262,6 +262,32 @@ done:
 	return ret;
 }
 
+PSID
+getusid()
+{
+	LPWSTR user_sid = NULL;
+	HANDLE token = 0;
+	DWORD info_len = 0;
+	TOKEN_USER* info = NULL;
+	PSID ret = NULL;
+
+	errno = 0;
+
+	if (	OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token) == FALSE ||
+		GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE ||
+		(info = (TOKEN_USER*)malloc(info_len)) == NULL ||
+		GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE) {
+		errno = ENOMEM;
+		goto done;
+	}
+	ret = info->User.Sid;	
+done:	
+	if (token)
+		CloseHandle(token);
+	if (info)
+		free(info);
+	return ret;
+}
 
 
 char *
