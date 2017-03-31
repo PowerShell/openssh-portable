@@ -204,7 +204,7 @@
         }
     }
 
-    Context "SFTP Test Cases" {
+    # Context "SFTP Test Cases" {
         AfterAll {
             if(!$OpenSSHTestInfo["DebugMode"])
             {
@@ -285,5 +285,5 @@
            iex $str
            Test-Path $tmpDirectoryPath2 | Should be $false
         }
-    }
+    # }
 }
