@@ -1767,7 +1767,7 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 
 		/*Get the sid of the calling process.*/
 		if ((user_sid = getusid()) == NULL) {
-			snprintf(buf, sizeof(buf), "failed to retrieve the user sid of the calling process with error: %d", strerror(errno));
+			snprintf(buf, sizeof(buf), "failed to retrieve the user sid of the calling process with error: %s", strerror(errno));
 			return_error = -1;
 			goto cleanup;
 		}		
