@@ -1731,45 +1731,61 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 	FILE *f;
 	char line[4096];
 	int linenum;
-	int bad_options = 0;	
+	int bad_options = 0;
 
 	if (depth < 0 || depth > READCONF_MAX_DEPTH)
 		fatal("Too many recursive configuration includes");
 
-	if ((f = fopen(filename, "r")) == NULL) 
+	if ((f = fopen(filename, "r")) == NULL)
 		return 0;
-	if (flags & SSHCONF_CHECKPERM) {
-		
+	if (flags & SSHCONF_CHECKPERM) {		
 #if WINDOWS
+		/*
+		Windows does not support get the fd from fopen 
+		implementation on windows to make sure the config file is owned by the user of calling process
+		and nobody else has the write permission
+		*/
 		HANDLE h;
-		PSID owner_sid = NULL;		
+		PSID owner_sid = NULL, user_sid = NULL;
 		DWORD ret;
 		PSECURITY_DESCRIPTOR pSD = NULL;
 		struct _stat sb;
+		char buf[2048];
+		int return_error = 0;		
 
 		if (_stat(filename, &sb) == -1)
 			fatal("_stat %s: %s", filename, strerror(errno));
+		
+		/*Get the owner sid of the file.*/
+		if ((h = (HANDLE)_get_osfhandle(_fileno(f))) == INVALID_HANDLE_VALUE ||
+		    (ret = GetSecurityInfo(h, SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION,
+			&owner_sid, NULL, NULL, NULL, &pSD)) != ERROR_SUCCESS) {
+			snprintf(buf, sizeof(buf), "failed to retrieve the owner sid of file %s", filename);
+			return_error = -1;
+			goto cleanup;
+		}
 
-		h = (HANDLE)_get_osfhandle(_fileno(f));
-		if (h == -1 && errno == EBADF)
-			fatal("failed to retrieve the handle of file %s", filename);
+		/*Get the sid of the calling process.*/
+		if ((user_sid = getusid()) == NULL) {
+			snprintf(buf, sizeof(buf), "failed to retrieve the user sid of the calling process with error: %d", strerror(errno));
+			return_error = -1;
+			goto cleanup;
+		}		
 
-		/*Get the owner SID of the file.*/
-		ret = GetSecurityInfo(
-			h,
-			SE_FILE_OBJECT,
-			OWNER_SECURITY_INFORMATION,
-			&owner_sid,
-			NULL,
-			NULL,
-			NULL,
-			&pSD);
-		if (ret != ERROR_SUCCESS)			
-			fatal("failed to retrieve the owner sid of the file %s with errorcode %d", filename, ret);		
-					
-		if (EqualSid(owner_sid, getusid()) == FALSE ||
-			(sb.st_mode & 022) != 0)			
-			fatal("Bad owner or permissions on %s", filename);		
+		if (EqualSid(owner_sid, user_sid) == FALSE ||
+		    (sb.st_mode & S_IWOTH) != 0) {
+			snprintf(buf, sizeof(buf), "Bad owner or permissions on %s", filename);
+			return_error = -1;
+			goto cleanup;
+		}
+		
+cleanup:		
+		if (user_sid)
+			FreeSid(user_sid);
+		if(pSD)
+			LocalFree(pSD);
+		if (return_error != 0)
+			fatal(buf);
 #else
 
 		struct stat sb;
