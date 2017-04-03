@@ -178,9 +178,9 @@ get_passwd(const char *user_utf8, LPWSTR user_sid)
 
 	memcpy(uname_upn, uname_utf8, strlen(uname_utf8) + 1);
 	if (udom_utf8) {
-/* TODO - get domain FQDN */
-uname_upn[strlen(uname_utf8)] = '@';
-memcpy(uname_upn + strlen(uname_utf8) + 1, udom_utf8, strlen(udom_utf8) + 1);
+		/* TODO - get domain FQDN */
+		uname_upn[strlen(uname_utf8)] = '@';
+		memcpy(uname_upn + strlen(uname_utf8) + 1, udom_utf8, strlen(udom_utf8) + 1);
 	}
 	pw.pw_name = uname_upn;
 	uname_upn = NULL;
@@ -215,13 +215,13 @@ done:
 }
 
 struct passwd*
-	w32_getpwnam(const char *user_utf8)
+w32_getpwnam(const char *user_utf8)
 {
 	return get_passwd(user_utf8, NULL);
 }
 
 struct passwd*
-	w32_getpwuid(uid_t uid)
+w32_getpwuid(uid_t uid)
 {
 	wchar_t* wuser = NULL;
 	char* user_utf8 = NULL;
@@ -235,14 +235,14 @@ struct passwd*
 	errno = 0;
 
 	if (GetUserNameExW(NameSamCompatible, NULL, &needed) != 0 ||
-		(wuser = malloc(needed * sizeof(wchar_t))) == NULL ||
-		GetUserNameExW(NameSamCompatible, wuser, &needed) == 0 ||
-		(user_utf8 = utf16_to_utf8(wuser)) == NULL ||
-		OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token) == FALSE ||
-		GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE ||
-		(info = (TOKEN_USER*)malloc(info_len)) == NULL ||
-		GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE ||
-		ConvertSidToStringSidW(info->User.Sid, &user_sid) == FALSE) {
+	    (wuser = malloc(needed * sizeof(wchar_t))) == NULL ||
+	    GetUserNameExW(NameSamCompatible, wuser, &needed) == 0 ||
+	    (user_utf8 = utf16_to_utf8(wuser)) == NULL ||
+	    OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token) == FALSE ||
+	    GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE ||
+	    (info = (TOKEN_USER*)malloc(info_len)) == NULL ||
+	    GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE ||
+	    ConvertSidToStringSidW(info->User.Sid, &user_sid) == FALSE) {
 		errno = ENOMEM;
 		goto done;
 	}
