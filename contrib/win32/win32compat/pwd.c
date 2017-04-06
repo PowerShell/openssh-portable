@@ -272,22 +272,22 @@ getusid(void)
 
 	errno = 0;
 	if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token) == FALSE) {
-		debug2("OpenProcessToken() failed. Error code is : %d.\n", GetLastError());
+		debug3("OpenProcessToken() failed. Error code is : %d.", GetLastError());
 		errno = ENOENT;
 		goto done;
 	}
 	if (GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE) {
-		debug2("GetTokenInformation() failed. Error code is : %d.\n", GetLastError());
+		debug3("GetTokenInformation() succeeded unexpectedly.");
 		errno = ENOENT;
 		goto done;
 	}
 	if ((info = (TOKEN_USER*)malloc(info_len)) == NULL){
-		debug2("GetTokenInformation() failed. Error code is : %d.\n", GetLastError());
+		debug3("Insufficient memory available");
 		errno = ENOMEM;
 		goto done;
 	}
 	if (GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE) {
-		debug2("GetTokenInformation() failed. Error code is : %d.\n", GetLastError());
+		debug3("GetTokenInformation() failed. Error code is : %d.", GetLastError());
 		errno = ENOENT;
 		goto done;
 	}
@@ -295,7 +295,7 @@ getusid(void)
 	    (user_sid = (PSID *)malloc(length)) == NULL ||
 	    CopySid(length, user_sid, info->User.Sid) == FALSE ||
 	    IsValidSid(user_sid) == FALSE) {
-		debug2("CopySid() failed. Error code is : %d.\n", GetLastError());
+		debug3("CopySid() failed. Error code is : %d.", GetLastError());
 		errno = ENOENT;
 		goto done;
 	}	

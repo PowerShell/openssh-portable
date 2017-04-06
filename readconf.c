@@ -1741,9 +1741,9 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 	if (flags & SSHCONF_CHECKPERM) {		
 #if WINDOWS
 		/*		
-		file permissin are designed differently on windows
-		implementation on windows to make sure the config file is owned by the user of calling process
-		and nobody else except Administrators group and SYSTEM account has the write permission
+		file permissions are designed differently on windows
+		implementation on windows to make sure the config file is owned by the user of calling process and
+		nobody else except Administrators group and  current user of calling process, and SYSTEM account has the write permission
 		*/
 		HANDLE h;
 		PSID owner_sid = NULL, user_sid = NULL;
@@ -1751,115 +1751,85 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 		DWORD ret;		
 		PSECURITY_DESCRIPTOR pSD = NULL;		
 		char buf[2048];
-		int return_error = 0;
-		BOOL others_has_write_permission = FALSE;
+		BOOL others_have_write_permission = FALSE;
 		
 		/*Get the sid of the calling process.*/
-		if ((user_sid = getusid()) == NULL) {
-			snprintf(buf, sizeof(buf), "failed to retrieve the user sid of the calling process with error: %s", strerror(errno));
-			return_error = -1;
-			goto cleanup;
-		}
+		if ((user_sid = getusid()) == NULL)
+			fatal("failed to retrieve the user sid of the calling process with error: %s", strerror(errno));		
 
 		/*Get the owner sid of the file.*/
 		if ((h = (HANDLE)_get_osfhandle(_fileno(f))) == INVALID_HANDLE_VALUE ||
 		    (ret = GetSecurityInfo(h, SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
-			&owner_sid, NULL, &dacl, NULL, &pSD)) != ERROR_SUCCESS) {
-			snprintf(buf, sizeof(buf), "failed to retrieve the owner sid of file %s", filename);
-			return_error = -1;
-			goto cleanup;
-		}
-		if ((IsValidSid(owner_sid) == FALSE) || (IsValidAcl(dacl) == FALSE)) {
-			snprintf(buf, sizeof(buf), "invalid sid or Acl is returned from  GetSecurityInfo()");
-			return_error = -1;
-			goto cleanup;
-		}
+		    &owner_sid, NULL, &dacl, NULL, &pSD)) != ERROR_SUCCESS)
+			fatal("failed to retrieve the owner sid of file %s", filename);
+		
+		if ((IsValidSid(owner_sid) == FALSE) || (IsValidAcl(dacl) == FALSE))
+			fatal("invalid sid or Acl is returned from  GetSecurityInfo()");		
 
-		if (EqualSid(owner_sid, user_sid) == FALSE) {
-			snprintf(buf, sizeof(buf), "Bad owner on %s", filename);
-			return_error = -1;
-			goto cleanup;
-		}
+		if (EqualSid(owner_sid, user_sid) == FALSE)
+			fatal("Bad owner on %s", filename);
 
 		/*
-		iternate all ace of the file to find out if any others than administrators group,
+		iterate all aces of the file to find out if others than administrators group,
 		 system account, and current user account has write permission on the file
 		*/
-		for (DWORD i = 0; i < dacl->AceCount; i++)
-		{
+		for (DWORD i = 0; i < dacl->AceCount; i++) {
 			PVOID       current_ace = NULL;
 			PACE_HEADER current_aceHeader = NULL;
 			PSID        current_trustee_sid = NULL;
 
 			if (!GetAce(dacl, i, &current_ace))
-			{
-				snprintf(buf, sizeof(buf), "%s", "GetAce() failed");
-				return_error = -1;
-				goto cleanup;
-			}
-						
+				fatal("GetAce() failed");
+
 			current_aceHeader = (PACE_HEADER)current_ace;
-			// Determine the location of the trustee's sid and the value of the access mask  
-			switch (current_aceHeader->AceType)
-			{
-			case ACCESS_ALLOWED_ACE_TYPE:
-			{
+			// Determine the location of the trustee's sid and the value of the access mask
+			switch (current_aceHeader->AceType) {
+			case ACCESS_ALLOWED_ACE_TYPE: {
 				PACCESS_ALLOWED_ACE pAllowedAce = (PACCESS_ALLOWED_ACE)current_ace;
 				current_trustee_sid = &(pAllowedAce->SidStart);
 				break;
 			}
-			case ACCESS_DENIED_ACE_TYPE:
-			{
+			case ACCESS_DENIED_ACE_TYPE: {
 				PACCESS_DENIED_ACE pDeniedAce = (PACCESS_DENIED_ACE)current_ace;
 				current_trustee_sid = &(pDeniedAce->SidStart);
 				break;
 			}
-			default:
-			{
+			default: {
 				// Not interested ACE
 				continue;
 			}
 			}
 			/*no need to check administrators group, current user account, and system account*/
-			if(IsWellKnownSid(current_trustee_sid, WinBuiltinAdministratorsSid) ||
+			if (IsWellKnownSid(current_trustee_sid, WinBuiltinAdministratorsSid) ||
 			    IsWellKnownSid(current_trustee_sid, WinLocalSystemSid) ||
-			    EqualSid(current_trustee_sid, user_sid) )
-			    continue;
-			else{
+			    EqualSid(current_trustee_sid, user_sid))
+				continue;
+			else {
 				TRUSTEE trustee = { 0 };
 				ACCESS_MASK access_mask = 0;
 
 				BuildTrusteeWithSid(&trustee, current_trustee_sid);
-				if (GetEffectiveRightsFromAcl(dacl, &trustee, &access_mask) != ERROR_SUCCESS) {
-					snprintf(buf, sizeof(buf), "%s", "GetEffectiveRightsFromAcl() failed!");
-					return_error = -1;
-					goto cleanup;
-				}
+				if (GetEffectiveRightsFromAcl(dacl, &trustee, &access_mask) != ERROR_SUCCESS)
+					fatal("GetEffectiveRightsFromAcl() failed!");				
 				
 				/*
 				Treat SYNCHRONIZE specially by removing it from the Generic Mapping because
 				SYNCHRONIZE and READ_CONTROL are always allowed for FILE_GENERIC_READ and FILE_GENERIC_EXECUTE
 				*/				
 				if ((access_mask & (FILE_GENERIC_WRITE & ~(SYNCHRONIZE | READ_CONTROL))) != 0) {
-					others_has_write_permission = TRUE;
+					others_have_write_permission = TRUE;
 					break;
 				}
 			}
 		}
 
-		if (others_has_write_permission) {
-			snprintf(buf, sizeof(buf), "Bad permissions on %s", filename);
-			return_error = -1;
-			goto cleanup;
-		}
-		
-cleanup:		
+		if (others_have_write_permission)
+			fatal("Bad permissions on %s", filename);		
+	
 		if (user_sid)
 			free(user_sid);
 		if(pSD)
-			LocalFree(pSD);
-		if (return_error != 0)
-			fatal(buf);
+			LocalFree(pSD);		
 #else
 
 		struct stat sb;
