@@ -50,7 +50,7 @@
         Remove-Item -Path $filePath -Force -ErrorAction ignore        
     }
 
-    Context "User SSHConfig -- ReadConfig (positive)" {
+    Context "User SSHConfig -- ReadConfig" {
         BeforeAll {
             $userConfigFile = Join-Path $home ".ssh\config"
             Copy-item "$PSScriptRoot\sshconfig\ssh_config" $userConfigFile -force
