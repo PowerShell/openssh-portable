@@ -1752,7 +1752,7 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 		PSECURITY_DESCRIPTOR pSD = NULL;		
 		char buf[2048];
 		int return_error = 0;
-		BOOL anyone_else_has_write_permission = FALSE;
+		BOOL others_has_write_permission = FALSE;
 		
 		/*Get the sid of the calling process.*/
 		if ((user_sid = getusid()) == NULL) {
@@ -1790,7 +1790,6 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 			PVOID       current_ace = NULL;
 			PACE_HEADER current_aceHeader = NULL;
 			PSID        current_trustee_sid = NULL;
-			ACCESS_MASK current_access_mask = 0;
 
 			if (!GetAce(dacl, i, &current_ace))
 			{
@@ -1807,14 +1806,12 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 			{
 				PACCESS_ALLOWED_ACE pAllowedAce = (PACCESS_ALLOWED_ACE)current_ace;
 				current_trustee_sid = &(pAllowedAce->SidStart);
-				current_access_mask = pAllowedAce->Mask;
 				break;
 			}
 			case ACCESS_DENIED_ACE_TYPE:
 			{
 				PACCESS_DENIED_ACE pDeniedAce = (PACCESS_DENIED_ACE)current_ace;
 				current_trustee_sid = &(pDeniedAce->SidStart);
-				current_access_mask = pDeniedAce->Mask;
 				break;
 			}
 			default:
@@ -1831,21 +1828,26 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 			else{
 				TRUSTEE trustee = { 0 };
 				ACCESS_MASK access_mask = 0;
+
 				BuildTrusteeWithSid(&trustee, current_trustee_sid);
-				GetEffectiveRightsFromAcl(dacl, &trustee, &access_mask);
+				if (GetEffectiveRightsFromAcl(dacl, &trustee, &access_mask) != ERROR_SUCCESS) {
+					snprintf(buf, sizeof(buf), "%s", "GetEffectiveRightsFromAcl() failed!");
+					return_error = -1;
+					goto cleanup;
+				}
 				
 				/*
 				Treat SYNCHRONIZE specially by removing it from the Generic Mapping because
 				SYNCHRONIZE and READ_CONTROL are always allowed for FILE_GENERIC_READ and FILE_GENERIC_EXECUTE
 				*/				
 				if ((access_mask & (FILE_GENERIC_WRITE & ~(SYNCHRONIZE | READ_CONTROL))) != 0) {
-					anyone_else_has_write_permission = TRUE;
+					others_has_write_permission = TRUE;
 					break;
 				}
 			}
 		}
 
-		if (anyone_else_has_write_permission) {
+		if (others_has_write_permission) {
 			snprintf(buf, sizeof(buf), "Bad permissions on %s", filename);
 			return_error = -1;
 			goto cleanup;
