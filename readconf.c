@@ -1749,8 +1749,7 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 		PSID owner_sid = NULL, user_sid = NULL;
 		PACL dacl = NULL;		
 		DWORD ret;		
-		PSECURITY_DESCRIPTOR pSD = NULL;		
-		char buf[2048];
+		PSECURITY_DESCRIPTOR pSD = NULL;
 		BOOL others_have_write_permission = FALSE;
 		
 		/*Get the sid of the calling process.*/
