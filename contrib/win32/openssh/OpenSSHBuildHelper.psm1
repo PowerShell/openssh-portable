@@ -471,6 +471,19 @@ function Install-OpenSSH
         [string]$OpenSSHDir = "$env:SystemDrive\OpenSSH"
     )
 
+    if ($Configuration -eq "")
+    {
+        $Configuration = 'Release'
+    }
+
+    if ($NativeHostArch -eq "") 
+    {
+        $NativeHostArch = 'x64'
+        if ($env:PROCESSOR_ARCHITECTURE  -eq 'x86') {
+            $NativeHostArch = 'x86'
+        }
+    }
+
     Package-OpenSSH -NativeHostArch $NativeHostArch -Configuration $Configuration -DestinationPath $OpenSSHDir
 
     Push-Location $OpenSSHDir 
