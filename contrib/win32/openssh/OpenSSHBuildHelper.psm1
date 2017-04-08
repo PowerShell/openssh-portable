@@ -311,7 +311,7 @@ function Package-OpenSSH
     }
     $buildDir = Join-Path $repositoryRoot ("bin\" + $folderName + "\" + $Configuration)
     $payload = "sshd.exe", "ssh.exe", "ssh-agent.exe", "ssh-add.exe", "sftp.exe"
-    $payload += "sftp-server.exe", "scp.exe", "ssh-lsa.dll", "ssh-shellhost.exe", "ssh-keygen.exe" 
+    $payload += "sftp-server.exe", "scp.exe", "ssh-shellhost.exe", "ssh-keygen.exe" 
     $payload += "sshd_config", "install-sshd.ps1", "uninstall-sshd.ps1"
     $payload += "install-sshlsa.ps1", "uninstall-sshlsa.ps1"
 
@@ -526,7 +526,7 @@ function Install-OpenSSH
     Push-Location $OpenSSHDir 
     & ( "$OpenSSHDir\install-sshd.ps1") 
     .\ssh-keygen.exe -A
-    & ( "$OpenSSHDir\install-sshlsa.ps1")
+
 
     #machine will be reboot after Install-openssh anyway
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
