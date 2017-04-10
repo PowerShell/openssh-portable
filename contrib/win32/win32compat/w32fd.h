@@ -102,7 +102,7 @@ BOOL w32_io_is_blocking(struct w32_io*);
 BOOL w32_io_is_io_available(struct w32_io* pio, BOOL rd);
 int wait_for_any_event(HANDLE* events, int num_events, DWORD milli_seconds);
 
-/*POSIX mimic'ing socket API*/
+/*POSIX mimic'ing socket API and socket helper API*/
 int socketio_initialize();
 int socketio_done();
 BOOL socketio_is_io_available(struct w32_io* pio, BOOL rd);
@@ -122,7 +122,7 @@ int socketio_send(struct w32_io* pio, const void *buf, size_t len, int flags);
 int socketio_shutdown(struct w32_io* pio, int how);
 int socketio_close(struct w32_io* pio);
 
-/*POSIX mimic'ing file API*/
+/*POSIX mimic'ing file API and file helper API*/
 BOOL fileio_is_io_available(struct w32_io* pio, BOOL rd);
 void fileio_on_select(struct w32_io* pio, BOOL rd);
 int fileio_close(struct w32_io* pio);
@@ -137,5 +137,5 @@ int fileio_stat(const char *path, struct _stat64 *buf);
 long fileio_lseek(struct w32_io* pio, long offset, int origin);
 FILE* fileio_fdopen(struct w32_io* pio, const char *mode);
 
-/* terminal io specific versions */
+/* terminal io helper API */
 int termio_close(struct w32_io* pio);
