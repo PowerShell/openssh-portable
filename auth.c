@@ -584,7 +584,7 @@ auth_openfile(const char *file, struct passwd *pw, int strict_modes,
                 return NULL;
         }
 	if (strict_modes &&
-	    w32_secure_file_permission(file, pw, 3) != 0) {
+	    w32_secure_file_permission(file, pw, TRUE) != 0) {
 		fclose(f);
 		logit("Authentication refused.");
 		auth_debug_add("Ignored %s", file_type);

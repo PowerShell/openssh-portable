@@ -39,7 +39,7 @@
 #include "debug.h"
 
 int
-w32_secure_file_permission(const char *name, struct passwd * pw, DWORD accepted_owner_account_type)
+w32_secure_file_permission(const char *name, struct passwd * pw, BOOL accept_system_account_as_owner)
 {
 	PSECURITY_DESCRIPTOR pSD = NULL;
 	PSID owner_sid = NULL, user_sid = NULL;
@@ -54,7 +54,8 @@ w32_secure_file_permission(const char *name, struct passwd * pw, DWORD accepted_
 	}
 
 	/*Get the owner sid of the file.*/
-	if ((ret = GetNamedSecurityInfo(name, SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+	if ((ret = GetNamedSecurityInfo(name, SE_FILE_OBJECT,
+		OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
 		&owner_sid, NULL, dacl, NULL, &pSD)) != ERROR_SUCCESS ||
 		(IsValidSid(owner_sid) == FALSE) ||
 		(IsValidAcl(dacl) == FALSE)) {
@@ -62,12 +63,8 @@ w32_secure_file_permission(const char *name, struct passwd * pw, DWORD accepted_
 		errno = ENOENT;
 		goto cleanup;
 	}
-	if ((accepted_owner_account_type & WinBuiltinAdministrators) != 0 &&
-		(IsWellKnownSid(owner_sid, WinBuiltinAdministratorsSid)) ||
-		(accepted_owner_account_type & WinLocalSystem) != 0 &&
-		(IsWellKnownSid(owner_sid, WinLocalSystemSid)))
-		debug3("valid owner account type on file", name);
-	else if (EqualSid(owner_sid, user_sid) == FALSE) {
+	if (!(accept_system_account_as_owner == TRUE && is_system_account(owner_sid)) &&
+		(EqualSid(owner_sid, user_sid) == FALSE)) {
 		debug3("Bad owner on %s", name);
 		ret = 1;
 		errno = ENOENT;
@@ -105,6 +102,7 @@ w32_secure_file_permission(const char *name, struct passwd * pw, DWORD accepted_
 			continue;
 		}
 		}
+
 		/*no need to check administrators group, current user account, and system account*/
 		if ( IsWellKnownSid(current_trustee_sid, WinBuiltinAdministratorsSid) ||
 			IsWellKnownSid(current_trustee_sid, WinLocalSystemSid) ||
@@ -140,4 +138,11 @@ cleanup:
 	if (user_sid)
 		FreeSid(user_sid);			
 	return ret;
+}
+
+BOOL is_system_account(PSID sid)
+{
+	return IsWellKnownSid(sid, WinBuiltinAdministratorsSid) ||
+		IsWellKnownSid(sid, WinLocalSystemSid);
+
 }
