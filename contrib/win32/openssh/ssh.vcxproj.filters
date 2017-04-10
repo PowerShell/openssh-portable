@@ -311,6 +311,9 @@
     <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\win32_sshtty.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\win32compat\w32-permcheck.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="version.rc">

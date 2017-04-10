@@ -120,18 +120,19 @@ int config_log_level() {
 }
 
 int pubkey_allowed(struct sshkey* pubkey, wchar_t* wuser, wchar_t* wuser_home) {
-	struct passwd pw;
+	struct passwd *pw;
         int ret;
 	char *user = NULL, *user_home = NULL;
-	memset(&pw, 0, sizeof(pw));
+	if((pw = getpwuid(getuid())) == NULL) 
+		return 0;
 
         if ((user_home = utf16_to_utf8(wuser_home)) == NULL ||
             (user = utf16_to_utf8(wuser)) == NULL)
                 return 0;
 	
-        pw.pw_dir = user_home;
-	pw.pw_name = user;
-	ret = user_key_allowed(&pw, pubkey, 1);
+        pw->pw_dir = user_home;
+	pw->pw_name = user;
+	ret = user_key_allowed(pw, pubkey, 1);
         free(user);
         free(user_home);
         return ret;
