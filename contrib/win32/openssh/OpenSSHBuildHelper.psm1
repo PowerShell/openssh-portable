@@ -334,23 +334,23 @@ function Package-OpenSSH
         if ((-not(Test-Path (Join-Path $buildDir $file)))) {
             Throw "Cannot find $file under $buildDir. Did you run Build-OpenSSH?"
         }
-        Copy-Item (Join-Path $buildDir $file) $packageDir
+        Copy-Item (Join-Path $buildDir $file) $packageDir -Force
         if ($file.EndsWith(".exe")) {
             $pdb = $file.Replace(".exe", ".pdb")
-            Copy-Item (Join-Path $buildDir $pdb) $symbolsDir
+            Copy-Item (Join-Path $buildDir $pdb) $symbolsDir -Force
         }
         if ($file.EndsWith(".dll")) {
             $pdb = $file.Replace(".dll", ".pdb")
-            Copy-Item (Join-Path $buildDir $pdb) $symbolsDir
+            Copy-Item (Join-Path $buildDir $pdb) $symbolsDir -Force
         }
     }
 
     if ($DestinationPath -ne "") {
         if (Test-Path $DestinationPath) {
-            Remove-Item $DestinationPath\* -Force
+            Remove-Item $DestinationPath\* -Force -Recurse
         }
         else {
-            New-Item -ItemType Directory $DestinationPath | Out-Null
+            New-Item -ItemType Directory $DestinationPath -Force | Out-Null
         }
         Copy-Item -Path $packageDir\* -Destination $DestinationPath -Force -Recurse
     }
