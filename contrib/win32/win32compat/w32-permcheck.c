@@ -56,7 +56,7 @@ w32_secure_file_permission(const char *name, struct passwd * pw, BOOL accept_sys
 	/*Get the owner sid of the file.*/
 	if ((ret = GetNamedSecurityInfo(name, SE_FILE_OBJECT,
 		OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
-		&owner_sid, NULL, dacl, NULL, &pSD)) != ERROR_SUCCESS ||
+		&owner_sid, NULL, &dacl, NULL, &pSD)) != ERROR_SUCCESS ||
 		(IsValidSid(owner_sid) == FALSE) ||
 		(IsValidAcl(dacl) == FALSE)) {
 		debug3("failed to retrieve the owner sid and dacl of file %s with error code: %d", name, ret);
