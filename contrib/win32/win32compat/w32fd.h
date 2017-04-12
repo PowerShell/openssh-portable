@@ -39,7 +39,7 @@ enum w32_io_type {
 	UNKNOWN_FD = 0,
 	SOCK_FD = 1,	/*maps a socket fd*/
 	NONSOCK_FD = 2,	/*maps a file fd, pipe fd or a tty fd*/
-	STD_IO_FD = 5	/*maps a std fd - ex. STDIN_FILE*/
+	NONSOCK_SYNC_FD = 3 /*maps a NONSOCK_FD that doesnt support async io*/
 };
 
 enum w32_io_sock_state {
@@ -94,7 +94,8 @@ struct w32_io {
 	}internal;
 };
 
-#define WINHANDLE(pio) (((pio)->type == STD_IO_FD)? GetStdHandle((pio)->std_handle):(pio)->handle)
+#define IS_STDIO(pio) ((pio)->table_index <= 2)
+#define WINHANDLE(pio) (IS_STDIO(pio)? GetStdHandle((pio)->std_handle):(pio)->handle)
 #define FILETYPE(pio) (GetFileType(WINHANDLE(pio)))
 extern HANDLE main_thread;
 
@@ -136,6 +137,3 @@ int fileio_fstat(struct w32_io* pio, struct _stat64 *buf);
 int fileio_stat(const char *path, struct _stat64 *buf);
 long fileio_lseek(struct w32_io* pio, long offset, int origin);
 FILE* fileio_fdopen(struct w32_io* pio, const char *mode);
-
-/* terminal io helper API */
-int termio_close(struct w32_io* pio);
