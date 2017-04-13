@@ -493,6 +493,7 @@ int
 w32_close(int fd)
 {
 	struct w32_io* pio;
+	int r;
 	if ((fd < 0) || (fd > MAX_FDS - 1) || fd_table.w32_ios[fd] == NULL) {
 		errno = EBADF;
 		return -1;
@@ -502,12 +503,14 @@ w32_close(int fd)
 
 	debug3("close - io:%p, type:%d, fd:%d, table_index:%d", pio, pio->type, fd,
 		pio->table_index);
-	fd_table_clear(pio->table_index);
-
+	
 	if (pio->type == SOCK_FD)
-		return socketio_close(pio);
+		r = socketio_close(pio);
 	else
-		return fileio_close(pio);		
+		r = fileio_close(pio);		
+
+	fd_table_clear(pio->table_index);
+	return r;
 }
 
 static int
