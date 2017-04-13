@@ -54,7 +54,8 @@ struct passwd *privsep_pw = NULL;
 static char *config_file_name = _PATH_SERVER_CONFIG_FILE;
 int auth_sock = -1;
 
-int	 auth2_methods_valid(const char * c, int i) {
+int	
+auth2_methods_valid(const char * c, int i) {
 	return 1;
 }
 
@@ -121,18 +122,21 @@ int config_log_level() {
 
 int pubkey_allowed(struct sshkey* pubkey, wchar_t* wuser, wchar_t* wuser_home) {
 	struct passwd *pw;
-        int ret;
-	char *user = NULL, *user_home = NULL;
-	if((pw = getpwuid(getuid())) == NULL) 
-		return 0;
+        int ret = 1;
+	char *user = NULL, *user_home = NULL;	
 
         if ((user_home = utf16_to_utf8(wuser_home)) == NULL ||
             (user = utf16_to_utf8(wuser)) == NULL)
                 return 0;
+	if ((pw = getpwnam(user)) == NULL) {		
+		ret = 0;
+		goto cleanup;
+	}
 	
         pw->pw_dir = user_home;
 	pw->pw_name = user;
 	ret = user_key_allowed(pw, pubkey, 1);
+cleanup:	
         free(user);
         free(user_home);
         return ret;

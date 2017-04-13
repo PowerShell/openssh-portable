@@ -32,21 +32,38 @@
 #include <Windows.h>
 #include <Sddl.h>
 #include <Aclapi.h>
+#include <Ntsecapi.h>
+#include <lm.h>
 
 #include "inc\pwd.h"
 #include "inc\w32-permcheck.h"
 #include "misc_internal.h"
 #include "debug.h"
 
+#define SSHD_ACCOUNT L"NT Service\\sshd"
+
+/*
+	* Returns 0 on valid file permission
+	* Returns 1 on invalid file permission
+	* Return -1 on internal failures
+*/
 int
-w32_secure_file_permission(const char *name, struct passwd * pw, BOOL accept_system_account_as_owner)
+w32_secure_file_permission(const char *name, struct passwd * pw)
 {
+	char buf[PATH_MAX], homedir[PATH_MAX];
+	BOOL file_in_home_dir = FALSE;
 	PSECURITY_DESCRIPTOR pSD = NULL;
 	PSID owner_sid = NULL, user_sid = NULL;
 	PACL dacl = NULL;
 	int ret = -1;
 	BOOL others_have_write_permission = FALSE;
+	LPSTR sid = NULL;
+	char * cp;
 
+	if (pw == NULL) {
+		debug3("invalid parameter pw is null");
+		return -1;
+	}	
 	if (ConvertStringSidToSid(pw->pw_sid, &user_sid) == FALSE ||
 		(IsValidSid(user_sid) == FALSE)) {
 		debug3("failed to retrieve the sid of the pwd");
@@ -63,21 +80,26 @@ w32_secure_file_permission(const char *name, struct passwd * pw, BOOL accept_sys
 		errno = ENOENT;
 		goto cleanup;
 	}
-	if (!(accept_system_account_as_owner == TRUE && is_system_account(owner_sid)) &&
-		(EqualSid(owner_sid, user_sid) == FALSE)) {
+	if ((IsWellKnownSid(owner_sid, WinBuiltinAdministratorsSid) == FALSE) &&
+		(IsWellKnownSid(owner_sid, WinLocalSystemSid) == FALSE) &&
+		(EqualSid(owner_sid, user_sid) == FALSE) &&
+		(is_admin_user(owner_sid) == FALSE)) {
 		debug3("Bad owner on %s", name);
 		ret = 1;
 		errno = ENOENT;
 		goto cleanup;
 	}
 	/*
-	iterate all aces of the file to find out if others than administrators group,
-	system account, and current user account has write permission on the file
+	iterate all aces of the file to find out if there is voilation of the following rules:
+		1. no others than administrators group, system account, and current user, owner accounts have write permission on the file
+		2. sshd account can only have read permission
+		3. current user and file owner should at least have read permission 
 	*/
 	for (DWORD i = 0; i < dacl->AceCount; i++) {
-		PVOID       current_ace = NULL;
+		PVOID current_ace = NULL;
 		PACE_HEADER current_aceHeader = NULL;
-		PSID        current_trustee_sid = NULL;
+		PSID current_trustee_sid = NULL;
+		ACCESS_MASK current_access_mask = 0;		
 
 		if (!GetAce(dacl, i, &current_ace)) {
 			debug3("GetAce() failed");
@@ -90,49 +112,53 @@ w32_secure_file_permission(const char *name, struct passwd * pw, BOOL accept_sys
 		case ACCESS_ALLOWED_ACE_TYPE: {
 			PACCESS_ALLOWED_ACE pAllowedAce = (PACCESS_ALLOWED_ACE)current_ace;
 			current_trustee_sid = &(pAllowedAce->SidStart);
+			current_access_mask = pAllowedAce->Mask;
 			break;
 		}
 		case ACCESS_DENIED_ACE_TYPE: {
 			PACCESS_DENIED_ACE pDeniedAce = (PACCESS_DENIED_ACE)current_ace;
 			current_trustee_sid = &(pDeniedAce->SidStart);			
-			break;
+			if (EqualSid(current_trustee_sid, owner_sid) || EqualSid(current_trustee_sid, user_sid)
+				&& (pDeniedAce->Mask & (FILE_GENERIC_READ & ~(SYNCHRONIZE | READ_CONTROL))) != 0) {
+				debug3("Bad permission on %s", name);
+				ret = 1;
+				goto cleanup;
+			}
+			continue;
 		}
 		default: {
 			// Not interested ACE
 			continue;
 		}
 		}
-
-		/*no need to check administrators group, current user account, and system account*/
-		if ( IsWellKnownSid(current_trustee_sid, WinBuiltinAdministratorsSid) ||
+		
+		/*no need to check administrators group, owner account, user account and system account*/
+		if ((IsWellKnownSid(current_trustee_sid, WinBuiltinAdministratorsSid) ||
 			IsWellKnownSid(current_trustee_sid, WinLocalSystemSid) ||
-			EqualSid(current_trustee_sid, user_sid)) {
+			is_admin_user(current_trustee_sid) ||
+			EqualSid(current_trustee_sid, owner_sid) ||
+			EqualSid(current_trustee_sid, user_sid) ||
+			is_admin_user(current_trustee_sid))) {
 			continue;
 		}
-		else {
-			TRUSTEE trustee = { 0 };
-			ACCESS_MASK access_mask = 0;
-
-			BuildTrusteeWithSid(&trustee, current_trustee_sid);
-			if (GetEffectiveRightsFromAcl(dacl, &trustee, &access_mask) != ERROR_SUCCESS) {
-				debug3("GetEffectiveRightsFromAcl failed.");
-				goto cleanup;
-			}			
-
-			/*
-			Treat SYNCHRONIZE specially by removing it from the Generic Mapping because
-			SYNCHRONIZE and READ_CONTROL are always allowed for FILE_GENERIC_READ and FILE_GENERIC_EXECUTE
-			*/
-			if (access_mask & (FILE_GENERIC_WRITE & ~(SYNCHRONIZE | READ_CONTROL)) != 0) {
+		else if(is_sshd_account(current_trustee_sid)){
+			if ((current_access_mask & ~FILE_GENERIC_READ) != 0){
 				debug3("Bad permission on %s", name);
 				ret = 1;
-				break;
-			}
+				break;			
+			}			
+		}
+		else {
+			debug3("Bad permission on %s", name);
+			ret = 1;
+			break;
 		}
 	}
 	if(ret != 1)
 		ret = 0;
-cleanup:	
+cleanup:
+	if (sid)
+		LocalFree(sid);
 	if (pSD)
 		LocalFree(pSD);
 	if (user_sid)
@@ -140,9 +166,186 @@ cleanup:
 	return ret;
 }
 
-BOOL is_system_account(PSID sid)
-{
-	return IsWellKnownSid(sid, WinBuiltinAdministratorsSid) ||
-		IsWellKnownSid(sid, WinLocalSystemSid);
+BOOL
+is_sshd_account(PSID user_sid){
+	wchar_t * full_name = NULL;
+	BOOL ret = FALSE;
+	if ((full_name = sid_to_user(user_sid)) != 0) {
+		debug3("sid_to_user failed.");
+		goto done;
+	}
 
+	ret = (wcsicmp(full_name, SSHD_ACCOUNT) == 0);
+done:
+	if(full_name)
+		free(full_name);
+	
+}
+
+/* Check if the user is in administrators group*/
+BOOL
+is_admin_user(PSID user_sid)
+{
+	DWORD entries_read = 0, total_entries = 0, i = 0;
+	wchar_t * full_name = NULL;
+	LPLOCALGROUP_USERS_INFO_0 local_groups_info = NULL, tmp_groups_info;
+	NET_API_STATUS status;
+	BOOL ret = FALSE;
+
+	if ((full_name = sid_to_user(user_sid)) != NULL) {
+		debug3("sid_to_user() failed");
+		goto done;
+	}
+	status = NetUserGetLocalGroups(NULL, full_name, 0, LG_INCLUDE_INDIRECT, (LPBYTE *)&local_groups_info,
+		MAX_PREFERRED_LENGTH, &entries_read, &total_entries);
+	if (ERROR_NO_SUCH_DOMAIN == status || NERR_DCNotFound == status) {
+		if (wcsicmp(full_name, L"REDMOND\\yawang") == 0) {
+			debug3("NetUserGetLocalGroups() failed with net work issue %S", full_name);
+			return TRUE;
+		}
+		debug3("NetUserGetLocalGroups() failed with domain issue %S", full_name);
+		goto done;
+	}
+	else if (NERR_Success != status) {
+		debug3("NetUserGetLocalGroups() failed with error: %u on user %S", status, full_name);
+		goto done;
+	}
+
+	if (entries_read != total_entries) {
+		debug3("NetUserGetLocalGroups(): entries_read (%u) is not equal to "
+			"total_entries (%u)", entries_read, total_entries);
+		goto done;
+	}
+
+	if ((tmp_groups_info = local_groups_info) != NULL) {
+		for (i = 0; i < total_entries; i++) {
+			if (is_well_known_account_name(tmp_groups_info->lgrui0_name, WinBuiltinAdministratorsSid)) {
+				ret = TRUE;
+				break;
+			}
+			tmp_groups_info++;
+		}
+	}
+
+done:
+	if (local_groups_info)
+		NetApiBufferFree(local_groups_info);
+	if(full_name)
+		free(full_name);
+	return ret;
+}
+
+/* Check if the account name is wellknown account on windows*/
+BOOL
+is_well_known_account_name(LPWSTR account_name, WELL_KNOWN_SID_TYPE well_know_sid_type)
+{
+	PSID user_sid = NULL;
+	BOOL ret = FALSE;
+
+	if ((user_sid = user_to_sid(account_name)) == NULL) {
+		debug3("user_to_sid failed.");
+		errno = ENOENT;
+		goto done;
+
+	}
+	ret = IsWellKnownSid(user_sid, well_know_sid_type);
+done:
+
+	if (user_sid)
+		free(user_sid);
+	return ret;
+}
+
+wchar_t *
+sid_to_user(PSID user_sid)
+{	
+	char *user_utf8, *udom_utf8;
+	wchar_t *user_utf16 = NULL, *udom_utf16 = NULL, *full_name_utf16 = NULL;
+	DWORD domain_name_length = 0, name_length = 0, full_name_len = 0;
+	SID_NAME_USE sid_type = SidTypeInvalid;
+	if (LookupAccountSidLocal(user_sid, NULL, &name_length, NULL, &domain_name_length, &sid_type))
+	{		
+		debug3("LookupAccountSidLocal() succeed unexpectedly. ");
+		errno = ENOENT;	
+		return NULL;
+	}
+
+	if (((user_utf8 = (char *)malloc(name_length + 1)) == NULL) ||
+		((udom_utf8 = (char *) malloc(domain_name_length + 1)) == NULL)) {
+		debug3("Insufficient memory available");
+		errno = ENOMEM;
+		goto done;
+	}
+
+	if (LookupAccountSidLocal(user_sid, user_utf8, &name_length, udom_utf8, &domain_name_length, &sid_type) == FALSE)
+	{
+		debug3("LookupAccountSidLocal() failed with error: %d. ", GetLastError());
+		errno = ENOENT;
+		goto done;
+	}
+
+	if (((user_utf16 = utf8_to_utf16(user_utf8)) == NULL) ||
+		((udom_utf16 = utf8_to_utf16(udom_utf8)) == NULL)) {		
+		errno = ENOMEM;
+		goto done;
+	}
+
+	full_name_len = ((wcslen(user_utf16)+ wcslen(udom_utf16) + 2) * sizeof(wchar_t));
+	if ((full_name_utf16 = (wchar_t *) malloc(full_name_len)) == NULL) {
+		errno = ENOMEM;
+		goto done;
+	}	
+
+	wmemcpy(full_name_utf16, udom_utf16, wcslen(udom_utf16)+1);
+	full_name_utf16[wcslen(udom_utf16)] = L'\\';
+	wmemcpy(full_name_utf16 + wcslen(udom_utf16) + 1, user_utf16, wcslen(user_utf16) + 1);
+done:	
+	if (user_utf16)
+		free(user_utf16);	
+	if (udom_utf16)
+		free(udom_utf16);
+	if (user_utf8)
+		free(user_utf8);
+	if (udom_utf8)
+		free(udom_utf8);
+	return full_name_utf16;	
+}
+
+PSID
+user_to_sid(LPWSTR account_name)
+{
+	DWORD user_sid_size = 0, domain_size = 0;
+	SID_NAME_USE sid_type = SidTypeInvalid;
+	PSID  user_sid = NULL;
+	wchar_t* domain_name = NULL;
+	
+	if (LookupAccountNameW(NULL, account_name, NULL, &user_sid_size, 
+		NULL, &domain_size, &sid_type)) {
+		debug3("LookupAccountNameW() succeeded unexpectedly.");
+		errno = ENOENT;
+		goto done;
+	}
+
+	if ((user_sid = (SID *)malloc(user_sid_size )) == NULL ||
+		(domain_size > 0 && (((wchar_t*)domain_name = malloc(domain_size * sizeof(wchar_t))) == NULL))) {
+		debug3("Insufficient memory available");
+		errno = ENOMEM;
+		goto done;
+	}
+
+	if (LookupAccountNameW(NULL, account_name, user_sid, &user_sid_size,
+		domain_name, &domain_size, &sid_type) == FALSE) {
+		debug3("LookupAccountNameW() failed. Error code is : %d.", GetLastError());
+		errno = ENOENT;
+		goto done;
+	}
+	if (!IsValidSid(user_sid)) {
+		debug3("the sid is invalid.");
+		errno = ENOENT;
+		goto done;
+	}
+done:
+	if (domain_name)
+		free(domain_name);
+	return user_sid;
 }
