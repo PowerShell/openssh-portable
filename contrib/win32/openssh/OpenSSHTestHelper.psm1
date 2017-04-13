@@ -108,6 +108,10 @@ function Setup-OpenSSHTestEnvironment
     }
 
     $Global:OpenSSHTestInfo.Add("OpenSSHBinPath", $script:OpenSSHBinPath)
+    if (-not ($env:Path.ToLower().Contains($script:OpenSSHBinPath.ToLower())))
+    {        
+        $env:Path = "$nativeMSBuildPath;$($env:path)"
+    }
 
     $warning = @"
 WARNING: Following changes will be made to OpenSSH configuration
