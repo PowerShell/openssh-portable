@@ -225,7 +225,7 @@ syncio_close(struct w32_io* pio)
 		if (FILETYPE(pio) == FILE_TYPE_CHAR)
 			TerminateThread(pio->read_overlapped.hEvent, 0);
 		else
-			WaitForSingleObject(pio->write_overlapped.hEvent, INFINITE);
+			WaitForSingleObject(pio->read_overlapped.hEvent, INFINITE);
 	}
 	if (pio->write_details.pending)
 		WaitForSingleObject(pio->write_overlapped.hEvent, INFINITE);
