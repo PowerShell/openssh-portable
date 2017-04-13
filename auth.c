@@ -76,9 +76,7 @@
 #include "authfile.h"
 #include "ssherr.h"
 #include "compat.h"
-#ifdef WINDOWS
-#include "w32-permcheck.h"
-#endif
+#include "sshfileperm.h"
 
 /* import */
 extern ServerOptions options;
@@ -583,8 +581,7 @@ auth_openfile(const char *file, struct passwd *pw, int strict_modes,
                         strerror(errno));
                 return NULL;
         }
-	if (strict_modes &&
-	    w32_secure_file_permission(file, pw, TRUE) != 0) {
+	if (strict_modes && secure_file_permission(file, pw) != 0) {
 		fclose(f);
 		logit("Authentication refused.");
 		auth_debug_add("Ignored %s", file_type);

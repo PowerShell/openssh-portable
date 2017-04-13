@@ -39,13 +39,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <sshfileperm.h>
 #ifdef USE_SYSTEM_GLOB
 # include <glob.h>
 #else
 # include "openbsd-compat/glob.h"
-#endif
-#ifdef WINDOWS
-#include "w32-permcheck.h"
 #endif
 #ifdef HAVE_UTIL_H
 #include <util.h>
@@ -1745,7 +1743,7 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 		implementation on windows to make sure the config file is owned by the user and
 		nobody else except Administrators group and  current user of calling process, and SYSTEM account has the write permission
 		*/
-		if (w32_secure_file_permission(filename, pw, FALSE) != 0)
+		if (secure_file_permission(filename, pw) != 0)
 			fatal("Bad owner or permissions on %s", filename);
 #else
 		struct stat sb;
