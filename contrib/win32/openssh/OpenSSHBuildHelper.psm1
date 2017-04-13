@@ -321,6 +321,12 @@ function Package-OpenSSH
     if ($NativeHostArch -eq 'x86') {
         $packageName = "OpenSSH-Win32"
     }
+    while((($service = Get-Service ssh-agent -ErrorAction Ignore) -ne $null) -and ($service.Status -ine 'Stopped'))
+    {        
+        Stop-Service ssh-agent -Force
+        #sleep to wait the servicelog file write        
+        Start-Sleep 5
+    }
 
     $packageDir = Join-Path $buildDir $packageName
     Remove-Item $packageDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -483,19 +489,12 @@ function Install-OpenSSH
             $NativeHostArch = 'x86'
         }
     }
-    
-    while((($service = Get-Service ssh-agent -ErrorAction Ignore) -ne $null) -and ($service.Status -ine 'Stopped'))
-    {        
-        Stop-Service ssh-agent -Force
-        #sleep to wait the servicelog file write        
-        Start-Sleep 5
-    }
 
     Package-OpenSSH -NativeHostArch $NativeHostArch -Configuration $Configuration -DestinationPath $OpenSSHDir
 
     Push-Location $OpenSSHDir 
     & "$OpenSSHDir\install-sshd.ps1"
-    & "c:\openssh\ssh-keygen.exe" -A
+    & "$OpenSSHDir\ssh-keygen.exe" -A
 
 
     #machine will be reboot after Install-openssh anyway

@@ -64,11 +64,9 @@
             Remove-Item -Path $userConfigFile -Force -ErrorAction ignore
         }
 
-        It 'User SSHConfig -- ReadConfig (positive)' {
+        It 'User SSHConfig -- ReadConfig (admin user is the owner)' {
             #setup
             $myACL = Get-ACL $userConfigFile
-            $owner = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
-            $myACL.SetOwner($owner)
             $accessRules = $myACL.GetAccessRules($true, $false, [System.Security.Principal.NTAccount])
             $accessRules | % {
                 if (($_.IdentityReference.Value -ine "BUILTIN\Administrators") -and 
@@ -97,7 +95,7 @@
         It 'User SSHConfig -- ReadConfig (wrong owner)' {
             #setup
             $myACL = Get-ACL $userConfigFile
-            $owner = New-Object System.Security.Principal.NTAccount("BUILTIN", "Administrators")
+            $owner = New-Object System.Security.Principal.NTAccount($ssouser)
             $myACL.SetOwner($owner)
             $accessRules = $myACL.GetAccessRules($true, $false, [System.Security.Principal.NTAccount])
             $accessRules | % {
