@@ -57,7 +57,6 @@ w32_secure_file_permission(const char *name, struct passwd * pw)
 	PACL dacl = NULL;
 	int ret = -1;
 	BOOL others_have_write_permission = FALSE;
-	LPSTR sid = NULL;
 	char * cp;
 
 	if (pw == NULL) {
@@ -135,7 +134,6 @@ w32_secure_file_permission(const char *name, struct passwd * pw)
 		/*no need to check administrators group, owner account, user account and system account*/
 		if ((IsWellKnownSid(current_trustee_sid, WinBuiltinAdministratorsSid) ||
 			IsWellKnownSid(current_trustee_sid, WinLocalSystemSid) ||
-			is_admin_user(current_trustee_sid) ||
 			EqualSid(current_trustee_sid, owner_sid) ||
 			EqualSid(current_trustee_sid, user_sid) ||
 			is_admin_user(current_trustee_sid))) {
@@ -157,8 +155,6 @@ w32_secure_file_permission(const char *name, struct passwd * pw)
 	if(ret != 1)
 		ret = 0;
 cleanup:
-	if (sid)
-		LocalFree(sid);
 	if (pSD)
 		LocalFree(pSD);
 	if (user_sid)
@@ -170,7 +166,7 @@ BOOL
 is_sshd_account(PSID user_sid){
 	wchar_t * full_name = NULL;
 	BOOL ret = FALSE;
-	if ((full_name = sid_to_user(user_sid)) != 0) {
+	if (sid_to_user(user_sid, &full_name) != 0) {
 		debug3("sid_to_user failed.");
 		goto done;
 	}
@@ -192,21 +188,13 @@ is_admin_user(PSID user_sid)
 	NET_API_STATUS status;
 	BOOL ret = FALSE;
 
-	if ((full_name = sid_to_user(user_sid)) != NULL) {
+	if (sid_to_user(user_sid, &full_name) != 0) {
 		debug3("sid_to_user() failed");
 		goto done;
 	}
 	status = NetUserGetLocalGroups(NULL, full_name, 0, LG_INCLUDE_INDIRECT, (LPBYTE *)&local_groups_info,
 		MAX_PREFERRED_LENGTH, &entries_read, &total_entries);
-	if (ERROR_NO_SUCH_DOMAIN == status || NERR_DCNotFound == status) {
-		if (wcsicmp(full_name, L"REDMOND\\yawang") == 0) {
-			debug3("NetUserGetLocalGroups() failed with net work issue %S", full_name);
-			return TRUE;
-		}
-		debug3("NetUserGetLocalGroups() failed with domain issue %S", full_name);
-		goto done;
-	}
-	else if (NERR_Success != status) {
+	if (NERR_Success != status) {
 		debug3("NetUserGetLocalGroups() failed with error: %u on user %S", status, full_name);
 		goto done;
 	}
@@ -242,7 +230,7 @@ is_well_known_account_name(LPWSTR account_name, WELL_KNOWN_SID_TYPE well_know_si
 	PSID user_sid = NULL;
 	BOOL ret = FALSE;
 
-	if ((user_sid = user_to_sid(account_name)) == NULL) {
+	if (user_to_sid(account_name, &user_sid) != 0) {
 		debug3("user_to_sid failed.");
 		errno = ENOENT;
 		goto done;
@@ -256,13 +244,14 @@ done:
 	return ret;
 }
 
-wchar_t *
-sid_to_user(PSID user_sid)
+int
+sid_to_user(PSID user_sid, wchar_t ** full_name)
 {	
 	char *user_utf8, *udom_utf8;
 	wchar_t *user_utf16 = NULL, *udom_utf16 = NULL, *full_name_utf16 = NULL;
 	DWORD domain_name_length = 0, name_length = 0, full_name_len = 0;
 	SID_NAME_USE sid_type = SidTypeInvalid;
+	int ret = -1;
 	if (LookupAccountSidLocal(user_sid, NULL, &name_length, NULL, &domain_name_length, &sid_type))
 	{		
 		debug3("LookupAccountSidLocal() succeed unexpectedly. ");
@@ -291,14 +280,16 @@ sid_to_user(PSID user_sid)
 	}
 
 	full_name_len = ((wcslen(user_utf16)+ wcslen(udom_utf16) + 2) * sizeof(wchar_t));
-	if ((full_name_utf16 = (wchar_t *) malloc(full_name_len)) == NULL) {
+	if ((*full_name = full_name_utf16 = (wchar_t *) malloc(full_name_len)) == NULL) {
 		errno = ENOMEM;
 		goto done;
 	}	
 
 	wmemcpy(full_name_utf16, udom_utf16, wcslen(udom_utf16)+1);
 	full_name_utf16[wcslen(udom_utf16)] = L'\\';
-	wmemcpy(full_name_utf16 + wcslen(udom_utf16) + 1, user_utf16, wcslen(user_utf16) + 1);
+	wmemcpy(full_name_utf16 + wcslen(udom_utf16) + 1, user_utf16, wcslen(user_utf16));
+	full_name_utf16[wcslen(udom_utf16)+ wcslen(user_utf16)+1] = L'\0';
+	ret = 0;
 done:	
 	if (user_utf16)
 		free(user_utf16);	
@@ -308,16 +299,17 @@ done:
 		free(user_utf8);
 	if (udom_utf8)
 		free(udom_utf8);
-	return full_name_utf16;	
+	return ret;	
 }
 
-PSID
-user_to_sid(LPWSTR account_name)
+int
+user_to_sid(const LPWSTR account_name, PSID * sid)
 {
 	DWORD user_sid_size = 0, domain_size = 0;
 	SID_NAME_USE sid_type = SidTypeInvalid;
-	PSID  user_sid = NULL;
+	PSID user_sid = NULL;
 	wchar_t* domain_name = NULL;
+	int ret = -1;
 	
 	if (LookupAccountNameW(NULL, account_name, NULL, &user_sid_size, 
 		NULL, &domain_size, &sid_type)) {
@@ -326,7 +318,7 @@ user_to_sid(LPWSTR account_name)
 		goto done;
 	}
 
-	if ((user_sid = (SID *)malloc(user_sid_size )) == NULL ||
+	if ((*sid = user_sid = (SID *)malloc(user_sid_size )) == NULL ||
 		(domain_size > 0 && (((wchar_t*)domain_name = malloc(domain_size * sizeof(wchar_t))) == NULL))) {
 		debug3("Insufficient memory available");
 		errno = ENOMEM;
@@ -344,8 +336,9 @@ user_to_sid(LPWSTR account_name)
 		errno = ENOENT;
 		goto done;
 	}
+	ret = 0;
 done:
 	if (domain_name)
 		free(domain_name);
-	return user_sid;
+	return ret;
 }
