@@ -138,7 +138,6 @@ fd_table_set(struct w32_io* pio, int index)
 static void
 fd_table_clear(int index)
 {
-	fd_table.w32_ios[index]->table_index = -1;
 	fd_table.w32_ios[index] = NULL;
 	FD_CLR(index, &(fd_table.occupied));
 }
@@ -509,7 +508,7 @@ w32_close(int fd)
 	else
 		r = fileio_close(pio);		
 
-	fd_table_clear(pio->table_index);
+	fd_table_clear(fd);
 	return r;
 }
 
