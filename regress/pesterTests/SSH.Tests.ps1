@@ -3,7 +3,7 @@
 $tB = 1
 $tI = 0
         
-Describe "Tests for ssh command" -Tags "Scenario" {
+Describe "ssh client tests" -Tags "CI" {
     BeforeAll {        
         if($OpenSSHTestInfo -eq $null)
         {
