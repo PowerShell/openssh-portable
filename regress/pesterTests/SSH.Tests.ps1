@@ -81,6 +81,7 @@ Describe "ssh client tests" -Tags "CI" {
         BeforeAll {$tI=1}
         AfterAll{$tB++}
 
+        <# these 2 tests dont work on AppVeyor that sniffs stderr channel
         It "$tB.$tI - test version" {
             iex "ssh -V 2> $tFile"
             $tFile | Should Contain "OpenSSH_"
@@ -90,6 +91,7 @@ Describe "ssh client tests" -Tags "CI" {
             iex "ssh -? 2> $tFile"
             $tFile | Should Contain "usage: ssh"
         }
+        #>
 
         It "$tB.$tI - remote echo command" {
             iex "$sshDefaultCmd echo 1234" | Should Be "1234"
