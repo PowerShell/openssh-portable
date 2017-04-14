@@ -39,7 +39,22 @@ enum w32_io_type {
 	UNKNOWN_FD = 0,
 	SOCK_FD = 1,	/*maps a socket fd*/
 	NONSOCK_FD = 2,	/*maps a file fd, pipe fd or a tty fd*/
-	NONSOCK_SYNC_FD = 3 /*maps a NONSOCK_FD that doesnt support async io*/
+	/*
+	 * maps a NONSOCK_FD that doesnt support async or overlapped io
+	 * these are typically used for stdio on ssh client side
+	 * executables (ssh, sftp and scp). 
+	 * Ex. ssh ... > output.txt
+	 *   In the above case, stdout passed to ssh.exe is a handle to 
+	 *   output.txt that is opened in non-overlapped mode
+	 * Ex. sample.exe | ssh ...
+	 *   In the above case, stdin passed to ssh.exe is a handle to
+	 *   a pipe opened in non-overlapped mode
+         * Ex. in Powershell
+	 * $o = ssh ...
+	 *   In the above case, stdout passed to ssh.exe is a handle to 
+	 *   a pipe opened in non-overlapped mode 
+	 */
+	NONSOCK_SYNC_FD = 3 
 };
 
 enum w32_io_sock_state {

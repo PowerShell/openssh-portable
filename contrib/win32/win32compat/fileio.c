@@ -444,8 +444,7 @@ fileio_read(struct w32_io* pio, void *dst, unsigned int max)
 		if (pio->type == NONSOCK_SYNC_FD || FILETYPE(pio) == FILE_TYPE_CHAR) {
 			if (-1 == syncio_initiate_read(pio))
 				return -1;
-		}
-		else {
+		} else {
 			if (-1 == fileio_ReadFileEx(pio, max)) {
 				if ((FILETYPE(pio) == FILE_TYPE_PIPE)
 					&& (errno == ERROR_BROKEN_PIPE)) {
@@ -576,8 +575,7 @@ fileio_write(struct w32_io* pio, const void *buf, unsigned int max)
 		if (syncio_initiate_write(pio, bytes_copied) == 0) {
 			pio->write_details.pending = TRUE;
 			pio->write_details.remaining = bytes_copied;
-		}
-		else
+		} else
 			return -1;
 	} else {
 		if (WriteFileEx(WINHANDLE(pio), pio->write_details.buf, bytes_copied,

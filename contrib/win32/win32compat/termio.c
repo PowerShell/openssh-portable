@@ -171,8 +171,7 @@ WriteThread(_In_ LPVOID lpParameter)
 			/* TODO - respbuf is not null in some cases, this needs to be returned back via read stream */
 		}
 		write_status.transferred = write_status.to_transfer;
-	}
-	else {
+	} else {
 		if (!WriteFile(WINHANDLE(pio), pio->write_details.buf, write_status.to_transfer,
 		    &write_status.transferred, NULL)) {
 			write_status.error = GetLastError();
