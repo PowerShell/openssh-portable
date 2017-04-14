@@ -146,11 +146,13 @@ secure_file_permission(const char *name, struct passwd * pw)
 		}
 		else if(is_sshd_account(current_trustee_sid)){
 			if ((current_access_mask & ~FILE_GENERIC_READ) != 0){
-				debug3("Bad permission. %s can only read access to %s", SSHD_ACCOUNT, name);				
+				debug3("Bad permission. %s can only read access to %s", SSHD_ACCOUNT, name);	
+				ret = -1;			
 				break;			
 			}			
 		}
-		else {			
+		else {
+			ret = -1;
 			debug3("Bad permission. Other user or group than owner, admin user and local system have access to file %s.", name);			
 			break;
 		}
@@ -159,7 +161,7 @@ cleanup:
 	if (pSD)
 		LocalFree(pSD);
 	if (user_sid)
-		FreeSid(user_sid);			
+		FreeSid(user_sid);
 	return ret;
 }
 
