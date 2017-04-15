@@ -4,8 +4,7 @@
 * Copyright (c) 2009, 2011 NoMachine
 * All rights reserved
 *
-* Support file permission check functions' replacements needed to let the
-* software run on Win32 based operating systems.
+* Support file permission check on Win32 based operating systems.
 *
 * Redistribution and use in source and binary forms, with or without
 * modification, are permitted provided that the following conditions
@@ -43,7 +42,14 @@
 #define SSHD_ACCOUNT L"NT Service\\sshd"
 
 /*
-* To Check if the user have right owner and permission set.
+* The function is to check if user prepresented by pw is secure to access to the file. 
+* Check the owner of the file is one of these types: Local Administrators groups, system account,
+* direct user accounts in local administrators, or user represented by pw
+* Check the users have access permission to the file don't voilate the following rules:	
+	1. no user other than local administrators group, system account, user represented by pw,
+	   and owner accounts have write permission on the file
+	2. sshd account can only have read permission
+	3. user represented by pw and file owner should at least have read permission.
 * Returns 0 on success and -1 on failure
 */
 int
@@ -52,6 +58,8 @@ secure_file_permission(const char *name, struct passwd * pw)
 	PSECURITY_DESCRIPTOR pSD = NULL;
 	PSID owner_sid = NULL, user_sid = NULL;
 	PACL dacl = NULL;
+	DWORD error_code = ERROR_SUCCESS; 
+	BOOL is_valid_sid = FALSE, is_valid_acl = FALSE;
 	int ret = 0;
 
 	if (pw == NULL) {
@@ -67,13 +75,16 @@ secure_file_permission(const char *name, struct passwd * pw)
 	}
 
 	/*Get the owner sid of the file.*/
-	if ((ret = GetNamedSecurityInfo(name, SE_FILE_OBJECT,
+	if ((error_code = GetNamedSecurityInfo(name, SE_FILE_OBJECT,
 		OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
-		&owner_sid, NULL, &dacl, NULL, &pSD)) != ERROR_SUCCESS ||
-		(IsValidSid(owner_sid) == FALSE) ||
-		(IsValidAcl(dacl) == FALSE)) {
-		debug3("failed to retrieve the owner sid and dacl of file %s with error code: %d", name, ret);
+		&owner_sid, NULL, &dacl, NULL, &pSD)) != ERROR_SUCCESS) {
+		debug3("failed to retrieve the owner sid and dacl of file %s with error code: %d", name, error_code);
 		errno = EOTHER;
+		ret = -1;
+		goto cleanup;
+	}
+	if (((is_valid_sid = IsValidSid(owner_sid)) == FALSE) || ((is_valid_acl = IsValidAcl(dacl)) == FALSE)) {
+		debug3("IsValidSid: %d; is_valid_acl: %d", is_valid_sid, is_valid_acl);		
 		ret = -1;
 		goto cleanup;
 	}
