@@ -843,6 +843,19 @@ QueueEvent(DWORD event, HWND hwnd, LONG idObject, LONG idChild)
 	LeaveCriticalSection(&criticalSection);
 }
 
+void FreeQueueEvent()
+{
+	EnterCriticalSection(&criticalSection);
+	while (head) {
+		consoleEvent* current = head;
+		head = current->next;
+		free(current);
+	}
+	head = NULL;
+	tail = NULL;
+	LeaveCriticalSection(&criticalSection);
+}
+
 DWORD WINAPI 
 ProcessPipes(LPVOID p)
 {
@@ -1054,7 +1067,6 @@ start_with_pty(wchar_t *command)
 	ProcessMessages(NULL);
 cleanup:
 	dwStatus = GetLastError();
-	DeleteCriticalSection(&criticalSection);
 	if (child != INVALID_HANDLE_VALUE)
 		TerminateProcess(child, 0);
 	if (monitor_thread != INVALID_HANDLE_VALUE)
@@ -1064,6 +1076,8 @@ cleanup:
 	if (hEventHook)
 		__UnhookWinEvent(hEventHook);
 	FreeConsole();
+	FreeQueueEvent();
+	DeleteCriticalSection(&criticalSection);
 
 	return child_exit_code;
 }
