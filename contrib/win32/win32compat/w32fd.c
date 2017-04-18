@@ -881,83 +881,100 @@ w32_fsync(int fd)
 * - with std handles set to in, out, err
 * - flags are passed to CreateProcess call
 *
-* cmd will be internally decoarated with a set of '"'
-* to account for any spaces within the commandline
-* this decoration is done only when additional arguments are passed in argv
+* if cmd==NULL and argv==NULL then was call WinAPI func GetCommandLineW
+* if argv==NULL then argument "cmd" must contain full command line (process name with all arguments)
 */
-int
-spawn_child(char* cmd, char** argv, int in, int out, int err, DWORD flags)
+int spawn_child(char * cmd, char ** argv, int in, int out, int err, unsigned long flags)
 {
+	int hr = EFAULT;
 	PROCESS_INFORMATION pi;
 	STARTUPINFOW si;
 	BOOL b;
-	char *cmdline, *t, **t1;
-	DWORD cmdline_len = 0;
-	wchar_t * cmdline_utf16;
-	int add_module_path = 0, ret = -1;
+	char * cmd_utf8 = NULL;
+	wchar_t * cmd_utf16 = NULL;
+	int add_module_path = 0;
+	size_t i, cmdlen = 0;
+	char * progdir = w32_programdir();
+	wchar_t * wprogdir = NULL;
+	wchar_t * wcmdline = NULL;
+	int ac = 0;
+	wchar_t ** av = NULL;
 
-	/* should module path be added */
-	do {
-		if (!cmd)
-			break;
-		t = cmd;
-		if (*t == '\"')
-			t++;
-		if (t[0] == '\0' || t[0] == '\\' || t[0] == '.' || t[1] == ':')
-			break;
-		add_module_path = 1;
-	} while (0);
-
-	/* compute total cmdline len*/
-	if (add_module_path)
-		cmdline_len += strlen(w32_programdir()) + 1 + strlen(cmd) + 1 + 2;
-	else
-		cmdline_len += strlen(cmd) + 1 + 2;
-
-	if (argv) {
-		t1 = argv;
-		while (*t1)
-			cmdline_len += strlen(*t1++) + 1 + 2;
-	}
-
-	if ((cmdline = malloc(cmdline_len)) == NULL) {
-		errno = ENOMEM;
-		goto cleanup;
-	}
-
-	/* add current module path to start if needed */
-	t = cmdline;
-	if (argv && argv[0])
-		*t++ = '\"';
-	if (add_module_path) {
-		memcpy(t, w32_programdir(), strlen(w32_programdir()));
-		t += strlen(w32_programdir());
-		*t++ = '\\';
-	}
-
-	memcpy(t, cmd, strlen(cmd));
-	t += strlen(cmd);
-
-	if (argv && argv[0])
-		*t++ = '\"';
-
-	if (argv) {
-		t1 = argv;
-		while (*t1) {
-			*t++ = ' ';
-			*t++ = '\"';
-			memcpy(t, *t1, strlen(*t1));
-			t += strlen(*t1);
-			*t++ = '\"';
-			t1++;
+	if (!argv) {
+		wchar_t * wname = NULL;
+		if (cmd) {
+			wcmdline = utf8_to_utf16(cmd);
+		} else {
+			wcmdline = GetCommandLineW();
 		}
-	}
-
-	*t = '\0';
-
-	if ((cmdline_utf16 = utf8_to_utf16(cmdline)) == NULL) {
-		errno = ENOMEM;
-		goto cleanup;
+		GOTO_CLEANUP_IF(!wcmdline, EFAULT);
+		av = CommandLineToArgvW(wcmdline, &ac);
+		if (!cmd)
+			wcmdline = NULL;
+		GOTO_CLEANUP_IF(!av || ac <= 0, EFAULT);
+		wname = av[0];
+		GOTO_CLEANUP_IF(*wname == L'\0', EINVAL);
+		cmdlen = 1;   /* null-terminate */
+		for (i = 0; i < ac; i++) {
+			cmdlen += 2 + wcslen(av[i]) + 1;   /* one space, two quotes */
+		}
+		if (wname[0] != L'\\' && wname[0] != L'.' && wname[1] != L':') {
+			GOTO_CLEANUP_IF(!progdir, EFAULT);
+			wprogdir = utf8_to_utf16(progdir);
+			GOTO_CLEANUP_IF(!wprogdir, ENOMEM);
+			add_module_path = 1;
+			cmdlen += wcslen(wprogdir) + 1;   /* one backslash */
+		}
+		cmd_utf16 = (wchar_t *) malloc(cmdlen * sizeof(wchar_t));
+		GOTO_CLEANUP_IF(!cmd_utf16, ENOMEM);
+		wcscpy(cmd_utf16, L"\"");
+		if (add_module_path) {
+			wcscat(cmd_utf16, wprogdir);
+			wcscat(cmd_utf16, L"\\");
+		}
+		wcscat(cmd_utf16, wname);
+		wcscat(cmd_utf16, L"\"");
+		for (i = 1; i < ac; i++) {
+			wcscat(cmd_utf16, L" \"");
+			wcscat(cmd_utf16, av[i]);
+			wcscat(cmd_utf16, L"\"");
+		}
+		cmd_utf8 = utf16_to_utf8(cmd_utf16);
+		GOTO_CLEANUP_IF(!cmd_utf8, ENOMEM);
+	} else {
+		char * name;
+		if (cmd && cmd[0]) {
+			name = cmd;
+		} else {
+			name = argv[0];
+		}
+		GOTO_CLEANUP_IF(!name || name[0] == '\0', EINVAL);
+		cmdlen = 1;   /* null-terminate */
+		cmdlen += 2 + strlen(name) + 1;         /* one space, two quotes */
+		for (i = 1; argv[i]; i++) {
+			cmdlen += 2 + strlen(argv[i]) + 1;  /* one space, two quotes */
+		}
+		if (name[0] != '\\' && name[0] != '.' && name[1] != ':') {
+			GOTO_CLEANUP_IF(!progdir, EFAULT);
+			add_module_path = 1;
+			cmdlen += strlen(progdir) + 1;    /* one backslash */
+		}
+		cmd_utf8 = (char *) malloc(cmdlen);
+		GOTO_CLEANUP_IF(!cmd_utf8, ENOMEM);
+		strcpy(cmd_utf8, "\"");
+		if (add_module_path) {
+			strcat(cmd_utf8, progdir);
+			strcat(cmd_utf8, "\\");
+		}
+		strcat(cmd_utf8, name);
+		strcat(cmd_utf8, "\"");
+		for (i = 1; argv[i]; i++) {
+			strcat(cmd_utf8, " \"");
+			strcat(cmd_utf8, argv[i]);
+			strcat(cmd_utf8, "\"");
+		}
+		cmd_utf16 = utf8_to_utf16(cmd_utf8);
+		GOTO_CLEANUP_IF(!cmd_utf16, ENOMEM);
 	}
 
 	memset(&si, 0, sizeof(STARTUPINFOW));
@@ -967,37 +984,42 @@ spawn_child(char* cmd, char** argv, int in, int out, int err, DWORD flags)
 	si.hStdError = w32_fd_to_handle(err);
 	si.dwFlags = STARTF_USESTDHANDLES;
 
-	debug3("spawning %ls", cmdline_utf16);
+	debug3("spawning %ls", cmd_utf16);
 	if (fd_table.w32_ios[in]->type != NONSOCK_SYNC_FD)
 		_putenv_s(SSH_ASYNC_STDIN, "1");
 	if (fd_table.w32_ios[out]->type != NONSOCK_SYNC_FD)
 		_putenv_s(SSH_ASYNC_STDOUT, "1");
 	if (fd_table.w32_ios[err]->type != NONSOCK_SYNC_FD)
 		_putenv_s(SSH_ASYNC_STDERR, "1");
-	b = CreateProcessW(NULL, cmdline_utf16, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
+
+	b = CreateProcessW(NULL, cmd_utf16, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
+
 	_putenv_s(SSH_ASYNC_STDIN, "");
 	_putenv_s(SSH_ASYNC_STDOUT, "");
 	_putenv_s(SSH_ASYNC_STDERR, "");
+	GOTO_CLEANUP_IF(!b, ENOEXEC);
+	CloseHandle(pi.hThread);    /* this handle not used */
 
-	if (b) {
-		if (register_child(pi.hProcess, pi.dwProcessId) == -1) {
-			TerminateProcess(pi.hProcess, 0);
-			CloseHandle(pi.hProcess);
-			goto cleanup;
-		}
-		CloseHandle(pi.hThread);
-	}
-	else {
-		errno = GetLastError();
-		goto cleanup;
+	if (register_child(pi.hProcess, pi.dwProcessId) == -1) {
+		TerminateProcess(pi.hProcess, 0);
+		CloseHandle(pi.hProcess);
+		hr = EFAULT;
+	} else {
+		hr = 0;
 	}
 
-	ret = pi.dwProcessId;
 cleanup:
-	if (cmdline)
-		free(cmdline);
-	if (cmdline_utf16)
-		free(cmdline_utf16);
+	if (av)
+		LocalFree(av);
+	if (wcmdline)
+		free(wcmdline);
+	if (cmd_utf8)
+		free(cmd_utf8);
+	if (cmd_utf16)
+		free(cmd_utf16);
+	if (wprogdir)
+		free(wprogdir);
 
-	return ret;
+	errno = hr;
+	return hr ? -1 : pi.dwProcessId;
 }

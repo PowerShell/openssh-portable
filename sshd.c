@@ -1299,13 +1299,9 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 			* - Spawn child sshd.exe
 			*/
 			{
-				char* path_utf8 = utf16_to_utf8(GetCommandLineW());
 				/* large enough to hold pointer value in hex */
 				char fd_handle[30];  
 
-				if (path_utf8 == NULL)
-					fatal("Failed to alloc memory");
-				
 				if (snprintf(fd_handle, sizeof(fd_handle), "%p", 
 					w32_fd_to_handle(*newsock)) == -1
 				    || SetEnvironmentVariable("SSHD_REMSOC", fd_handle) == FALSE
@@ -1320,12 +1316,10 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 					 * automatically be cleaned up on next iteration
 					 */
 					close(startup_p[1]);
-					free(path_utf8);
 					continue;
 				}
                 
-				pid = spawn_child(path_utf8, NULL, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, CREATE_NEW_PROCESS_GROUP);
-				free(path_utf8);
+				pid = spawn_child(NULL, NULL, STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO, CREATE_NEW_PROCESS_GROUP);
 				close(*newsock);
 			}
 #else /* !WINDOWS */

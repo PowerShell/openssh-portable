@@ -295,7 +295,7 @@ do_cmd(char *host, char *remuser, char *cmd, int *fdin, int *fdout)
 	fcntl(pout[0], F_SETFD, FD_CLOEXEC);
 	fcntl(pin[1], F_SETFD, FD_CLOEXEC);
 
-	do_cmd_pid = spawn_child(args.list[0], args.list + 1, pin[0], pout[1], STDERR_FILENO, 0);
+	do_cmd_pid = spawn_child(NULL, args.list, pin[0], pout[1], STDERR_FILENO, 0);
 
 #else /* !WINDOWS */
 	do_cmd_pid = fork();
@@ -364,7 +364,7 @@ do_cmd2(char *host, char *remuser, char *cmd, int fdin, int fdout)
 	addargs(&args, "%s", host);
 	addargs(&args, "%s", cmd);
 
-	pid = spawn_child(args.list[0], args.list + 1, fdin, fdout, STDERR_FILENO, 0);
+	pid = spawn_child(NULL, args.list, fdin, fdout, STDERR_FILENO, 0);
 		
 #else /* !WINDOWS */
 	pid = fork();

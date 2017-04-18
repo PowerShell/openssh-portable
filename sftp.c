@@ -2259,7 +2259,7 @@ connect_to_server(char *path, char **args, int *in, int *out)
 	fcntl(pout[1], F_SETFD, FD_CLOEXEC);
 	fcntl(pin[0], F_SETFD, FD_CLOEXEC);
 
-	sshpid = spawn_child(path, args + 1, c_in, c_out, STDERR_FILENO, 0);
+	sshpid = spawn_child(path, args, c_in, c_out, STDERR_FILENO, 0);
 	if (sshpid == -1)
 #else /* !WINDOWS */
 	if ((sshpid = fork()) == -1)
