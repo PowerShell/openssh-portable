@@ -1069,13 +1069,25 @@ cleanup:
 	dwStatus = GetLastError();
 	if (child != INVALID_HANDLE_VALUE)
 		TerminateProcess(child, 0);
-	if (monitor_thread != INVALID_HANDLE_VALUE)
+	if (monitor_thread != INVALID_HANDLE_VALUE) {
 		WaitForSingleObject(monitor_thread, INFINITE);
-	if (ux_thread != INVALID_HANDLE_VALUE)
+		CloseHandle(monitor_thread);
+	}
+	if (ux_thread != INVALID_HANDLE_VALUE) {
 		TerminateThread(ux_thread, S_OK);
+		CloseHandle(ux_thread);
+	}
+	if (io_thread != INVALID_HANDLE_VALUE) {
+		TerminateThread(io_thread, 0);
+		CloseHandle(io_thread);
+	}
 	if (hEventHook)
 		__UnhookWinEvent(hEventHook);
 	FreeConsole();
+	if (child != INVALID_HANDLE_VALUE) {
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+	}
 	FreeQueueEvent();
 	DeleteCriticalSection(&criticalSection);
 
