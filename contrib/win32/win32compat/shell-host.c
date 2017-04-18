@@ -212,8 +212,7 @@ SendKeyStroke(HANDLE hInput, int keyStroke, char character)
 	ir.Event.KeyEvent.wVirtualScanCode = 0;
 	ir.Event.KeyEvent.dwControlKeyState = 0;
 	ir.Event.KeyEvent.uChar.UnicodeChar = 0;
-	if (character != 0)
-		ir.Event.KeyEvent.uChar.AsciiChar = character;
+	ir.Event.KeyEvent.uChar.AsciiChar = character;
 
 	WriteConsoleInputA(hInput, &ir, 1, &wr);
 
@@ -224,21 +223,20 @@ SendKeyStroke(HANDLE hInput, int keyStroke, char character)
 void 
 ProcessIncomingKeys(char * ansikey)
 {
-	int nKey = 0;
-	int index = ARRAYSIZE(keys);
+	int keylen = strlen(ansikey);
 
-	while (nKey < index) {
+	if (!keylen)
+		return;
+
+	for (int nKey=0; nKey < ARRAYSIZE(keys); nKey++) {
 		if (strcmp(ansikey, keys[nKey].incoming) == 0) {
 			SendKeyStroke(child_in, keys[nKey].vk, keys[nKey].outgoing[0]);
-			break;
+			return;
 		}
-		else
-			nKey++;
 	}
 
-	if (nKey == index)
-		for(int i=0; i < strlen(ansikey); i++)
-			SendKeyStroke(child_in, 0, ansikey[i]);
+	for (int i=0; i < keylen; i++)
+		SendKeyStroke(child_in, 0, ansikey[i]);
 }
 
 /*
@@ -852,30 +850,22 @@ ProcessPipes(LPVOID p)
 
 	/* process data from pipe_in and route appropriately */
 	while (1) {	
-		ZeroMemory(buf, 128);
-		DWORD rd = 0, wr = 0, i = -1;
+		DWORD rd = 0;
+		ZeroMemory(buf, sizeof(buf));
 
-		GOTO_CLEANUP_ON_FALSE(ReadFile(pipe_in, buf, 127, &rd, NULL)); /* read bufsize-1 */
+		GOTO_CLEANUP_ON_FALSE(ReadFile(pipe_in, buf, sizeof(buf)-1, &rd, NULL)); /* read bufsize-1 */
 		bStartup = FALSE;
-		while (++i < rd) {
-			INPUT_RECORD ir;
+		for (DWORD i=0; i < rd; i++) {
+			if (buf[i] == 0)
+				break;
+
 			if (buf[i] == 3) { /*Ctrl+C - Raise Ctrl+C*/
 				GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
 				continue;
 			}
 
 			if (bAnsi) {
-				ir.EventType = KEY_EVENT;
-				ir.Event.KeyEvent.bKeyDown = TRUE;
-				ir.Event.KeyEvent.wRepeatCount = 1;
-				ir.Event.KeyEvent.wVirtualKeyCode = 0;
-				ir.Event.KeyEvent.wVirtualScanCode = 0;
-				ir.Event.KeyEvent.uChar.AsciiChar = buf[i];
-				ir.Event.KeyEvent.dwControlKeyState = 0;
-				WriteConsoleInputA(child_in, &ir, 1, &wr);
-
-				ir.Event.KeyEvent.bKeyDown = FALSE;
-				WriteConsoleInputA(child_in, &ir, 1, &wr);
+				SendKeyStroke(child_in, 0, buf[i]);
 			} else {
 				ProcessIncomingKeys(buf);
 				break;
