@@ -25,5 +25,6 @@
 #ifndef _SSH_FILE_PERM_H
 #define _SSH_FILE_PERM_H
 
-int secure_file_permission(const char *, struct passwd *);
+int check_secure_file_permission(const char *, struct passwd *);
+int set_secure_file_permission(const char *, struct passwd *, BOOL);
 #endif /* _SSH_FILE_PERM_H */

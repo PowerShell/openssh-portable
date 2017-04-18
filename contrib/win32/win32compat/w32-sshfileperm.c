@@ -33,6 +33,7 @@
 #include <Aclapi.h>
 #include <Ntsecapi.h>
 #include <lm.h>
+#include <stdio.h> 
 
 #include "inc\pwd.h"
 #include "sshfileperm.h"
@@ -53,29 +54,34 @@
 * Returns 0 on success and -1 on failure
 */
 int
-secure_file_permission(const char *name, struct passwd * pw)
+check_secure_file_permission(const char *name, struct passwd * pw)
 {	
 	PSECURITY_DESCRIPTOR pSD = NULL;
+	wchar_t * name_utf16 = NULL;
 	PSID owner_sid = NULL, user_sid = NULL;
 	PACL dacl = NULL;
 	DWORD error_code = ERROR_SUCCESS; 
 	BOOL is_valid_sid = FALSE, is_valid_acl = FALSE;
-	int ret = 0;
+	struct passwd * pwd = pw;
+	int ret = 0;	
 
-	if (pw == NULL) {
-		debug3("invalid parameter pw is null");
-		errno = EINVAL;
-		return -1;
-	}	
-	if (ConvertStringSidToSid(pw->pw_sid, &user_sid) == FALSE ||
+	if (pwd == NULL)
+		if ((pwd = getpwuid(0)) == NULL) 
+			fatal("getpwuid failed.");
+	
+	if (ConvertStringSidToSid(pwd->pw_sid, &user_sid) == FALSE ||
 		(IsValidSid(user_sid) == FALSE)) {
 		debug3("failed to retrieve the sid of the pwd");
 		ret = -1;
 		goto cleanup;
 	}
+	if ((name_utf16 = utf8_to_utf16(name)) == NULL) {
+		errno = ENOMEM;
+		goto cleanup;
+	}
 
 	/*Get the owner sid of the file.*/
-	if ((error_code = GetNamedSecurityInfo(name, SE_FILE_OBJECT,
+	if ((error_code = GetNamedSecurityInfoW(name_utf16, SE_FILE_OBJECT,
 		OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
 		&owner_sid, NULL, &dacl, NULL, &pSD)) != ERROR_SUCCESS) {
 		debug3("failed to retrieve the owner sid and dacl of file %s with error code: %d", name, error_code);
@@ -173,6 +179,8 @@ cleanup:
 		LocalFree(pSD);
 	if (user_sid)
 		FreeSid(user_sid);
+	if(name_utf16)
+		free(name_utf16);
 	return ret;
 }
 
@@ -245,5 +253,96 @@ done:
 		NetApiBufferFree(local_groups_member_info);
 	if(admins_sid)
 		LocalFree(admins_sid);
+	return ret;
+}
+
+int
+set_secure_file_permission(const char *name, struct passwd * pw, BOOL others_can_read)
+{
+	PSECURITY_DESCRIPTOR pSD = NULL;
+	PSID owner_sid = NULL;
+	PACL dacl = NULL;
+	wchar_t *name_utf16 = NULL, *sid_utf16 = NULL, sddl[256];
+	DWORD error_code = ERROR_SUCCESS;
+	BOOL is_valid_sid = FALSE, is_valid_acl = FALSE;
+	struct passwd * pwd = pw;
+	BOOL present, defaulted;
+	int ret = 0;
+
+	if (pwd == NULL)
+		if ((pwd = getpwuid(0)) == NULL)
+			fatal("getpwuid failed.");
+
+	if (ConvertStringSidToSid(pwd->pw_sid, &owner_sid) == FALSE) {
+		debug3("failed to retrieve the sid of the pwd with error code: %d", GetLastError());
+		ret = -1;
+		goto cleanup;
+	}
+	
+	if((IsValidSid(owner_sid) == FALSE)) {
+		debug3("IsValidSid(owner_sid): FALSE");
+		ret = -1;
+		goto cleanup;		
+	}	
+
+	if ((sid_utf16 = utf8_to_utf16(pwd->pw_sid)) == NULL) {
+		errno = ENOMEM;
+		goto cleanup;
+	}
+	if (others_can_read) {
+		swprintf(sddl, 255, L"D:AI(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;0x1200a9;;;BU)(A;ID;FA;;;%s)", sid_utf16);
+	}
+	else
+	{
+		swprintf(sddl, 255, L"D:AI(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;%s)", sid_utf16);
+	}
+
+	if(ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION, &pSD, NULL) == FALSE) {
+		debug3("ConvertStringSecurityDescriptorToSecurityDescriptorW failed with error code %d", GetLastError());
+		ret = -1;
+		goto cleanup;
+	}
+
+	if (IsValidSecurityDescriptor(pSD) == FALSE) {
+		debug3("IsValidSecurityDescriptor return FALSE");
+		ret = -1;
+		goto cleanup;
+	}
+
+	if (GetSecurityDescriptorDacl(pSD, &present, &dacl, &defaulted) == FALSE) {
+		debug3("GetSecurityDescriptorDacl failed with error code %d", GetLastError());
+		ret = -1;
+		goto cleanup;
+	}
+	if (!present || dacl == NULL) {
+		debug3("failed to find the acl from security descriptior.");
+		ret = -1;
+		goto cleanup;
+	}
+
+	if ((name_utf16 = utf8_to_utf16(name)) == NULL) {
+		errno = ENOMEM;
+		goto cleanup;
+	}
+
+	/*Set the owner sid and acl of the file.*/
+	if ((error_code = SetNamedSecurityInfoW(name_utf16, SE_FILE_OBJECT,
+		OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+		owner_sid, NULL, dacl, NULL)) != ERROR_SUCCESS) {
+		debug3("failed to set the owner sid and dacl of file %s with error code: %d", name, error_code);
+		errno = EOTHER;
+		ret = -1;
+		goto cleanup;
+	}
+cleanup:
+	if (pSD)
+		LocalFree(pSD);
+	if (name_utf16)
+		free(name_utf16);
+	if(sid_utf16)
+		free(sid_utf16);
+	if (owner_sid)
+		FreeSid(owner_sid);	
+	
 	return ret;
 }

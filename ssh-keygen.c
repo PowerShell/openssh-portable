@@ -59,6 +59,7 @@
 #include "krl.h"
 #include "digest.h"
 #include "utf8.h"
+#include "sshfileperm.h"
 
 #ifdef WITH_OPENSSL
 # define DEFAULT_KEY_TYPE_NAME "rsa"
@@ -1046,7 +1047,12 @@ do_gen_all_hostkeys(struct passwd *pw)
 		/* Windows POSIX adpater does not support fdopen() on open(file)*/
 		if ((f = fopen(identity_file, "w")) == NULL) {
 			error("fopen %s failed: %s", identity_file, strerror(errno));
-		/* TODO - set permissions on file */
+			sshkey_free(public);
+			first = 0;
+			continue;
+		}
+		if (set_secure_file_permission(identity_file, pw, TRUE) !=0) {
+			error("set_secure_file_permission on %s failed!", identity_file);
 #else  /* !WINDOWS */
 		fd = open(identity_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if (fd == -1) {
@@ -2758,7 +2764,8 @@ passphrase_again:
 	/* Windows POSIX adpater does not support fdopen() on open(file)*/
 	if ((f = fopen(identity_file, "w")) == NULL)
 		fatal("fopen %s failed: %s", identity_file, strerror(errno));
-	/* TODO - set permissions on file */
+	if (set_secure_file_permission(identity_file, pw, TRUE) != 0)
+		error("set_secure_file_permission on %s failed!", identity_file);
 #else  /* !WINDOWS */
 	if ((fd = open(identity_file, O_WRONLY|O_CREAT|O_TRUNC, 0644)) == -1)
 		fatal("Unable to save public key to %s: %s",
