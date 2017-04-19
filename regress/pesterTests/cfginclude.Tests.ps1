@@ -32,16 +32,20 @@
         function Set-SecureFileACL 
         {
             [CmdletBinding()]
-            param($filePath, $owner, $objACE)
+            param(
+                [string]$FilePath,
+                [System.Security.Principal.NTAccount]$Owner = $null,
+                [System.Security.AccessControl.FileSystemAccessRule]$ACE = $null
+                )
 
-            $myACL = Get-ACL $filePath
+            $myACL = Get-ACL -Path $FilePath
             $myACL.SetAccessRuleProtection($True, $True)
-            Set-Acl -Path $filePath -AclObject $myACL
+            Set-Acl -Path $FilePath -AclObject $myACL
 
-            $myACL = Get-ACL $filePath
+            $myACL = Get-ACL $FilePath
             if($owner -ne $null)
             {
-                $myACL.SetOwner($owner)
+                $myACL.SetOwner($Owner)
             }
     
             if($myACL.Access) 
@@ -58,12 +62,12 @@
                     }
                 }
             }
-            if($objACE -ne $null)
+            if($ACE -ne $null)
             {            
-                $myACL.AddAccessRule($objACE)
+                $myACL.AddAccessRule($ACE)
             }
 
-            Set-Acl -Path $filePath -AclObject $myACL
+            Set-Acl -Path $FilePath -AclObject $myACL
         }
     }
 
@@ -90,6 +94,7 @@
     Context "User SSHConfig -- ReadConfig" {
         BeforeAll {
             $userConfigFile = Join-Path $home ".ssh\config"
+            $userConfigFile
             Copy-item "$PSScriptRoot\testdata\ssh_config" $userConfigFile -force
             $oldACL = Get-ACL $userConfigFile
         }
@@ -103,7 +108,7 @@
 
         It 'User SSHConfig -- ReadConfig (admin user is the owner)' {
             #setup
-            Set-SecureFileACL($userConfigFile, $null, $null)
+            Set-SecureFileACL -filepath $userConfigFile
 
             #Run
             $str = "ssh -p $($port) -E $logPath $($Options) $($ssouser)@$($server) hostname > $filePath"
@@ -119,8 +124,7 @@
         It 'User SSHConfig -- ReadConfig (wrong owner)' {
             #setup            
             $owner = New-Object System.Security.Principal.NTAccount($ssouser)
-            $myACL.SetOwner($owner)
-            Set-SecureFileACL($userConfigFile, $owner, $null)
+            Set-SecureFileACL -filepath $userConfigFile -owner $owner
 
             #Run
             $str = "ssh -p $($port) -E $logPath $($Options) $($ssouser)@$($server) hostname > $filePath"
@@ -133,12 +137,11 @@
         It 'User SSHConfig -- ReadConfig (wrong permission)' {
             #setup            
             $owner = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
-            $myACL.SetOwner($owner)                 
 
             $objUser = New-Object System.Security.Principal.NTAccount($ssouser)
             $objACE = New-Object System.Security.AccessControl.FileSystemAccessRule `
                 ($objUser, "Read, Write", "None", "None", "Allow") 
-            Set-SecureFileACL($userConfigFile, $owner, $objACE)
+             Set-SecureFileACL -filepath $userConfigFile -owner $owner -Ace $objACE
 
             #Run
             $str = "ssh -p $($port) -E $logPath $($Options) $($ssouser)@$($server) hostname > $filePath"

@@ -298,7 +298,7 @@ done:
 }
 
 int
-set_secure_file_permission(const char *name, struct passwd * pw, BOOL others_can_read)
+set_secure_file_permission(const char *name, struct passwd * pw, BOOL strict)
 {
 	PSECURITY_DESCRIPTOR pSD = NULL;
 	PSID owner_sid = NULL, sshd_sid;
@@ -349,8 +349,8 @@ set_secure_file_permission(const char *name, struct passwd * pw, BOOL others_can
 		goto cleanup;
 
 	}
-	if (others_can_read) {
-		swprintf(sddl, 255, L"D:AI(A;;FR;;;%s)(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FR;;;BU)(A;ID;FA;;;%s)", sshd_sid_str, sid_utf16);
+	if (strict) {
+		swprintf(sddl, 255, L"D:AI(A;;FR;;;%s)(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FR;;;WD)(A;ID;FA;;;%s)", sshd_sid_str, sid_utf16);
 	}
 	else
 	{
