@@ -28,6 +28,43 @@
             Clear-Content "$($OpenSSHTestInfo['OpenSSHBinPath'])\logs\sshd.log" -Force -ErrorAction ignore         
         }
         Remove-Item -Path $filePath -Force -ErrorAction ignore
+
+        function Set-SecureFileACL 
+        {
+            [CmdletBinding()]
+            param($filePath, $owner, $objACE)
+
+            $myACL = Get-ACL $filePath
+            $myACL.SetAccessRuleProtection($True, $True)
+            Set-Acl -Path $filePath -AclObject $myACL
+
+            $myACL = Get-ACL $filePath
+            if($owner -ne $null)
+            {
+                $myACL.SetOwner($owner)
+            }
+    
+            if($myACL.Access) 
+            {        
+                $myACL.Access | % {
+                    if (($_ -ne $null) -and ($_.IdentityReference.Value -ine "BUILTIN\Administrators") -and 
+                    ($_.IdentityReference.Value -ine "NT AUTHORITY\SYSTEM") -and 
+                    ($_.IdentityReference.Value -ine "$(whoami)"))
+                    {
+                        if(-not ($myACL.RemoveAccessRule($_)))
+                        {
+                            throw "failed to remove access of $($_.IdentityReference.Value) rule in setup "
+                        }
+                    }
+                }
+            }
+            if($objACE -ne $null)
+            {            
+                $myACL.AddAccessRule($objACE)
+            }
+
+            Set-Acl -Path $filePath -AclObject $myACL
+        }
     }
 
     AfterAll {
@@ -66,23 +103,7 @@
 
         It 'User SSHConfig -- ReadConfig (admin user is the owner)' {
             #setup
-            $myACL = Get-ACL $userConfigFile
-            $accessRules = $myACL.GetAccessRules($true, $false, [System.Security.Principal.NTAccount])
-            if($accessRules -ne $null) 
-            {
-                $accessRules | % {
-                    if (($_.IdentityReference.Value -ine "BUILTIN\Administrators") -and 
-                    ($_.IdentityReference.Value -ine "NT AUTHORITY\SYSTEM") -and 
-                    ($_.IdentityReference.Value -ine "$(whoami)"))
-                    {
-                        if(-not $myACL.RemoveAccessRule($_))
-                        {
-                            throw "failed to remove access of $($_.IdentityReference.Value) rule in setup "
-                        }
-                    }
-                }
-            }
-            Set-Acl -Path $userConfigFile -AclObject $myACL
+            Set-SecureFileACL($userConfigFile, $null, $null)
 
             #Run
             $str = "ssh -p $($port) -E $logPath $($Options) $($ssouser)@$($server) hostname > $filePath"
@@ -96,27 +117,10 @@
             Set-Acl -Path $userConfigFile -AclObject $oldACL
         }
         It 'User SSHConfig -- ReadConfig (wrong owner)' {
-            #setup
-            $myACL = Get-ACL $userConfigFile
+            #setup            
             $owner = New-Object System.Security.Principal.NTAccount($ssouser)
             $myACL.SetOwner($owner)
-            $accessRules = $myACL.GetAccessRules($true, $false, [System.Security.Principal.NTAccount])
-            if($accessRules -ne $null) 
-            {
-                $accessRules | % {
-                    if (($_.IdentityReference.Value -ine "BUILTIN\Administrators") -and 
-                    ($_.IdentityReference.Value -ine "NT AUTHORITY\SYSTEM") -and 
-                    ($_.IdentityReference.Value -ine "$(whoami)"))
-                    {
-                        if(-not $myACL.RemoveAccessRule($_))
-                        {
-                            throw "failed to remove access of $($_.IdentityReference.Value) rule in setup "
-                        }
-                    }
-                }
-            }
-
-            Set-Acl -Path $userConfigFile -AclObject $myACL
+            Set-SecureFileACL($userConfigFile, $owner, $null)
 
             #Run
             $str = "ssh -p $($port) -E $logPath $($Options) $($ssouser)@$($server) hostname > $filePath"
@@ -127,34 +131,14 @@
         }
 
         It 'User SSHConfig -- ReadConfig (wrong permission)' {
-            #setup
-            $myACL = Get-ACL $userConfigFile
+            #setup            
             $owner = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
-            $myACL.SetOwner($owner)
-            $accessRules = $myACL.GetAccessRules($true, $false, [System.Security.Principal.NTAccount])
-            if($accessRules -ne $null) 
-            {
-                $accessRules | % {
-                    if (($_.IdentityReference.Value -ine "BUILTIN\Administrators") -and 
-                    ($_.IdentityReference.Value -ine "NT AUTHORITY\SYSTEM") -and 
-                    ($_.IdentityReference.Value -ine "$(whoami)"))
-                    {
-                        if(-not $myACL.RemoveAccessRule($_))
-                        {
-                            throw "failed to remove access of $($_.IdentityReference.Value) rule in setup "
-                        }
-                    }
-                }
-            }            
+            $myACL.SetOwner($owner)                 
 
-            $objUser = New-Object System.Security.Principal.NTAccount($ssouser) 
-
+            $objUser = New-Object System.Security.Principal.NTAccount($ssouser)
             $objACE = New-Object System.Security.AccessControl.FileSystemAccessRule `
                 ($objUser, "Read, Write", "None", "None", "Allow") 
-
-            $myACL.AddAccessRule($objACE)
-
-            Set-Acl -Path $userConfigFile -AclObject $myACL
+            Set-SecureFileACL($userConfigFile, $owner, $objACE)
 
             #Run
             $str = "ssh -p $($port) -E $logPath $($Options) $($ssouser)@$($server) hostname > $filePath"

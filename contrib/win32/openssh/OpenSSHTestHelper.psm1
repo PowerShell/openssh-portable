@@ -159,18 +159,14 @@ WARNING: Following changes will be made to OpenSSH configuration
     # copy new sshd_config    
     Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) (Join-Path $script:OpenSSHBinPath sshd_config) -Force
 
-    $keyFiles = Get-ChildItem "$($Script:E2ETestDirectory)\sshtest*user*key*" -Exclude *.pub
-    foreach ($file in $keyfiles) 
-    {
-        Set-PrivateKeyACL($file)
+    $keyFiles = Get-ChildItem "$($Script:E2ETestDirectory)\sshtest*user*key*" -Exclude *.pub | % {    
+        Set-SecureFileACL($_.FullName)
     }
 
     #copy sshtest keys
     Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force
-    $keyfiles = Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*" -Exclude *.pub
-    foreach ($file in $keyfiles) 
-    {
-        Set-PrivateKeyACL($file)
+    Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*" -Exclude *.pub | % {    
+        Set-SecureFileACL($_.FullName)
     }
     Restart-Service sshd -Force
    
@@ -222,25 +218,28 @@ WARNING: Following changes will be made to OpenSSH configuration
     #workaround for the cariggage new line added by git
     (Get-Content $testPubKeyPath -Raw).Replace("`r`n","`n") | Set-Content $testPubKeyPath -Force
     Copy-Item $testPubKeyPath $authorizedKeyPath -Force -ErrorAction SilentlyContinue
-    Set-PrivateKeyACL($authorizedKeyPath)
+    Set-SecureFileACL($authorizedKeyPath)
     $testPriKeypath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519
     (Get-Content $testPriKeypath -Raw).Replace("`r`n","`n") | Set-Content $testPriKeypath -Force
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
 }
 
-function Set-PrivateKeyACL 
+function Set-SecureFileACL 
 {
     [CmdletBinding()]
     param($filePath)
 
     $myACL = Get-ACL $filePath
+    $myACL.SetAccessRuleProtection($True, $True)
+    Set-Acl -Path $filePath -AclObject $myACL
+
+    $myACL = Get-ACL $filePath
     $owner = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
     $myACL.SetOwner($owner)
-    $myACL.SetAccessRuleProtection($True, $True)
-    $accessRules = $myACL.GetAccessRules($true, $false, [System.Security.Principal.NTAccount])
-    if($accessRules) 
-    {
-        $accessRules | % {
+    
+    if($myACL.Access) 
+    {        
+        $myACL.Access | % {
             if (($_ -ne $null) -and ($_.IdentityReference.Value -ine "BUILTIN\Administrators") -and 
             ($_.IdentityReference.Value -ine "NT AUTHORITY\SYSTEM") -and 
             ($_.IdentityReference.Value -ine "$(whoami)"))
@@ -256,7 +255,7 @@ function Set-PrivateKeyACL
     $objUser = New-Object System.Security.Principal.NTAccount("NT Service","sshd")
     $objACE = New-Object System.Security.AccessControl.FileSystemAccessRule `
         ($objUser, "Read", "None", "None", "Allow") 
-    $myACL.AddAccessRule($objACE)
+    $myACL.AddAccessRule($objACE)    
 
     Set-Acl -Path $filePath -AclObject $myACL
 }
