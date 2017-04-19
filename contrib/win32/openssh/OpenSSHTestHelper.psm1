@@ -159,14 +159,18 @@ WARNING: Following changes will be made to OpenSSH configuration
     # copy new sshd_config    
     Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) (Join-Path $script:OpenSSHBinPath sshd_config) -Force
 
-    Get-ChildItem "$($Script:E2ETestDirectory)\sshtest*user*key*" -Exclude *.pub | % {
-        Set-PrivateKeyACL($_.FullName)
+    $keyFiles = Get-ChildItem "$($Script:E2ETestDirectory)\sshtest*user*key*" -Exclude *.pub
+    foreach ($file in $keyfiles) 
+    {
+        Set-PrivateKeyACL($file)
     }
 
     #copy sshtest keys
     Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force
-    Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*" -Exclude *.pub | % {
-        Set-PrivateKeyACL($_.FullName)
+    $keyfiles = Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*" -Exclude *.pub
+    foreach ($file in $keyfiles) 
+    {
+        Set-PrivateKeyACL($file)
     }
     Restart-Service sshd -Force
    
@@ -218,10 +222,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     #workaround for the cariggage new line added by git
     (Get-Content $testPubKeyPath -Raw).Replace("`r`n","`n") | Set-Content $testPubKeyPath -Force
     Copy-Item $testPubKeyPath $authorizedKeyPath -Force -ErrorAction SilentlyContinue
-    $acl = get-acl $authorizedKeyPath
-    $ar = New-Object  System.Security.AccessControl.FileSystemAccessRule("NT Service\sshd", "Read", "Allow")
-    $acl.SetAccessRule($ar)
-    Set-Acl  $authorizedKeyPath $acl
+    Set-PrivateKeyACL($authorizedKeyPath)
     $testPriKeypath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519
     (Get-Content $testPriKeypath -Raw).Replace("`r`n","`n") | Set-Content $testPriKeypath -Force
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
