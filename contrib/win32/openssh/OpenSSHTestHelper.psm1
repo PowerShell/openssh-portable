@@ -157,8 +157,17 @@ WARNING: Following changes will be made to OpenSSH configuration
     }
     
     # copy new sshd_config    
-    Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) (Join-Path $script:OpenSSHBinPath sshd_config) -Force    
-    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force    
+    Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) (Join-Path $script:OpenSSHBinPath sshd_config) -Force
+
+    Get-ChildItem "$($Script:E2ETestDirectory)\sshtest*user*key*" -Exclude *.pub | % {
+        Set-PrivateKeyACL($_.FullName)
+    }
+
+    #copy sshtest keys
+    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force
+    Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*" -Exclude *.pub | % {
+        Set-PrivateKeyACL($_.FullName)
+    }
     Restart-Service sshd -Force
    
     #Backup existing known_hosts and replace with test version
@@ -216,6 +225,39 @@ WARNING: Following changes will be made to OpenSSH configuration
     $testPriKeypath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519
     (Get-Content $testPriKeypath -Raw).Replace("`r`n","`n") | Set-Content $testPriKeypath -Force
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
+}
+
+function Set-PrivateKeyACL 
+{
+    [CmdletBinding()]
+    param($filePath)
+
+    $myACL = Get-ACL $filePath
+    $owner = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
+    $myACL.SetOwner($owner)
+    $myACL.SetAccessRuleProtection($True, $True)
+    $accessRules = $myACL.GetAccessRules($true, $false, [System.Security.Principal.NTAccount])
+    if($accessRules) 
+    {
+        $accessRules | % {
+            if (($_ -ne $null) -and ($_.IdentityReference.Value -ine "BUILTIN\Administrators") -and 
+            ($_.IdentityReference.Value -ine "NT AUTHORITY\SYSTEM") -and 
+            ($_.IdentityReference.Value -ine "$(whoami)"))
+            {
+                if(-not ($myACL.RemoveAccessRule($_)))
+                {
+                    throw "failed to remove access of $($_.IdentityReference.Value) rule in setup "
+                }
+            }
+        }
+    }
+
+    $objUser = New-Object System.Security.Principal.NTAccount("NT Service","sshd")
+    $objACE = New-Object System.Security.AccessControl.FileSystemAccessRule `
+        ($objUser, "Read", "None", "None", "Allow") 
+    $myACL.AddAccessRule($objACE)
+
+    Set-Acl -Path $filePath -AclObject $myACL
 }
 
 <#

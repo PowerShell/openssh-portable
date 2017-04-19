@@ -68,14 +68,17 @@
             #setup
             $myACL = Get-ACL $userConfigFile
             $accessRules = $myACL.GetAccessRules($true, $false, [System.Security.Principal.NTAccount])
-            $accessRules | % {
-                if (($_.IdentityReference.Value -ine "BUILTIN\Administrators") -and 
-                ($_.IdentityReference.Value -ine "NT AUTHORITY\SYSTEM") -and 
-                ($_.IdentityReference.Value -ine "$(whoami)"))
-                {
-                    f(-not $a.RemoveAccessRule($_))
+            if($accessRules -ne $null) 
+            {
+                $accessRules | % {
+                    if (($_.IdentityReference.Value -ine "BUILTIN\Administrators") -and 
+                    ($_.IdentityReference.Value -ine "NT AUTHORITY\SYSTEM") -and 
+                    ($_.IdentityReference.Value -ine "$(whoami)"))
                     {
-                        throw "failed to remove access of $($_.IdentityReference.Value) rule in setup "
+                        if(-not $myACL.RemoveAccessRule($_))
+                        {
+                            throw "failed to remove access of $($_.IdentityReference.Value) rule in setup "
+                        }
                     }
                 }
             }
@@ -98,14 +101,17 @@
             $owner = New-Object System.Security.Principal.NTAccount($ssouser)
             $myACL.SetOwner($owner)
             $accessRules = $myACL.GetAccessRules($true, $false, [System.Security.Principal.NTAccount])
-            $accessRules | % {
-                if (($_.IdentityReference.Value -ine "BUILTIN\Administrators") -and 
-                ($_.IdentityReference.Value -ine "NT AUTHORITY\SYSTEM") -and 
-                ($_.IdentityReference.Value -ine "$(whoami)"))
-                {
-                    f(-not $a.RemoveAccessRule($_))
+            if($accessRules -ne $null) 
+            {
+                $accessRules | % {
+                    if (($_.IdentityReference.Value -ine "BUILTIN\Administrators") -and 
+                    ($_.IdentityReference.Value -ine "NT AUTHORITY\SYSTEM") -and 
+                    ($_.IdentityReference.Value -ine "$(whoami)"))
                     {
-                        throw "failed to remove access of $($_.IdentityReference.Value) rule in setup "
+                        if(-not $myACL.RemoveAccessRule($_))
+                        {
+                            throw "failed to remove access of $($_.IdentityReference.Value) rule in setup "
+                        }
                     }
                 }
             }
@@ -118,7 +124,7 @@
 
             #clean up
             $LASTEXITCODE | Should Not Be 0        
-        }#>
+        }
 
         It 'User SSHConfig -- ReadConfig (wrong permission)' {
             #setup
@@ -126,17 +132,20 @@
             $owner = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
             $myACL.SetOwner($owner)
             $accessRules = $myACL.GetAccessRules($true, $false, [System.Security.Principal.NTAccount])
-            $accessRules | % {
-                if (($_.IdentityReference.Value -ine "BUILTIN\Administrators") -and 
-                ($_.IdentityReference.Value -ine "NT AUTHORITY\SYSTEM") -and 
-                ($_.IdentityReference.Value -ine "$(whoami)"))
-                {
-                    f(-not $a.RemoveAccessRule($_))
+            if($accessRules -ne $null) 
+            {
+                $accessRules | % {
+                    if (($_.IdentityReference.Value -ine "BUILTIN\Administrators") -and 
+                    ($_.IdentityReference.Value -ine "NT AUTHORITY\SYSTEM") -and 
+                    ($_.IdentityReference.Value -ine "$(whoami)"))
                     {
-                        throw "failed to remove access of $($_.IdentityReference.Value) rule in setup "
+                        if(-not $myACL.RemoveAccessRule($_))
+                        {
+                            throw "failed to remove access of $($_.IdentityReference.Value) rule in setup "
+                        }
                     }
                 }
-            }
+            }            
 
             $objUser = New-Object System.Security.Principal.NTAccount($ssouser) 
 
