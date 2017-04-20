@@ -1051,7 +1051,7 @@ do_gen_all_hostkeys(struct passwd *pw)
 			first = 0;
 			continue;
 		}
-		if (set_secure_file_permission(identity_file, pw, TRUE) !=0) {
+		if (set_secure_file_permission(identity_file, pw) !=0) {
 			error("set_secure_file_permission on %s failed!", identity_file);
 #else  /* !WINDOWS */
 		fd = open(identity_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
@@ -1504,7 +1504,7 @@ do_change_comment(struct passwd *pw)
 	strlcat(identity_file, ".pub", sizeof(identity_file));
 	fd = open(identity_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 #ifdef WINDOWS
-	if (set_secure_file_permission(identity_file, pw, TRUE) != 0)
+	if (set_secure_file_permission(identity_file, pw) != 0)
 		fatal("set_secure_file_permission on %s failed!", identity_file);
 #endif /* WINDOWS*/	
 	if (fd == -1)
@@ -1691,7 +1691,7 @@ do_ca_sign(struct passwd *pw, int argc, char **argv)
 			fatal("Could not open \"%s\" for writing: %s", out,
 			    strerror(errno));
 #ifdef WINDOWS
-		if (set_secure_file_permission(out, pw, TRUE) != 0)
+		if (set_secure_file_permission(out, pw) != 0)
 			fatal("set_secure_file_permission on %s failed!", identity_file);
 #endif /* WINDOWS */
 		
@@ -2205,7 +2205,7 @@ do_gen_krl(struct passwd *pw, int updating, int argc, char **argv)
 	if ((fd = open(identity_file, O_WRONLY|O_CREAT|O_TRUNC, 0644)) == -1)
 		fatal("open %s: %s", identity_file, strerror(errno));
 #ifdef WINDOWS
-	if (set_secure_file_permission(identity_file, pw, TRUE) != 0)
+	if (set_secure_file_permission(identity_file, pw) != 0)
 		fatal("set_secure_file_permission on %s failed!", identity_file);
 #endif /* WINDOWS */
 	if (atomicio(vwrite, fd, (void *)sshbuf_ptr(kbuf), sshbuf_len(kbuf)) !=
@@ -2777,7 +2777,7 @@ passphrase_again:
 	/* Windows POSIX adpater does not support fdopen() on open(file)*/
 	if ((f = fopen(identity_file, "w")) == NULL)
 		fatal("fopen %s failed: %s", identity_file, strerror(errno));
-	if (set_secure_file_permission(identity_file, pw, TRUE) != 0)
+	if (set_secure_file_permission(identity_file, pw) != 0)
 		error("set_secure_file_permission on %s failed!", identity_file);
 #else  /* !WINDOWS */
 	if ((fd = open(identity_file, O_WRONLY|O_CREAT|O_TRUNC, 0644)) == -1)

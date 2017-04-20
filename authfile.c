@@ -62,7 +62,7 @@ sshkey_save_private_blob(struct sshbuf *keybuf, const char *filename)
 	if ((fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0600)) < 0)
 		return SSH_ERR_SYSTEM_ERROR;
 #ifdef WINDOWS /* WINDOWS */
-	if (set_secure_file_permission(filename, NULL, FALSE) != 0)
+	if (set_secure_file_permission(filename, NULL) != 0)
 		return SSH_ERR_SYSTEM_ERROR;	
 #endif  /* WINDOWS */
 	if (atomicio(vwrite, fd, (u_char *)sshbuf_ptr(keybuf),

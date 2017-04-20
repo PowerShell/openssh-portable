@@ -157,16 +157,14 @@ WARNING: Following changes will be made to OpenSSH configuration
     }
     
     # copy new sshd_config    
-    Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) (Join-Path $script:OpenSSHBinPath sshd_config) -Force
-
-    $keyFiles = Get-ChildItem "$($Script:E2ETestDirectory)\sshtest*user*key*" -Exclude *.pub | % {    
-        Set-SecureFileACL($_.FullName)
-    }
+    Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) (Join-Path $script:OpenSSHBinPath sshd_config) -Force    
 
     #copy sshtest keys
     Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force
+    $owner = New-Object System.Security.Principal.NTAccount($env:USERDOMAIN, $env:USERNAME)
     Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*" -Exclude *.pub | % {    
-        Set-SecureFileACL($_.FullName)
+        Cleanup-SecureFileACL -FilePath $_.FullName -Owner $owner
+        Add-PermissionToFileACL -FilePath $_.FullName -User "NT Service\sshd" -Perm "Read"
     }
     Restart-Service sshd -Force
    
@@ -210,7 +208,7 @@ WARNING: Following changes will be made to OpenSSH configuration
         cmd /c "ssh -p 47002 sshtest_ssouser@localhost echo %userprofile% > profile.txt"
         if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
         remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
-    }
+    }    
     $ssouserProfile = (Get-ItemProperty -Path $ssouserProfileRegistry -Name 'ProfileImagePath').ProfileImagePath
     New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
@@ -218,47 +216,14 @@ WARNING: Following changes will be made to OpenSSH configuration
     #workaround for the cariggage new line added by git
     (Get-Content $testPubKeyPath -Raw).Replace("`r`n","`n") | Set-Content $testPubKeyPath -Force
     Copy-Item $testPubKeyPath $authorizedKeyPath -Force -ErrorAction SilentlyContinue
-    Set-SecureFileACL($authorizedKeyPath)
+    Add-PermissionToFileACL -FilePath $authorizedKeyPath -User "NT Service\sshd" -Perm "Read"
     $testPriKeypath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519
     (Get-Content $testPriKeypath -Raw).Replace("`r`n","`n") | Set-Content $testPriKeypath -Force
+        
+    Cleanup-SecureFileACL -FilePath $testPriKeypath -Owner sshtest_ssouser
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
 }
 
-function Set-SecureFileACL 
-{
-    [CmdletBinding()]
-    param($filePath)
-
-    $myACL = Get-ACL $filePath
-    $myACL.SetAccessRuleProtection($True, $True)
-    Set-Acl -Path $filePath -AclObject $myACL
-
-    $myACL = Get-ACL $filePath
-    $owner = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
-    $myACL.SetOwner($owner)
-    
-    if($myACL.Access) 
-    {        
-        $myACL.Access | % {
-            if (($_ -ne $null) -and ($_.IdentityReference.Value -ine "BUILTIN\Administrators") -and 
-            ($_.IdentityReference.Value -ine "NT AUTHORITY\SYSTEM") -and 
-            ($_.IdentityReference.Value -ine "$(whoami)"))
-            {
-                if(-not ($myACL.RemoveAccessRule($_)))
-                {
-                    throw "failed to remove access of $($_.IdentityReference.Value) rule in setup "
-                }
-            }
-        }
-    }
-
-    $objUser = New-Object System.Security.Principal.NTAccount("NT Service","sshd")
-    $objACE = New-Object System.Security.AccessControl.FileSystemAccessRule `
-        ($objUser, "Read", "None", "None", "Allow") 
-    $myACL.AddAccessRule($objACE)    
-
-    Set-Acl -Path $filePath -AclObject $myACL
-}
 
 <#
       .SYNOPSIS

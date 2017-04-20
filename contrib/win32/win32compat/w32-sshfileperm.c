@@ -184,47 +184,6 @@ cleanup:
 	return ret;
 }
 
-static int
-user_to_sid(const LPWSTR account_name, PSID * sid)
-{
-	DWORD user_sid_size = 0, domain_size = 0;
-	SID_NAME_USE sid_type = SidTypeInvalid;
-	PSID user_sid = NULL;
-	wchar_t* domain_name = NULL;
-	int ret = -1;
-
-	if (LookupAccountNameW(NULL, account_name, NULL, &user_sid_size,
-		NULL, &domain_size, &sid_type)) {
-		debug3("LookupAccountNameW() succeeded unexpectedly.");
-		errno = ENOENT;
-		goto done;
-	}
-
-	if ((*sid = user_sid = (SID *)malloc(user_sid_size)) == NULL ||
-		(domain_size > 0 && (((wchar_t*)domain_name = malloc(domain_size * sizeof(wchar_t))) == NULL))) {
-		debug3("Insufficient memory available");
-		errno = ENOMEM;
-		goto done;
-	}
-
-	if (LookupAccountNameW(NULL, account_name, user_sid, &user_sid_size,
-		domain_name, &domain_size, &sid_type) == FALSE) {
-		debug3("LookupAccountNameW() failed. Error code is : %d.", GetLastError());
-		errno = ENOENT;
-		goto done;
-	}
-	if (!IsValidSid(user_sid)) {
-		debug3("The sid is invalid.");
-		errno = ENOENT;
-		goto done;
-	}
-	ret = 0;
-done:
-	if (domain_name)
-		free(domain_name);
-	return ret;
-}
-
 static BOOL
 is_sshd_account(PSID user_sid) {	
 	wchar_t user_name[UNCLEN], full_name[UNCLEN + DNLEN + 2];
@@ -298,14 +257,13 @@ done:
 }
 
 int
-set_secure_file_permission(const char *name, struct passwd * pw, BOOL strict)
+set_secure_file_permission(const char *name, struct passwd * pw)
 {
 	PSECURITY_DESCRIPTOR pSD = NULL;
-	PSID owner_sid = NULL, sshd_sid;
+	PSID owner_sid = NULL;
 	PACL dacl = NULL;
-	wchar_t *name_utf16 = NULL, *sid_utf16 = NULL, sddl[256], *sshd_sid_str;;
+	wchar_t *name_utf16 = NULL, *sid_utf16 = NULL, sddl[256];
 	DWORD error_code = ERROR_SUCCESS;
-	BOOL is_valid_sid = FALSE, is_valid_acl = FALSE;
 	struct passwd * pwd = pw;
 	BOOL present, defaulted;
 	int ret = 0;
@@ -328,35 +286,10 @@ set_secure_file_permission(const char *name, struct passwd * pw, BOOL strict)
 
 	if ((sid_utf16 = utf8_to_utf16(pwd->pw_sid)) == NULL) {
 		errno = ENOMEM;
-		goto cleanup;
-	}
-
-	if (user_to_sid(SSHD_ACCOUNT, &sshd_sid) != 0) {
-		debug3("get sshd_sid failed.");
-		errno = ENOENT;
-		goto cleanup;
-	}
-
-	if ((IsValidSid(sshd_sid) == FALSE)) {
-		debug3("IsValidSid(sshd_sid): FALSE");
 		ret = -1;
 		goto cleanup;
 	}
-
-	if (ConvertSidToStringSidW(sshd_sid, &sshd_sid_str) == FALSE) {
-		debug3("ConvertSidToStringSidW failed with error code %d.", GetLastError());
-		errno = ENOENT;
-		goto cleanup;
-
-	}
-	if (strict) {
-		swprintf(sddl, 255, L"D:AI(A;;FR;;;%s)(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FR;;;WD)(A;ID;FA;;;%s)", sshd_sid_str, sid_utf16);
-	}
-	else
-	{
-		swprintf(sddl, 255, L"D:AI(A;;FR;;;%s)(A;ID;FA;;;SY)(A;ID;FA;;;BA)(A;ID;FA;;;%s)", sshd_sid_str, sid_utf16);
-	}
-
+	swprintf(sddl, 255, L"D:P(A;;FA;;;%s)", sid_utf16);
 	if(ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION, &pSD, NULL) == FALSE) {
 		debug3("ConvertStringSecurityDescriptorToSecurityDescriptorW failed with error code %d", GetLastError());
 		ret = -1;
@@ -378,10 +311,11 @@ set_secure_file_permission(const char *name, struct passwd * pw, BOOL strict)
 		debug3("failed to find the acl from security descriptior.");
 		ret = -1;
 		goto cleanup;
-	}
+	}	
 
 	if ((name_utf16 = utf8_to_utf16(name)) == NULL) {
 		errno = ENOMEM;
+		ret = -1;
 		goto cleanup;
 	}
 
@@ -399,10 +333,6 @@ cleanup:
 		LocalFree(pSD);
 	if (name_utf16)
 		free(name_utf16);
-	if(sshd_sid_str)
-		LocalFree(sshd_sid_str);
-	if(sshd_sid)
-		free(sshd_sid);
 	if(sid_utf16)
 		free(sid_utf16);
 	if (owner_sid)

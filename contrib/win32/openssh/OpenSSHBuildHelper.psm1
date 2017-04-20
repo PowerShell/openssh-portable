@@ -496,6 +496,10 @@ function Install-OpenSSH
     & "$OpenSSHDir\install-sshd.ps1"
     & "$OpenSSHDir\ssh-keygen.exe" -A
 
+    $keyFiles = Get-ChildItem "$OpenSSHDir\ssh_host_*_key*" | % {        
+        Add-PermissionToFileACL -FilePath $_.FullName -Domain "NT Service" -Name sshd -Perm "Read"
+    }
+
 
     #machine will be reboot after Install-openssh anyway
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
