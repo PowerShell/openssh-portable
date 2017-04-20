@@ -220,7 +220,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     $testPriKeypath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519
     (Get-Content $testPriKeypath -Raw).Replace("`r`n","`n") | Set-Content $testPriKeypath -Force
         
-    Cleanup-SecureFileACL -FilePath $testPriKeypath -Owner sshtest_ssouser
+    Cleanup-SecureFileACL -FilePath $testPriKeypath
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
 }
 
