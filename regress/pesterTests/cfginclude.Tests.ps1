@@ -137,8 +137,9 @@
             #setup            
             $owner = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
 
-            $objUser = New-Object System.Security.Principal.NTAccount($ssouser)            
-                ($ssouser, "Read, Write", "None", "None", "Allow") 
+            $objUser = New-Object System.Security.Principal.NTAccount($ssouser)
+            $objACE = New-Object System.Security.AccessControl.FileSystemAccessRule `
+                ($objUser, "Read, Write", "None", "None", "Allow")
              Set-SecureFileACL -filepath $userConfigFile -owner $owner -Ace $objACE
 
             #Run

@@ -110,7 +110,7 @@ function Setup-OpenSSHTestEnvironment
     $Global:OpenSSHTestInfo.Add("OpenSSHBinPath", $script:OpenSSHBinPath)
     if (-not ($env:Path.ToLower().Contains($script:OpenSSHBinPath.ToLower())))
     {        
-        $env:Path = "$nativeMSBuildPath;$($env:path)"
+        $env:Path = "$($script:OpenSSHBinPath);$($env:path)"
     }
 
     $warning = @"
@@ -157,14 +157,19 @@ WARNING: Following changes will be made to OpenSSH configuration
     }
     
     # copy new sshd_config    
-    Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) (Join-Path $script:OpenSSHBinPath sshd_config) -Force    
+    Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) (Join-Path $script:OpenSSHBinPath sshd_config) -Force
+    
+    #workaround for the cariggage new line added by git before copy them
+    Get-ChildItem "$($Script:E2ETestDirectory)\sshtest_*key*" | % {
+        (Get-Content $_.FullName -Raw).Replace("`r`n","`n") | Set-Content $_.FullName -Force
+    }
 
     #copy sshtest keys
     Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force
     $owner = New-Object System.Security.Principal.NTAccount($env:USERDOMAIN, $env:USERNAME)
-    Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*" -Exclude *.pub | % {    
+    Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*" -Exclude *.pub | % {        
         Cleanup-SecureFileACL -FilePath $_.FullName -Owner $owner
-        Add-PermissionToFileACL -FilePath $_.FullName -User "NT Service\sshd" -Perm "Read"
+        Add-PermissionToFileACL -FilePath $_.FullName -User "NT Service\sshd" -Perm "Read"        
     }
     Restart-Service sshd -Force
    
@@ -185,13 +190,13 @@ WARNING: Following changes will be made to OpenSSH configuration
     #TODO - this is Windows specific. Need to be in PAL
     foreach ($user in $OpenSSHTestAccounts)
     {
-        try 
+        try
         {
             $objUser = New-Object System.Security.Principal.NTAccount($user)
             $strSID = $objUser.Translate([System.Security.Principal.SecurityIdentifier])
         }
         catch
-        {    
+        {
             #only add the local user when it does not exists on the machine        
             net user $user $Script:OpenSSHTestAccountsPassword /ADD 2>&1 >> $Script:TestSetupLogFile
         }
@@ -212,15 +217,11 @@ WARNING: Following changes will be made to OpenSSH configuration
     $ssouserProfile = (Get-ItemProperty -Path $ssouserProfileRegistry -Name 'ProfileImagePath').ProfileImagePath
     New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
-    $testPubKeyPath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519.pub
-    #workaround for the cariggage new line added by git
-    (Get-Content $testPubKeyPath -Raw).Replace("`r`n","`n") | Set-Content $testPubKeyPath -Force
+    $testPubKeyPath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519.pub    
     Copy-Item $testPubKeyPath $authorizedKeyPath -Force -ErrorAction SilentlyContinue
     Add-PermissionToFileACL -FilePath $authorizedKeyPath -User "NT Service\sshd" -Perm "Read"
     $testPriKeypath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519
-    (Get-Content $testPriKeypath -Raw).Replace("`r`n","`n") | Set-Content $testPriKeypath -Force
-        
-    Cleanup-SecureFileACL -FilePath $testPriKeypath
+    Cleanup-SecureFileACL -FilePath $testPriKeypath -owner $owner
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
 }
 
