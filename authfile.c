@@ -62,6 +62,10 @@ sshkey_save_private_blob(struct sshbuf *keybuf, const char *filename)
 	if ((fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0600)) < 0)
 		return SSH_ERR_SYSTEM_ERROR;
 #ifdef WINDOWS /* WINDOWS */
+	/*
+	Set the owner of the private key file to current user and only grant
+	current user the full control access
+	 */
 	if (set_secure_file_permission(filename, NULL) != 0)
 		return SSH_ERR_SYSTEM_ERROR;	
 #endif  /* WINDOWS */
@@ -207,7 +211,6 @@ sshkey_perm_ok(int fd, const char *filename)
 		error("Permissions for '%s' are too open.", filename);
 #else
 	if ((st.st_uid == getuid()) && (st.st_mode & 077) != 0) {
-
 		error("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
 		error("@         WARNING: UNPROTECTED PRIVATE KEY FILE!          @");
 		error("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");

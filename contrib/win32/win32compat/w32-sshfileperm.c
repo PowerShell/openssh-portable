@@ -256,6 +256,10 @@ done:
 	return ret;
 }
 
+/*
+* Set the owner of the secure file to the user represented by pw and only grant
+* it the full control access
+*/
 int
 set_secure_file_permission(const char *name, struct passwd * pw)
 {
@@ -285,11 +289,12 @@ set_secure_file_permission(const char *name, struct passwd * pw)
 	}	
 
 	if ((sid_utf16 = utf8_to_utf16(pwd->pw_sid)) == NULL) {
+		debug3("Failed to get utf16 of the sid string");
 		errno = ENOMEM;
 		ret = -1;
 		goto cleanup;
 	}
-	swprintf(sddl, 255, L"D:P(A;;FA;;;%s)", sid_utf16);
+	swprintf(sddl, sizeof(sddl) - 1, L"D:P(A;;FA;;;%s)", sid_utf16);
 	if(ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION, &pSD, NULL) == FALSE) {
 		debug3("ConvertStringSecurityDescriptorToSecurityDescriptorW failed with error code %d", GetLastError());
 		ret = -1;
@@ -314,6 +319,7 @@ set_secure_file_permission(const char *name, struct passwd * pw)
 	}	
 
 	if ((name_utf16 = utf8_to_utf16(name)) == NULL) {
+		debug3("Failed to get utf16 of the name");
 		errno = ENOMEM;
 		ret = -1;
 		goto cleanup;
