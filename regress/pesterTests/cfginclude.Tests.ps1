@@ -94,7 +94,6 @@
     Context "User SSHConfig -- ReadConfig" {
         BeforeAll {
             $userConfigFile = Join-Path $home ".ssh\config"
-            $userConfigFile
             Copy-item "$PSScriptRoot\testdata\ssh_config" $userConfigFile -force
             $oldACL = Get-ACL $userConfigFile
         }
