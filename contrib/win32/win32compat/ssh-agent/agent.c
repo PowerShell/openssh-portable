@@ -185,23 +185,22 @@ agent_shutdown()
 	SetEvent(event_stop_agent);
 }
 
-#define REG_AGENT_SDDL L"D:P(A;; GR;;; AU)(A;; GA;;; SY)(A;; GA;;; BA)"
-
 void
 agent_start(BOOL dbg_mode) 
 {
 	int r;
 	HKEY agent_root = NULL;
 	DWORD process_id = GetCurrentProcessId();
-	SECURITY_ATTRIBUTES sa;
-
+	
 	verbose("%s pid:%d, dbg:%d", __FUNCTION__, process_id, dbg_mode);
 	debug_mode = dbg_mode;
 
 	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
 	sa.nLength = sizeof(sa);
-	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_AGENT_SDDL, SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sa.nLength))
-		fatal("ConvertStringSecurityDescriptorToSecurityDescriptorW failed with %d", GetLastError());
+	/* allow access to Authenticated users and Network Service */
+	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;;GA;;;AU)(A;;GA;;;NS)", SDDL_REVISION_1,
+	    &sa.lpSecurityDescriptor, &sa.nLength))
+		fatal("cannot convert sddl ERROR:%d", GetLastError());
 	if ((r = RegCreateKeyExW(HKEY_LOCAL_MACHINE, SSH_AGENT_ROOT, 0, 0, 0, KEY_WRITE, &sa, &agent_root, 0)) != ERROR_SUCCESS)
 		fatal("cannot create agent root reg key, ERROR:%d", r);
 	if ((r = RegSetValueExW(agent_root, L"ProcessID", 0, REG_DWORD, (BYTE*)&process_id, 4)) != ERROR_SUCCESS)
@@ -212,9 +211,6 @@ agent_start(BOOL dbg_mode)
 		fatal("cannot create event ERROR:%d", GetLastError());
 	pipe = INVALID_HANDLE_VALUE;
 	sa.bInheritHandle = FALSE;
-	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;; GA;;; AU)", SDDL_REVISION_1,
-	    &sa.lpSecurityDescriptor, &sa.nLength)) 
-		fatal("cannot convert sddl ERROR:%d", GetLastError());
 	agent_listen_loop();
 }
 
