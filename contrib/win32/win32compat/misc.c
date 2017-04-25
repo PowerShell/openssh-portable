@@ -304,7 +304,7 @@ char*
 		*/
 		do {
 			if (str_tmp)
-				free(str_tmp);
+				free(str_tmp);			
 			if (fgetws(str_w, 2, stream) == NULL)
 				goto cleanup;
 			if ((str_tmp = utf16_to_utf8(str_w)) == NULL) {
@@ -312,13 +312,12 @@ char*
 				goto cleanup;
 			}
 			
-			if((actual_read + strlen(str_tmp)) < n) {
-				memcpy(cp, str_tmp, strlen(str_tmp) + 1);
-				actual_read += strlen(str_tmp);
-			}
-			else
+			if((actual_read + strlen(str_tmp)) >= n)
 				break;
-			cp++;
+			memcpy(cp, str_tmp, strlen(str_tmp) + 1);
+			actual_read += strlen(str_tmp);
+			cp += strlen(str_tmp);
+			
 		} while ((actual_read < n - 1) && *str_tmp != '\n');
 
 		if (actual_read > n - 1) {
