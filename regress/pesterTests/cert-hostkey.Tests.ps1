@@ -1,4 +1,4 @@
-﻿Describe "Tests for host keys" -Tags "CI" {
+﻿Describe "Tests for ssh-keygen" -Tags "CI" {
     BeforeAll {
         if($OpenSSHTestInfo -eq $null)
         {
@@ -88,14 +88,6 @@
 
             Set-Acl -Path $filePath -AclObject $myACL
         }
-
-        function attempt_connect
-        {
-            param(
-                [string]$keyname,
-                [Boolean]$ExpectedSuccess = $false                
-                )
-        }
     }    
 
     AfterEach {        
@@ -114,16 +106,22 @@
 
     Context "Host key files permission" {
         BeforeAll {
-            $hostKeyFilePath = "$($OpenSSHTestInfo['OpenSSHBinPath'])\ssh_host_ed25519_key"
-            #TODO: generate the key after issue 684 got fixed.
-            #ssh-keygen.exe -t ed25519 -P """" -f $hostKeyFilePath
+            $hostKeyFilePath = "$($OpenSSHTestInfo['OpenSSHBinPath'])\hostkeyFilePermTest_ed25519_key"
+            if(Test-path $hostKeyFilePath -PathType Leaf){
+                Set-SecureFileACL -filepath $hostKeyFilePath            
+            }
+            if(Test-path "$hostKeyFilePath.pub" -PathType Leaf){
+                Set-SecureFileACL -filepath "$hostKeyFilePath.pub"
+            }
+            Remove-Item -path "$hostKeyFilePath*" -Force -ErrorAction Ignore
+            ssh-keygen.exe -t ed25519 -f $hostKeyFilePath -P `"`" 
 
             Remove-Item $filePath -Force -ErrorAction Ignore
-            Get-Process -Name sshd | % {if($_.SI -ne 0) { Stop-process $_ } }
+            Get-Process -Name sshd | Where-Object {$_.SI -ne 0} | Stop-process
         }
 
         AfterEach {
-            Remove-Item -Path $filePath -Force -ErrorAction ignore
+            Remove-Item -Path $filePath -Force -ErrorAction ignore            
         }
 
         It 'Host keys -- positive (Secured private key and sshd can access to public key file)' {
@@ -133,8 +131,8 @@
             Add-PermissionToFileACL -FilePath "$hostKeyFilePath.pub" -User "NT Service\sshd" -Perm "Read"            
 
             #Run
-            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p 47003", "-h $hostKeyFilePath", "-E $filePath") -NoNewWindow                      
-            Get-Process -Name sshd | % {if($_.SI -ne 0) { $_ } } | % { Start-Sleep 2 ; Stop-process $_; Start-Sleep 2 }
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p 47003", "-h $hostKeyFilePath", "-E $filePath") -NoNewWindow
+            Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } }
             
 
             #validate file content does not contain unprotected.
@@ -154,7 +152,7 @@
 
             #Run
             Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p 47003", "-h $hostKeyFilePath", "-E $filePath") -NoNewWindow
-            Get-Process -Name sshd | % {if($_.SI -ne 0) { $_ } } | % { Start-Sleep 2 ; Stop-process $_; Start-Sleep 2 }
+            Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } }
 
             #validate file content does not contain unprotected.
             $matches = Get-Content $filePath | Select-String -pattern "key_load_private: bad permissions"
@@ -166,14 +164,14 @@
             $objUser = New-Object System.Security.Principal.NTAccount($ssouser)
             Set-SecureFileACL -filepath $hostKeyFilePath -owner $objUser
             $currentUser = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
-            Add-PermissionToFileACL -FilePath "$hostKeyFilePath" -User $currentUser -Perm "FullControl"
+            Add-PermissionToFileACL -FilePath $hostKeyFilePath -User $currentUser -Perm "FullControl"
             
             #grant sshd Read permission to the public key
             Add-PermissionToFileACL -FilePath "$hostKeyFilePath.pub" -User "NT Service\sshd" -Perm "Read"
 
             #Run
             Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p 47003", "-h $hostKeyFilePath", "-E $filePath") -NoNewWindow
-            Get-Process -Name sshd | % {if($_.SI -ne 0) { $_ } } | % { Start-Sleep 2 ; Stop-process $_; Start-Sleep 2 }
+            Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } }
 
             #validate file content does not contain unprotected.
             $matches = Get-Content $filePath | Select-String -pattern "key_load_private: bad permissions"
@@ -191,7 +189,7 @@
 
             #Run
             Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p 47003", "-h $hostKeyFilePath", "-E $filePath") -NoNewWindow
-            Get-Process -Name sshd | % {if($_.SI -ne 0) { $_ } } | % { Start-Sleep 2 ; Stop-process $_; Start-Sleep 2 }
+            Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } }
 
             #validate file content does not contain unprotected.
             $matches = Get-Content $filePath | Select-String -pattern "key_load_public: Permission denied"
