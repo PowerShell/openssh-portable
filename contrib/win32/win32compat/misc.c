@@ -308,20 +308,23 @@ char*
 			if (fgetws(str_w, 2, stream) == NULL)
 				goto cleanup;
 			if ((str_tmp = utf16_to_utf8(str_w)) == NULL) {
+				debug3("utf16_to_utf8 failed!");
 				errno = ENOMEM;
 				goto cleanup;
 			}
 			
 			if((actual_read + strlen(str_tmp)) >= n)
 				break;
-			memcpy(cp, str_tmp, strlen(str_tmp) + 1);
+			memcpy(cp, str_tmp, strlen(str_tmp));
 			actual_read += strlen(str_tmp);
 			cp += strlen(str_tmp);
 			
 		} while ((actual_read < n - 1) && *str_tmp != '\n');
+		*cp = '\0';
 
 		if (actual_read > n - 1) {
 			/* shouldn't happen. but handling in case */
+			debug3("actual_read %d exceeds the limit:%d", actual_read, n-1);
 			errno = EINVAL;
 			goto cleanup;
 		}		
