@@ -51,6 +51,10 @@
 # include <vis.h>
 #endif
 
+#if WINDOWS
+#include <Aclapi.h>
+#endif
+
 #include "xmalloc.h"
 #include "ssh.h"
 #include "compat.h"
@@ -1734,9 +1738,99 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 
 	if ((f = fopen(filename, "r")) == NULL)
 		return 0;
+	if (flags & SSHCONF_CHECKPERM) {		
+#if WINDOWS
+		/*		
+		file permissions are designed differently on windows
+		implementation on windows to make sure the config file is owned by the user of calling process and
+		nobody else except Administrators group and  current user of calling process, and SYSTEM account has the write permission
+		*/
+		HANDLE h;
+		PSID owner_sid = NULL, user_sid = NULL;
+		PACL dacl = NULL;		
+		DWORD ret;		
+		PSECURITY_DESCRIPTOR pSD = NULL;
+		BOOL others_have_write_permission = FALSE;
+		
+		/*Get the sid of the calling process.*/
+		if ((user_sid = getusid()) == NULL)
+			fatal("failed to retrieve the user sid of the calling process with error: %s", strerror(errno));		
 
-#ifndef WINDOWS /* TODO - implement permission checks for Windows */
-	if (flags & SSHCONF_CHECKPERM) {
+		/*Get the owner sid of the file.*/
+		if ((h = (HANDLE)_get_osfhandle(_fileno(f))) == INVALID_HANDLE_VALUE ||
+		    (ret = GetSecurityInfo(h, SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+		    &owner_sid, NULL, &dacl, NULL, &pSD)) != ERROR_SUCCESS)
+			fatal("failed to retrieve the owner sid of file %s", filename);
+		
+		if ((IsValidSid(owner_sid) == FALSE) || (IsValidAcl(dacl) == FALSE))
+			fatal("invalid sid or Acl is returned from  GetSecurityInfo()");		
+
+		if (EqualSid(owner_sid, user_sid) == FALSE)
+			fatal("Bad owner on %s", filename);
+
+		/*
+		iterate all aces of the file to find out if others than administrators group,
+		 system account, and current user account has write permission on the file
+		*/
+		for (DWORD i = 0; i < dacl->AceCount; i++) {
+			PVOID       current_ace = NULL;
+			PACE_HEADER current_aceHeader = NULL;
+			PSID        current_trustee_sid = NULL;
+
+			if (!GetAce(dacl, i, &current_ace))
+				fatal("GetAce() failed");
+
+			current_aceHeader = (PACE_HEADER)current_ace;
+			// Determine the location of the trustee's sid and the value of the access mask
+			switch (current_aceHeader->AceType) {
+			case ACCESS_ALLOWED_ACE_TYPE: {
+				PACCESS_ALLOWED_ACE pAllowedAce = (PACCESS_ALLOWED_ACE)current_ace;
+				current_trustee_sid = &(pAllowedAce->SidStart);
+				break;
+			}
+			case ACCESS_DENIED_ACE_TYPE: {
+				PACCESS_DENIED_ACE pDeniedAce = (PACCESS_DENIED_ACE)current_ace;
+				current_trustee_sid = &(pDeniedAce->SidStart);
+				break;
+			}
+			default: {
+				// Not interested ACE
+				continue;
+			}
+			}
+			/*no need to check administrators group, current user account, and system account*/
+			if (IsWellKnownSid(current_trustee_sid, WinBuiltinAdministratorsSid) ||
+			    IsWellKnownSid(current_trustee_sid, WinLocalSystemSid) ||
+			    EqualSid(current_trustee_sid, user_sid))
+				continue;
+			else {
+				TRUSTEE trustee = { 0 };
+				ACCESS_MASK access_mask = 0;
+
+				BuildTrusteeWithSid(&trustee, current_trustee_sid);
+				if (GetEffectiveRightsFromAcl(dacl, &trustee, &access_mask) != ERROR_SUCCESS)
+					fatal("GetEffectiveRightsFromAcl() failed!");				
+				
+				/*
+				Treat SYNCHRONIZE specially by removing it from the Generic Mapping because
+				SYNCHRONIZE and READ_CONTROL are always allowed for FILE_GENERIC_READ and FILE_GENERIC_EXECUTE
+				*/				
+				if ((access_mask & (FILE_GENERIC_WRITE & ~(SYNCHRONIZE | READ_CONTROL))) != 0) {
+					others_have_write_permission = TRUE;
+					break;
+				}
+			}
+		}
+
+		if (others_have_write_permission)
+			fatal("Bad permissions on %s", filename);		
+	
+		if (user_sid)
+			free(user_sid);
+		if(pSD)
+			LocalFree(pSD);		
+#else
+
 		struct stat sb;
 
 		if (fstat(fileno(f), &sb) == -1)
@@ -1744,8 +1838,9 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 		if (((sb.st_uid != 0 && sb.st_uid != getuid()) ||
 		    (sb.st_mode & 022) != 0))
 			fatal("Bad owner or permissions on %s", filename);
-	}
 #endif /* !WINDOWS */
+	}
+
 
 	debug("Reading configuration data %.200s", filename);
 

@@ -262,6 +262,50 @@ done:
 	return ret;
 }
 
+PSID
+getusid(void)
+{
+	HANDLE token = 0;
+	DWORD info_len = 0, length = 0;
+	TOKEN_USER* info = NULL;
+	PSID user_sid = NULL;
+
+	errno = 0;
+	if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token) == FALSE) {
+		debug3("OpenProcessToken() failed. Error code is : %d.", GetLastError());
+		errno = ENOENT;
+		goto done;
+	}
+	if (GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE) {
+		debug3("GetTokenInformation() succeeded unexpectedly.");
+		errno = ENOENT;
+		goto done;
+	}
+	if ((info = (TOKEN_USER*)malloc(info_len)) == NULL){
+		debug3("Insufficient memory available");
+		errno = ENOMEM;
+		goto done;
+	}
+	if (GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE) {
+		debug3("GetTokenInformation() failed. Error code is : %d.", GetLastError());
+		errno = ENOENT;
+		goto done;
+	}
+	if ((length = GetLengthSid(info->User.Sid)) <= 0 ||
+	    (user_sid = (PSID *)malloc(length)) == NULL ||
+	    CopySid(length, user_sid, info->User.Sid) == FALSE ||
+	    IsValidSid(user_sid) == FALSE) {
+		debug3("CopySid() failed. Error code is : %d.", GetLastError());
+		errno = ENOENT;
+		goto done;
+	}	
+done:
+	if (info)
+		free(info);
+	if (token)
+		CloseHandle(token);	
+	return user_sid;
+}
 
 
 char *
