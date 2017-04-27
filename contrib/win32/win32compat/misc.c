@@ -278,7 +278,13 @@ w32_fopen_utf8(const char *path, const char *mode)
 	return f;
 }
 
-/* fgets to support Unicode input */
+/*
+* fgets to support Unicode input 
+* each UTF-16 char may bloat up to 4 utf-8 chars. We cannot determine if the length of 
+* input unicode string until it is readed and converted to utf8 string.
+* There is a risk to miss on unicode char when last unicode char read from console
+* does not fit the remain space in str. use cauciously. 
+*/
 char*
  w32_fgets(char *str, int n, FILE *stream) {
 	HANDLE h = (HANDLE)_get_osfhandle(_fileno(stream));
