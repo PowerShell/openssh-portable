@@ -1,5 +1,11 @@
-﻿Describe "Tests for ssh-keygen" -Tags "CI" {
+﻿Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
+Describe "Tests for host keys file permission" -Tags "CI" {
     BeforeAll {
+        $platform = Get-Platform
+        if ($platform -ine "Windows")
+        {
+            $PSDefaultParameterValues["It:Skip"] = $true
+        }
         if($OpenSSHTestInfo -eq $null)
         {
             Throw "`$OpenSSHTestInfo is null. Please run Setup-OpenSSHTestEnvironment to setup test environment."
@@ -18,7 +24,8 @@
         $fileName = "test.txt"
         $filePath = Join-Path $testDir $fileName
         $logName = "log.txt"
-        $logPath = Join-Path $testDir $logName        
+        $logPath = Join-Path $testDir $logName
+        $port = 47003
         $ssouser = $OpenSSHTestInfo["SSOUser"]
         $script:logNum = 0
 
@@ -29,66 +36,11 @@
         }        
 
         Remove-Item -Path $filePath -Force -ErrorAction ignore
+    }
 
-        function Set-SecureFileACL 
-        {            
-            param(
-                [string]$FilePath,
-                [System.Security.Principal.NTAccount]$Owner = $null
-                )
-
-            $myACL = Get-ACL -Path $FilePath
-            $myACL.SetAccessRuleProtection($True, $True)
-            Set-Acl -Path $FilePath -AclObject $myACL
-
-            $myACL = Get-ACL $FilePath
-            $actualOwner = $null
-            if($owner -eq $null)
-            {
-                $actualOwner = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
-            }
-            else
-            {
-                $actualOwner = $Owner
-            }
-            
-            $myACL.SetOwner($actualOwner)
-    
-            if($myACL.Access) 
-            {        
-                $myACL.Access | % {                    
-                    if(-not ($myACL.RemoveAccessRule($_)))
-                    {
-                        throw "failed to remove access of $($_.IdentityReference.Value) rule in setup "
-                    }                    
-                }
-            }
-
-            $objACE = New-Object System.Security.AccessControl.FileSystemAccessRule `
-                ($actualOwner, "FullControl", "None", "None", "Allow")
-            $myACL.AddAccessRule($objACE)
-
-            Set-Acl -Path $FilePath -AclObject $myACL
-        }
-        
-        function Add-PermissionToFileACL 
-        {
-            [CmdletBinding()]
-            param(
-                [string]$FilePath,
-                [System.Security.Principal.NTAccount] $User,
-                [System.Security.AccessControl.FileSystemRights]$Perm
-            )    
-
-            $myACL = Get-ACL $filePath
-        
-            $objACE = New-Object System.Security.AccessControl.FileSystemAccessRule `
-                ($User, $perm, "None", "None", "Allow") 
-            $myACL.AddAccessRule($objACE)    
-
-            Set-Acl -Path $filePath -AclObject $myACL
-        }
-    }    
+    AfterAll {
+        $global:PSDefaultParameterValues = $defaultParamValues
+    }
 
     AfterEach {        
         if( $OpenSSHTestInfo["DebugMode"])
@@ -131,7 +83,7 @@
             Add-PermissionToFileACL -FilePath "$hostKeyFilePath.pub" -User "NT Service\sshd" -Perm "Read"            
 
             #Run
-            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p 47003", "-h $hostKeyFilePath", "-E $filePath") -NoNewWindow
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-h $hostKeyFilePath", "-E $filePath") -NoNewWindow
             Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } }
             
 
@@ -151,7 +103,7 @@
             Add-PermissionToFileACL -FilePath "$hostKeyFilePath.pub" -User "NT Service\sshd" -Perm "Read"
 
             #Run
-            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p 47003", "-h $hostKeyFilePath", "-E $filePath") -NoNewWindow
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-h $hostKeyFilePath", "-E $filePath") -NoNewWindow
             Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } }
 
             #validate file content does not contain unprotected.
@@ -159,7 +111,7 @@
             $matches.Count | Should Be 1
         }
 
-        It 'Host keys -- negative (the private has wrong owner)' {
+        It 'Host keys -- negative (the private key has wrong owner)' {
             #setup to have ssouser as owner and grant it full control
             $objUser = New-Object System.Security.Principal.NTAccount($ssouser)
             Set-SecureFileACL -filepath $hostKeyFilePath -owner $objUser
@@ -170,7 +122,7 @@
             Add-PermissionToFileACL -FilePath "$hostKeyFilePath.pub" -User "NT Service\sshd" -Perm "Read"
 
             #Run
-            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p 47003", "-h $hostKeyFilePath", "-E $filePath") -NoNewWindow
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-h $hostKeyFilePath", "-E $filePath") -NoNewWindow
             Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } }
 
             #validate file content does not contain unprotected.
@@ -188,7 +140,7 @@
             Add-PermissionToFileACL -FilePath "$hostKeyFilePath.pub" -User $objUser -Perm "Read" 
 
             #Run
-            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p 47003", "-h $hostKeyFilePath", "-E $filePath") -NoNewWindow
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-h $hostKeyFilePath", "-E $filePath") -NoNewWindow
             Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } }
 
             #validate file content does not contain unprotected.

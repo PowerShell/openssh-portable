@@ -109,7 +109,7 @@ function Setup-OpenSSHTestEnvironment
 
     $Global:OpenSSHTestInfo.Add("OpenSSHBinPath", $script:OpenSSHBinPath)
     if (-not ($env:Path.ToLower().Contains($script:OpenSSHBinPath.ToLower())))
-    {        
+    {
         $env:Path = "$($script:OpenSSHBinPath);$($env:path)"
     }
 
@@ -130,7 +130,7 @@ WARNING: Following changes will be made to OpenSSH configuration
         Write-Warning $warning
         $continue = Read-Host -Prompt "Do you want to continue with the above changes? [Yes] Y; [No] N (default is `"Y`")"
         if( ($continue -eq "") -or ($continue -ieq "Y") -or ($continue -ieq "Yes") )
-        {            
+        {
         }
         elseif( ($continue -ieq "N") -or ($continue -ieq "No") )
         {
@@ -156,7 +156,7 @@ WARNING: Following changes will be made to OpenSSH configuration
         Copy-Item (Join-Path $script:OpenSSHBinPath sshd_config) $backupConfigPath -Force
     }
     
-    # copy new sshd_config    
+    # copy new sshd_config
     Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) (Join-Path $script:OpenSSHBinPath sshd_config) -Force
     
     #workaround for the cariggage new line added by git before copy them
@@ -167,9 +167,9 @@ WARNING: Following changes will be made to OpenSSH configuration
     #copy sshtest keys
     Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force
     $owner = New-Object System.Security.Principal.NTAccount($env:USERDOMAIN, $env:USERNAME)
-    Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*" -Exclude *.pub | % {        
+    Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*" -Exclude *.pub | % {
         Cleanup-SecureFileACL -FilePath $_.FullName -Owner $owner
-        Add-PermissionToFileACL -FilePath $_.FullName -User "NT Service\sshd" -Perm "Read"        
+        Add-PermissionToFileACL -FilePath $_.FullName -User "NT Service\sshd" -Perm "Read"
     }
     Restart-Service sshd -Force
    
@@ -215,6 +215,9 @@ WARNING: Following changes will be made to OpenSSH configuration
         remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
     }    
     $ssouserProfile = (Get-ItemProperty -Path $ssouserProfileRegistry -Name 'ProfileImagePath').ProfileImagePath
+
+    $Global:OpenSSHTestInfo.Add("SSOUserProfile", $ssouserProfile)
+
     New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
     $testPubKeyPath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519.pub    
