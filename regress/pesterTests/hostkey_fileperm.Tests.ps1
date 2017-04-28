@@ -15,7 +15,7 @@ Describe "Tests for host keys file permission" -Tags "CI" {
         {
             $null = New-Item $OpenSSHTestInfo["TestDataPath"] -ItemType directory -Force -ErrorAction SilentlyContinue
         }
-        $testDir = "$($OpenSSHTestInfo["TestDataPath"])\cert-hostkey"
+        $testDir = "$($OpenSSHTestInfo["TestDataPath"])\hostkey_fileperm"
         if( -not (Test-path $testDir -PathType Container))
         {
             $null = New-Item $testDir -ItemType directory -Force -ErrorAction SilentlyContinue
