@@ -162,6 +162,9 @@ Describe "Tests for user Key file permission" -Tags "CI" {
             #Run
             $o = ssh -p $port -i $keyFilePath -E $filePath $pubKeyUser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
+
+            $matches = Get-Content $filePath | Select-String -pattern "UNPROTECTED PRIVATE KEY FILE!"
+            $matches.Count | Should Be 1
         }
 
         It 'ssh with private key file -- (the private key has wrong owner)' {
@@ -174,6 +177,9 @@ Describe "Tests for user Key file permission" -Tags "CI" {
 
             $o = ssh -p $port -i $keyFilePath -E $filePath $pubKeyUser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
+
+            $matches = Get-Content $filePath | Select-String -pattern "UNPROTECTED PRIVATE KEY FILE!"
+            $matches.Count | Should Be 1
         }
     }
 }

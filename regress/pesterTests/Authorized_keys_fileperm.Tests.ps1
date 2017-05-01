@@ -122,6 +122,8 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $logPath") -NoNewWindow
             ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
+            $matches = Get-Content $filePath | Select-String -pattern "Permission denied"
+            $matches.Count | Should Not Be 0
             
             #Cleanup
             Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } }            
@@ -140,6 +142,8 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $logPath") -NoNewWindow
             ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
+            $matches = Get-Content $filePath | Select-String -pattern "Permission denied"
+            $matches.Count | Should Not Be 0
             
             #Cleanup
             Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } }  
@@ -153,6 +157,9 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $logPath") -NoNewWindow
             ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
+
+            $matches = Get-Content $filePath | Select-String -pattern "Permission denied"
+            $matches.Count | Should Not Be 0
             
             #Cleanup
             Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } } 
