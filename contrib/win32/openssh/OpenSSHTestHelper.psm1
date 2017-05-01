@@ -129,15 +129,12 @@ WARNING: Following changes will be made to OpenSSH configuration
     if (-not $Quiet) {
         Write-Warning $warning
         $continue = Read-Host -Prompt "Do you want to continue with the above changes? [Yes] Y; [No] N (default is `"Y`")"
-        if( ($continue -eq "") -or ($continue -ieq "Y") -or ($continue -ieq "Yes") )
-        {
-        }
-        elseif( ($continue -ieq "N") -or ($continue -ieq "No") )
+        if( ($continue -ieq "N") -or ($continue -ieq "No") )
         {
             Write-Host "User decided not to make the changes."
             return
         }
-        else
+        elseif(($continue -ne "") -and ($continue -ine "Y") -and ($continue -ine "Yes"))        
         {
             Throw "User entered invalid option ($continue). Exit now."
         }
