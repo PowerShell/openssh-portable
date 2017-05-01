@@ -5,15 +5,22 @@ Describe "Tests for Key file permission" -Tags "CI" {
         {
             Throw "`$OpenSSHTestInfo is null. Please run Setup-OpenSSHTestEnvironment to setup test environment."
         }
+        $testDir = "$($OpenSSHTestInfo["TestDataPath"])\usertkey_fileperm"
+        if( -not (Test-path $testDir -PathType Container))
+        {
+            $null = New-Item $testDir -ItemType directory -Force -ErrorAction SilentlyContinue
+        }
+        $fileName = "test.txt"
+        $filePath = Join-Path $testDir $fileName
         $port = $OpenSSHTestInfo["Port"]
         $ssouser = $OpenSSHTestInfo["SSOUser"]
         $pubKeyUser = $OpenSSHTestInfo["PubKeyUser"]
         $pubKeyUserProfile = $OpenSSHTestInfo["PubKeyUserProfile"]
         $server = $OpenSSHTestInfo["Target"]
         $keyFileName = "sshtest_userPermTestkey_ed25519"
-        $keyFilePath = Join-Path $PSScriptRoot "testdata\$keyFileName"
-        #(Get-Content $keyFilePath).Replace("`r`n","`n") | Set-Content $keyFilePath -Force
-        #(Get-Content "$keyFilePath.pub").Replace("`r`n","`n") | Set-Content "$keyFilePath.pub" -Force
+        $keyFilePath = Join-Path $testDir $keyFileName
+        Remove-Item -path "$keyFilePath*" -Force -ErrorAction Ignore
+        ssh-keygen.exe -t ed25519 -f $keyFilePath -P `"`" 
         $userName = "$env:USERNAME@$env:USERDOMAIN"
         if(Test-Path $keyFilePath) {
             Set-SecureFileACL -filepath $keyFilePath
@@ -107,6 +114,7 @@ Describe "Tests for Key file permission" -Tags "CI" {
             $testAuthorizedKeyPath = Join-Path $pubKeyUserProfilePath authorized_keys
             Copy-Item "$keyFilePath.pub" $testAuthorizedKeyPath -Force -ErrorAction SilentlyContinue
             Add-PermissionToFileACL -FilePath $testAuthorizedKeyPath -User "NT Service\sshd" -Perm "Read"
+            Remove-Item -Path $filePath -Force -ErrorAction ignore
         }
         AfterAll {
             if(Test-Path $testAuthorizedKeyPath) {
@@ -121,7 +129,9 @@ Describe "Tests for Key file permission" -Tags "CI" {
         AfterEach {
             if(Test-Path $keyFilePath) {
                 Set-SecureFileACL -filepath $keyFilePath
-            }            
+            }
+
+            Remove-Item -Path $filePath -Force -ErrorAction ignore
         }
 
         It 'ssh with private key file -- positive (Secured private key owned by current user)' {
@@ -150,7 +160,7 @@ Describe "Tests for Key file permission" -Tags "CI" {
             Add-PermissionToFileACL -FilePath $keyFilePath -User $objUser -Perm "Read"
 
             #Run
-            $o = ssh -p $port -i $keyFilePath $pubKeyUser@$server echo 1234
+            $o = ssh -p $port -i $keyFilePath -E $filePath $pubKeyUser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
         }
 
@@ -162,7 +172,7 @@ Describe "Tests for Key file permission" -Tags "CI" {
             $currentUser = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
             Add-PermissionToFileACL -FilePath $keyFilePath -User $currentUser -Perm "FullControl"
 
-            $o = ssh -p $port -i $keyFilePath $pubKeyUser@$server echo 1234
+            $o = ssh -p $port -i $keyFilePath -E $filePath $pubKeyUser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
         }
     }

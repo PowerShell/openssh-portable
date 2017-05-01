@@ -1,20 +1,11 @@
 ﻿Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
 Describe "Tests for host keys file permission" -Tags "CI" {
     BeforeAll {
-        $platform = Get-Platform
-        if ($platform -ine "Windows")
-        {
-            $PSDefaultParameterValues["It:Skip"] = $true
-        }
         if($OpenSSHTestInfo -eq $null)
         {
             Throw "`$OpenSSHTestInfo is null. Please run Setup-OpenSSHTestEnvironment to setup test environment."
         }
-
-        if(-not (Test-Path $OpenSSHTestInfo["TestDataPath"]))
-        {
-            $null = New-Item $OpenSSHTestInfo["TestDataPath"] -ItemType directory -Force -ErrorAction SilentlyContinue
-        }
+        
         $testDir = "$($OpenSSHTestInfo["TestDataPath"])\hostkey_fileperm"
         if( -not (Test-path $testDir -PathType Container))
         {
@@ -36,10 +27,6 @@ Describe "Tests for host keys file permission" -Tags "CI" {
         }        
 
         Remove-Item -Path $filePath -Force -ErrorAction ignore
-    }
-
-    AfterAll {
-        $global:PSDefaultParameterValues = $defaultParamValues
     }
 
     AfterEach {        

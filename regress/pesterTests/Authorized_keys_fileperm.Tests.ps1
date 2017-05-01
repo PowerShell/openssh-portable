@@ -1,22 +1,11 @@
 ﻿Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
 Describe "Tests for hot keys file permission" -Tags "CI" {
-    BeforeAll {
-        $defaultParamValues = $PSDefaultParameterValues.Clone()
-        $platform = Get-Platform
-        if ($platform -ine "Windows")
-        {
-            $PSDefaultParameterValues["It:Skip"] = $true
-        }
-    
+    BeforeAll {    
         if($OpenSSHTestInfo -eq $null)
         {
             Throw "`$OpenSSHTestInfo is null. Please run Setup-OpenSSHTestEnvironment to setup test environment."
         }
-
-        if(-not (Test-Path $OpenSSHTestInfo["TestDataPath"]))
-        {
-            $null = New-Item $OpenSSHTestInfo["TestDataPath"] -ItemType directory -Force -ErrorAction SilentlyContinue
-        }
+        
         $testDir = "$($OpenSSHTestInfo["TestDataPath"])\authorized_keys_fileperm"
         if( -not (Test-path $testDir -PathType Container))
         {
@@ -42,10 +31,6 @@ Describe "Tests for hot keys file permission" -Tags "CI" {
 
         Remove-Item -Path $filePath -Force -ErrorAction ignore
     }
-    
-    AfterAll {
-        $global:PSDefaultParameterValues = $defaultParamValues
-    }
 
     AfterEach {        
         if( $OpenSSHTestInfo["DebugMode"])
@@ -58,7 +43,6 @@ Describe "Tests for hot keys file permission" -Tags "CI" {
             # clear the ssh-agent so that next testcase will get fresh logs.
             Clear-Content "$($OpenSSHTestInfo['OpenSSHBinPath'])\logs\ssh-agent.log" -Force -ErrorAction ignore            
         }
-        Remove-Item -Path $filePath -Force -ErrorAction ignore
     }
 
     Context "Authorized key file permission" {
@@ -101,7 +85,7 @@ Describe "Tests for hot keys file permission" -Tags "CI" {
             Set-SecureFileACL -filepath $authorizedkeyPath
 
             #Run
-            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $filePath") -NoNewWindow
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $logPath") -NoNewWindow
             $o = ssh -p $port $ssouser@$server -o "UserKnownHostsFile $testknownhosts"  echo 1234
             $o | Should Be "1234"
             
@@ -119,7 +103,7 @@ Describe "Tests for hot keys file permission" -Tags "CI" {
             Add-PermissionToFileACL -FilePath $authorizedkeyPath -User $currentUser -Perm "Read"
 
             #Run
-            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $filePath") -NoNewWindow
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $logPath") -NoNewWindow
             $o = ssh -p $port $ssouser@$server -o "UserKnownHostsFile $testknownhosts"  echo 1234
             $o | Should Be "1234"
             
@@ -127,7 +111,7 @@ Describe "Tests for hot keys file permission" -Tags "CI" {
             Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } }            
         }
 
-        <#It 'Authorized key file -- negative (other account can access private key file)' {
+        It 'Authorized key file -- negative (other account can access private key file)' {
             #setup to have current user as owner and grant it full control
             Set-SecureFileACL -filepath $authorizedkeyPath
             #add $PwdUser to access the file authorized_keys
@@ -135,8 +119,8 @@ Describe "Tests for hot keys file permission" -Tags "CI" {
             Add-PermissionToFileACL -FilePath $authorizedkeyPath -User $objPwdUser -Perm "Read"
 
             #Run
-            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $filePath") -NoNewWindow
-            ssh -p $port $ssouser@$server -o "UserKnownHostsFile $testknownhosts" echo 1234
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $logPath") -NoNewWindow
+            ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
             
             #Cleanup
@@ -153,8 +137,8 @@ Describe "Tests for hot keys file permission" -Tags "CI" {
             Add-PermissionToFileACL -FilePath $authorizedkeyPath -User $currentUser -Perm "FullControl"
 
             #Run
-            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $filePath") -NoNewWindow
-            ssh -p $port $ssouser@$server -o "UserKnownHostsFile $testknownhosts" echo 1234
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $logPath") -NoNewWindow
+            ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
             
             #Cleanup
@@ -166,12 +150,12 @@ Describe "Tests for hot keys file permission" -Tags "CI" {
             Set-SecureFileACL -filepath $authorizedkeyPath -Owner $objUser
 
             #Run
-            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $filePath") -NoNewWindow
-            ssh -p $port $ssouser@$server -o "UserKnownHostsFile $testknownhosts" echo 1234
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $logPath") -NoNewWindow
+            ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
             
             #Cleanup
             Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } } 
-        }#>
+        }
     }
 }
