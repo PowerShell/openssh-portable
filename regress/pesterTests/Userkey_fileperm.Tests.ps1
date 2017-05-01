@@ -12,6 +12,8 @@ Describe "Tests for Key file permission" -Tags "CI" {
         $server = $OpenSSHTestInfo["Target"]
         $keyFileName = "sshtest_userPermTestkey_ed25519"
         $keyFilePath = Join-Path $PSScriptRoot "testdata\$keyFileName"
+        (Get-Content $keyFilePath).Replace("`r`n","`n") | Set-Content $keyFilePath -Force
+        (Get-Content "$keyFilePath.pub").Replace("`r`n","`n") | Set-Content "$keyFilePath.pub" -Force
         $userName = "$env:USERNAME@$env:USERDOMAIN"
         if(Test-Path $keyFilePath) {
             Set-SecureFileACL -filepath $keyFilePath
