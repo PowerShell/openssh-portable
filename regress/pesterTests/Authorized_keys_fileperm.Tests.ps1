@@ -105,7 +105,6 @@ Describe "Tests for hot keys file permission" -Tags "CI" {
             $o = ssh -p $port $ssouser@$server -o "UserKnownHostsFile $testknownhosts"  echo 1234
             $o | Should Be "1234"
             
-            
             #Cleanup
             Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } }            
         }
@@ -124,13 +123,11 @@ Describe "Tests for hot keys file permission" -Tags "CI" {
             $o = ssh -p $port $ssouser@$server -o "UserKnownHostsFile $testknownhosts"  echo 1234
             $o | Should Be "1234"
             
-            
             #Cleanup
             Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } }            
         }
 
-
-        It 'Authorized key file -- negative (other account can access private key file)' {
+        <#It 'Authorized key file -- negative (other account can access private key file)' {
             #setup to have current user as owner and grant it full control
             Set-SecureFileACL -filepath $authorizedkeyPath
             #add $PwdUser to access the file authorized_keys
@@ -175,6 +172,6 @@ Describe "Tests for hot keys file permission" -Tags "CI" {
             
             #Cleanup
             Get-Process -Name sshd | % { if($_.SI -ne 0) { Start-sleep 1; Stop-Process $_; Start-sleep 1 } } 
-        }
+        }#>
     }
 }
