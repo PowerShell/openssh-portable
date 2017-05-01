@@ -199,24 +199,13 @@ WARNING: Following changes will be made to OpenSSH configuration
         {
             #only add the local user when it does not exists on the machine        
             net user $user $Script:OpenSSHTestAccountsPassword /ADD 2>&1 >> $Script:TestSetupLogFile
-        }
+        }        
     }
 
-    #setup single sign on for ssouser
-    #TODO - this is Windows specific. Need to be in PAL
-    $ssousersid = Get-UserSID -User sshtest_ssouser
-    $ssouserProfileRegistry = Join-Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" $ssousersid
-    if (-not (Test-Path $ssouserProfileRegistry) ) {        
-        #create profile
-        if (-not($env:DISPLAY)) { $env:DISPLAY = 1 }
-        $env:SSH_ASKPASS="$($env:ComSpec) /c echo $($OpenSSHTestAccountsPassword)"
-        cmd /c "ssh -p 47002 sshtest_ssouser@localhost echo %userprofile% > profile.txt"
-        if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
-        remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
-    }    
-    $ssouserProfile = (Get-ItemProperty -Path $ssouserProfileRegistry -Name 'ProfileImagePath').ProfileImagePath
-
+    #setup single sign on for ssouser    
+    $ssouserProfile = Get-LocalUserProfile -User $SSOUser
     $Global:OpenSSHTestInfo.Add("SSOUserProfile", $ssouserProfile)
+    $Global:OpenSSHTestInfo.Add("PubKeyUserProfile", (Get-LocalUserProfile -User $PubKeyUser))        
 
     New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
@@ -226,6 +215,23 @@ WARNING: Following changes will be made to OpenSSH configuration
     $testPriKeypath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519
     Cleanup-SecureFileACL -FilePath $testPriKeypath -owner $owner
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
+}
+#TODO - this is Windows specific. Need to be in PAL
+function Get-LocalUserProfile
+{
+    param([string]$User)
+    $sid = Get-UserSID -User $User
+    $userProfileRegistry = Join-Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" $sid
+    if (-not (Test-Path $userProfileRegistry) ) {        
+        #create profile
+        if (-not($env:DISPLAY)) { $env:DISPLAY = 1 }
+        $env:SSH_ASKPASS="$($env:ComSpec) /c echo $($OpenSSHTestAccountsPassword)"
+        $ret = ssh -p 47002 "$User@localhost" echo %userprofile%
+        if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
+        remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
+    }   
+    
+    (Get-ItemProperty -Path $userProfileRegistry -Name 'ProfileImagePath').ProfileImagePath    
 }
 
 

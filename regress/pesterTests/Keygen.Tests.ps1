@@ -10,7 +10,7 @@
         {
             $null = New-Item $testDir -ItemType directory -Force -ErrorAction SilentlyContinue
         }        
-        #only valid owner and ACE of the file 
+        #only validate owner and ACE of the file
         function ValidKeyFile {
             param($Path)
 
@@ -22,6 +22,7 @@
             
             $myACL.Access[0].IdentityReference.Equals($currentUser) | Should Be $true
             $myACL.Access[0].AccessControlType | Should Be ([System.Security.AccessControl.AccessControlType]::Allow)
+            $myACL.Access[0].FileSystemRights | Should Be ([System.Security.AccessControl.FileSystemRights]::FullControl)
             $myACL.Access[0].IsInherited | Should Be $false
             $myACL.Access[0].InheritanceFlags | Should Be ([System.Security.AccessControl.InheritanceFlags]::None)
             $myACL.Access[0].PropagationFlags | Should Be ([System.Security.AccessControl.PropagationFlags]::None)            

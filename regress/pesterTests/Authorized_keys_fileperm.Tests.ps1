@@ -62,8 +62,7 @@ Describe "Tests for hot keys file permission" -Tags "CI" {
     }
 
     Context "Authorized key file permission" {
-        BeforeAll {
-            $testsshdConfig = Join-Path $PSScriptRoot testdata\test_sshd_config
+        BeforeAll {            
             $ssouserSSHProfilePath = Join-Path $ssouserProfile .testssh
             if(-not (Test-Path $ssouserSSHProfilePath -PathType Container)) {
                 New-Item $ssouserSSHProfilePath -ItemType directory -Force -ErrorAction Stop | Out-Null
@@ -87,6 +86,10 @@ Describe "Tests for hot keys file permission" -Tags "CI" {
                 Set-SecureFileACL -filepath $authorizedkeyPath
                 Remove-Item $authorizedkeyPath -Force -ErrorAction Ignore
             }
+            if(Test-Path $ssouserSSHProfilePath) {            
+                Remove-Item $ssouserSSHProfilePath -Force -ErrorAction Ignore
+            }
+            Remove-PasswordSetting
         }
 
         AfterEach {
@@ -115,7 +118,6 @@ Describe "Tests for hot keys file permission" -Tags "CI" {
             #add running process account Read access the file authorized_keys
             $currentUser = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
             Add-PermissionToFileACL -FilePath $authorizedkeyPath -User $currentUser -Perm "Read"
-
 
             #Run
             Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $filePath") -NoNewWindow
