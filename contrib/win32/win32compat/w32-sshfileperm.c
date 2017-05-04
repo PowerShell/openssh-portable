@@ -175,7 +175,7 @@ check_secure_file_permission(const char *name, struct passwd * pw)
 				debug3("ConvertSidToSidString failed with %d. ", GetLastError());
 				break;
 			}
-			debug3("Bad permission. Other user or group (sid: %s) than owner, admin user and local system have access to file %s.", bad_user, name);
+			debug3("Bad permissions. Try removing permissions for user: %s on file %s.", bad_user, name);
 			break;
 		}
 	}	
