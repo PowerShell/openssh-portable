@@ -51,6 +51,7 @@
 #endif
 
 #include "log.h"
+#include "sshfileperm.h"
 
 static LogLevel log_level = SYSLOG_LEVEL_INFO;
 static int log_on_stderr = 1;
@@ -366,6 +367,17 @@ log_redirect_stderr_to(const char *logfile)
 		     strerror(errno));
 		exit(1);
 	}
+#ifdef WINDOWS /* WINDOWS */
+	/*
+	Set the owner of the log file to current user and only grant
+	current user the full control access
+	*/
+	if (set_secure_file_permission(logfile, NULL) != 0) {
+		fprintf(stderr, "Couldn't set permisson of logfile %s: %s\n", logfile,
+			strerror(errno));
+		exit(1);
+	}
+#endif  /* WINDOWS */
 	log_stderr_fd = fd;
 }
 
