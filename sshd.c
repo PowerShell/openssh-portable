@@ -1676,9 +1676,9 @@ main(int ac, char **av)
 
 #ifdef WINDOWS
 	/*
-	* The non-windows code doesn't enable the logging until the private host keys are loaded.
-	* For windows, we want to enable the logging even before loading the private host keys to capture the errors.
-	*/
+	 * The non-windows code doesn't enable the logging until the private host keys are loaded.
+	 * For windows, we want to enable the logging even before loading the private host keys to capture the errors.
+	 */
 	log_init(__progname, options.log_level, options.log_facility, log_stderr);
 #endif // WINDOWS
 
