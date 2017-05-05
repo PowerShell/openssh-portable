@@ -1668,6 +1668,7 @@ main(int ac, char **av)
 
 	parse_server_config(&options, rexeced_flag ? "rexec" : config_file_name,
 	    &cfg, NULL);
+
 	seed_rng();
 
 	/* Fill in default values for those options not explicitly set. */
