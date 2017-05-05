@@ -1674,6 +1674,14 @@ main(int ac, char **av)
 	/* Fill in default values for those options not explicitly set. */
 	fill_default_server_options(&options);
 
+#ifdef WINDOWS
+	/*
+	 * The non-windows code doesn't enable the logging until the private host keys are loaded.
+	 * For windows, we want to enable the logging even before loading the private host keys to capture the errors.
+	 */
+	log_init(__progname, options.log_level, options.log_facility, log_stderr);
+#endif // WINDOWS
+
 	/* challenge-response is implemented via keyboard interactive */
 	if (options.challenge_response_authentication)
 		options.kbd_interactive_authentication = 1;
