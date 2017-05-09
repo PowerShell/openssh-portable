@@ -13,7 +13,7 @@ Describe "Tests for ssh-keygen" -Tags "CI" {
         {
             $null = New-Item $testDir -ItemType directory -Force -ErrorAction SilentlyContinue
         }
-        $pwd = "testpassword"
+        $keypassphrase = "testpassword"
         $keytypes = @("rsa","dsa","ecdsa","ed25519")     
         #only validate owner and ACE of the file
         function ValidKeyFile {
@@ -64,7 +64,7 @@ Describe "Tests for ssh-keygen" -Tags "CI" {
             {
                 $keyPath = Join-Path $testDir "id_$type"
                 remove-item $keyPath -ErrorAction SilentlyContinue             
-                ssh-keygen -t $type -P $pwd -f $keyPath
+                ssh-keygen -t $type -P $keypassphrase -f $keyPath
                 ValidKeyFile -Path $keyPath
                 ValidKeyFile -Path "$keyPath.pub"
             }
@@ -79,19 +79,71 @@ Describe "Tests for ssh-keygen" -Tags "CI" {
         # Executing ssh-agent will start agent service
         # This is to support typical Unix scenarios where 
         # running ssh-agent will setup the agent for current session
-        It "$tC.$tI - ssh-agent starts agent service" {
+        It "$tC.$tI - ssh-agent starts agent service and sshd depends on ssh-agent" {
             if ((Get-Service ssh-agent).Status -eq "Running") {
-                Stop-Service ssh-agent
+                Stop-Service ssh-agent -Force
             }
 
             (Get-Service ssh-agent).Status | Should Be "Stopped"
+            (Get-Service sshd).Status | Should Be "Stopped"
 
             ssh-agent
 
             (Get-Service ssh-agent).Status | Should Be "Running"
+
+            Stop-Service ssh-agent -Force
+
+            (Get-Service ssh-agent).Status | Should Be "Stopped"
+            (Get-Service sshd).Status | Should Be "Stopped"
+
+            # this should automatically start both the services
+            Start-Service sshd
+            (Get-Service ssh-agent).Status | Should Be "Running"
+            (Get-Service sshd).Status | Should Be "Running"
         }
 
-        It "$tC.$tI - ssh-add - add all key types" {
+        It "$tC.$tI - ssh-add - add and remove all key types" {
+            #set up SSH_ASKPASS
+            if (-not($env:DISPLAY)) { $env:DISPLAY = 1 }
+            $env:SSH_ASKPASS="$($env:ComSpec) /c echo $($keypassphrase)"
+            
+            foreach($type in $keytypes)
+            {
+                $keyPath = Join-Path $testDir "id_$type"
+                # for ssh-add to consume SSh_ASKPASS, stdin should not be TTY
+                $null | ssh-add $keyPath
+            }
+
+            #remove SSH_ASKPASS
+            if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
+            remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
+
+            #ensure added keys are listed
+            $allkeys = ssh-add -L
+            
+            foreach($type in $keytypes)
+            {
+                $keyPath = Join-Path $testDir "id_$type"
+                $pubkeyraw = ((Get-Content "$keyPath.pub").Split(' '))[1]
+                ($allkeys | foreach {$_.Contains($pubkeyraw)}).Contains($true) | Should Be $true               
+            }
+
+            #delete added keys
+            foreach($type in $keytypes)
+            {
+                $keyPath = Join-Path $testDir "id_$type"
+                ssh-add -d $keyPath
+            }
+
+            #check keys are deleted
+            $allkeys = ssh-add -L
+            
+            foreach($type in $keytypes)
+            {
+                $keyPath = Join-Path $testDir "id_$type"
+                $pubkeyraw = ((Get-Content "$keyPath.pub").Split(' '))[1]
+                ($allkeys | foreach {$_.Contains($pubkeyraw)}).Contains($true) | Should Be $false  
+            }
             
         }
         
