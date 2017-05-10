@@ -2,7 +2,7 @@
 $tI = 0
 $suite = "keyutils"
 
-Describe "Tests for ssh-keygen" -Tags "CI" {
+Describe "E2E scenarios for ssh key management" -Tags "CI" {
     BeforeAll {    
         if($OpenSSHTestInfo -eq $null)
         {
