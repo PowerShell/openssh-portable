@@ -139,13 +139,13 @@ HANDLE child_err = INVALID_HANDLE_VALUE;
 HANDLE pipe_in = INVALID_HANDLE_VALUE;
 HANDLE pipe_out = INVALID_HANDLE_VALUE;
 HANDLE pipe_err = INVALID_HANDLE_VALUE;
-HANDLE child = INVALID_HANDLE_VALUE;
-DWORD child_exit_code = 0;
-HANDLE hConsoleBuffer = INVALID_HANDLE_VALUE;
 
-HANDLE monitor_thread = INVALID_HANDLE_VALUE;
-HANDLE io_thread = INVALID_HANDLE_VALUE;
-HANDLE ux_thread = INVALID_HANDLE_VALUE;
+HANDLE child = NULL;
+DWORD child_exit_code = 0;
+
+HANDLE monitor_thread = NULL;
+HANDLE io_thread = NULL;
+HANDLE ux_thread = NULL;
 
 DWORD hostProcessId = 0;
 DWORD hostThreadId = 0;
@@ -796,7 +796,8 @@ ProcessEventQueue(LPVOID p)
 			lastX = consoleInfo.dwCursorPosition.X;
 			lastY = consoleInfo.dwCursorPosition.Y;
 		}
-		Sleep(100);
+		if (WaitForSingleObject(monitor_thread, 100) == WAIT_OBJECT_0)
+			break;
 	}
 	return 0;
 }
@@ -864,9 +865,11 @@ ProcessPipes(LPVOID p)
 	/* process data from pipe_in and route appropriately */
 	while (1) {	
 		DWORD rd = 0;
-		ZeroMemory(buf, sizeof(buf));
 
 		GOTO_CLEANUP_ON_FALSE(ReadFile(pipe_in, buf, sizeof(buf)-1, &rd, NULL)); /* read bufsize-1 */
+		if (WaitForSingleObject(monitor_thread, 0) == WAIT_OBJECT_0)
+			break;
+		ZeroMemory(buf + rd, sizeof(buf) - rd);
 		bStartup = FALSE;
 		for (DWORD i=0; i < rd; i++) {
 			if (buf[i] == 0)
@@ -1006,6 +1009,9 @@ start_with_pty(wchar_t *command)
 	InitializeCriticalSection(&criticalSection);
 	hEventHook = __SetWinEventHook(EVENT_CONSOLE_CARET, EVENT_CONSOLE_END_APPLICATION, NULL,
 					ConsoleEventProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+	if (!hEventHook)
+		goto cleanup;
+
 	memset(&si, 0, sizeof(STARTUPINFO));
 	memset(&pi, 0, sizeof(PROCESS_INFORMATION));
 	/* Copy our parent buffer sizes */
@@ -1040,44 +1046,47 @@ start_with_pty(wchar_t *command)
 	/* monitor child exist */
 	child = pi.hProcess;
 	monitor_thread = CreateThread(NULL, 0, MonitorChild, NULL, 0, NULL);
-	if (monitor_thread == INVALID_HANDLE_VALUE)
+	if (monitor_thread == NULL)
 		goto cleanup;
 
 	/* disable Ctrl+C hander in this process*/
 	SetConsoleCtrlHandler(NULL, TRUE);
 
 	io_thread = CreateThread(NULL, 0, ProcessPipes, NULL, 0, NULL);
-	if (io_thread == INVALID_HANDLE_VALUE)
+	if (io_thread == NULL)
 		goto cleanup;
 
 	ux_thread = CreateThread(NULL, 0, ProcessEventQueue, NULL, 0, NULL);
-	if (ux_thread == INVALID_HANDLE_VALUE)
+	if (ux_thread == NULL)
 		goto cleanup;
 
 	ProcessMessages(NULL);
+
 cleanup:
 	dwStatus = GetLastError();
-	if (child != INVALID_HANDLE_VALUE)
+	if (childProcessId) {
 		TerminateProcess(child, 0);
-	if (monitor_thread != INVALID_HANDLE_VALUE) {
-		WaitForSingleObject(monitor_thread, INFINITE);
-		CloseHandle(monitor_thread);
-	}
-	if (ux_thread != INVALID_HANDLE_VALUE) {
-		TerminateThread(ux_thread, S_OK);
-		CloseHandle(ux_thread);
-	}
-	if (io_thread != INVALID_HANDLE_VALUE) {
-		TerminateThread(io_thread, 0);
-		CloseHandle(io_thread);
-	}
-	if (hEventHook)
-		__UnhookWinEvent(hEventHook);
-	FreeConsole();
-	if (child != INVALID_HANDLE_VALUE) {
-		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
 	}
+	if (monitor_thread)
+		WaitForSingleObject(monitor_thread, INFINITE);
+	if (ux_thread)
+		WaitForSingleObject(ux_thread, INFINITE);
+	if (io_thread)
+		WaitForSingleObject(io_thread, INFINITE);
+	if (hEventHook)
+		__UnhookWinEvent(hEventHook);
+	if (monitor_thread)
+		FreeConsole();    /* free attached console */
+	if (monitor_thread)
+		CloseHandle(monitor_thread);
+	if (ux_thread)
+		CloseHandle(ux_thread);
+	if (io_thread)
+		CloseHandle(io_thread);
+
+	FreeLibrary(hm_kernel32);
+	FreeLibrary(hm_user32);
 	FreeQueueEvent();
 	DeleteCriticalSection(&criticalSection);
 
@@ -1145,9 +1154,11 @@ start_withno_pty(wchar_t *command)
 	CloseHandle(child_pipe_read);
 	child_pipe_read = INVALID_HANDLE_VALUE;
 	child = pi.hProcess;
+	childProcessId = pi.dwProcessId;
+
 	/* monitor child exist */
 	monitor_thread = CreateThread(NULL, 0, MonitorChild_nopty, NULL, 0, NULL);
-	if (monitor_thread == INVALID_HANDLE_VALUE)
+	if (monitor_thread == NULL)
 		goto cleanup;
 
 	/* disable Ctrl+C hander in this process*/
@@ -1157,7 +1168,11 @@ start_withno_pty(wchar_t *command)
 	while (1) {
 		char buf[128];
 		DWORD rd = 0, wr = 0, i = 0;
-		GOTO_CLEANUP_ON_FALSE(ReadFile(pipe_in, buf, 128, &rd, NULL));
+
+		GOTO_CLEANUP_ON_FALSE(ReadFile(pipe_in, buf, sizeof(buf)-1, &rd, NULL));
+		if (WaitForSingleObject(monitor_thread, 0) == WAIT_OBJECT_0)
+			break;
+		memset(buf + rd, 0, sizeof(buf) - rd);
 
 		while (i < rd) {
 			/* skip arrow keys */
@@ -1217,11 +1232,17 @@ start_withno_pty(wchar_t *command)
 			i++;
 		}
 	}
+
 cleanup:
-	if (child != INVALID_HANDLE_VALUE)
+	if (childProcessId) {
 		TerminateProcess(child, 0);
-	if (monitor_thread != INVALID_HANDLE_VALUE)
+		CloseHandle(pi.hThread);
+	}
+	if (monitor_thread) {
 		WaitForSingleObject(monitor_thread, INFINITE);
+		CloseHandle(monitor_thread);
+	}
+	CloseHandle(child_pipe_write);
 	
 	return child_exit_code;
 }
