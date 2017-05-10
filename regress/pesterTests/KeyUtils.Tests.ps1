@@ -107,12 +107,15 @@ Describe "Tests for ssh-keygen" -Tags "CI" {
             #set up SSH_ASKPASS
             if (-not($env:DISPLAY)) { $env:DISPLAY = 1 }
             $env:SSH_ASKPASS="$($env:ComSpec) /c echo $($keypassphrase)"
+
+            $nullFile = join-path $testDir ("$tC.$tI.nullfile")
+            $null > $nullFile
             
             foreach($type in $keytypes)
             {
                 $keyPath = Join-Path $testDir "id_$type"
                 # for ssh-add to consume SSh_ASKPASS, stdin should not be TTY
-                iex "cmd /c `"ssh-add $keyPath < $keyPath 2> nul `""
+                iex "cmd /c `"ssh-add $keyPath < $nullFile 2> nul `""
             }
 
             #remove SSH_ASKPASS
@@ -133,7 +136,7 @@ Describe "Tests for ssh-keygen" -Tags "CI" {
             foreach($type in $keytypes)
             {
                 $keyPath = Join-Path $testDir "id_$type"
-                iex "cmd /c `"ssh-add -d $keyPath < $keyPath 2> nul `""
+                iex "cmd /c `"ssh-add -d $keyPath 2> nul `""
             }
 
             #check keys are deleted
@@ -143,7 +146,13 @@ Describe "Tests for ssh-keygen" -Tags "CI" {
             {
                 $keyPath = Join-Path $testDir "id_$type"
                 $pubkeyraw = ((Get-Content "$keyPath.pub").Split(' '))[1]
-                ($allkeys | foreach {$_.Contains($pubkeyraw)}).Contains($true) | Should Be $false  
+                if ($allkeys.Count -eq 1) {
+                    $allkeys.Contains($pubkeyraw) | Should Be $false
+                }
+                else { 
+                    ($allkeys | foreach {$_.Contains($pubkeyraw)}).Contains($true) | Should Be $false  
+                }
+
             }
             
         }
