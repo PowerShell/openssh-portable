@@ -60,8 +60,8 @@ static char* s_programdir = NULL;
 #define REPARSE_MOUNTPOINT_HEADER_SIZE 8
 
  /* Difference in us between UNIX Epoch and Win32 Epoch */
-#define EPOCH_DELTA_US  11644473600000000ULL
-#define RATE_DIFF 10000000 /* 100 nsecs */
+#define EPOCH_DELTA_US  116444736000000000ULL
+#define RATE_DIFF 10000000ULL /* 1000 nsecs */
 
 typedef struct _REPARSE_DATA_BUFFER {
 	ULONG  ReparseTag;
@@ -192,17 +192,14 @@ gettimeofday(struct timeval *tv, void *tz)
 	unsigned long long us;
 
 	/* Fetch time since Jan 1, 1601 in 100ns increments */
-	GetSystemTimeAsFileTime(&timehelper.ft);
-
-	/* Convert to microseconds from 100 ns units */
-	us = timehelper.ns / 10;
+	GetSystemTimeAsFileTime(&timehelper.ft);	
 
 	/* Remove the epoch difference */
-	us -= EPOCH_DELTA_US;
+	us = timehelper.ns - EPOCH_DELTA_US;
 
 	/* Stuff result into the timeval */
-	tv->tv_sec = (long)(us / 1000000ULL);
-	tv->tv_usec = (long)(us % 1000000ULL);
+	tv->tv_sec = (long)(us / RATE_DIFF);
+	tv->tv_usec = (long)(us % RATE_DIFF);
 
 	return 0;
 }
@@ -609,8 +606,8 @@ has_executable_extension(wchar_t * path)
 int
 file_attr_to_st_mode(wchar_t * path, DWORD attributes)
 {
-	int mode = S_IREAD;
-	if ((attributes & FILE_ATTRIBUTE_DIRECTORY != 0) || is_root_or_empty(path))
+	int mode = S_IREAD;	
+	if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 || is_root_or_empty(path))
 		mode |= S_IFDIR | _S_IEXEC;
 	else {
 		mode |= S_IFREG;

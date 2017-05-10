@@ -34,6 +34,7 @@
 #include <io.h>
 #include <errno.h>
 #include <stddef.h>
+#include <direct.h>
 
 #include "w32fd.h"
 #include "inc\utf.h"
@@ -676,7 +677,7 @@ fileio_stat(const char *path, struct _stat64 *buf)
 	if (len > 1 && __ascii_iswalpha(*wpath) && (*(wpath + 1) == ':'))
 		buf->st_dev = buf->st_rdev = towupper(*wpath) - L'A'; /* drive num */
 	else
-		buf->st_dev = buf->st_rdev = get_drive() - 1;
+		buf->st_dev = buf->st_rdev = _getdrive() - 1;
 	debug("fileio_stat. buf->st_dev %d", buf->st_dev);
 	file_time_to_unix_time(&(attributes.ftLastAccessTime), &(buf->st_atime));
 	file_time_to_unix_time(&(attributes.ftLastWriteTime), &(buf->st_mtime));
@@ -692,7 +693,7 @@ fileio_stat(const char *path, struct _stat64 *buf)
 			}
 			FindClose(handle);
 		}
-	}
+	}	
 	ret = 0;
 cleanup:
 	if (wpath)
