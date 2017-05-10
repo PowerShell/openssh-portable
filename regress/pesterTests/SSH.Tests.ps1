@@ -81,20 +81,25 @@ Describe "ssh client tests" -Tags "CI" {
         BeforeAll {$tI=1}
         AfterAll{$tC++}
 
-        <# these 2 tests dont work on AppVeyor that sniffs stderr channel
         It "$tC.$tI - test version" {
-            iex "ssh -V 2> $tFile"
+            iex "cmd /c `"ssh -V 2> $tFile`""
             $tFile | Should Contain "OpenSSH_"
         }
 
         It "$tC.$tI - test help" {
-            iex "ssh -? 2> $tFile"
+            iex "cmd /c `"ssh -? 2> $tFile`""
             $tFile | Should Contain "usage: ssh"
         }
-        #>
-
+        
         It "$tC.$tI - remote echo command" {
             iex "$sshDefaultCmd echo 1234" | Should Be "1234"
+        }
+
+        It "$tC.$tI - exit code" {
+            ssh -p $port $ssouser@$server exit 0
+            $LASTEXITCODE | Should Be 0
+            ssh -p $port $ssouser@$server exit 21
+            $LASTEXITCODE | Should Be 21
         }
     }
 

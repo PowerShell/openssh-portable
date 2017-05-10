@@ -1,5 +1,6 @@
 ﻿$tC = 1
 $tI = 0
+$suite = "keyutils"
 
 Describe "Tests for ssh-keygen" -Tags "CI" {
     BeforeAll {    
@@ -8,7 +9,7 @@ Describe "Tests for ssh-keygen" -Tags "CI" {
             Throw "`$OpenSSHTestInfo is null. Please run Setup-OpenSSHTestEnvironment to setup test environment."
         }
         
-        $testDir = "$($OpenSSHTestInfo["TestDataPath"])\keyutils"
+        $testDir = "$($OpenSSHTestInfo["TestDataPath"])\$suite"
         if( -not (Test-path $testDir -PathType Container))
         {
             $null = New-Item $testDir -ItemType directory -Force -ErrorAction SilentlyContinue
@@ -111,7 +112,7 @@ Describe "Tests for ssh-keygen" -Tags "CI" {
             {
                 $keyPath = Join-Path $testDir "id_$type"
                 # for ssh-add to consume SSh_ASKPASS, stdin should not be TTY
-                $null | ssh-add $keyPath
+                iex "cmd /c `"ssh-add $keyPath < $keyPath 2> nul `""
             }
 
             #remove SSH_ASKPASS
@@ -132,7 +133,7 @@ Describe "Tests for ssh-keygen" -Tags "CI" {
             foreach($type in $keytypes)
             {
                 $keyPath = Join-Path $testDir "id_$type"
-                ssh-add -d $keyPath
+                iex "cmd /c `"ssh-add -d $keyPath < $keyPath 2> nul `""
             }
 
             #check keys are deleted
