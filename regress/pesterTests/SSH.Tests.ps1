@@ -142,8 +142,10 @@ Describe "ssh client tests" -Tags "CI" {
 
 
         It "$tC.$tI - cipher options" {
+            #bad cipher
             iex "cmd /c `"ssh -c bad_cipher $ssouser@$server echo 1234 2>$stderrFile`""
             $stderrFile | Should Contain "Unknown cipher type"
+            #good cipher, ensure cipher is used from debug logs
             $o = ssh -c aes256-ctr  -v -E $logFile -p $port $ssouser@$server echo 1234
             $o | Should Be "1234"
             $logFile | Should Contain "kex: server->client cipher: aes256-ctr"
@@ -151,7 +153,24 @@ Describe "ssh client tests" -Tags "CI" {
         }
 
         It "$tC.$tI - ssh_config" {
-            
+            #ensure -F is working by pointing to a bad configuration
+            $badConfigFile = Join-Path $testDir "$tC.$tI.bad_ssh_config"
+            "bad_config_line" | Set-Content $badConfigFile
+            iex "cmd /c `"ssh -F $badConfigFile $ssouser@$server echo 1234 2>$stderrFile`""
+            $stderrFile | Should Contain "bad_ssh_config"
+            $stderrFile | Should Contain "bad_config_line"
+            $stderrFile | Should Contain "bad configuration options"
+
+            #try with a proper configuration file. Put it on a unicode path with unicode content
+            #so we can test the Unicode support simultaneously
+            $goodConfigFile = Join-Path $testDir "$tC.$tI.Очень_хорошо_ssh_config"
+            "#this is a Unicode comment because it contains русский язык" | Set-Content $goodConfigFile -Encoding UTF8
+            "Host myhost" | Add-Content $goodConfigFile
+            "    HostName $server" | Add-Content $goodConfigFile
+            "    Port $port" | Add-Content $goodConfigFile
+            "    User $ssouser" | Add-Content $goodConfigFile
+            $o = ssh -F $goodConfigFile myhost echo 1234
+            $o | Should Be "1234"          
         }
     }
 
