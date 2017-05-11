@@ -651,8 +651,7 @@ fileio_stat(const char *path, struct _stat64 *buf)
 {
 	wchar_t* wpath = NULL;
 	WIN32_FILE_ATTRIBUTE_DATA attributes = { 0 };
-	int ret = -1, len = 0;
-	debug("enterring fileio_stat. Path %s", path);
+	int ret = -1, len = 0;	
 	if ((wpath = utf8_to_utf16(path)) == NULL) {
 		errno = errno_from_Win32LastError();
 		debug3("utf8_to_utf16 failed for file:%s error:%d", path, GetLastError());
@@ -678,7 +677,6 @@ fileio_stat(const char *path, struct _stat64 *buf)
 		buf->st_dev = buf->st_rdev = towupper(*wpath) - L'A'; /* drive num */
 	else
 		buf->st_dev = buf->st_rdev = _getdrive() - 1;
-	debug("fileio_stat. buf->st_dev %d", buf->st_dev);
 	file_time_to_unix_time(&(attributes.ftLastAccessTime), &(buf->st_atime));
 	file_time_to_unix_time(&(attributes.ftLastWriteTime), &(buf->st_mtime));
 	file_time_to_unix_time(&(attributes.ftCreationTime), &(buf->st_ctime));
@@ -697,8 +695,7 @@ fileio_stat(const char *path, struct _stat64 *buf)
 	ret = 0;
 cleanup:
 	if (wpath)
-		free(wpath);
-	debug("exiting fileio_stat. Path %d", ret);
+		free(wpath);	
 	return ret;
 }
 
