@@ -14,3 +14,6 @@ char* w32_programdir();
 
 void convertToBackslash(char *str);
 void convertToForwardslash(char *str);
+
+#define errno_from_Win32LastError() errno_from_Win32Error(GetLastError())
+int errno_from_Win32Error(int);

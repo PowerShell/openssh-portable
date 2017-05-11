@@ -218,7 +218,7 @@ is_sshd_account(PSID user_sid) {
 static BOOL
 is_admin_account(PSID user_sid)
 {
-	DWORD entries_read = 0, total_entries = 0, i = 0, name_length = UNCLEN, domain_name_length = DNLEN, sid_size;
+	DWORD entries_read = 0, total_entries = 0, i = 0, name_length = UNCLEN, domain_name_length = DNLEN, sid_size = SECURITY_MAX_SID_SIZE;
 	LPLOCALGROUP_MEMBERS_INFO_1 local_groups_member_info = NULL;
 	char admins_sid[SECURITY_MAX_SID_SIZE];
 	wchar_t admins_group_name[UNCLEN], domain_name[DNLEN];

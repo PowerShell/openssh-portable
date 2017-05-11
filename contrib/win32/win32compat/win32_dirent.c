@@ -54,7 +54,6 @@ opendir(const char *name)
 	DIR *pdir;
 	wchar_t searchstr[PATH_MAX];
 	wchar_t* wname = NULL;
-	int needed;
 
 	if ((wname = utf8_to_utf16(sanitized_path(name))) == NULL) {
 		errno = ENOMEM;
@@ -124,7 +123,7 @@ readdir(void *avp)
 			return NULL;
 		}
 
-		strncpy(pdirentry.d_name, tmp, strlen(tmp) + 1);
+		strncpy_s(pdirentry.d_name, PATH_MAX, tmp, strlen(tmp) + 1);		
 		free(tmp);
 
 		pdirentry.d_ino = 1; /* a fictious one like UNIX to say it is nonzero */
