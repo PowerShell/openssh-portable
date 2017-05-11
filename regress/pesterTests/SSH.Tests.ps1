@@ -73,7 +73,9 @@ Describe "ssh client tests" -Tags "CI" {
 
     BeforeEach {
         $tI++;
-        $tFile=Join-Path $testDir "$tC.$tI.txt"
+        $stderrFile=Join-Path $testDir "$tC.$tI.stderr.txt"
+        $stdoutFile=Join-Path $testDir "$tC.$tI.stdout.txt"
+        $logFile = Join-Path $testDir "$tC.$tI.log.txt"
     }        
 
     Context "$tC - Basic Scenarios" {
@@ -82,13 +84,13 @@ Describe "ssh client tests" -Tags "CI" {
         AfterAll{$tC++}
 
         It "$tC.$tI - test version" {
-            iex "cmd /c `"ssh -V 2> $tFile`""
-            $tFile | Should Contain "OpenSSH_"
+            iex "cmd /c `"ssh -V 2> $stderrFile`""
+            $stderrFile | Should Contain "OpenSSH_"
         }
 
         It "$tC.$tI - test help" {
-            iex "cmd /c `"ssh -? 2> $tFile`""
-            $tFile | Should Contain "usage: ssh"
+            iex "cmd /c `"ssh -? 2> $stderrFile`""
+            $stderrFile | Should Contain "usage: ssh"
         }
         
         It "$tC.$tI - remote echo command" {
@@ -109,8 +111,8 @@ Describe "ssh client tests" -Tags "CI" {
         AfterAll{$tC++}
 
         It "$tC.$tI - stdout to file" {
-            iex "$sshDefaultCmd powershell get-process > $tFile"
-            $tFile | Should Contain "ProcessName"
+            iex "$sshDefaultCmd powershell get-process > $stdoutFile"
+            $stdoutFile | Should Contain "ProcessName"
         }
 
         It "$tC.$tI - stdout to PS object" {
@@ -131,7 +133,6 @@ Describe "ssh client tests" -Tags "CI" {
         AfterAll{$tC++}
 
         It "$tC.$tI - verbose to file" {
-            $logFile = Join-Path $testDir "$tC.$tI.log.txt"
             $o = ssh -p $port -v -E $logFile $ssouser@$server echo 1234
             $o | Should Be "1234"
             #TODO - checks below are very inefficient (time taking). 
@@ -139,7 +140,23 @@ Describe "ssh client tests" -Tags "CI" {
             $logFile | Should Contain "Exit Status 0"
         }
 
+
+        It "$tC.$tI - cipher options" {
+            iex "cmd /c `"ssh -c bad_cipher $ssouser@$server echo 1234 2>$stderrFile`""
+            $stderrFile | Should Contain "Unknown cipher type"
+            $o = ssh -c aes256-ctr  -v -E $logFile -p $port $ssouser@$server echo 1234
+            $o | Should Be "1234"
+            $logFile | Should Contain "kex: server->client cipher: aes256-ctr"
+            $logFile | Should Contain "kex: client->server cipher: aes256-ctr"
+        }
+
+        It "$tC.$tI - ssh_config" {
+            
+        }
     }
+
+
+    
     <#Context "Key is not secured in ssh-agent on server" {
         BeforeAll {            
             $identifyFile = $client.clientPrivateKeyPaths[0]
