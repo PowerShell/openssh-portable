@@ -441,7 +441,7 @@ void
 CalculateAndSetCursor(HANDLE hInput, UINT x, UINT y)
 {
 
-	SendSetCursor(pipe_out, x + 1, y + 1);
+	SendSetCursor(hInput, x + 1, y + 1);
 	currentLine = y;
 }
 
@@ -464,16 +464,16 @@ SizeWindow(HANDLE hInput)
 	matchingFont.FontWeight = FW_NORMAL;
 	wcscpy(matchingFont.FaceName, L"Consolas");
 
-	bSuccess = __SetCurrentConsoleFontEx(child_out, FALSE, &matchingFont);
+	bSuccess = __SetCurrentConsoleFontEx(hInput, FALSE, &matchingFont);
 
 	/* This information is the live screen  */
 	ZeroMemory(&consoleInfo, sizeof(consoleInfo));
 	consoleInfo.cbSize = sizeof(consoleInfo);
 
-	bSuccess = GetConsoleScreenBufferInfoEx(child_out, &consoleInfo);
+	bSuccess = GetConsoleScreenBufferInfoEx(hInput, &consoleInfo);
 
 	/* Get the largest size we can size the console window to */
-	coordScreen = GetLargestConsoleWindowSize(child_out);
+	coordScreen = GetLargestConsoleWindowSize(hInput);
 
 	/* Define the new console window size and scroll position */
 	if (inputSi.dwXCountChars == 0 || inputSi.dwYCountChars == 0) {
@@ -489,14 +489,14 @@ SizeWindow(HANDLE hInput)
 	coordScreen.X = 100;
 	coordScreen.Y = 9999;
 
-	if (SetConsoleWindowInfo(child_out, TRUE, &srWindowRect))
-		bSuccess = SetConsoleScreenBufferSize(child_out, coordScreen);
+	if (SetConsoleWindowInfo(hInput, TRUE, &srWindowRect))
+		bSuccess = SetConsoleScreenBufferSize(hInput, coordScreen);
 	else {
-		if (SetConsoleScreenBufferSize(child_out, coordScreen))
-			bSuccess = SetConsoleWindowInfo(child_out, TRUE, &srWindowRect);
+		if (SetConsoleScreenBufferSize(hInput, coordScreen))
+			bSuccess = SetConsoleWindowInfo(hInput, TRUE, &srWindowRect);
 	}
 
-	bSuccess = GetConsoleScreenBufferInfoEx(child_out, &consoleInfo);
+	bSuccess = GetConsoleScreenBufferInfoEx(hInput, &consoleInfo);
 }
 
 DWORD WINAPI 
@@ -523,19 +523,21 @@ ProcessEvent(void *p)
 	HWND hwnd;
 	LONG idObject;
 	LONG idChild;
-
-	if (!p)
-		return ERROR_INVALID_PARAMETER;
-
+	DWORD n;
+	CHAR_INFO pBuffer[MAX_EXPECTED_BUFFER_SIZE];
+	DWORD bufferSize;
+	SMALL_RECT readRect;
+	COORD coordBufSize;
+	COORD coordBufCoord;
 	consoleEvent* current = (consoleEvent *)p;
 
-	if (current) {
-		event = current->event;
-		hwnd = current->hwnd;
-		idObject = current->idObject;
-		idChild = current->idChild;
-	} else
+	if (!current)
 		return ERROR_INVALID_PARAMETER;
+
+	event = current->event;
+	hwnd = current->hwnd;
+	idObject = current->idObject;
+	idChild = current->idChild;
 
 	if (event < EVENT_CONSOLE_CARET || event > EVENT_CONSOLE_LAYOUT)
 		return ERROR_INVALID_PARAMETER;
@@ -572,8 +574,6 @@ ProcessEvent(void *p)
 	}
 	case EVENT_CONSOLE_UPDATE_REGION:
 	{
-		SMALL_RECT readRect;
-
 		readRect.Top = HIWORD(idObject);
 		readRect.Left = LOWORD(idObject);
 		readRect.Bottom = HIWORD(idChild);
@@ -598,7 +598,6 @@ ProcessEvent(void *p)
 		}
 
 		/* Figure out the buffer size */
-		COORD coordBufSize;
 		coordBufSize.Y = readRect.Bottom - readRect.Top + 1;
 		coordBufSize.X = readRect.Right - readRect.Left + 1;
 
@@ -612,7 +611,7 @@ ProcessEvent(void *p)
 			return ERROR_INVALID_PARAMETER;
 
 		/* Compute buffer size */
-		DWORD bufferSize = coordBufSize.X * coordBufSize.Y;
+		bufferSize = coordBufSize.X * coordBufSize.Y;
 		if (bufferSize > MAX_EXPECTED_BUFFER_SIZE) {
 			if (!bStartup) {
 				SendClearScreen(pipe_out);
@@ -622,22 +621,13 @@ ProcessEvent(void *p)
 			return ERROR_SUCCESS;
 		}
 
-		/* Create the screen scrape buffer */
-		CHAR_INFO *pBuffer = (PCHAR_INFO)malloc(sizeof(CHAR_INFO) * bufferSize);
-		if (!pBuffer)
-			return ERROR_INSUFFICIENT_BUFFER;
-
 		/* The top left destination cell of the temporary buffer is row 0, col 0 */
-		COORD coordBufCoord;
 		coordBufCoord.X = 0;
 		coordBufCoord.Y = 0;
 
 		/* Copy the block from the screen buffer to the temp. buffer */
 		if (!ReadConsoleOutput(child_out, pBuffer, coordBufSize, coordBufCoord, &readRect)) {
-			DWORD dwError = GetLastError();
-			
-			free(pBuffer);
-			return dwError;
+			return GetLastError();
 		}
 
 		if (readRect.Top > currentLine)
@@ -651,9 +641,6 @@ ProcessEvent(void *p)
 		SendBuffer(pipe_out, pBuffer, bufferSize);
 		lastViewPortY = ViewPortY;
 		lastLineLength = readRect.Left;
-		
-		free(pBuffer);
-		
 		break;
 	}
 	case EVENT_CONSOLE_UPDATE_SIMPLE:
@@ -663,7 +650,6 @@ ProcessEvent(void *p)
 		wX = LOWORD(idObject);
 		wY = HIWORD(idObject);
 		
-		SMALL_RECT readRect;
 		readRect.Top = wY;
 		readRect.Bottom = wY;
 		readRect.Left = wX;
@@ -672,28 +658,20 @@ ProcessEvent(void *p)
 		/* Set cursor location based on the reported location from the message */
 		CalculateAndSetCursor(pipe_out, wX, wY);
 		
-		COORD coordBufSize;
 		coordBufSize.Y = readRect.Bottom - readRect.Top + 1;
 		coordBufSize.X = readRect.Right - readRect.Left + 1;
+		bufferSize = coordBufSize.X * coordBufSize.Y;
 
 		/* The top left destination cell of the temporary buffer is row 0, col 0 */
-		COORD coordBufCoord;
 		coordBufCoord.X = 0;
 		coordBufCoord.Y = 0;
-		int pBufferSize = coordBufSize.X * coordBufSize.Y;
-		/* Send the one character. Note that a CR doesn't end up here */
-		CHAR_INFO *pBuffer = (PCHAR_INFO)malloc(sizeof(CHAR_INFO) * pBufferSize);
 
 		/* Copy the block from the screen buffer to the temp. buffer */
 		if (!ReadConsoleOutput(child_out, pBuffer, coordBufSize, coordBufCoord, &readRect)) {
-			DWORD dwError = GetLastError();
-			free(pBuffer);
-			return dwError;
+			return GetLastError();
 		}
 
-		SendBuffer(pipe_out, pBuffer, pBufferSize);
-		free(pBuffer);
-
+		SendBuffer(pipe_out, pBuffer, bufferSize);
 		break;
 	}
 	case EVENT_CONSOLE_UPDATE_SCROLL:
@@ -709,7 +687,6 @@ ProcessEvent(void *p)
 		} else {
 			ViewPortY += vn;
 		}
-
 		break;
 	}
 	case EVENT_CONSOLE_LAYOUT:
