@@ -653,13 +653,13 @@ ProcessEvent(void *p)
 		readRect.Top = wY;
 		readRect.Bottom = wY;
 		readRect.Left = wX;
-		readRect.Right = ConSRWidth();
+		readRect.Right = wX;
 		
 		/* Set cursor location based on the reported location from the message */
 		CalculateAndSetCursor(pipe_out, wX, wY);
 		
-		coordBufSize.Y = readRect.Bottom - readRect.Top + 1;
-		coordBufSize.X = readRect.Right - readRect.Left + 1;
+		coordBufSize.Y = 1;
+		coordBufSize.X = 1;
 		bufferSize = coordBufSize.X * coordBufSize.Y;
 
 		/* The top left destination cell of the temporary buffer is row 0, col 0 */
