@@ -438,8 +438,12 @@ SendBuffer(HANDLE hInput, CHAR_INFO *buffer, DWORD bufferSize)
 }
 
 void 
-CalculateAndSetCursor(HANDLE hInput, UINT x, UINT y)
+CalculateAndSetCursor(HANDLE hInput, UINT x, UINT y, BOOL scroll)
 {
+	DWORD n;
+	if (scroll && y > currentLine)
+		for (n = currentLine; n < y; n++)
+			SendLF(hInput);
 
 	SendSetCursor(hInput, x + 1, y + 1);
 	currentLine = y;
@@ -568,8 +572,11 @@ ProcessEvent(void *p)
 		lastX = co.X;
 		lastY = co.Y;
 
-		SendSetCursor(pipe_out, lastX + 1, lastY + 1);
-
+		if (lastX == 0 && lastY > currentLine) {
+			CalculateAndSetCursor(pipe_out, lastX, lastY, TRUE);
+		} else {
+			SendSetCursor(pipe_out, lastX + 1, lastY + 1);
+		}
 		break;
 	}
 	case EVENT_CONSOLE_UPDATE_REGION:
@@ -630,12 +637,8 @@ ProcessEvent(void *p)
 			return GetLastError();
 		}
 
-		if (readRect.Top > currentLine)
-			for (SHORT n = currentLine; n < readRect.Top; n++)
-				SendLF(pipe_out);
-
 		/* Set cursor location based on the reported location from the message */
-		CalculateAndSetCursor(pipe_out, readRect.Left, readRect.Top);
+		CalculateAndSetCursor(pipe_out, readRect.Left, readRect.Top, TRUE);
 
 		/* Send the entire block */
 		SendBuffer(pipe_out, pBuffer, bufferSize);
@@ -656,7 +659,7 @@ ProcessEvent(void *p)
 		readRect.Right = wX;
 		
 		/* Set cursor location based on the reported location from the message */
-		CalculateAndSetCursor(pipe_out, wX, wY);
+		CalculateAndSetCursor(pipe_out, wX, wY, TRUE);
 		
 		coordBufSize.Y = 1;
 		coordBufSize.X = 1;
