@@ -101,6 +101,9 @@ struct key_translation keys[] = {
     { "\x1b[B",     VK_DOWN,     0 },
     { "\x1b[C",     VK_RIGHT,    0 },
     { "\x1b[D",     VK_LEFT,     0 },
+    { "\x1b[F",     VK_END,      0 },    /* KeyPad END */
+    { "\x1b[H",     VK_HOME,     0 },    /* KeyPad HOME */
+    { "\x1b[Z",     0,           0 },    /* ignore Shift+TAB */
     { "\x1b[1~",    VK_HOME,     0 },
     { "\x1b[2~",    VK_INSERT,   0 },
     { "\x1b[3~",    VK_DELETE,   0 },
@@ -118,7 +121,11 @@ struct key_translation keys[] = {
     { "\x1b[20~",   VK_F9,       0 },
     { "\x1b[21~",   VK_F10,      0 },
     { "\x1b[23~",   VK_F11,      0 },
-    { "\x1b[24~",   VK_F12,      0 }
+    { "\x1b[24~",   VK_F12,      0 },
+    { "\x1bOP",     VK_F1,       0 },
+    { "\x1bOQ",     VK_F2,       0 },
+    { "\x1bOR",     VK_F3,       0 },
+    { "\x1bOS",     VK_F4,       0 },
 };
 
 static SHORT lastX = 0;
