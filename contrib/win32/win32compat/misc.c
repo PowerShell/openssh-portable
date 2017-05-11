@@ -256,7 +256,6 @@ w32_fopen_utf8(const char *path, const char *mode)
 	}
 
 	f = _wfopen(wpath, wmode);
-	int err = errno;
 	if (f) {
 		/* BOM adjustments for file streams*/
 		if (mode[0] == 'w' && fseek(f, 0, SEEK_SET) != EBADF) {
