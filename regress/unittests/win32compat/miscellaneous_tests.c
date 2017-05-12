@@ -32,7 +32,8 @@ test_path_conversion_utilities()
 {
 	TEST_START("path conversion utilities");
 
-	char *windows_style_path = "c:\\testdir\\test";
+	char *s = "c:\\testdir\\test";
+	char *windows_style_path = dup_str(s);
 	int len = strlen(windows_style_path);
 	char *backup = malloc(len + 1);
 	strncpy(backup, windows_style_path, len);
@@ -49,6 +50,8 @@ test_path_conversion_utilities()
 
 	retValue = strcmp(windows_style_path, backup);
 	ASSERT_INT_EQ(retValue, 0);
+
+	free(windows_style_path);
 
 	TEST_DONE();
 }
