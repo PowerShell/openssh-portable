@@ -3,7 +3,7 @@
 $tC = 1
 $tI = 0
         
-Describe "ssh client tests" -Tags "CI" {
+Describe "E2E scenarios for ssh client" -Tags "CI" {
     BeforeAll {        
         if($OpenSSHTestInfo -eq $null)
         {
@@ -97,11 +97,17 @@ Describe "ssh client tests" -Tags "CI" {
             iex "$sshDefaultCmd echo 1234" | Should Be "1234"
         }
 
-        It "$tC.$tI - exit code" {
-            ssh -p $port $ssouser@$server exit 0
-            $LASTEXITCODE | Should Be 0
-            ssh -p $port $ssouser@$server exit 21
-            $LASTEXITCODE | Should Be 21
+    }
+
+    Context "$tC - exit code (exit-status.sh)" {
+        BeforeAll {$tI=1}
+        AfterAll{$tC++}
+
+        It "$tC.$tI - various exit codes" {
+            foreach ($i in (0,1,4,5,44)) {
+                ssh -p $port $ssouser@$server exit $i
+                $LASTEXITCODE | Should Be $i
+            }            
         }
     }
 
