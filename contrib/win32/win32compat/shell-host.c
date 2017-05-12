@@ -89,6 +89,7 @@ struct key_translation {
 	char incoming[6];
 	int vk;
 	char outgoing;
+	int  len;          /* lenght of incoming string */
 } key_translation;
 
 struct key_translation keys[] = {
@@ -203,47 +204,133 @@ ConSRWidth()
 	return consoleBufferInfo.srWindow.Right;
 }
 
+void
+InitKeyTranslateMap(void)
+{
+	int i;
+	for (i=0; i < ARRAYSIZE(keys); i++) {
+		keys[i].len = strlen(keys[i].incoming);
+	}
+}
+
+struct key_translation *
+FindKeyTransByMask(char prefix, const char * value, int vlen, char suffix)
+{
+	int i;
+	for (i=0; i < ARRAYSIZE(keys); i++) {
+		struct key_translation * k = &keys[i];
+		if (k->len < vlen + 2) continue;
+		if (k->incoming[0] != '\033') continue;
+		if (k->incoming[1] != prefix) continue;
+		if (k->incoming[vlen+2] != suffix) continue;
+		if (vlen <= 1 && value[0] == k->incoming[2])
+			return k;
+		if (vlen > 1 && strncmp(&k->incoming[2], value, vlen) == 0)
+			return k;
+	}
+	return NULL;
+}
+
+int
+GetVirtualKeyByMask(char prefix, const char * value, int vlen, char suffix)
+{
+	struct key_translation * pk;
+	pk = FindKeyTransByMask(prefix, value, vlen, suffix);
+	return pk ? pk->vk : 0;
+}
+
 /*
  * This function will handle the console keystrokes.
  */
-void 
-SendKeyStroke(HANDLE hInput, int keyStroke, char character) 
+void
+SendKeyStrokeEx(HANDLE hInput, int vKey, char character, DWORD ctrlState, BOOL keyDown)
 {
 	DWORD wr = 0;
 	INPUT_RECORD ir;
 
 	ir.EventType = KEY_EVENT;
-	ir.Event.KeyEvent.bKeyDown = TRUE;
-	ir.Event.KeyEvent.wRepeatCount = 1;
-	ir.Event.KeyEvent.wVirtualKeyCode = keyStroke;
-	ir.Event.KeyEvent.wVirtualScanCode = 0;
-	ir.Event.KeyEvent.dwControlKeyState = 0;
+	ir.Event.KeyEvent.bKeyDown = keyDown;
+	ir.Event.KeyEvent.wRepeatCount = 0;
+	ir.Event.KeyEvent.wVirtualKeyCode = vKey;
+	ir.Event.KeyEvent.wVirtualScanCode = MapVirtualKeyA(vKey, MAPVK_VK_TO_VSC);
+	ir.Event.KeyEvent.dwControlKeyState = ctrlState;
 	ir.Event.KeyEvent.uChar.UnicodeChar = 0;
 	ir.Event.KeyEvent.uChar.AsciiChar = character;
 
 	WriteConsoleInputA(hInput, &ir, 1, &wr);
-
-	ir.Event.KeyEvent.bKeyDown = FALSE;
-	WriteConsoleInputA(hInput, &ir, 1, &wr);
 }
 
 void 
-ProcessIncomingKeys(char * ansikey)
+SendKeyStroke(HANDLE hInput, int keyStroke, char character)
 {
-	int keylen = strlen(ansikey);
+	SendKeyStrokeEx(hInput, keyStroke, character, 0, TRUE);
+	SendKeyStrokeEx(hInput, keyStroke, character, 0, FALSE);
+}
 
-	if (!keylen)
+void 
+ProcessIncomingKeys(char * ak)
+{
+	int aklen = strlen(ak);
+
+	if (!aklen)
 		return;
 
+	/* Decode base VT100 commands */
 	for (int nKey=0; nKey < ARRAYSIZE(keys); nKey++) {
-		if (strcmp(ansikey, keys[nKey].incoming) == 0) {
+		if (keys[nKey].len == aklen && strcmp(ak, keys[nKey].incoming) == 0) {
 			SendKeyStroke(child_in, keys[nKey].vk, keys[nKey].outgoing);
 			return;
 		}
 	}
 
-	for (int i=0; i < keylen; i++)
-		SendKeyStroke(child_in, 0, ansikey[i]);
+	/* Decode keys when pressed ALT key */
+	if (aklen == 2 && ak[0] == '\033') {
+		BYTE k = ak[1];
+		if (k > 0x20 && k < 0x7F) {
+			SendKeyStrokeEx(child_in, VK_MENU, 0, LEFT_ALT_PRESSED, TRUE);
+			SendKeyStrokeEx(child_in, 0, k, LEFT_ALT_PRESSED, TRUE);
+			SendKeyStrokeEx(child_in, VK_MENU, 0, 0, FALSE);
+			SendKeyStrokeEx(child_in, 0, k, 0, FALSE);
+			return;
+		}
+	}
+
+	/* Decode special keys when pressed CTRL key */
+	if (aklen >= 6 && aklen <= 7 && ak[0] == '\033' && ak[1] == '[' &&
+	    ak[aklen-3] == ';' && ak[aklen-2] == '5') {
+		int vkey = 0;
+		if (ak[aklen-1] == '~') {
+			/* VK_DELETE, VK_PGDN, VK_PGUP */
+			if (!vkey && aklen == 6) {
+				vkey = GetVirtualKeyByMask('[', &ak[2], 1, '~');
+			}
+			/* VK_F1 ... VK_F12 */
+			if (!vkey && aklen == 7) {
+				if (GetVirtualKeyByMask('[', &ak[2], 2, '~'))
+					return;    /* ignore F1 ... F12 */
+			}
+		} else {
+			/* VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN */
+			if (!vkey && aklen == 6 && ak[2] == '1') {
+				vkey = GetVirtualKeyByMask('[', &ak[5], 1, 0);
+			}
+			/* VK_F1 ... VK_F4 */
+			if (!vkey && aklen == 6 && ak[2] == '1' && isalpha(ak[5])) {
+				if (GetVirtualKeyByMask('O', &ak[5], 1, 0))
+					return;    /* ignore F1 ... F12 */
+			}
+		}
+		if (vkey) {
+			SendKeyStrokeEx(child_in, VK_CONTROL, 0, LEFT_CTRL_PRESSED, TRUE);
+			SendKeyStrokeEx(child_in, vkey, 0, LEFT_CTRL_PRESSED, TRUE);
+			SendKeyStrokeEx(child_in, VK_CONTROL, 0, 0, FALSE);
+			SendKeyStrokeEx(child_in, vkey, 0, 0, FALSE);
+			return;
+		}
+	}
+
+	for (int i=0; i < aklen; i++)
+		SendKeyStroke(child_in, 0, ak[i]);
 }
 
 /*
@@ -1261,6 +1348,8 @@ wmain(int ac, wchar_t **av)
 		free(cmd_b64_utf8);
 		free(cmd_utf8);
 	}
+
+	InitKeyTranslateMap();
 
 	if (pty_requested)
 		return start_with_pty(cmd);
