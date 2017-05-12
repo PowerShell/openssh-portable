@@ -66,7 +66,7 @@ test_sanitizedpath()
 	ASSERT_INT_EQ(retValue, 0);
 
 	char win32prgdir_len = strlen(win32prgdir);
-	char *tmp_path = malloc(win32prgdir_len + 2); /* for NULL and adding "/" */
+	char *tmp_path = malloc(win32prgdir_len + 2); /* 1-NULL and 1-adding "/" */
 	tmp_path[0] = '/';
 	strncpy(tmp_path+1, win32prgdir, win32prgdir_len);
 	tmp_path[win32prgdir_len+1] = '\0';
@@ -96,7 +96,6 @@ test_pw()
 
 	struct passwd *pw1 = NULL;
 	char *user = dup_str(pw->pw_name);
-
 	pw1 = getpwnam(user);
 	ASSERT_PTR_NE(pw1, NULL);
 

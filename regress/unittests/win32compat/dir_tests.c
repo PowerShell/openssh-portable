@@ -49,7 +49,6 @@ dir_tests_1()
 	retValue = stat(test_dirname_1, &st);
 	ASSERT_INT_EQ(retValue, 0);
 	ASSERT_INT_EQ(st.st_size, 0);
-	
 	strmode(st.st_mode, mode);
 	ASSERT_CHAR_EQ(mode[0], 'd');
 
@@ -58,7 +57,6 @@ dir_tests_1()
 	
 	p_ret = getcwd(cwd, MAX_PATH);
 	ASSERT_PTR_NE(p_ret, NULL);
-
 	p_ret = NULL;
 	p_ret = strstr(cwd, test_dirname_1);
 	ASSERT_PTR_NE(p_ret, NULL);

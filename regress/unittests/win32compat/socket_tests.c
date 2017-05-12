@@ -34,7 +34,7 @@ unset_nonblock(int fd)
 	val = fcntl(fd, F_GETFL, 0);
 	if (val < 0)
 		return (-1);
-			
+
 	if (!(val & O_NONBLOCK))
 		return (0);
 	
