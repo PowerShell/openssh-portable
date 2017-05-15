@@ -583,8 +583,8 @@ SizeWindow(HANDLE hInput)
 	srWindowRect.Bottom = (SHORT)(min(inputSi.dwYCountChars, coordScreen.Y) - 1);
 	srWindowRect.Left = srWindowRect.Top = (SHORT)0;
 
-	/* Define the new console buffer size to be the maximum possible */
-	coordScreen.X = 100;
+	/* Define the new console buffer history to be the maximum possible */
+	coordScreen.X = srWindowRect.Right + 1;   /* buffer width must be equ window width */
 	coordScreen.Y = 9999;
 
 	if (SetConsoleWindowInfo(hInput, TRUE, &srWindowRect))
