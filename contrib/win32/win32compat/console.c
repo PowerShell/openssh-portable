@@ -1583,10 +1583,12 @@ get_console_handle(FILE *stream, DWORD * mode)
 	if (file_num == -1) {
 		return INVALID_HANDLE_VALUE;
 	}
+
 	lHandle = _get_osfhandle(file_num);
 	if (lHandle == -1 && errno == EBADF) {
 		return INVALID_HANDLE_VALUE;
 	}
+
 	type = GetFileType((HANDLE)lHandle);
 	if (type == FILE_TYPE_CHAR && file_num >= 0 && file_num <= 2) {
 		if (file_num == 0)
