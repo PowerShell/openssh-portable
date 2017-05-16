@@ -39,6 +39,19 @@
 #include "misc_internal.h"
 #include "inc\utf.h"
 
+/* Terminal Types */
+#define TERM_TYPE_ANSI    "ansi"
+#define TERM_TYPE_VT100   "vt100"
+#define TERM_TYPE_XTERM   "xterm"
+
+#define TT_ANSI     0x0001        /* Codes in all ANSI like terminals. */
+#define TT_VT100    0x0002        /* VT100 */
+#define TT_XTERM    0x0004        /* Xterm */
+
+#define TTM_VT100X   (TT_VT100 | TT_XTERM)
+
+#define IS_TT_VTX(_tt_)   (((_tt_) & TTM_VT100X) != 0)
+
 #define MAX_CONSOLE_COLUMNS 9999
 #define MAX_CONSOLE_ROWS 9999
 #define MAX_CMD_LEN 8191 // msdn
@@ -159,10 +172,12 @@ DWORD hostProcessId = 0;
 DWORD hostThreadId = 0;
 DWORD childProcessId = 0;
 DWORD dwStatus = 0;
+DWORD currentCol = 0;
 DWORD currentLine = 0;
 DWORD lastLineLength = 0;
 
 UINT cp = 0;
+DWORD termType = 0;
 
 UINT ViewPortY = 0;
 UINT lastViewPortY = 0;
@@ -355,12 +370,21 @@ SendClearScreen(HANDLE hInput)
 }
 
 void 
-SendClearScreenFromCursor(HANDLE hInput)
+SendClearScreenFromCursorUp(HANDLE hInput)
 {
 	DWORD wr = 0;
 
 	if (bUseAnsiEmulation)
 		WriteFile(hInput, "\033[1J", 4, &wr, NULL);
+}
+
+void 
+SendClearScreenFromCursorDown(HANDLE hInput)
+{
+	DWORD wr = 0;
+
+	if (bUseAnsiEmulation)
+		WriteFile(hInput, "\033[J", 3, &wr, NULL);
 }
 
 void 
@@ -532,15 +556,34 @@ SendBuffer(HANDLE hInput, CHAR_INFO *buffer, DWORD bufferSize)
 }
 
 void 
-CalculateAndSetCursor(HANDLE hInput, UINT x, UINT y, BOOL scroll)
+SendScrollViaLF(HANDLE hInput, UINT y)
 {
 	DWORD n;
-	if (scroll && y > currentLine)
+	if (y > currentLine)
 		for (n = currentLine; n < y; n++)
 			SendLF(hInput);
+}
 
-	SendSetCursor(hInput, x + 1, y + 1);
+void 
+CalculateAndSetCursor(HANDLE hInput, UINT x, UINT y)
+{
+	if (IS_TT_VTX(termType)) {
+		SendScrollViaLF(hInput, y);
+		SendSetCursor(hInput, x + 1, y - ViewPortY + 1);
+		if (y < currentLine)
+			SendClearScreenFromCursorDown(hInput);
+	} else {
+		SendSetCursor(hInput, x + 1, y + 1);
+	}
 	currentLine = y;
+	currentCol = x;
+}
+
+void 
+SendBufferAtPos(HANDLE hInput, UINT x, UINT y, CHAR_INFO *buffer, DWORD bufferSize)
+{
+	CalculateAndSetCursor(hInput, x, y);
+	SendBuffer(hInput, buffer, bufferSize);
 }
 
 void 
@@ -666,8 +709,8 @@ ProcessEvent(void *p)
 		lastX = co.X;
 		lastY = co.Y;
 
-		if (lastX == 0 && lastY > currentLine) {
-			CalculateAndSetCursor(pipe_out, lastX, lastY, TRUE);
+		if (IS_TT_VTX(termType)) {
+			CalculateAndSetCursor(pipe_out, lastX, lastY);
 		} else {
 			SendSetCursor(pipe_out, lastX + 1, lastY + 1);
 		}
@@ -731,11 +774,11 @@ ProcessEvent(void *p)
 			return GetLastError();
 		}
 
-		/* Set cursor location based on the reported location from the message */
-		CalculateAndSetCursor(pipe_out, readRect.Left, readRect.Top, TRUE);
+		if (!IS_TT_VTX(termType))
+			SendScrollViaLF(pipe_out, readRect.Top);
 
 		/* Send the entire block */
-		SendBuffer(pipe_out, pBuffer, bufferSize);
+		SendBufferAtPos(pipe_out, readRect.Left, readRect.Top, pBuffer, bufferSize);
 		lastViewPortY = ViewPortY;
 		lastLineLength = readRect.Left;
 		break;
@@ -752,12 +795,18 @@ ProcessEvent(void *p)
 		readRect.Left = wX;
 		readRect.Right = wX;
 		
-		/* Set cursor location based on the reported location from the message */
-		CalculateAndSetCursor(pipe_out, wX, wY, TRUE);
-		
 		coordBufSize.Y = 1;
 		coordBufSize.X = 1;
+
+		if (!IS_TT_VTX(termType) || wX < currentCol || wY < currentLine) {
+			/* send full line */
+			readRect.Right = ConSRWidth();
+			coordBufSize.Y += readRect.Bottom - readRect.Top;
+			coordBufSize.X += readRect.Right - readRect.Left;
+		}
 		bufferSize = coordBufSize.X * coordBufSize.Y;
+		if (bufferSize > MAX_EXPECTED_BUFFER_SIZE)
+			return ERROR_INVALID_PARAMETER;
 
 		/* The top left destination cell of the temporary buffer is row 0, col 0 */
 		coordBufCoord.X = 0;
@@ -768,22 +817,14 @@ ProcessEvent(void *p)
 			return GetLastError();
 		}
 
-		SendBuffer(pipe_out, pBuffer, bufferSize);
+		SendBufferAtPos(pipe_out, wX, wY, pBuffer, bufferSize);
 		break;
 	}
 	case EVENT_CONSOLE_UPDATE_SCROLL:
 	{
-		DWORD out = 0;
-		LONG vd = idChild;
-		LONG hd = idObject;
-		LONG vn = abs(vd);
-
-		if (vd > 0) {
-			if (ViewPortY > 0)
-				ViewPortY -= vn;
-		} else {
-			ViewPortY += vn;
-		}
+		ViewPortY -= idChild;
+		if (ViewPortY > INT_MAX)
+			ViewPortY = 0;
 		break;
 	}
 	case EVENT_CONSOLE_LAYOUT:
@@ -863,9 +904,13 @@ ProcessEventQueue(LPVOID p)
 			GetConsoleScreenBufferInfoEx(child_out, &consoleInfo);
 
 			/* Set the cursor to the last known good location according to the live buffer */
-			if (lastX != consoleInfo.dwCursorPosition.X ||
-			    lastY != consoleInfo.dwCursorPosition.Y)
-				SendSetCursor(pipe_out, consoleInfo.dwCursorPosition.X + 1, consoleInfo.dwCursorPosition.Y + 1);
+			if (lastX != consoleInfo.dwCursorPosition.X || lastY != consoleInfo.dwCursorPosition.Y) {
+				if (IS_TT_VTX(termType)) {
+					CalculateAndSetCursor(pipe_out, consoleInfo.dwCursorPosition.X, consoleInfo.dwCursorPosition.Y);
+				} else {
+					SendSetCursor(pipe_out, consoleInfo.dwCursorPosition.X + 1, consoleInfo.dwCursorPosition.Y + 1);
+				}
+			}
 
 			lastX = consoleInfo.dwCursorPosition.X;
 			lastY = consoleInfo.dwCursorPosition.Y;
@@ -980,6 +1025,20 @@ ConsoleEventProc(HWINEVENTHOOK hWinEventHook,
 }
 
 DWORD 
+GetCurrentTerminalType(void)
+{
+	char env[256] = {0};
+	GetEnvironmentVariableA("TERM", env, ARRAYSIZE(env) - 1);
+	if (strcmp(env, TERM_TYPE_ANSI) == 0)
+		return TT_ANSI;
+	if (strcmp(env, TERM_TYPE_VT100) == 0)
+		return TT_VT100;
+	if (strcmp(env, TERM_TYPE_XTERM) == 0)
+		return TT_XTERM;
+	return 0;
+}
+
+DWORD 
 ProcessMessages(void* p)
 {
 	BOOL ret;
@@ -1010,6 +1069,10 @@ ProcessMessages(void* p)
 	if (child_out == (HANDLE)-1)
 		goto cleanup;
 	child_err = child_out;
+
+	/* Get terminal type of client side */
+	termType = GetCurrentTerminalType();
+
 	SizeWindow(child_out);
 	/* Get the current buffer information after all the adjustments */
 	GetConsoleScreenBufferInfoEx(child_out, &consoleInfo);
