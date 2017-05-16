@@ -581,6 +581,7 @@ is_root_or_empty(wchar_t * path)
 		path_start = path + 2;
 	else
 		path_start = path;
+	/*path like  c:\, /, \ are root directory*/
 	if ((*path_start == L'\0') || ((*path_start == L'\\' || *path_start == L'/' ) && path_start[1] == L'\0'))
 		return TRUE;
 	return FALSE;
