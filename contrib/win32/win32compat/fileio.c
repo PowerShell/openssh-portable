@@ -29,6 +29,7 @@
 */
 
 #include <fcntl.h>
+#include <Sddl.h>
 #include "inc/sys/stat.h"
 #include "inc/sys/types.h"
 #include <io.h>
@@ -38,6 +39,7 @@
 #include "w32fd.h"
 #include "inc\utf.h"
 #include "inc\fcntl.h"
+#include "inc\pwd.h"
 #include "misc_internal.h"
 #include "debug.h"
 
@@ -241,13 +243,50 @@ error:
 	return -1;
 }
 
+static int
+st_mode_to_file_att(int mode, wchar_t * attributes)
+{
+	DWORD att = 0;
+	switch (mode) {
+	case S_IRWXO:
+		swprintf(attributes, sizeof(attributes) - 1, L"FA");
+		break;
+	case S_IXOTH:
+		swprintf(attributes, sizeof(attributes) - 1, L"FX");
+		break;
+	case S_IWOTH:
+		swprintf(attributes, sizeof(attributes) - 1, L"FW");
+		*attributes = FILE_GENERIC_WRITE;
+		break;
+	case S_IROTH:
+		swprintf(attributes, sizeof(attributes) - 1, L"FR");
+		break;
+	default:
+		if((mode | S_IROTH) != 0)
+			att |= FILE_GENERIC_READ;
+		if ((mode | S_IWOTH) != 0)
+			att |= FILE_GENERIC_WRITE;
+		if ((mode | S_IXOTH) != 0)
+			att |= FILE_GENERIC_EXECUTE;
+		swprintf(attributes, sizeof(attributes) - 1, L"0x%x", att);
+		return -1;
+	}
+	return 0;
+}
+
 /* maps open() file modes and flags to ones needed by CreateFile */
 static int
 createFile_flags_setup(int flags, int mode, struct createFile_flags* cf_flags)
 {
 	/* check flags */
 	int rwflags = flags & 0x3;
-	int c_s_flags = flags & 0xfffffff0;
+	int c_s_flags = flags & 0xfffffff0, ret = -1, temp_mode;
+	PSECURITY_DESCRIPTOR pSD = NULL;
+	wchar_t sddl[256], owner_ace[100], everyone_ace[100], owner_sid_str[SECURITY_MAX_SID_SIZE];
+	wchar_t owner_access[10], everyone_access[10], *sid_utf16;
+	PACL dacl = NULL;
+	struct passwd * pwd;
+	PSID owner_sid = NULL;
 
 	/*
 	* should be one of one of the following access modes:
@@ -267,7 +306,7 @@ createFile_flags_setup(int flags, int mode, struct createFile_flags* cf_flags)
 	}
 
 	/*validate mode*/
-	if (mode &~(S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) {
+	if (mode &~(S_IRWXU | S_IRWXG | S_IRWXO)) {
 		debug3("open - ERROR: unsupported mode: %d", mode);
 		errno = ENOTSUP;
 		return -1;
@@ -286,12 +325,7 @@ createFile_flags_setup(int flags, int mode, struct createFile_flags* cf_flags)
 	case O_RDWR:
 		cf_flags->dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
 		break;
-	}
-
-	cf_flags->securityAttributes.lpSecurityDescriptor = NULL;
-	cf_flags->securityAttributes.bInheritHandle = TRUE;
-	cf_flags->securityAttributes.nLength = 0;
-
+	}	
 	cf_flags->dwCreationDisposition = OPEN_EXISTING;
 	if (c_s_flags & O_TRUNC)
 		cf_flags->dwCreationDisposition = TRUNCATE_EXISTING;
@@ -307,9 +341,53 @@ createFile_flags_setup(int flags, int mode, struct createFile_flags* cf_flags)
 
 	cf_flags->dwFlagsAndAttributes = FILE_FLAG_OVERLAPPED | SECURITY_IMPERSONATION | FILE_FLAG_BACKUP_SEMANTICS;
 
-	/*TODO - map mode */
+	/*map mode*/
+	if ((pwd = getpwuid(0)) == NULL)
+		fatal("getpwuid failed.");
 
-	return 0;
+	if ((sid_utf16 = utf8_to_utf16(pwd->pw_sid)) == NULL) {
+		debug3("Failed to get utf16 of the sid string");
+		errno = ENOMEM;
+		ret = -1;
+		goto cleanup;
+	}
+
+	if ((mode & S_IRWXU) != 0) {
+		if (st_mode_to_file_att((mode | S_IRWXU) >> 6, owner_access) != 0) {
+			debug3("st_mode_to_file_att()");
+			return -1;
+		}
+		swprintf(owner_ace, sizeof(owner_ace) - 1, L"(A;;%s;;;%s)", owner_access, sid_utf16);
+	}
+
+	if (mode & S_IRWXO) {
+		if (st_mode_to_file_att(mode | S_IRWXO, everyone_access) != 0) {
+			debug3("st_mode_to_file_att()");
+			return -1;
+		}
+		swprintf(everyone_ace, sizeof(everyone_ace) - 1, L"(A;;%s;;;WD)", everyone_access);
+	}
+
+	swprintf(sddl, sizeof(sddl) - 1, L"D:PAI(A;;FA;;;BA)(A;;FA;;;SY)%s%s", owner_ace, everyone_ace);
+	if (ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, &pSD, NULL) == FALSE) {
+		debug3("ConvertStringSecurityDescriptorToSecurityDescriptorW failed with error code %d", GetLastError());
+		goto cleanup;
+	}
+
+	if (IsValidSecurityDescriptor(pSD) == FALSE) {
+		debug3("IsValidSecurityDescriptor return FALSE");
+		goto cleanup;
+	}
+
+	cf_flags->securityAttributes.lpSecurityDescriptor = pSD;
+	cf_flags->securityAttributes.bInheritHandle = TRUE;
+	cf_flags->securityAttributes.nLength = sizeof(cf_flags->securityAttributes);
+
+	ret = 0;
+cleanup:
+	if (sid_utf16)
+		free(sid_utf16);
+	return ret;
 }
 
 

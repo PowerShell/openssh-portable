@@ -1507,14 +1507,6 @@ do_change_comment(struct passwd *pw)
 
 	strlcat(identity_file, ".pub", sizeof(identity_file));
 	fd = open(identity_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-#ifdef WINDOWS
-	/*
-	Set the owner of the private key file to user represented by pw and only grant
-	it the full control access
-	*/
-	if (set_secure_file_permission(identity_file, pw) != 0)
-		fatal("set_secure_file_permission on %s failed!", identity_file);
-#endif /* WINDOWS*/	
 	if (fd == -1)
 		fatal("Could not save your public key in %s", identity_file);
 	f = fdopen(fd, "w");
@@ -1697,16 +1689,7 @@ do_ca_sign(struct passwd *pw, int argc, char **argv)
 
 		if ((fd = open(out, O_WRONLY|O_CREAT|O_TRUNC, 0644)) == -1)
 			fatal("Could not open \"%s\" for writing: %s", out,
-			    strerror(errno));
-#ifdef WINDOWS
-		/*
-		Set the owner of the private key file to user represented by pw and only grant
-		it the full control access
-		*/
-		if (set_secure_file_permission(out, pw) != 0)
-			fatal("set_secure_file_permission on %s failed!", identity_file);
-#endif /* WINDOWS */
-		
+			    strerror(errno));		
 		if ((f = fdopen(fd, "w")) == NULL)
 			fatal("%s: fdopen: %s", __func__, strerror(errno));
 		if ((r = sshkey_write(public, f)) != 0)
@@ -2216,14 +2199,6 @@ do_gen_krl(struct passwd *pw, int updating, int argc, char **argv)
 		fatal("Couldn't generate KRL");
 	if ((fd = open(identity_file, O_WRONLY|O_CREAT|O_TRUNC, 0644)) == -1)
 		fatal("open %s: %s", identity_file, strerror(errno));
-#ifdef WINDOWS
-	/*
-	Set the owner of the private key file to user represented by pw and only grant
-	it the full control access
-	*/
-	if (set_secure_file_permission(identity_file, pw) != 0)
-		fatal("set_secure_file_permission on %s failed!", identity_file);
-#endif /* WINDOWS */
 	if (atomicio(vwrite, fd, (void *)sshbuf_ptr(kbuf), sshbuf_len(kbuf)) !=
 	    sshbuf_len(kbuf))
 		fatal("write %s: %s", identity_file, strerror(errno));
