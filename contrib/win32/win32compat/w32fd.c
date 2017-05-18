@@ -392,15 +392,16 @@ w32_open(const char *pathname, int flags, ... /* arg */)
 	int min_index = fd_table_get_min_index();
 	struct w32_io* pio;
 	va_list valist;
-	mode_t mode;
+	mode_t mode = 0;
 
 	errno = 0;
 	if (min_index == -1)
 		return -1;
-	
-	va_start(valist, flags);
-	mode = va_arg(valist, mode_t);
-	va_end(valist);
+	if (flags & O_CREAT) {
+		va_start(valist, flags);
+		mode = va_arg(valist, mode_t);
+		va_end(valist);
+	}
 
 	pio = fileio_open(sanitized_path(pathname), flags, mode);
 	
