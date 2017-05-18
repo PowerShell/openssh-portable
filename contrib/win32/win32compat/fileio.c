@@ -244,31 +244,30 @@ error:
 }
 
 static int
-st_mode_to_file_att(int mode, wchar_t * attributes)
+st_mode_to_file_att(int mode, wchar_t * attributes, int buf_size)
 {
 	DWORD att = 0;
 	switch (mode) {
 	case S_IRWXO:
-		swprintf(attributes, sizeof(attributes) - 1, L"FA");
+		swprintf(attributes, buf_size - 1, L"FA");
 		break;
 	case S_IXOTH:
-		swprintf(attributes, sizeof(attributes) - 1, L"FX");
+		swprintf(attributes, buf_size - 1, L"FX");
 		break;
 	case S_IWOTH:
-		swprintf(attributes, sizeof(attributes) - 1, L"FW");
-		*attributes = FILE_GENERIC_WRITE;
+		swprintf(attributes, buf_size - 1, L"FW");
 		break;
 	case S_IROTH:
-		swprintf(attributes, sizeof(attributes) - 1, L"FR");
+		swprintf(attributes, buf_size - 1, L"FR");
 		break;
 	default:
-		if((mode | S_IROTH) != 0)
+		if((mode & S_IROTH) != 0)
 			att |= FILE_GENERIC_READ;
-		if ((mode | S_IWOTH) != 0)
+		if ((mode & S_IWOTH) != 0)
 			att |= FILE_GENERIC_WRITE;
-		if ((mode | S_IXOTH) != 0)
+		if ((mode & S_IXOTH) != 0)
 			att |= FILE_GENERIC_EXECUTE;
-		swprintf(attributes, sizeof(attributes) - 1, L"%llx*", att);
+		swprintf(attributes, buf_size - 1, L"%#llx", att);
 		break;		
 	}
 	return 0;
@@ -279,11 +278,9 @@ static int
 createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags)
 {
 	/* check flags */
-	int rwflags = flags & 0x3;	
-	int c_s_flags = flags & 0xfffffff0, ret = -1;
-	mode_t temp_mode;
+	int rwflags = flags & 0x3, c_s_flags = flags & 0xfffffff0, ret = -1;
 	PSECURITY_DESCRIPTOR pSD = NULL;
-	wchar_t sddl[256], owner_ace[100], everyone_ace[100], owner_access[10], everyone_access[10], *sid_utf16;
+	wchar_t sddl[256], owner_ace[100] = {0}, everyone_ace[100] = {0}, owner_access[17] = {0}, everyone_access[17] = {0}, *sid_utf16;
 	PACL dacl = NULL;
 	struct passwd * pwd;
 	PSID owner_sid = NULL;
@@ -306,7 +303,7 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 	}
 
 	/*validate mode*/
-	if (mode &~(S_IRWXU | S_IRWXG | S_IRWXO)) {
+	if (mode & ~(S_IRWXU | S_IRWXG | S_IRWXO)) {
 		debug3("open - ERROR: unsupported mode: %d", mode);
 		errno = ENOTSUP;
 		return -1;
@@ -348,29 +345,28 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 	if ((sid_utf16 = utf8_to_utf16(pwd->pw_sid)) == NULL) {
 		debug3("Failed to get utf16 of the sid string");
 		errno = ENOMEM;
-		ret = -1;
 		goto cleanup;
 	}
-	owner_access[0] = L'\0';
 	if ((mode & S_IRWXU) != 0) {
-		if (st_mode_to_file_att((mode & S_IRWXU) >> 6, owner_access) != 0) {
+		if (st_mode_to_file_att((mode & S_IRWXU) >> 6, owner_access, sizeof(owner_access)/sizeof(wchar_t)) != 0) {
+		errno = ENOMEM;
 			debug3("st_mode_to_file_att()");
-			return -1;
+			goto cleanup;
 		}
-		swprintf(owner_ace, sizeof(owner_ace) - 1, L"(A;;%s;;;%s)", owner_access, sid_utf16);
+		swprintf(owner_ace, sizeof(owner_ace)/sizeof(wchar_t) - 1, L"(A;;%s;;;%s)", owner_access, sid_utf16);
 	}
 
-	everyone_ace[0] = L'\0';
 	if (mode & S_IRWXO) {
-		if (st_mode_to_file_att(mode & S_IRWXO, everyone_access) != 0) {
+		if (st_mode_to_file_att(mode & S_IRWXO, everyone_access, sizeof(everyone_access)/sizeof(wchar_t)) != 0) {
+			errno = ENOMEM;
 			debug3("st_mode_to_file_att()");
-			return -1;
+			goto cleanup;
 		}
-		swprintf(everyone_ace, sizeof(everyone_ace) - 1, L"(A;;%s;;;WD)", everyone_access);
+		swprintf(everyone_ace, sizeof(everyone_ace)/sizeof(wchar_t) - 1, L"(A;;%s;;;WD)", everyone_access);
 	}
 
-	int j = swprintf(sddl, sizeof(sddl) - 1, L"O:%sD:PAI(A;;FA;;;BA)(A;;FA;;;SY)%s%s", sid_utf16, owner_ace, everyone_ace);
-	if (ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, &pSD, NULL) == FALSE) {
+	swprintf(sddl, sizeof(sddl)/sizeof(wchar_t) - 1, L"O:%sD:PAI(A;;FA;;;BA)(A;;FA;;;SY)%s%s", sid_utf16, owner_ace, everyone_ace);
+	if (ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION, &pSD, NULL) == FALSE) {
 		debug3("ConvertStringSecurityDescriptorToSecurityDescriptorW failed with error code %d", GetLastError());
 		goto cleanup;
 	}
@@ -420,27 +416,28 @@ fileio_open(const char *path_utf8, int flags, mode_t mode)
 		return NULL;
 	}
 
-	if (createFile_flags_setup(flags, mode, &cf_flags) == -1)
-		return NULL;
+	if (createFile_flags_setup(flags, mode, &cf_flags) == -1) {
+		debug3("createFile_flags_setup() failed.");
+		goto cleanup;
+	}	
 
 	handle = CreateFileW(path_utf16, cf_flags.dwDesiredAccess, cf_flags.dwShareMode,
 		&cf_flags.securityAttributes, cf_flags.dwCreationDisposition,
-		cf_flags.dwFlagsAndAttributes, NULL);
+		cf_flags.dwFlagsAndAttributes, NULL);	
 
 	if (handle == INVALID_HANDLE_VALUE) {
 		errno = errno_from_Win32LastError();
 		debug3("failed to open file:%s error:%d", path_utf8, GetLastError());
-		free(path_utf16);
-		return NULL;
+		goto cleanup;
 	}
 
-	free(path_utf16);
+	
 	pio = (struct w32_io*)malloc(sizeof(struct w32_io));
 	if (pio == NULL) {
 		CloseHandle(handle);
 		errno = ENOMEM;
 		debug3("fileio_open(), failed to allocate memory error:%d", errno);
-		return NULL;
+		goto cleanup;
 	}
 
 	memset(pio, 0, sizeof(struct w32_io));
@@ -449,6 +446,11 @@ fileio_open(const char *path_utf8, int flags, mode_t mode)
 		pio->fd_status_flags = O_NONBLOCK;
 
 	pio->handle = handle;
+cleanup:
+	if ((&cf_flags.securityAttributes != NULL) && (&cf_flags.securityAttributes.lpSecurityDescriptor != NULL))
+		LocalFree(cf_flags.securityAttributes.lpSecurityDescriptor);
+	if(path_utf16)
+		free(path_utf16);
 	return pio;
 }
 
