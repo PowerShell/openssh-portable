@@ -280,7 +280,8 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 	/* check flags */
 	int rwflags = flags & 0x3, c_s_flags = flags & 0xfffffff0, ret = -1;
 	PSECURITY_DESCRIPTOR pSD = NULL;
-	wchar_t sddl[256], owner_ace[100] = {0}, everyone_ace[100] = {0}, owner_access[17] = {0}, everyone_access[17] = {0}, *sid_utf16;
+	wchar_t sddl[256] = { 0 }, owner_ace[100] = {0}, everyone_ace[100] = {0};
+	wchar_t owner_access[17] = {0}, everyone_access[17] = {0}, *sid_utf16;
 	PACL dacl = NULL;
 	struct passwd * pwd;
 	PSID owner_sid = NULL;
@@ -348,8 +349,7 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 		goto cleanup;
 	}
 	if ((mode & S_IRWXU) != 0) {
-		if (st_mode_to_file_att((mode & S_IRWXU) >> 6, owner_access, sizeof(owner_access)/sizeof(wchar_t)) != 0) {
-		errno = ENOMEM;
+		if (st_mode_to_file_att((mode & S_IRWXU) >> 6, owner_access, sizeof(owner_access)/sizeof(wchar_t)) != 0) {		
 			debug3("st_mode_to_file_att()");
 			goto cleanup;
 		}
@@ -357,8 +357,7 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 	}
 
 	if (mode & S_IRWXO) {
-		if (st_mode_to_file_att(mode & S_IRWXO, everyone_access, sizeof(everyone_access)/sizeof(wchar_t)) != 0) {
-			errno = ENOMEM;
+		if (st_mode_to_file_att(mode & S_IRWXO, everyone_access, sizeof(everyone_access)/sizeof(wchar_t)) != 0) {			
 			debug3("st_mode_to_file_att()");
 			goto cleanup;
 		}
