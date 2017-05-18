@@ -29,7 +29,6 @@
 */
 
 #include <fcntl.h>
-#include <Sddl.h>
 #include "inc/sys/stat.h"
 #include "inc/sys/types.h"
 #include <io.h>
@@ -42,6 +41,7 @@
 #include "inc\pwd.h"
 #include "misc_internal.h"
 #include "debug.h"
+#include <Sddl.h>
 
 /* internal read buffer size */
 #define READ_BUFFER_SIZE 100*1024
@@ -268,22 +268,22 @@ st_mode_to_file_att(int mode, wchar_t * attributes)
 			att |= FILE_GENERIC_WRITE;
 		if ((mode | S_IXOTH) != 0)
 			att |= FILE_GENERIC_EXECUTE;
-		swprintf(attributes, sizeof(attributes) - 1, L"0x%x", att);
-		return -1;
+		swprintf(attributes, sizeof(attributes) - 1, L"%llx*", att);
+		break;		
 	}
 	return 0;
 }
 
 /* maps open() file modes and flags to ones needed by CreateFile */
 static int
-createFile_flags_setup(int flags, int mode, struct createFile_flags* cf_flags)
+createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags)
 {
 	/* check flags */
-	int rwflags = flags & 0x3;
-	int c_s_flags = flags & 0xfffffff0, ret = -1, temp_mode;
+	int rwflags = flags & 0x3;	
+	int c_s_flags = flags & 0xfffffff0, ret = -1;
+	mode_t temp_mode;
 	PSECURITY_DESCRIPTOR pSD = NULL;
-	wchar_t sddl[256], owner_ace[100], everyone_ace[100], owner_sid_str[SECURITY_MAX_SID_SIZE];
-	wchar_t owner_access[10], everyone_access[10], *sid_utf16;
+	wchar_t sddl[256], owner_ace[100], everyone_ace[100], owner_access[10], everyone_access[10], *sid_utf16;
 	PACL dacl = NULL;
 	struct passwd * pwd;
 	PSID owner_sid = NULL;
@@ -351,24 +351,25 @@ createFile_flags_setup(int flags, int mode, struct createFile_flags* cf_flags)
 		ret = -1;
 		goto cleanup;
 	}
-
+	owner_access[0] = L'\0';
 	if ((mode & S_IRWXU) != 0) {
-		if (st_mode_to_file_att((mode | S_IRWXU) >> 6, owner_access) != 0) {
+		if (st_mode_to_file_att((mode & S_IRWXU) >> 6, owner_access) != 0) {
 			debug3("st_mode_to_file_att()");
 			return -1;
 		}
 		swprintf(owner_ace, sizeof(owner_ace) - 1, L"(A;;%s;;;%s)", owner_access, sid_utf16);
 	}
 
+	everyone_ace[0] = L'\0';
 	if (mode & S_IRWXO) {
-		if (st_mode_to_file_att(mode | S_IRWXO, everyone_access) != 0) {
+		if (st_mode_to_file_att(mode & S_IRWXO, everyone_access) != 0) {
 			debug3("st_mode_to_file_att()");
 			return -1;
 		}
 		swprintf(everyone_ace, sizeof(everyone_ace) - 1, L"(A;;%s;;;WD)", everyone_access);
 	}
 
-	swprintf(sddl, sizeof(sddl) - 1, L"D:PAI(A;;FA;;;BA)(A;;FA;;;SY)%s%s", owner_ace, everyone_ace);
+	int j = swprintf(sddl, sizeof(sddl) - 1, L"O:%sD:PAI(A;;FA;;;BA)(A;;FA;;;SY)%s%s", sid_utf16, owner_ace, everyone_ace);
 	if (ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, &pSD, NULL) == FALSE) {
 		debug3("ConvertStringSecurityDescriptorToSecurityDescriptorW failed with error code %d", GetLastError());
 		goto cleanup;
@@ -394,7 +395,7 @@ cleanup:
 #define NULL_DEVICE "/dev/null"
 /* open() implementation. Uses CreateFile to open file, console, device, etc */
 struct w32_io*
-fileio_open(const char *path_utf8, int flags, int mode)
+fileio_open(const char *path_utf8, int flags, mode_t mode)
 {
 	struct w32_io* pio = NULL;
 	struct createFile_flags cf_flags;

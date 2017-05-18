@@ -1043,21 +1043,6 @@ do_gen_all_hostkeys(struct passwd *pw)
 		}
 		sshkey_free(private);
 		strlcat(identity_file, ".pub", sizeof(identity_file));
-#ifdef WINDOWS
-		/* Windows POSIX adpater does not support fdopen() on open(file)*/
-		if ((f = fopen(identity_file, "w")) == NULL) {
-			error("fopen %s failed: %s", identity_file, strerror(errno));
-			sshkey_free(public);
-			first = 0;
-			continue;
-		}
-		/*
-		Set the owner of the private key file to the user represented by pw 
-		and only grant it the full control access
-		*/
-		if (set_secure_file_permission(identity_file, pw) !=0) {
-			error("set_secure_file_permission on %s failed!", identity_file);
-#else  /* !WINDOWS */
 		fd = open(identity_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 		if (fd == -1) {
 			error("Could not save your public key in %s",
@@ -1066,6 +1051,12 @@ do_gen_all_hostkeys(struct passwd *pw)
 			first = 0;
 			continue;
 		}
+#ifdef WINDOWS
+		/* Windows POSIX adpater does not support fdopen() on open(file)*/
+		close(fd);
+		if ((f = fopen(identity_file, "w")) == NULL) {
+			error("fopen %s failed: %s", identity_file, strerror(errno));			
+#else  /* !WINDOWS */
 		f = fdopen(fd, "w");
 		if (f == NULL) {
 			error("fdopen %s failed", identity_file);
@@ -2764,20 +2755,15 @@ passphrase_again:
 		printf("Your identification has been saved in %s.\n", identity_file);
 
 	strlcat(identity_file, ".pub", sizeof(identity_file));
-#ifdef WINDOWS
-	/* Windows POSIX adpater does not support fdopen() on open(file)*/
-	if ((f = fopen(identity_file, "w")) == NULL)
-		fatal("fopen %s failed: %s", identity_file, strerror(errno));
-	/*
-	Set the owner of the private key file to the user represented by pw and only grant
-	it the full control access
-	*/
-	if (set_secure_file_permission(identity_file, pw) != 0)
-		error("set_secure_file_permission on %s failed!", identity_file);
-#else  /* !WINDOWS */
 	if ((fd = open(identity_file, O_WRONLY|O_CREAT|O_TRUNC, 0644)) == -1)
 		fatal("Unable to save public key to %s: %s",
 		    identity_file, strerror(errno));
+#ifdef WINDOWS
+	/* Windows POSIX adpater does not support fdopen() on open(file)*/
+	close(fd);
+	if ((f = fopen(identity_file, "w")) == NULL)
+		fatal("fopen %s failed: %s", identity_file, strerror(errno));
+#else  /* !WINDOWS */
 	if ((f = fdopen(fd, "w")) == NULL)
 		fatal("fdopen %s failed: %s", identity_file, strerror(errno));
 #endif  /* !WINDOWS */
