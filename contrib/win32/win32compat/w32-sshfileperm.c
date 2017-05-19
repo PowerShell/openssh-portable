@@ -54,8 +54,7 @@
 */
 int
 check_secure_file_permission(const char *name, struct passwd * pw)
-{
-	return 0;
+{	
 	PSECURITY_DESCRIPTOR pSD = NULL;
 	wchar_t * name_utf16 = NULL;
 	PSID owner_sid = NULL, user_sid = NULL;

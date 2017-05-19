@@ -503,7 +503,7 @@ function Install-OpenSSH
     & "$OpenSSHDir\ssh-keygen.exe" -A
 
     $keyFiles = Get-ChildItem "$OpenSSHDir\ssh_host_*_key*" | % {        
-        Add-PermissionToFileACL -FilePath $_.FullName -User "NT Service\sshd" -Perm "Read"
+        Adjust-HostKeyFileACL -FilePath $_.FullName
     }
 
 

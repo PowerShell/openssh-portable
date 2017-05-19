@@ -34,12 +34,14 @@ function Get-Platform {
 function Set-SecureFileACL 
 {            
     param(
+        [parameter(Mandatory=$true)]
         [string]$FilePath,
-        [System.Security.Principal.NTAccount]$Owner = $null
+        [System.Security.Principal.NTAccount]$Owner = $null,
+        [System.Security.AccessControl.FileSystemRights[]] $OwnerPerms = @("Read", "Write")
         )
 
     $myACL = Get-ACL -Path $FilePath
-    $myACL.SetAccessRuleProtection($True, $True)
+    $myACL.SetAccessRuleProtection($True, $FALSE)
     Set-Acl -Path $FilePath -AclObject $myACL
 
     $myACL = Get-ACL $FilePath
@@ -65,9 +67,14 @@ function Set-SecureFileACL
         }
     }
 
-    $objACE = New-Object System.Security.AccessControl.FileSystemAccessRule `
-        ($actualOwner, "FullControl", "None", "None", "Allow")
-    $myACL.AddAccessRule($objACE)
+    if($OwnerPerms)
+    {
+        $OwnerPerms | % { 
+            $ownerACE = New-Object System.Security.AccessControl.FileSystemAccessRule `
+                ($actualOwner, $_, "None", "None", "Allow")
+            $myACL.AddAccessRule($ownerACE)
+        }
+    }
 
     Set-Acl -Path $FilePath -AclObject $myACL
 }
@@ -75,18 +82,25 @@ function Set-SecureFileACL
 function Add-PermissionToFileACL 
 {    
     param(
+        [parameter(Mandatory=$true)]
         [string]$FilePath,
         [System.Security.Principal.NTAccount] $User,
-        [System.Security.AccessControl.FileSystemRights]$Perm
+        [System.Security.AccessControl.FileSystemRights[]]$Perms,
+        [System.Security.AccessControl.AccessControlType] $AccessType = "Allow"
     )    
 
-    $myACL = Get-ACL $filePath
-        
-    $objACE = New-Object System.Security.AccessControl.FileSystemAccessRule `
-        ($User, $perm, "None", "None", "Allow") 
-    $myACL.AddAccessRule($objACE)    
+    $myACL = Get-ACL $FilePath
 
-    Set-Acl -Path $filePath -AclObject $myACL
+    if($Perms)
+    {
+        $Perms | % { 
+            $userACE = New-Object System.Security.AccessControl.FileSystemAccessRule `
+                ($User, $_, "None", "None", $AccessType)
+            $myACL.AddAccessRule($userACE)
+        }
+    }   
+
+    Set-Acl -Path $FilePath -AclObject $myACL
 }
 
 function Add-PasswordSetting 
