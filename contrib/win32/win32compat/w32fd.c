@@ -606,6 +606,7 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 		return -1;
 	}
 
+	/* TODO - see if this needs to be supported */
 	if (exceptfds) {
 		for (i = 0; i < fds; i++)
 			FD_CLR(i, exceptfds);
@@ -736,7 +737,7 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 		for (i = 0; i < fds; i++)
 			if (FD_ISSET(i, readfds)) {
 				if (FD_ISSET(i, &read_ready_fds)) {
-					/* for connect() completed sockets finish WSA connect process*/
+					/* for connect() initiated sockets finish WSA connect process*/
 					if ((fd_table.w32_ios[i]->type == SOCK_FD) &&
 						((fd_table.w32_ios[i]->internal.state == SOCK_CONNECTING)))
 						if (socketio_finish_connect(fd_table.w32_ios[i]) != 0) {
@@ -751,7 +752,7 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 		for (i = 0; i < fds; i++)
 			if (FD_ISSET(i, writefds)) {
 				if (FD_ISSET(i, &write_ready_fds)) {
-					/* for connect() completed sockets finish WSA connect process*/
+					/* for connect() initiated sockets finish WSA connect process*/
 					if ((fd_table.w32_ios[i]->type == SOCK_FD) &&
 					    ((fd_table.w32_ios[i]->internal.state == SOCK_CONNECTING)))
 						if (socketio_finish_connect(fd_table.w32_ios[i]) != 0) {
