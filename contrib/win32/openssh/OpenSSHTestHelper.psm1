@@ -1,5 +1,5 @@
 ﻿$ErrorActionPreference = 'Stop'
-Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -DisableNameChecking
+Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -DisableNameChecking -Force
 
 [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
 # test environment parameters initialized with defaults
@@ -185,7 +185,7 @@ WARNING: Following changes will be made to OpenSSH configuration
         Copy-Item $sshConfigFilePath (Join-Path $dotSshDirectoryPath config.ori) -Force
     }
     Copy-Item (Join-Path $Script:E2ETestDirectory ssh_config) $sshConfigFilePath -Force
-    Adjust-UserKeyFileACL -FilePath $sshConfigFilePath -OwnerPerms "Read","Write"
+    Adjust-UserKeyFileACL -FilePath $sshConfigFilePath -OwnerPerms "Read,Write"
 
     # create test accounts
     #TODO - this is Windows specific. Need to be in PAL
@@ -217,7 +217,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     Add-PermissionToFileACL -FilePath $authorizedKeyPath -User "NT Service\sshd" -Perm "Read"
     $testPriKeypath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519
     (Get-Content $testPriKeypath -Raw).Replace("`r`n","`n") | Set-Content $testPriKeypath -Force
-    Adjust-UserKeyFileACL -FilePath $testPriKeypath -OwnerPerms "Read","Write"
+    Adjust-UserKeyFileACL -FilePath $testPriKeypath -OwnerPerms "Read, Write"
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
     Backup-OpenSSHTestInfo
 }

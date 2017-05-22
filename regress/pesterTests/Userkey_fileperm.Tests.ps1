@@ -1,4 +1,4 @@
-﻿Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
+﻿Import-Module $PSScriptRoot\CommonUtils.psm1 -Force -DisableNameChecking
 
 $tC = 1
 $tI = 0
