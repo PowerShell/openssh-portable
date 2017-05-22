@@ -1,5 +1,5 @@
 ﻿Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
-Describe "Tests for host keys file permission" -Tags "CI" {
+Describe "Tests for host keys file permission" -Tags "Scenario" {
     BeforeAll {
         if($OpenSSHTestInfo -eq $null)
         {
@@ -61,6 +61,15 @@ Describe "Tests for host keys file permission" -Tags "CI" {
 
         AfterEach {
             Remove-Item -Path $filePath -Force -ErrorAction ignore            
+        }
+
+        AfterAll {
+            if(Test-path $hostKeyFilePath -PathType Leaf){
+                Set-SecureFileACL -filepath $hostKeyFilePath            
+            }
+            if(Test-path "$hostKeyFilePath.pub" -PathType Leaf){
+                Set-SecureFileACL -filepath "$hostKeyFilePath.pub"
+            }
         }
 
         It 'Host keys -- positive (Secured private key and sshd can access to public key file)' {
