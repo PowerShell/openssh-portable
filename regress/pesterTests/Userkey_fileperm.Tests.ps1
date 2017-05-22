@@ -31,8 +31,7 @@ Describe "Tests for user Key file permission" -Tags "CI" {
         $pubKeyUserAccount = New-Object System.Security.Principal.NTAccount($pubKeyUser)
         $currentUser = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
         $everyone =  New-Object System.Security.Principal.NTAccount("EveryOne")
-        
-        #add wrong password so ssh does not prompt password if failed with authorized keys
+                
         Add-PasswordSetting -Pass $keypassphrase
     }
 
