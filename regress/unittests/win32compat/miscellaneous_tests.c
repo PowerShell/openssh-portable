@@ -11,22 +11,24 @@
 int retValue;
 
 // The ioctl() testcase is failing when ran from Run-OpenSSHUnitTest.
-//void 
-//test_ioctl()
-//{
-//	TEST_START("ioctl");
-//
-//	struct winsize ws;
-//	memset(&ws, 0, sizeof(ws));
-//	retValue = ioctl(fileno(stdin), TIOCGWINSZ, &ws);
-//	ASSERT_INT_EQ(retValue, 0);
-//	ASSERT_INT_NE(ws.ws_col, 0);
-//	ASSERT_INT_NE(ws.ws_row, 0);
-//	ASSERT_INT_NE(ws.ws_xpixel, 0);
-//	ASSERT_INT_NE(ws.ws_ypixel, 0);	
-//
-//	TEST_DONE();
-//}
+void 
+test_ioctl()
+{
+	if(!isatty(fileno(stdin))) return;
+
+	TEST_START("ioctl");
+
+	struct winsize ws;
+	memset(&ws, 0, sizeof(ws));
+	retValue = ioctl(fileno(stdin), TIOCGWINSZ, &ws);
+	ASSERT_INT_EQ(retValue, 0);
+	ASSERT_INT_NE(ws.ws_col, 0);
+	ASSERT_INT_NE(ws.ws_row, 0);
+	ASSERT_INT_NE(ws.ws_xpixel, 0);
+	ASSERT_INT_NE(ws.ws_ypixel, 0);	
+
+	TEST_DONE();
+}
 
 void
 test_path_conversion_utilities()
@@ -64,6 +66,8 @@ test_sanitizedpath()
 	
 	char *win32prgdir = w32_programdir();
 	ASSERT_PTR_NE(win32prgdir, NULL);
+
+	ASSERT_PTR_EQ(sanitized_path(NULL), NULL);
 
 	char *ret = sanitized_path(win32prgdir);
 	retValue = strcmp(win32prgdir, ret);
@@ -117,6 +121,9 @@ test_statvfs()
 	char *tmp = getcwd(cwd, MAX_PATH);
 	ASSERT_PTR_NE(tmp, NULL);
 
+	retValue = statvfs(NULL, &st);
+	ASSERT_INT_EQ(retValue, -1);
+
 	explicit_bzero(&st, sizeof(st));
 	retValue = statvfs(cwd, &st);
 	ASSERT_INT_EQ(retValue, 0);
@@ -134,6 +141,15 @@ void test_realpath()
 	char *expectedOutput1 = "/c:/windows/system32";
 	char *expectedOutput2 = "/c:/";
 
+	ret = realpath(NULL, NULL);
+	ASSERT_PTR_EQ(ret, NULL);
+
+	ret = realpath("c:\\windows\\system32", NULL);
+	ASSERT_PTR_EQ(ret, NULL);
+
+	ret = realpath(NULL, resolved_path);
+	ASSERT_PTR_EQ(ret, NULL);
+
 	ret = realpath("c:\\windows\\system32", resolved_path);
 	ASSERT_STRING_EQ(ret, expectedOutput1);
 
@@ -144,6 +160,9 @@ void test_realpath()
 	ASSERT_STRING_EQ(ret, expectedOutput1);
 
 	ret = realpath("/c:\\windows\\.\\..\\windows\\system32", resolved_path);
+	ASSERT_STRING_EQ(ret, expectedOutput1);
+
+	ret = realpath("/c:\\windows/.\\..\\windows\\system32", resolved_path);
 	ASSERT_STRING_EQ(ret, expectedOutput1);
 
 	ret = realpath("c:/windows/system32", resolved_path);

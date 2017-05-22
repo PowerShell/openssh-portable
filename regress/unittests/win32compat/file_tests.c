@@ -211,7 +211,13 @@ void file_simple_fileio_mode()
 	int ret;
 	FILE* f;
 	struct stat st;
-		
+
+	f = fopen(NULL, "w");
+	ASSERT_PTR_EQ(f, NULL);
+
+	c = fgets(NULL, 0, f);
+	ASSERT_PTR_EQ(c, NULL);
+
 	f = fopen("tmp.txt", "w");
 	ASSERT_PTR_NE(f, NULL);
 	fclose(f);

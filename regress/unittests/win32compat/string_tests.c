@@ -13,6 +13,9 @@ str_simple_tests()
 	char *s1 = "test_dir";
 	char *s2 = NULL;
 
+	s2 = strdup(NULL);
+	ASSERT_PTR_EQ(s2, NULL);
+
 	s2 = strdup(s1);
 	ASSERT_PTR_NE(s2, NULL);
 

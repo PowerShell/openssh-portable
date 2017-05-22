@@ -28,6 +28,9 @@ dir_tests_1()
 	char dir_fullpath[MAX_PATH];
 	int f = -1;
 
+	p_ret = getcwd(NULL, MAX_PATH);
+	ASSERT_PTR_EQ(p_ret, NULL);
+
 	p_ret = getcwd(cwd, MAX_PATH);
 	ASSERT_PTR_NE(p_ret, NULL);
 
@@ -43,14 +46,23 @@ dir_tests_1()
 	strcat(dir_fullpath, tes_dirname_2);
 	delete_dir_recursive(dir_fullpath);
 
+	retValue = mkdir(NULL, 0);
+	ASSERT_INT_EQ(retValue, -1);
+
 	retValue = mkdir(test_dirname_1, S_IRUSR | S_IWUSR | S_IXUSR);
 	ASSERT_INT_EQ(retValue, 0);
+
+	retValue = stat(NULL, &st);
+	ASSERT_INT_EQ(retValue, -1);
 
 	retValue = stat(test_dirname_1, &st);
 	ASSERT_INT_EQ(retValue, 0);
 	ASSERT_INT_EQ(st.st_size, 0);
 	strmode(st.st_mode, mode);
 	ASSERT_CHAR_EQ(mode[0], 'd');
+
+	retValue = chdir(NULL);
+	ASSERT_INT_EQ(retValue, -1);
 
 	retValue = chdir(test_dirname_1);
 	ASSERT_INT_EQ(retValue, 0);
@@ -63,16 +75,31 @@ dir_tests_1()
 
 	retValue = chdir("..");
 	ASSERT_INT_EQ(retValue, 0);
-	
+
+	retValue = rename(NULL, tes_dirname_2);
+	ASSERT_INT_EQ(retValue, -1);
+
+	retValue = rename(test_dirname_1, NULL);
+	ASSERT_INT_EQ(retValue, -1);
+
+	retValue = rename(NULL, NULL);
+	ASSERT_INT_EQ(retValue, -1);
+
 	retValue = rename(test_dirname_1, tes_dirname_2);
 	ASSERT_INT_EQ(retValue, 0);
 
 	retValue = stat(tes_dirname_2, &st);
 	ASSERT_INT_EQ(retValue, 0);
 
+	dirp = opendir(NULL);
+	ASSERT_PTR_EQ(dirp, NULL);
+
 	dirp = opendir(tes_dirname_2);
 	ASSERT_PTR_NE(dirp, NULL);
-	
+
+	dp = readdir(NULL);
+	ASSERT_PTR_EQ(dp, NULL);
+
 	dp = readdir(dirp);
 	ASSERT_PTR_EQ(dp, NULL);
 	
@@ -83,6 +110,9 @@ dir_tests_1()
 	ASSERT_INT_EQ(retValue, -1);
 	ASSERT_INT_EQ(errno, ERROR_SHARING_VIOLATION);
 
+	retValue = closedir(NULL);
+	ASSERT_INT_EQ(retValue, -1);
+
 	retValue = closedir(dirp);
 	ASSERT_INT_EQ(retValue, 0);
 
@@ -91,7 +121,7 @@ dir_tests_1()
 
 	retValue = chdir(tes_dirname_2);
 	ASSERT_INT_EQ(retValue, 0);
-	
+
 	f = open(tmpfile, O_RDWR | O_CREAT | O_TRUNC);
 	ASSERT_INT_NE(f, -1);
 	close(f);
@@ -108,11 +138,17 @@ dir_tests_1()
 	retValue = closedir(dirp);
 	ASSERT_INT_EQ(retValue, 0);
 
+	retValue = rmdir(NULL);
+	ASSERT_INT_EQ(retValue, -1);
+
 	retValue = rmdir(tes_dirname_2);
 	ASSERT_INT_NE(retValue, 0);
 	
 	retValue = chdir(tes_dirname_2);
 	ASSERT_INT_EQ(retValue, 0);
+
+	retValue = unlink(NULL);
+	ASSERT_INT_EQ(retValue, -1);
 
 	retValue = unlink(tmpfile);
 	ASSERT_INT_EQ(retValue, 0);
