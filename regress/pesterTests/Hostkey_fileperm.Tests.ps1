@@ -59,7 +59,7 @@ Describe "Tests for host keys file permission" -Tags "CI" {
             $tC++
         }
 
-        It "$tC.$tI-Host keys-positive(both public and private keys are owned by admin groups and running process can access to public key file)" {
+        It "$tC.$tI-Host keys-positive (both public and private keys are owned by admin groups and running process can access to public key file)" {
             Set-FileOwnerAndACL -Filepath $hostKeyFilePath -Owner $adminAccount -OwnerPerms "FullControl"
             Add-PermissionToFileACL -FilePath $hostKeyFilePath -User $systemAccount -Perms "FullControl"
             
@@ -76,7 +76,7 @@ Describe "Tests for host keys file permission" -Tags "CI" {
             $logPath | Should Not Contain "UNPROTECTED PRIVATE KEY FILE!"
         }
 
-        It "$tC.$tI-Host keys-positive(both public and private keys are owned by system and running process can access to public key file)" {               
+        It "$tC.$tI-Host keys-positive (both public and private keys are owned by system and running process can access to public key file)" {               
             Set-FileOwnerAndACL -Filepath $hostKeyFilePath -Owner $systemAccount -OwnerPerms "FullControl"
             Add-PermissionToFileACL -FilePath $hostKeyFilePath -User $adminAccount -Perms "Read"
 
@@ -92,7 +92,7 @@ Describe "Tests for host keys file permission" -Tags "CI" {
             $logPath | Should Not Contain "UNPROTECTED PRIVATE KEY FILE!"
         }
 
-        It "$tC.$tI-Host keys-negative(other account can access private key file)" {
+        It "$tC.$tI-Host keys-negative (other account can access private key file)" {
             Set-FileOwnerAndACL -Filepath $hostKeyFilePath -Owner $systemAccount -OwnerPerms "FullControl"
             Add-PermissionToFileACL -FilePath $hostKeyFilePath -User $adminAccount -Perms "FullControl"
             Add-PermissionToFileACL -FilePath $hostKeyFilePath -User $objUser -Perms "Read"
@@ -109,7 +109,7 @@ Describe "Tests for host keys file permission" -Tags "CI" {
             $logPath | Should Contain "key_load_private: bad permissions"            
         }
 
-        It "$tC.$tI-Host keys-negative(the private key has wrong owner)" {
+        It "$tC.$tI-Host keys-negative (the private key has wrong owner)" {
             #setup to have ssouser as owner and grant it full control
             Set-FileOwnerAndACL -FilePath $hostKeyFilePath -Owner $objUser -OwnerPerms "Read","Write"
             Add-PermissionToFileACL -FilePath $hostKeyFilePath -User $adminAccount -Perms "FullControl"
@@ -126,7 +126,7 @@ Describe "Tests for host keys file permission" -Tags "CI" {
             #validate file content contains unprotected info.
             $logPath | Should Contain "key_load_private: bad permissions"
         }
-        It "$tC.$tI-Host keys-negative(the running process does not have read access to public key)" {
+        It "$tC.$tI-Host keys-negative (the running process does not have read access to public key)" {
             #setup to have ssouser as owner and grant it full control
             Set-FileOwnerAndACL -FilePath $hostKeyFilePath -Owner $systemAccount -OwnerPerms "FullControl"            
             Add-PermissionToFileACL -FilePath $hostKeyFilePath -User $adminAccount -Perms "Read"
@@ -141,7 +141,7 @@ Describe "Tests for host keys file permission" -Tags "CI" {
             $logPath | Should Contain "key_load_public: Permission denied"
         }
 
-        It "$tC.$tI-Host keys-negative(the owner of private host key is denied Read access to private key)" {
+        It "$tC.$tI-Host keys-negative (the owner of private host key is denied Read access to private key)" {
             #setup to have ssouser as owner and grant it full control
             Set-FileOwnerAndACL -FilePath $hostKeyFilePath -Owner $systemAccount -OwnerPerms "FullControl"
             Add-PermissionToFileACL -FilePath $hostKeyFilePath -User $adminAccount -Perms "FullControl"

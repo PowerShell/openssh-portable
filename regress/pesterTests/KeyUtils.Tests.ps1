@@ -234,7 +234,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             cmd /c "ssh-add -d $keyFilePath 2> nul "
         }
 
-        It "$tC.$tI - ssh-add - positive(Secured private key owned by Administrators group)" {
+        It "$tC.$tI - ssh-add - positive (Secured private key owned by Administrators group)" {
             #setup to have local admin group as owner and grant it full control
             Set-FileOwnerAndACL -FilePath $keyFilePath -Owner $adminsAccount -OwnerPerms "FullControl"
 
@@ -249,7 +249,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             cmd /c "ssh-add -d $keyFilePath 2> nul "
         }
 
-        It "$tC.$tI - ssh-add positive (Secured private key owned by local system group)" {
+        It "$tC.$tI - ssh-add - positive (Secured private key owned by local system group)" {
             #setup to have local admin group as owner and grant it full control
             Set-FileOwnerAndACL -FilePath $keyFilePath -Owner $systemAccount -OwnerPerms "FullControl"
             Add-PermissionToFileACL -FilePath $keyFilePath -User $adminsAccount -Perm "FullControl"
@@ -280,7 +280,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             ($allkeys | where { $_.contains($pubkeyraw) }).count | Should Be 0
         }
 
-        It "$tC.$tI - ssh-add - negative(the private key has wrong owner)" {
+        It "$tC.$tI - ssh-add - negative (the private key has wrong owner)" {
             #setup to have ssouser as owner and grant it full control
             Set-FileOwnerAndACL -FilePath $keyFilePath -owner $objUser -OwnerPerms "Read, Write"
             Add-PermissionToFileACL -FilePath $keyFilePath -User $adminsAccount -Perm "FullControl"
@@ -293,7 +293,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             ($allkeys | where { $_.contains($pubkeyraw) }).count | Should Be 0
         }
 
-        It "$tC.$tI - ssh-add- negative(the owner is denied Read perm on private key)" {
+        It "$tC.$tI - ssh-add- negative (the owner is denied Read perm on private key)" {
             #setup to have local ssytem account as owner and grant it full control
             Set-FileOwnerAndACL -FilePath $keyFilePath -owner $systemAccount -OwnerPerms "FullControl"
             Add-PermissionToFileACL -FilePath $keyFilePath -User $adminsAccount -Perm "FullControl"

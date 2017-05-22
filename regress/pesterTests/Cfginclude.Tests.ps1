@@ -75,7 +75,7 @@ Describe "Tests for ssh config" -Tags "CI" {
             $tC++
         }
 
-        It "$tC.$tI-User SSHConfig-ReadConfig positive(current logon user is the owner)" {
+        It "$tC.$tI-User SSHConfig-ReadConfig positive (current logon user is the owner)" {
             #setup
             Set-FileOwnerAndACL -Filepath $userConfigFile -Owner $currentUser -OwnerPerms "Read","Write"
             Add-PermissionToFileACL -FilePath $userConfigFile -User $systemAccount -Perms "FullControl"
@@ -86,7 +86,7 @@ Describe "Tests for ssh config" -Tags "CI" {
             $o | Should Be "1234"
         }
 
-        It "$tC.$tI-User SSHConfig-ReadConfig positive(local system is the owner)" {
+        It "$tC.$tI-User SSHConfig-ReadConfig positive (local system is the owner)" {
             #setup
             Set-FileOwnerAndACL -Filepath $userConfigFile -Owner $systemAccount -OwnerPerms "FullControl"
             Add-PermissionToFileACL -FilePath $userConfigFile -User $adminAccount -Perms "FullControl"
@@ -96,7 +96,7 @@ Describe "Tests for ssh config" -Tags "CI" {
             $o | Should Be "1234"
         }
 
-        It "$tC.$tI-User SSHConfig-ReadConfig positive(admin is the owner)" {
+        It "$tC.$tI-User SSHConfig-ReadConfig positive (admin is the owner)" {
             #setup
             Set-FileOwnerAndACL -Filepath $userConfigFile -Owner $adminAccount -OwnerPerms "FullControl"
             Add-PermissionToFileACL -FilePath $userConfigFile -User $systemAccount -Perms "FullControl"
@@ -106,7 +106,7 @@ Describe "Tests for ssh config" -Tags "CI" {
             $o | Should Be "1234"
         }
 
-        It "$tC.$tI-User SSHConfig-ReadConfig negative(wrong owner)" {
+        It "$tC.$tI-User SSHConfig-ReadConfig negative (wrong owner)" {
             #setup
             Set-FileOwnerAndACL -Filepath $userConfigFile -Owner $ssouser -OwnerPerms "Read","Write"
             Add-PermissionToFileACL -FilePath $userConfigFile -User $systemAccount -Perms "FullControl"
@@ -118,7 +118,7 @@ Describe "Tests for ssh config" -Tags "CI" {
             Get-Content $logPath | Should Match "^Bad owner or permissions on [a-fA-F]:[/\\]{1,}Users[/\\]{1,}\w+[/\\]{1,}.ssh[/\\]{1,}config$"
         }
 
-        It "$tC.$tI-User SSHConfig--ReadConfig negative(others has permission)" {
+        It "$tC.$tI-User SSHConfig-ReadConfig negative (others has permission)" {
             #setup
             Set-FileOwnerAndACL -Filepath $userConfigFile -Owner $currentUser -OwnerPerms "Read","Write"
             Add-PermissionToFileACL -FilePath $userConfigFile -User $systemAccount -Perms "FullControl"
@@ -130,7 +130,7 @@ Describe "Tests for ssh config" -Tags "CI" {
             $LASTEXITCODE | Should Not Be 0
             Get-Content $logPath | Should Match "^Bad owner or permissions on [a-fA-F]:[/\\]{1,}Users[/\\]{1,}\w+[/\\]{1,}.ssh[/\\]{1,}config$"
         }
-        It "$tC.$tI-User SSHConfig--ReadConfig negative(owner is denied Read permission)" {
+        It "$tC.$tI-User SSHConfig-ReadConfig negative (owner is denied Read permission)" {
             #setup
             Set-FileOwnerAndACL -Filepath $userConfigFile -Owner $systemAccount -OwnerPerms "FullControl"
             Add-PermissionToFileACL -FilePath $userConfigFile -User $adminAccount -Perms "FullControl"
