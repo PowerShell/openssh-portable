@@ -54,16 +54,10 @@
     <ClCompile Include="$(OpenSSH-Src-Path)channels.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(OpenSSH-Src-Path)cipher-3des1.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)cipher-aes.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)cipher-aesctr.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="$(OpenSSH-Src-Path)cipher-bf1.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)cipher-chachapoly.c">
@@ -82,9 +76,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)crc32.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="$(OpenSSH-Src-Path)deattack.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)dh.c">
@@ -293,7 +284,7 @@
     <ClInclude Include="$(OpenSSH-Src-Path)crypto-wrap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include=$(OpenSSH-Src-Path)sshfileperm.h">
+    <ClInclude Include="$(OpenSSH-Src-Path)sshfileperm.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
