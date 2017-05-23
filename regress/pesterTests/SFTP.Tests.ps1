@@ -262,7 +262,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
        Test-Path $tmpDirectoryPath2 | Should be $false
     }
 
-    It "$script:testId-ls list items without permission successfully" {
+    It "$script:testId-ls lists items the user has no read permission" {
        $permTestHasAccessFile = "permTestHasAccessFile.txt"
        $permTestHasAccessFilePath = Join-Path $serverDirectory $permTestHasAccessFile
        Remove-Item $permTestHasAccessFilePath -Force -ErrorAction Ignore
