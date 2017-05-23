@@ -2,7 +2,7 @@
 $tI = 0
 $suite = "keyutils"
 
-Describe "E2E scenarios for ssh key management" -Tags "Scenario" {
+Describe "E2E scenarios for ssh key management" -Tags "CI" {
     BeforeAll {    
         if($OpenSSHTestInfo -eq $null)
         {
@@ -167,29 +167,33 @@ Describe "E2E scenarios for ssh key management" -Tags "Scenario" {
     }
 		
     Context "$tC - ssh-keyscan test cases" {
-        BeforeAll {$tI=1}
+        BeforeAll {
+            $tI=1
+            $port = $OpenSSHTestInfo["Port"]
+        }
+        
         AfterAll{$tC++}
 
 		It "$tC.$tI - ssh-keyscan with default arguments" {
-			iex "ssh-keyscan -p 22 github.com 2>&1 > out.txt"
-			'out.txt' | Should Contain 'github.com ssh-rsa.*' 			
+			iex "ssh-keyscan -p $port 127.0.0.1 2>&1 > out.txt"
+			'out.txt' | Should Contain '.*ssh-rsa.*'
 		}
 
         It "$tC.$tI - ssh-keyscan with -p" {
-			iex "ssh-keyscan -p 22 github.com 2>&1 > out.txt"
-			'out.txt' | Should Contain 'github.com ssh-rsa.*' 			
+			iex "ssh-keyscan -p $port 127.0.0.1 2>&1 > out.txt"
+			'out.txt' | Should Contain '.*ssh-rsa.*'
 		}
 
 		It "$tC.$tI - ssh-keyscan with -f" {
-			Set-Content -Path tmp.txt -Value "github.com"
-			iex "ssh-keyscan -f tmp.txt 2>&1 > out.txt"
-			'out.txt' | Should Contain 'github.com ssh-rsa.*' 			
+			Set-Content -Path tmp.txt -Value "127.0.0.1"
+			iex "ssh-keyscan -p $port -f tmp.txt 2>&1 > out.txt"
+			'out.txt' | Should Contain '.*ssh-rsa.*'
 		}
 
 		It "$tC.$tI - ssh-keyscan with -f -t" {
-			Set-Content -Path tmp.txt -Value "github.com"
-			iex "ssh-keyscan -f tmp.txt -t rsa,dsa 2>&1 > out.txt"
-			'out.txt' | Should Contain 'github.com ssh-rsa.*' 			
+			Set-Content -Path tmp.txt -Value "127.0.0.1"
+			iex "ssh-keyscan -p $port -f tmp.txt -t rsa,dsa 2>&1 > out.txt"
+			'out.txt' | Should Contain '.*ssh-rsa.*'
 		}
 	}
 }
