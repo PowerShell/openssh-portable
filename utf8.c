@@ -57,6 +57,9 @@ static int	 vasnmprintf(char **, size_t, int *, const char *, va_list);
 
 static int
 dangerous_locale(void) {
+#ifdef WINDOWS	
+	return 0;
+#else   /* !WINDOWS */
 	char	*loc;
 
 	loc = nl_langinfo(CODESET);
@@ -260,11 +263,56 @@ vfmprintf(FILE *stream, const char *fmt, va_list ap)
 {
 	char	*str;
 	int	 ret;
-
+		
 	if ((ret = vasnmprintf(&str, INT_MAX, NULL, fmt, ap)) < 0)
 		return -1;
+#ifdef WINDOWS
+	wchar_t *str_utf16 = NULL;
+	int file_num = 0;
+	intptr_t lHandle = 0;
+	HANDLE hFile = NULL;
+	DWORD type = 0, mode = 0, num_write;
+
+	if ((str_utf16 = utf8_to_utf16(str)) == NULL) {
+		errno = ENOMEM;
+		goto done;
+	}	
+
+	file_num = (_fileno)(stream);
+	if (file_num == -1) {
+		ret = -1;
+		goto done;
+	}	
+	lHandle = _get_osfhandle(file_num);
+	if (lHandle == -1 && errno == EBADF) {
+		ret = -1;
+		goto done;
+	}
+	type = GetFileType((HANDLE)lHandle);
+	if(type == FILE_TYPE_CHAR && file_num >= 0 && file_num <=2 ) {
+		if (file_num == 0) 		
+			hFile = GetStdHandle(STD_INPUT_HANDLE);
+		else if (file_num == 1)
+			hFile = GetStdHandle(STD_OUTPUT_HANDLE);
+		else if (file_num == 2)
+			hFile = GetStdHandle(STD_ERROR_HANDLE);
+		
+		if ((hFile != NULL) && (hFile != INVALID_HANDLE_VALUE) &&
+			(GetFileType(hFile) == FILE_TYPE_CHAR) &&
+			(GetConsoleMode(hFile, &mode) != FALSE))
+				WriteConsoleW(hFile, str_utf16, wcslen(str_utf16), 0, 0);
+		else if(fputws(str_utf16, stream) == EOF)
+			ret = -1;
+	}
+	else if(fputws(str_utf16, stream) == EOF)
+		ret = -1;
+done:
+	if(str_utf16)
+		free(str_utf16);
+#else /* !WINDOWS */	
 	if (fputs(str, stream) == EOF)
 		ret = -1;
+#endif /* !WINDOWS */
 	free(str);
 	return ret;
 }
