@@ -171,7 +171,6 @@ WARNING: Following changes will be made to OpenSSH configuration
         if (-not ($_.Name.EndsWith(".pub"))) {
             $cmd = "cmd /c `"$env:ProgramData\chocolatey\lib\sysinternals\tools\psexec -accepteula -nobanner -s -w $($script:OpenSSHBinPath) ssh-add $_ 2> tmp.txt`""
             iex $cmd
-            Remove-Item $_ -Force
         }
     }
     Restart-Service sshd -Force
