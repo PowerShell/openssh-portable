@@ -1711,7 +1711,7 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 #if WINDOWS
 		/*
 		file permissions are designed differently on windows.
-		implementation on windows to make sure the config file is owned by a user, administrators group, or LOCALSYETEM account
+		implementation on windows to make sure the config file is owned by a user, administrators group, or LOCALSYSTEM account
 		and nobody else except Administrators group, LOCALSYSTEM, and file owner account has the write permission
 		*/
 		if (check_secure_file_permission(filename, pw) != 0)

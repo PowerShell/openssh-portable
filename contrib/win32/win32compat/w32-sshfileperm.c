@@ -31,23 +31,20 @@
 #include <Windows.h>
 #include <Sddl.h>
 #include <Aclapi.h>
-#include <Ntsecapi.h>
 #include <lm.h>
 #include <stdio.h> 
 
 #include "inc\pwd.h"
 #include "sshfileperm.h"
-#include "misc_internal.h"
 #include "debug.h"
 
 #define SSHD_ACCOUNT L"NT Service\\sshd"
 
 /*
 * The function is to check if user prepresented by pw is secure to access to the file. 
-* Check the owner of the file is one of these types: Local Administrators groups, system account,
-* direct user accounts in local administrators, or user represented by pw
+* Check the owner of the file is one of these types: Local Administrators groups, system account
 * Check the users have access permission to the file don't voilate the following rules:	
-	1. no user other than local administrators group, system account, and owner accounts have permission on the file
+	1. no user other than local administrators group, system account, and owner accounts have write permission on the file
 	2. sshd account can only have read permission
 	3. file owner should at least have read permission.
 * Returns 0 on success and -1 on failure

@@ -209,7 +209,7 @@ void file_simple_fileio()
 
 void file_simple_fileio_mode()
 {
-	TEST_START("file mode");
+	TEST_START("file io and mode");
 
 	char * small_write_buf = "sample payload", *c, small_read_buf[SMALL_RECV_BUF_SIZE];
 	int ret;
