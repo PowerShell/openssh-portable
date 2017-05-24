@@ -4,6 +4,13 @@
 #define SSH_ASYNC_STDOUT "SSH_ASYNC_STDOUT"
 #define SSH_ASYNC_STDERR "SSH_ASYNC_STDERR"
 
+#define GOTO_CLEANUP_IF(_cond_,_err_) do {  \
+    if ((_cond_)) {                         \
+        hr = _err_;                         \
+        goto cleanup;                       \
+    }                                       \
+} while(0)
+
 /* removes first '/' for Windows paths that are unix styled. Ex: /c:/ab.cd */
 char * sanitized_path(const char *);
 
@@ -13,6 +20,7 @@ void w32posix_done();
 char* w32_programdir();
 
 void convertToBackslash(char *str);
+void convertToBackslashW(wchar_t *str);
 void convertToForwardslash(char *str);
 
 void unix_time_to_file_time(ULONG, LPFILETIME);
