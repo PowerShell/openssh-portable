@@ -88,7 +88,7 @@ void file_simple_fileio()
 	int f;
 	struct stat st;
 	{
-		f = open(tmp_filename, O_WRONLY | O_TRUNC);
+		f = open(tmp_filename, O_WRONLY | O_CREAT | O_TRUNC);
 		ASSERT_INT_EQ(f, -1);
 	}
 	{
@@ -424,7 +424,7 @@ file_miscellaneous_tests()
 	ASSERT_INT_NE(f, -1);
 	close(f);
 
-	f = open(tmp_filename, O_RDWR | O_TRUNC);
+	f = open(tmp_filename, O_RDWR | O_CREAT | O_TRUNC, 0600);
 	ASSERT_INT_NE(f, -1);
 	int f1 = dup(f);
 	ASSERT_INT_EQ(f1, -1);
