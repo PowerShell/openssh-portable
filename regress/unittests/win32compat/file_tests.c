@@ -166,7 +166,7 @@ void file_simple_fileio()
 
 	{
 		/* test writev, ftruncate, isatty, lseek, fdopen */
-		f = open(tmp_filename, O_RDWR | O_CREAT | O_TRUNC);
+		f = open(tmp_filename, O_RDWR | O_TRUNC);
 		ASSERT_INT_NE(f, -1);
 		struct iovec iov;
 		iov.iov_base = small_write_buf;

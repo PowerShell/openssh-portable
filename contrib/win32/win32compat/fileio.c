@@ -298,7 +298,7 @@ createFile_flags_setup(int flags, u_short mode, struct createFile_flags* cf_flag
 	/* check flags */
 	int rwflags = flags & 0x3, c_s_flags = flags & 0xfffffff0, ret = -1;
 	PSECURITY_DESCRIPTOR pSD = NULL;
-	wchar_t sddl[SDDL_LENGTH+1] = { 0 }, owner_ace[MAX_ACE_LENGTH + 1] = {0}, everyone_ace[MAX_ACE_LENGTH + 1] = {0};
+	wchar_t sddl[SDDL_LENGTH + 1] = { 0 }, owner_ace[MAX_ACE_LENGTH + 1] = {0}, everyone_ace[MAX_ACE_LENGTH + 1] = {0};
 	wchar_t owner_access[MAX_ATTRIBUTE_LENGTH + 1] = {0}, everyone_access[MAX_ATTRIBUTE_LENGTH + 1] = {0}, *sid_utf16;
 	PACL dacl = NULL;
 	struct passwd * pwd;
