@@ -165,6 +165,15 @@ WARNING: Following changes will be made to OpenSSH configuration
         (Get-Content $_.FullName -Raw).Replace("`r`n","`n") | Set-Content $_.FullName -Force
         Adjust-HostKeyFileACL -FilePath $_.FullName
     }
+
+    #register host keys with agent
+    Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*"| % {
+        if (-not ($_.Name.EndsWith(".pub"))) {
+            $cmd = "cmd /c `"psexec -s $($script:OpenSSHBinPath)ssh-add $_ 2> tmp.txt`""
+            iex $cmd
+            Remove-Item $_ -Force
+        }
+    }
     Restart-Service sshd -Force
    
     #Backup existing known_hosts and replace with test version
@@ -304,6 +313,13 @@ function Cleanup-OpenSSHTestEnvironment
     {
         Throw "Cannot find OpenSSH binaries under $script:OpenSSHBinPath. "
     }
+
+    #unregister test host keys from agent
+    Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*.pub"| % {
+            $cmd = "cmd /c `"psexec -s $($script:OpenSSHBinPath)\ssh-add -d $_ 2> tmp.txt`""
+            iex $cmd
+    }
+    
 
     #Restore sshd_config
     $backupConfigPath = Join-Path $Script:OpenSSHBinPath sshd_config.ori
