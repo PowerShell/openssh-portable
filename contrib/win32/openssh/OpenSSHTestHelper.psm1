@@ -169,7 +169,8 @@ WARNING: Following changes will be made to OpenSSH configuration
     #register host keys with agent
     Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*"| % {
         if (-not ($_.Name.EndsWith(".pub"))) {
-            $cmd = "cmd /c `"psexec -s $($script:OpenSSHBinPath)ssh-add $_ 2> tmp.txt`""
+            $cmd = "cmd /c `"$env:ProgramData\chocolatey\lib\sysinternals\tools\psexec  -accepteula -s -w $($script:OpenSSHBinPath) ssh-add $_`""
+            Write-Host $cmd
             iex $cmd
             Remove-Item $_ -Force
         }
@@ -316,7 +317,7 @@ function Cleanup-OpenSSHTestEnvironment
 
     #unregister test host keys from agent
     Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*.pub"| % {
-            $cmd = "cmd /c `"psexec -s $($script:OpenSSHBinPath)\ssh-add -d $_ 2> tmp.txt`""
+            $cmd = "cmd /c `"$env:ProgramData\chocolatey\lib\sysinternals\tools\psexec  -accepteula -s -w $($script:OpenSSHBinPath) ssh-add -d $_ 2> tmp.txt`""
             iex $cmd
     }
     
