@@ -160,16 +160,10 @@ get_con_client_type(struct agent_connection* con)
 		goto done;
 
 	/* check if its localsystem */
-	{
-		sid_size = SECURITY_MAX_SID_SIZE;
-		if (CreateWellKnownSid(WinLocalSystemSid, NULL, sid, &sid_size) == FALSE)
-			goto done;
-		if (EqualSid(info->User.Sid, sid)) {
-			con->client_type = SYSTEM;
-			r = 0;
-			goto done;
-		}
-			
+	if (IsWellKnownSid(info->User.Sid, WinLocalSystemSid)) {
+		con->client_type = SYSTEM;
+		r = 0;
+		goto done;
 	}
 
 	/* check if its SSHD service */
@@ -204,23 +198,11 @@ get_con_client_type(struct agent_connection* con)
 	}
 
 	/* check if its LS or NS */
-	{
-		sid_size = SECURITY_MAX_SID_SIZE;
-		if (CreateWellKnownSid(WinNetworkServiceSid, NULL, sid, &sid_size) == FALSE)
-			goto done;
-		if (EqualSid(info->User.Sid, sid)) {
-			con->client_type = SERVICE;
-			r = 0;
-			goto done;
-		}
-		sid_size = SECURITY_MAX_SID_SIZE;
-		if (CreateWellKnownSid(WinLocalServiceSid, NULL, sid, &sid_size) == FALSE)
-			goto done;
-		if (EqualSid(info->User.Sid, sid)) {
-			con->client_type = SERVICE;
-			r = 0;
-			goto done;
-		}
+	if (IsWellKnownSid(info->User.Sid, WinNetworkServiceSid) ||
+	    IsWellKnownSid(info->User.Sid, WinLocalServiceSid)) {
+		con->client_type = SERVICE;
+		r = 0;
+		goto done;
 	}
 
 	/* check if its admin */
