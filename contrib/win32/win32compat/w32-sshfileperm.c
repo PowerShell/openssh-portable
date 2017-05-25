@@ -41,8 +41,8 @@
 #define SSHD_ACCOUNT L"NT Service\\sshd"
 
 /*
-* The function is to check if user prepresented by pw is secure to access to the file. 
-* Check the owner of the file is one of these types: Local Administrators groups, system account, pwd account
+* The function is to check if current user is secure to access to the file. 
+* Check the owner of the file is one of these types: Local Administrators groups, system account, current user account
 * Check the users have access permission to the file don't voilate the following rules:	
 	1. no user other than local administrators group, system account, and pwd user have write permission on the file
 	2. sshd account can only have read permission	
@@ -67,7 +67,7 @@ check_secure_file_permission(const char *name, struct passwd * pw)
 	
 	if (ConvertStringSidToSid(pwd->pw_sid, &user_sid) == FALSE ||
 		(IsValidSid(user_sid) == FALSE)) {
-		debug3("failed to retrieve the sid of the pwd");
+		debug3("failed to retrieve sid of user %s", pwd->pw_name);
 		ret = -1;
 		goto cleanup;
 	}
@@ -100,7 +100,7 @@ check_secure_file_permission(const char *name, struct passwd * pw)
 	}
 	/*
 	iterate all aces of the file to find out if there is voilation of the following rules:
-		1. no others than administrators group, system account, and pwd user account have write permission on the file
+		1. no others than administrators group, system account, and current user account have write permission on the file
 		2. sshd account can only have read permission
 	*/
 	for (DWORD i = 0; i < dacl->AceCount; i++) {

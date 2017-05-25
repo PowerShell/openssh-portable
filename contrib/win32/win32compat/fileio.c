@@ -369,7 +369,7 @@ createFile_flags_setup(int flags, u_short mode, struct createFile_flags* cf_flag
 
 	if (ConvertStringSidToSid(pwd->pw_sid, &owner_sid) == FALSE ||
 		(IsValidSid(owner_sid) == FALSE)) {
-		debug3("failed to retrieve the sid of the pwd");
+		debug3("cannot retrieve SID of user %s", pwd->pw_name);
 		goto cleanup;
 	}
 
