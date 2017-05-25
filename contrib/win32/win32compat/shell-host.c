@@ -1211,15 +1211,17 @@ start_withno_pty(wchar_t *command)
 		}
 	}
 cleanup:
+	/* close child's stdin first */
+	if(!IS_INVALID_HANDLE(child_pipe_write))
+		CloseHandle(child_pipe_write);
+	
 	if (!IS_INVALID_HANDLE(monitor_thread)) {
 		WaitForSingleObject(monitor_thread, INFINITE);
 		CloseHandle(monitor_thread);
 	}		
 	if (!IS_INVALID_HANDLE(child))
 		TerminateProcess(child, 0);
-	if(!IS_INVALID_HANDLE(child_pipe_write))
-		CloseHandle(child_pipe_write);
-
+	
 	return child_exit_code;
 }
 
