@@ -438,7 +438,7 @@ file_miscellaneous_tests()
 	int f1 = dup(f);
 	ASSERT_INT_EQ(f1, -1);
 	HANDLE h = w32_fd_to_handle(f);
-	ASSERT_HANDLE(h, retValue);
+	ASSERT_HANDLE(h);
 	close(f);
 
 	char *tmp_filename_1 = "tmp_1.txt";
@@ -452,16 +452,16 @@ file_miscellaneous_tests()
 		free(tmp);
 
 	h = w32_fd_to_handle(STDIN_FILENO);
-	ASSERT_HANDLE(h, retValue);
+	ASSERT_HANDLE(h);
 
 	h = w32_fd_to_handle(STDOUT_FILENO);
-	ASSERT_HANDLE(h, retValue);
+	ASSERT_HANDLE(h);
 
 	h = w32_fd_to_handle(STDERR_FILENO);
-	ASSERT_HANDLE(h, retValue);
+	ASSERT_HANDLE(h);
 
 	retValue = w32_allocate_fd_for_handle(h, FALSE);
-	ASSERT_HANDLE(h, retValue);
+	ASSERT_HANDLE(h);
 
 	TEST_DONE();
 }

@@ -254,7 +254,7 @@ w32_fopen_utf8(const char *path, const char *mode)
 	}
 
 	/* if opening null device, point to Windows equivalent */
-	if (0 == strncmp(path, NULL_DEVICE, strlen(NULL_DEVICE)))
+	if (0 == strncmp(path, NULL_DEVICE, strlen(NULL_DEVICE)+1))
 		wcsncpy_s(wpath, PATH_MAX, L"NUL", 3);
 	else
 		status = MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, PATH_MAX);
