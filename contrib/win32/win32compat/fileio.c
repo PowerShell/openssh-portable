@@ -404,8 +404,6 @@ cleanup:
 	return ret;
 }
 
-
-#define NULL_DEVICE "/dev/null"
 /* open() implementation. Uses CreateFile to open file, console, device, etc */
 struct w32_io*
 fileio_open(const char *path_utf8, int flags, u_short mode)

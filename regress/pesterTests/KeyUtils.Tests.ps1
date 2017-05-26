@@ -321,25 +321,25 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
         AfterAll{$tC++}
 
 		It "$tC.$tI - ssh-keyscan with default arguments" {
-			iex "ssh-keyscan -p $port 127.0.0.1 2>&1 > out.txt"
-			'out.txt' | Should Contain '.*ssh-rsa.*'
+			cmd /c "ssh-keyscan -p $port 127.0.0.1 2>&1 > $outputFile"
+			$outputFile | Should Contain '.*ssh-rsa.*'
 		}
 
         It "$tC.$tI - ssh-keyscan with -p" {
-			iex "ssh-keyscan -p $port 127.0.0.1 2>&1 > out.txt"
-			'out.txt' | Should Contain '.*ssh-rsa.*'
+			cmd /c "ssh-keyscan -p $port 127.0.0.1 2>&1 > $outputFile"
+			$outputFile | Should Contain '.*ssh-rsa.*'
 		}
 
 		It "$tC.$tI - ssh-keyscan with -f" {
 			Set-Content -Path tmp.txt -Value "127.0.0.1"
-			iex "ssh-keyscan -p $port -f tmp.txt 2>&1 > out.txt"
-			'out.txt' | Should Contain '.*ssh-rsa.*'
+			cmd /c "ssh-keyscan -p $port -f tmp.txt 2>&1 > $outputFile"
+			$outputFile | Should Contain '.*ssh-rsa.*'
 		}
 
 		It "$tC.$tI - ssh-keyscan with -f -t" {
 			Set-Content -Path tmp.txt -Value "127.0.0.1"
-			iex "ssh-keyscan -p $port -f tmp.txt -t rsa,dsa 2>&1 > out.txt"
-			'out.txt' | Should Contain '.*ssh-rsa.*'
+			cmd /c "ssh-keyscan -p $port -f tmp.txt -t rsa,dsa 2>&1 > $outputFile"
+			$outputFile | Should Contain '.*ssh-rsa.*'
 		}
 	}
 }
