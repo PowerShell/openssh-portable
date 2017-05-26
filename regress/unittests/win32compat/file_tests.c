@@ -204,6 +204,15 @@ void file_simple_fileio()
 		ASSERT_INT_EQ(retValue, 0);
 	}
 	
+	{
+		// test null device 
+		FILE *fp = fopen("/dev/null", "r");
+		ASSERT_PTR_NE(fp, NULL);
+
+		f = open("/dev/null", O_RDONLY);
+		ASSERT_INT_NE(f, -1);
+	}
+
 	TEST_DONE();
 }
 

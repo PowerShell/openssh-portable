@@ -247,6 +247,12 @@ w32_fopen_utf8(const char *path, const char *mode)
 		return NULL;
 	}
 
+	if(NULL == path) { 
+		errno = EINVAL;
+		debug3("fopen - ERROR:%d", errno);
+		return NULL; 
+	}
+
 	/* if opening null device, point to Windows equivalent */
 	if (0 == strncmp(path, NULL_DEVICE, strlen(NULL_DEVICE)))
 		wcsncpy_s(wpath, PATH_MAX, L"NUL", 3);
