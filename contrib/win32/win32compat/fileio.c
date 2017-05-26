@@ -359,14 +359,21 @@ createFile_flags_setup(int flags, u_short mode, struct createFile_flags* cf_flag
 
 	/*map mode*/
 	if ((pwd = getpwuid(0)) == NULL)
-		fatal("getpwuid failed.");
+		fatal("getpwuid failed.");	
 
 	if ((sid_utf16 = utf8_to_utf16(pwd->pw_sid)) == NULL) {
 		debug3("Failed to get utf16 of the sid string");
 		errno = ENOMEM;
 		goto cleanup;
 	}
-	if ((mode & S_IRWXU) != 0) {
+
+	if (ConvertStringSidToSid(pwd->pw_sid, &owner_sid) == FALSE ||
+		(IsValidSid(owner_sid) == FALSE)) {
+		debug3("cannot retrieve SID of user %s", pwd->pw_name);
+		goto cleanup;
+	}
+
+	if (!IsWellKnownSid(owner_sid, WinLocalSystemSid) && ((mode & S_IRWXU) != 0)) {
 		if (st_mode_to_file_att((mode & S_IRWXU) >> 6, owner_access) != 0) {
 			debug3("st_mode_to_file_att()");
 			goto cleanup;
@@ -399,13 +406,13 @@ createFile_flags_setup(int flags, u_short mode, struct createFile_flags* cf_flag
 
 	ret = 0;
 cleanup:
+	if (owner_sid)
+		LocalFree(owner_sid);
 	if (sid_utf16)
 		free(sid_utf16);
 	return ret;
 }
 
-
-#define NULL_DEVICE "/dev/null"
 /* open() implementation. Uses CreateFile to open file, console, device, etc */
 struct w32_io*
 fileio_open(const char *path_utf8, int flags, u_short mode)
@@ -424,7 +431,7 @@ fileio_open(const char *path_utf8, int flags, u_short mode)
 	}
 
 	/* if opening null device, point to Windows equivalent */
-	if (strncmp(path_utf8, NULL_DEVICE, strlen(NULL_DEVICE)) == 0) 
+	if (strncmp(path_utf8, NULL_DEVICE, strlen(NULL_DEVICE)+1) == 0) 
 		path_utf8 = "NUL";
 
 	if ((path_utf16 = utf8_to_utf16(path_utf8)) == NULL) {

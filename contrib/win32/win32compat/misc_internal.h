@@ -10,6 +10,9 @@
         goto cleanup;                       \
     }                                       \
 } while(0)
+#define NULL_DEVICE "/dev/null"
+
+#define IS_INVALID_HANDLE(h) ( ((NULL == h) || (INVALID_HANDLE_VALUE == h)) ? 1 : 0 )
 
 /* removes first '/' for Windows paths that are unix styled. Ex: /c:/ab.cd */
 char * sanitized_path(const char *);

@@ -234,9 +234,25 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             cmd /c "ssh-add -d $keyFilePath 2> nul "
         }
 
-        It "$tC.$tI - ssh-add - positive (Secured private key owned by Administrators group)" {
+        It "$tC.$tI - ssh-add - positive (Secured private key owned by Administrators group and the current user has no explicit ACE)" {
             #setup to have local admin group as owner and grant it full control
             Set-FileOwnerAndACL -FilePath $keyFilePath -Owner $adminsAccount -OwnerPerms "FullControl"
+
+            # for ssh-add to consume SSh_ASKPASS, stdin should not be TTY
+            cmd /c "ssh-add $keyFilePath < $nullFile 2> nul "
+            $LASTEXITCODE | Should Be 0
+            $allkeys = ssh-add -L
+            $pubkeyraw = ((Get-Content "$keyFilePath.pub").Split(' '))[1]
+            ($allkeys | where { $_.contains($pubkeyraw) }).count | Should Be 1
+            
+            #clean up
+            cmd /c "ssh-add -d $keyFilePath 2> nul "
+        }
+
+        It "$tC.$tI - ssh-add - positive (Secured private key owned by Administrators group and the current user has explicit ACE)" {
+            #setup to have local admin group as owner and grant it full control
+            Set-FileOwnerAndACL -FilePath $keyFilePath -Owner $adminsAccount -OwnerPerms "FullControl"
+            Add-PermissionToFileACL -FilePath $keyFilePath -User $currentUser -Perm "Read, Write"
 
             # for ssh-add to consume SSh_ASKPASS, stdin should not be TTY
             cmd /c "ssh-add $keyFilePath < $nullFile 2> nul "
@@ -292,26 +308,12 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             $pubkeyraw = ((Get-Content "$keyFilePath.pub").Split(' '))[1]            
             ($allkeys | where { $_.contains($pubkeyraw) }).count | Should Be 0
         }
-
-        It "$tC.$tI - ssh-add- negative (the owner is denied Read perm on private key)" {
-            #setup to have local ssytem account as owner and grant it full control
-            Set-FileOwnerAndACL -FilePath $keyFilePath -owner $systemAccount -OwnerPerms "FullControl"
-            Add-PermissionToFileACL -FilePath $keyFilePath -User $adminsAccount -Perm "FullControl"
-            #deny owner 
-            Add-PermissionToFileACL -FilePath $keyFilePath -User $systemAccount -Perm "Read, Write" -AccessType Deny
-
-            cmd /c "ssh-add $keyFilePath < $nullFile 2> nul "
-            $LASTEXITCODE | Should Not Be 0
-
-            $allkeys = ssh-add -L
-            $pubkeyraw = ((Get-Content "$keyFilePath.pub").Split(' '))[1]            
-            ($allkeys | where { $_.contains($pubkeyraw) }).count | Should Be 0
-        }
     }
 		
     Context "$tC - ssh-keyscan test cases" {
         BeforeAll {
             $tI=1
+            $port = $OpenSSHTestInfo["Port"]
             Remove-item (join-path $testDir "$tC.$tI.out.txt") -force -ErrorAction Ignore
         }
         BeforeEach {
@@ -320,25 +322,25 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
         AfterAll{$tC++}
 
 		It "$tC.$tI - ssh-keyscan with default arguments" {
-			cmd /c "ssh-keyscan -p 22 github.com 2>&1 > $outputFile"
-			$outputFile | Should Contain 'github.com ssh-rsa.*' 			
+			cmd /c "ssh-keyscan -p $port 127.0.0.1 2>&1 > $outputFile"
+			$outputFile | Should Contain '.*ssh-rsa.*'
 		}
 
         It "$tC.$tI - ssh-keyscan with -p" {
-			cmd /c "ssh-keyscan -p 22 github.com 2>&1 > $outputFile"
-			$outputFile | Should Contain 'github.com ssh-rsa.*' 			
+			cmd /c "ssh-keyscan -p $port 127.0.0.1 2>&1 > $outputFile"
+			$outputFile | Should Contain '.*ssh-rsa.*'
 		}
 
 		It "$tC.$tI - ssh-keyscan with -f" {
-			Set-Content -Path tmp.txt -Value "github.com"
-			cmd /c "ssh-keyscan -f tmp.txt 2>&1 > $outputFile"
-			$outputFile | Should Contain 'github.com ssh-rsa.*' 			
+			Set-Content -Path tmp.txt -Value "127.0.0.1"
+			cmd /c "ssh-keyscan -p $port -f tmp.txt 2>&1 > $outputFile"
+			$outputFile | Should Contain '.*ssh-rsa.*'
 		}
 
 		It "$tC.$tI - ssh-keyscan with -f -t" {
-			Set-Content -Path tmp.txt -Value "github.com"
-			cmd /c "ssh-keyscan -f tmp.txt -t rsa,dsa 2>&1 > $outputFile"
-			$outputFile | Should Contain 'github.com ssh-rsa.*' 			
+			Set-Content -Path tmp.txt -Value "127.0.0.1"
+			cmd /c "ssh-keyscan -p $port -f tmp.txt -t rsa,dsa 2>&1 > $outputFile"
+			$outputFile | Should Contain '.*ssh-rsa.*'
 		}
 	}
 }
