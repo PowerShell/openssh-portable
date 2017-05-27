@@ -1049,7 +1049,7 @@ w32_strerror(int errnum)
  * TODO - this needs to be reimplemented as per 
  * https://linux.die.net/man/3/readpassphrase
  */
-char * 
+char *
 readpassphrase(const char *prompt, char *out, size_t out_len, int flags) {
 	char *askpass = NULL;
 	char *ret = NULL;
@@ -1072,24 +1072,28 @@ readpassphrase(const char *prompt, char *out, size_t out_len, int flags) {
 
 	while (len < out_len) {
 		out[len] = (unsigned char)_getch();
-
 		if (out[len] == '\r') {
 			if (_kbhit()) /* read linefeed if its there */
 				_getch();
 			break;
-		}
-		else if (out[len] == '\n') {
+		} else if (out[len] == '\n') {
 			break;
-		}
-		else if (out[len] == '\b') { /* backspace */
-			if (len > 0)
+		} else if (out[len] == '\b') { /* backspace */
+			if (len > 0) {
+				if (flags & 0x1) {
+					printf("%c", out[len]);
+					printf("  \b\b");
+				}
+
 				len--; /* overwrite last character */
-		}
-		else if (out[len] == '\003') {
+			}
+		} else if (out[len] == '\003') {
 			/* exit on Ctrl+C */
 			fatal("");
-		}
-		else {
+		} else {
+			if (flags & 0x1)
+				printf("%c", out[len]);
+
 			len++; /* keep reading in the loop */
 		}
 	}
