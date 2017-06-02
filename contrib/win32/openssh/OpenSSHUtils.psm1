@@ -33,10 +33,10 @@ function Fix-HostKeyPermissions
         [string]$FilePath,
         [switch] $Quiet)
         
-        Fix-FilePermissions -Owners $systemAccount,$adminsAccount -ReadAccessOK $sshdAccount @psBoundParameters
+        Fix-FilePermissions -Owners $systemAccount,$adminsAccount -ReadAccessNeeded $sshdAccount @psBoundParameters
         $publicParameters = $PSBoundParameters
         $publicParameters["FilePath"] += ".pub"
-        Fix-FilePermissions -Owners $systemAccount,$adminsAccount -ReadAccessOK $everyone @publicParameters
+        Fix-FilePermissions -Owners $systemAccount,$adminsAccount -ReadAccessOK $everyone -ReadAccessNeeded $sshdAccount @publicParameters
 }
 
 <#
