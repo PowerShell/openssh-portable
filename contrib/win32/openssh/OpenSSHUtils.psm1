@@ -65,7 +65,7 @@ function Fix-AuthorizedKeyPermissions
         if($profileItem)
         {
             $userSid = $profileItem.PSChildName
-            $account = Get-UserSID -UserSid $userSid
+            $account = Get-UserAccount -UserSid $userSid
             Fix-FilePermissions -Owners $account,$adminsAccount,$systemAccount -AnyAccessOK $account -ReadAccessNeeded $sshdAccount @psBoundParameters
         }
         else
@@ -320,31 +320,38 @@ Need to remove inheritance to fix it.
     if($realReadAccessNeeded)
     {
         $realReadAccessNeeded | % {
-            if (-not $Quiet) {
-                $warning = "'$_' needs Read access to $FilePath'."
-                Do {
-                    Write-Warning $warning
-                    $input = Read-Host -Prompt "Shall I make the above change? [Yes] Y; [No] N (default is `"Y`")"
-                    if([string]::IsNullOrEmpty($input))
-                    {
-                        $input = 'Y'
-                    }        
-                } until ($input -match "^(y(es)?|N(o)?)$")
-                $result = $Matches[0]
-            }
-        
-            if($result.ToLower().Startswith('y'))
+            if([string]::IsNullOrEmpty((Get-UserSID -User $_)))
             {
-                $needChange = $true
-                $ace = New-Object System.Security.AccessControl.FileSystemAccessRule `
-                        ($_, "Read", "None", "None", "Allow")
-                $acl.AddAccessRule($ace)
-                Write-Host "'$_' now has Read access to $FilePath. " -ForegroundColor Green
+                Write-Warning "'$_' needs Read access to $FilePath', but it does not exit on the machine."
             }
             else
             {
-                $health = $false
-                Write-Host "'$_' does not have Read access to $FilePath." -ForegroundColor Yellow
+                if (-not $Quiet) {
+                    $warning = "'$_' needs Read access to $FilePath'."
+                    Do {
+                        Write-Warning $warning
+                        $input = Read-Host -Prompt "Shall I make the above change? [Yes] Y; [No] N (default is `"Y`")"
+                        if([string]::IsNullOrEmpty($input))
+                        {
+                            $input = 'Y'
+                        }        
+                    } until ($input -match "^(y(es)?|N(o)?)$")
+                    $result = $Matches[0]
+                }
+        
+                if($result.ToLower().Startswith('y'))
+                {
+                    $needChange = $true
+                    $ace = New-Object System.Security.AccessControl.FileSystemAccessRule `
+                            ($_, "Read", "None", "None", "Allow")
+                    $acl.AddAccessRule($ace)
+                    Write-Host "'$_' now has Read access to $FilePath. " -ForegroundColor Green
+                }
+                else
+                {
+                    $health = $false
+                    Write-Host "'$_' does not have Read access to $FilePath." -ForegroundColor Yellow
+                }
             }
         }
     }
@@ -403,7 +410,7 @@ function Remove-RuleProtection
     .Synopsis
     Get-UserAccount
 #>
-function Get-UserSID
+function Get-UserAccount
 {
     param
         (   [parameter(Mandatory=$true)]      
@@ -419,5 +426,21 @@ function Get-UserSID
     }
 }
 
+<#
+    .Synopsis
+    Get-UserSID
+#>
+function Get-UserSID
+{
+    param ([System.Security.Principal.NTAccount]$User)    
+    try
+    {
+        $strSID = $User.Translate([System.Security.Principal.SecurityIdentifier])
+        $strSID.Value
+    }
+    catch {
+    }
+}
 
-Export-ModuleMember -Function Fix-FilePermissions, Fix-HostSSHDConfigPermissions, Fix-HostKeyPermissions, Fix-AuthorizedKeyPermissions, Fix-UserKeyPermissions, Fix-UserSSHConfigPermissions
+
+Export-ModuleMember -Function Fix-HostSSHDConfigPermissions, Fix-HostKeyPermissions, Fix-AuthorizedKeyPermissions, Fix-UserKeyPermissions, Fix-UserSSHConfigPermissions
