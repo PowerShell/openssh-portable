@@ -24,6 +24,7 @@ function Fix-HostSSHDConfigPermissions
     .Synopsis
     Fix-HostKeyPermissions
     fix the file owner and permissions of host private and public key
+    -FilePath: The path of the private host key
 #>
 function Fix-HostKeyPermissions
 {
@@ -32,11 +33,15 @@ function Fix-HostKeyPermissions
         [ValidateNotNullOrEmpty()]        
         [string]$FilePath,
         [switch] $Quiet)
-        
+        $parameters = $PSBoundParameters
+        if($parameters["FilePath"].EndsWith(".pub"))
+        {
+            $parameters["FilePath"] = $parameters["FilePath"].Replace(".pub", "")
+        }
         Fix-FilePermissions -Owners $systemAccount,$adminsAccount -ReadAccessNeeded $sshdAccount @psBoundParameters
-        $publicParameters = $PSBoundParameters
-        $publicParameters["FilePath"] += ".pub"
-        Fix-FilePermissions -Owners $systemAccount,$adminsAccount -ReadAccessOK $everyone -ReadAccessNeeded $sshdAccount @publicParameters
+        
+        $parameters["FilePath"] += ".pub"
+        Fix-FilePermissions -Owners $systemAccount,$adminsAccount -ReadAccessOK $everyone -ReadAccessNeeded $sshdAccount @parameters
 }
 
 <#
@@ -78,6 +83,7 @@ function Fix-AuthorizedKeyPermissions
     .Synopsis
     Fix-UserKeyPermissions
     fix the file owner and permissions of user config
+    -FilePath: The path of the private user key
 #>
 function Fix-UserKeyPermissions
 {
@@ -87,10 +93,15 @@ function Fix-UserKeyPermissions
         [string]$FilePath,
         [switch] $Quiet)
 
+        $parameters = $PSBoundParameters
+        if($parameters["FilePath"].EndsWith(".pub"))
+        {
+            $parameters["FilePath"] = $parameters["FilePath"].Replace(".pub", "")
+        }
         Fix-FilePermissions -Owners $currentUser, $adminsAccount,$systemAccount -AnyAccessOK $currentUser @psBoundParameters
-        $publicParameters = $PSBoundParameters
-        $publicParameters["FilePath"] += ".pub"
-        Fix-FilePermissions -Owners $currentUser, $adminsAccount,$systemAccount -AnyAccessOK $currentUser -ReadAccessOK $everyone @publicParameters
+        
+        $parameters["FilePath"] += ".pub"
+        Fix-FilePermissions -Owners $currentUser, $adminsAccount,$systemAccount -AnyAccessOK $currentUser -ReadAccessOK $everyone @parameters
 }
 
 <#

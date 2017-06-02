@@ -12,7 +12,7 @@ else
     Write-host "$FilePath does not exist"  -ForegroundColor Yellow
 }
  
-#check private host keys
+#check host keys
 <#$result = 'n'
 if (-not $Quiet) {
     Do
