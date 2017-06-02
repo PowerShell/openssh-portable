@@ -10,4 +10,5 @@ Get-ChildItem ~\.ssh\* -Include "id_rsa","id_dsa" -ErrorAction Ignore | % {
     Fix-UserKeyPermissions -FilePath $_.FullName @psBoundParameters
 }
 
-Write-Host "--------------------------Done-------------------------------"
+Write-Host "   Done."
+Write-Host " "

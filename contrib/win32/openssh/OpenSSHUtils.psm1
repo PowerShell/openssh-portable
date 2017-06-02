@@ -133,7 +133,7 @@ function Fix-FilePermissions
         return
     }
     
-    Write-host "----------Validating $FilePath----------"
+    Write-host "  [*] $FilePath"
     $return = Fix-FilePermissionInternal @PSBoundParameters
 
     if($return -contains $true) 
@@ -372,7 +372,14 @@ Need to remove inheritance to fix it.
     }
     if($health)
     {
-        Write-Host "-----------$FilePath looks good!-------- "  -ForegroundColor Green
+        if ($needChange) 
+        {
+            Write-Host "      fixed permissions" -ForegroundColor Yellow
+        }
+        else 
+        {
+            Write-Host "      looks good"  -ForegroundColor Green
+        }
     }
     Write-host " "
 }

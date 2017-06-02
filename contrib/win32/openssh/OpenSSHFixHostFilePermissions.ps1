@@ -30,6 +30,7 @@ steps in link https://github.com/PowerShell/Win32-OpenSSH/wiki/Install-Win32-Ope
 If you choose not to register the keys with ssh-agent, please grant sshd read access to the private host keys after run this script.
 "@
     Write-Warning $warning
+    Write-Host " "
 }
 
 Get-ChildItem $PSScriptRoot\ssh_host_*_key -ErrorAction Ignore | % {    
@@ -47,4 +48,5 @@ Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList"  
     }
 }
 
-Write-Host "--------------------------Done-------------------------------"
+Write-Host "   Done."
+Write-Host " "
