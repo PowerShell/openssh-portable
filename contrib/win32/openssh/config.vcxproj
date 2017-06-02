@@ -148,9 +148,10 @@
     <PostBuildEvent>
       <Command>copy /Y $(SolutionDir)install-ssh*ps1 $(OutDir)
 copy /Y $(SolutionDir)uninstall-ssh*ps1 $(OutDir)
-copy /Y $(SolutionDir)OpenSSHCheckHostConfig.ps1 $(OutDir)
+copy /Y $(SolutionDir)OpenSSHUtils.psm1 $(OutDir)
+copy /Y $(SolutionDir)OpenSSHFix*FilePermissions.ps1 $(OutDir)
 If NOT exist $(OutDir)\sshd_config (copy $(SolutionDir)sshd_config $(OutDir))</Command>
-      <Message>Copy install-sshd.ps1, uninstall-sshd.ps1, OpenSSHCheckHostConfig.ps1, and sshd_config (if not already present) to build directory</Message>
+      <Message>Copy install-sshd.ps1, uninstall-sshd.ps1, OpenSSHUtils.psm1, OpenSSHFix*FilePermissions.ps1, and sshd_config (if not already present) to build directory</Message>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -215,9 +216,10 @@ If NOT exist $(OutDir)\sshd_config (copy $(SolutionDir)sshd_config $(OutDir))</C
     <PostBuildEvent>
       <Command>copy /Y $(SolutionDir)install-ssh*ps1 $(OutDir)
 copy /Y $(SolutionDir)uninstall-ssh*ps1 $(OutDir)
-copy /Y $(SolutionDir)OpenSSHCheckHostConfig.ps1 $(OutDir)
+copy /Y $(SolutionDir)OpenSSHUtils.psm1 $(OutDir)
+copy /Y $(SolutionDir)OpenSSHFix*FilePermissions.ps1 $(OutDir)
 If NOT exist $(OutDir)\sshd_config (copy $(SolutionDir)sshd_config $(OutDir))</Command>
-      <Message>Copy install-sshd.ps1, uninstall-sshd.ps1, OpenSSHCheckHostConfig.ps1, and sshd_config (if not already present) to build directory</Message>
+      <Message>Copy install-sshd.ps1, uninstall-sshd.ps1, OpenSSHUtils.psm1, OpenSSHFix*FilePermissions.ps1, and sshd_config (if not already present) to build directory</Message>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
