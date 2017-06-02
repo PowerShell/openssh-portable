@@ -1065,7 +1065,7 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags) {
 	free(wtmp);
 
 	while (currentIndex < outBufLen - 1) {
-		ch = (unsigned char)_getch();
+		ch = _getch();
 		
 		if (ch == '\r') {
 			if (_kbhit()) _getch(); /* read linefeed if its there */				
