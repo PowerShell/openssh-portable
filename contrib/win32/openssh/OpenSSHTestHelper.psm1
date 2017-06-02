@@ -168,9 +168,8 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     #register host keys with agent
     Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*"| % {
-        if (-not ($_.Name.EndsWith(".pub"))) {
-            $cmd = "cmd /c `"$env:ProgramData\chocolatey\lib\sysinternals\tools\psexec -accepteula -nobanner -s -w $($script:OpenSSHBinPath) ssh-add $_ 2> tmp.txt`""
-            iex $cmd
+        if (-not ($_.Name.EndsWith(".pub"))) {            
+            & "$env:ProgramData\chocolatey\lib\sysinternals\tools\psexec" -accepteula -nobanner -i -s -w $($script:OpenSSHBinPath) cmd.exe /c "ssh-add $_"            
         }
     }
     Restart-Service sshd -Force
