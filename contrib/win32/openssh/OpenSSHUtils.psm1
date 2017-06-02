@@ -54,7 +54,7 @@ function Fix-AuthorizedKeyPermissions
 
         if(-not (Test-Path $FilePath -PathType Leaf))
         {
-            Write-host "----$FilePath not found------"
+            Write-host "$FilePath not found" -ForegroundColor Yellow
             return
         }
         $fullPath = (Resolve-Path $FilePath).Path
@@ -70,7 +70,7 @@ function Fix-AuthorizedKeyPermissions
         }
         else
         {
-            Write-host "----$fullPath is not in the profile folder of any user------"
+            Write-host "$fullPath is not in the profile folder of any user. Skip checking..." -ForegroundColor Yellow
         }
 }
 
@@ -129,7 +129,7 @@ function Fix-FilePermissions
 
     if(-not (Test-Path $FilePath -PathType Leaf))
     {
-        Write-host "----$FilePath not found------"
+        Write-host "$FilePath not found" -ForegroundColor Yellow
         return
     }
     
@@ -198,16 +198,24 @@ function Fix-FilePermissionInternal {
 
     $ReadAccessPerm = ([System.UInt32] [System.Security.AccessControl.FileSystemRights]::Read.value__) -bor `
                     ([System.UInt32] [System.Security.AccessControl.FileSystemRights]::Synchronize.value__)
+
+    #system and admin groups can have any access to the file; plus the account in the AnyAccessOK list
     $realAnyAccessOKList = $AnyAccessOK + @($systemAccount, $adminsAccount)
+
+    #if accounts in the ReadAccessNeeded already part of dacl, they are okay; need to make sure they have read access only
     $realReadAcessOKList = $ReadAccessOK + $ReadAccessNeeded
+
+    #this is orginal list requested by the user, the account will be removed from the list if they already part of the dacl
     $realReadAccessNeeded = $ReadAccessNeeded
 
     foreach($a in $acl.Access)
     {
         if(($realAnyAccessOKList -ne $null) -and $realAnyAccessOKList.Contains($a.IdentityReference))
         {
-            #ingore identities
+            #ignore those accounts listed in the AnyAccessOK list.
         }
+        #If everyone is in the ReadAccessOK list, any user can have read access;
+        # below block make sure they are granted Read access only
         elseif($realReadAcessOKList -and (($realReadAcessOKList.Contains($everyone)) -or `
              ($realReadAcessOKList.Contains($a.IdentityReference))))
         {
@@ -269,6 +277,7 @@ Need to remove inheritance to fix it.
                 Write-Host "'$($a.IdentityReference)' still has these access to $($FilePath): '$($a.FileSystemRights)'." -ForegroundColor Yellow
             }
           }
+        #other than AnyAccessOK and ReadAccessOK list, if any other account is allowed, they should be removed from the dacl
         elseif($a.AccessControlType.Equals([System.Security.AccessControl.AccessControlType]::Allow))
         {
             
@@ -317,6 +326,7 @@ Need to remove inheritance to fix it.
         }    
     }
 
+    #This is the real account list we need to add read access to the file
     if($realReadAccessNeeded)
     {
         $realReadAccessNeeded | % {

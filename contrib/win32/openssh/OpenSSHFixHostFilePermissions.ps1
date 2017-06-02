@@ -9,7 +9,7 @@ if(Test-Path $sshdConfigPath -PathType Leaf)
 }
 else
 {
-    Write-host "----------$FilePath does not exist----------"O
+    Write-host "$FilePath does not exist"  -ForegroundColor Yellow
 }
  
 #check private host keys
