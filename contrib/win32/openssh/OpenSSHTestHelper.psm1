@@ -168,8 +168,9 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     #register host keys with agent
     Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*"| % {
-        if (-not ($_.Name.EndsWith(".pub"))) {            
-            & "$env:ProgramData\chocolatey\lib\sysinternals\tools\psexec" -accepteula -nobanner -i -s -w $($script:OpenSSHBinPath) cmd.exe /c "ssh-add $_"            
+        if (-not ($_.Name.EndsWith(".pub"))) {
+            & "$env:ProgramData\chocolatey\lib\sysinternals\tools\psexec" -accepteula -nobanner -i -s -w $($script:OpenSSHBinPath) cmd.exe /c "ssh-add $_"
+            Add-PermissionToFileACL -FilePath $_.FullName -User "NT Service\sshd" -Perm "Read"
         }
     }
     Restart-Service sshd -Force
@@ -274,7 +275,7 @@ function Install-OpenSSHTestDependencies
 
     if ( -not (Test-Path "$env:ProgramData\chocolatey\lib\sysinternals\tools" ) ) {        
         Write-Log -Message "sysinternals not present. Installing sysinternals."
-        choco install sysinternals -y --force --limitoutput --version 2017.05.16 2>&1 >> $Script:TestSetupLogFile
+        choco install sysinternals -y --force --limitoutput 2>&1 >> $Script:TestSetupLogFile
     }
 }
 <#
