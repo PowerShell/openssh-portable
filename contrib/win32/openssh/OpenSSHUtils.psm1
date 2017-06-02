@@ -13,10 +13,10 @@ function Fix-HostSSHDConfigPermissions
 {
     param (
         [parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        [ValidateScript({Test-Path $_ })]
+        [ValidateNotNullOrEmpty()]        
         [string]$FilePath,
         [switch] $Quiet)
+
         Fix-FilePermissions -Owners $systemAccount,$adminsAccount -ReadAccessNeeded $sshdAccount @psBoundParameters
 }
 
@@ -29,11 +29,10 @@ function Fix-HostKeyPermissions
 {
     param (
         [parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        [ValidateScript({Test-Path $_ })]
+        [ValidateNotNullOrEmpty()]        
         [string]$FilePath,
-        [switch] $Quiet)        
-
+        [switch] $Quiet)
+        
         Fix-FilePermissions -Owners $systemAccount,$adminsAccount -ReadAccessOK $sshdAccount @psBoundParameters
         $publicParameters = $PSBoundParameters
         $publicParameters["FilePath"] += ".pub"
@@ -49,19 +48,30 @@ function Fix-AuthorizedKeyPermissions
 {
     param (
         [parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        [ValidateScript({Test-Path $_ })]
+        [ValidateNotNullOrEmpty()]        
         [string]$FilePath,
-        [switch] $Quiet)
-        
+        [switch] $Quiet)        
+
+        if(-not (Test-Path $FilePath -PathType Leaf))
+        {
+            Write-host "----$FilePath not found------"
+            return
+        }
         $fullPath = (Resolve-Path $FilePath).Path
         $profileListPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList"
         $profileItem = Get-ChildItem $profileListPath  -ErrorAction Ignore | ? { 
             $fullPath.ToLower().Contains((Get-ItemPropertyValue $_.PSPath -Name ProfileImagePath -ErrorAction Ignore).Tolower())
         }
-        $userSid = $profileItem.PSChildName
-        $account = Get-UserSID -UserSid $userSid
-        Fix-FilePermissions -Owners $account,$adminsAccount,$systemAccount -AnyAccessOK $account -ReadAccessNeeded $sshdAccount @psBoundParameters
+        if($profileItem)
+        {
+            $userSid = $profileItem.PSChildName
+            $account = Get-UserSID -UserSid $userSid
+            Fix-FilePermissions -Owners $account,$adminsAccount,$systemAccount -AnyAccessOK $account -ReadAccessNeeded $sshdAccount @psBoundParameters
+        }
+        else
+        {
+            Write-host "----$fullPath is not in the profile folder of any user------"
+        }
 }
 
 <#
@@ -73,8 +83,7 @@ function Fix-UserKeyPermissions
 {
     param (
         [parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        [ValidateScript({Test-Path $_ })]
+        [ValidateNotNullOrEmpty()]        
         [string]$FilePath,
         [switch] $Quiet)
 
@@ -93,8 +102,7 @@ function Fix-UserSSHConfigPermissions
 {
     param (
         [parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        [ValidateScript({Test-Path $_ })]
+        [ValidateNotNullOrEmpty()]        
         [string]$FilePath,
         [switch] $Quiet)
         Fix-FilePermissions -Owners $currentUser,$adminsAccount,$systemAccount -AnyAccessOK $currentUser @psBoundParameters
@@ -109,8 +117,7 @@ function Fix-FilePermissions
 {
     param (        
         [parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        [ValidateScript({Test-Path $_ })]
+        [ValidateNotNullOrEmpty()]        
         [string]$FilePath,
         [ValidateNotNull()]
         [System.Security.Principal.NTAccount[]] $Owners = $currentUser,
@@ -118,7 +125,13 @@ function Fix-FilePermissions
         [System.Security.Principal.NTAccount[]] $ReadAccessOK,
         [System.Security.Principal.NTAccount[]] $ReadAccessNeeded,
         [switch] $Quiet
-    )   
+    )
+
+    if(-not (Test-Path $FilePath -PathType Leaf))
+    {
+        Write-host "----$FilePath not found------"
+        return
+    }
     
     Write-host "----------Validating $FilePath----------"
     $return = Fix-FilePermissionInternal @PSBoundParameters
