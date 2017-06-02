@@ -274,7 +274,7 @@ function Install-OpenSSHTestDependencies
 
     if ( -not (Test-Path "$env:ProgramData\chocolatey\lib\sysinternals\tools" ) ) {        
         Write-Log -Message "sysinternals not present. Installing sysinternals."
-        choco install sysinternals -y --force --limitoutput 2>&1 >> $Script:TestSetupLogFile
+        choco install sysinternals -y --force --limitoutput --version 2017.05.16 2>&1 >> $Script:TestSetupLogFile
     }
 }
 <#
