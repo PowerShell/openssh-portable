@@ -77,7 +77,7 @@ function Fix-AuthorizedKeyPermissions
             }
             else
             {
-                Write-host "Can't translate $userSid to an account. skip $fullPath..." -ForegroundColor Yellow
+                Write-Warning "Can't translate $userSid to an account. skip $fullPath..." -ForegroundColor Yellow
             }
         }
         else
@@ -516,4 +516,4 @@ function Get-UserSID
 }
 
 
-Export-ModuleMember -Function Fix-HostSSHDConfigPermissions, Fix-HostKeyPermissions, Fix-AuthorizedKeyPermissions, Fix-UserKeyPermissions, Fix-UserSSHConfigPermissions
+Export-ModuleMember -Function Fix-FilePermissions, Fix-HostSSHDConfigPermissions, Fix-HostKeyPermissions, Fix-AuthorizedKeyPermissions, Fix-UserKeyPermissions, Fix-UserSSHConfigPermissions
