@@ -158,6 +158,8 @@ WARNING: Following changes will be made to OpenSSH configuration
     # copy new sshd_config
     Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) (Join-Path $script:OpenSSHBinPath sshd_config) -Force
     
+    Start-Service ssh-agent
+
     #copy sshtest keys
     Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force    
     Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*"| % {
@@ -299,7 +301,7 @@ function Get-UserSID
 function Cleanup-OpenSSHTestEnvironment
 {   
     if($Global:OpenSSHTestInfo -eq $null) {
-        throw "OpenSSHTestInfo is not set. Did you run Set-OpenSShTestEnvironment?"
+        throw "OpenSSHTestInfo is not set. Did you run Setup-OpenSShTestEnvironment?"
     }
 
     $sshBinPath = $Global:OpenSSHTestInfo["OpenSSHBinPath"]
