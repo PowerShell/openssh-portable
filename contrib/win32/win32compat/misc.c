@@ -1047,7 +1047,7 @@ w32_strerror(int errnum)
 
 char *
 readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags) {
-	int currentIndex = 0;
+	int current_index = 0;
 	char ch;
 	wchar_t* wtmp = NULL;
 
@@ -1070,7 +1070,7 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags) {
 	_cputws(wtmp);
 	free(wtmp);
 
-	while (currentIndex < outBufLen - 1) {
+	while (current_index < outBufLen - 1) {
 		ch = _getch();
 		
 		if (ch == '\r') {
@@ -1079,11 +1079,11 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags) {
 		} else if (ch == '\n') {
 			break;
 		} else if (ch == '\b') { /* backspace */
-			if (currentIndex > 0) {
+			if (current_index > 0) {
 				if (flags & RPP_ECHO_ON)
 					printf("%c \b", ch);
 
-				currentIndex--; /* overwrite last character */
+				current_index--; /* overwrite last character */
 			}
 		} else if (ch == '\003') { /* exit on Ctrl+C */
 			fatal("");
@@ -1098,13 +1098,13 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags) {
 					ch = toupper((unsigned char)ch);
 			}
 
-			outBuf[currentIndex++] = ch;
+			outBuf[current_index++] = ch;
 			if(flags & RPP_ECHO_ON)
 				printf("%c", ch);
 		}
 	}
 
-	outBuf[currentIndex] = '\0';
+	outBuf[current_index] = '\0';
 	_cputs("\n");
 
 	return outBuf;
