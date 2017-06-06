@@ -16,34 +16,30 @@
 #>
 
 # see https://linux.die.net/man/1/ssh-add for what the arguments mean
-Param(
-  ## if parametersets are specified, "ssh-add-hostkey hostkey" is not working
-  #[Parameter(ParameterSetName="List_fingerprints")]
+[CmdletBinding(DefaultParameterSetName='Add_key')]
+Param(    
+  [Parameter(ParameterSetName="List_fingerprints")]
   [switch]$List_fingerprints, #ssh-add -l 
-  #[Parameter(ParameterSetName="List_pubkeys")]
+  [Parameter(ParameterSetName="List_pubkeys")]
   [switch]$List_pubkeys,      #ssh-add -L 
-  #[Parameter(ParameterSetName="Delete_key")]
+  [Parameter(ParameterSetName="Delete_key")]
   [switch]$Delete_key,        #ssh-add -d 
-  #[Parameter(ParameterSetName="Delete_all")]
-  [switch]$Delete_all,        #ssh-add -D
-  [string]$key="" 
-
+  [Parameter(ParameterSetName="Delete_all")]
+  [switch]$Delete_all,       #ssh-add -D
+  [Parameter(Mandatory, Position=0, ParameterSetName="Delete_key")]
+  [Parameter(Mandatory, Position=0, ParameterSetName="Add_key")] 
+  [ValidateNotNullOrEmpty()]
+  [string]$key
 )
-
-$switch_count = 0
-if ($List_fingerprints) {$switch_count++}
-if ($List_pubkeys)      {$switch_count++}
-if ($Delete_key)        {$switch_count++}
-if ($Delete_all)        {$switch_count++}        
-
-if ($switch_count -gt 1) {
-    throw "Invalid usage: More than one operation specified"
-}
-
 
 #create ssh-add cmdlinet
 $ssh_add_cmd = "ssh-add"
-if ($switch_count -eq 0)    {
+if ($List_fingerprints) { $ssh_add_cmd += " -l" } 
+elseif ($List_pubkeys)      { $ssh_add_cmd += " -L" } 
+elseif ($Delete_key)        { $ssh_add_cmd += " -d $key" } 
+elseif ($Delete_all)        { $ssh_add_cmd += " -D" } 
+else
+{
     if ( ($key.Length -gt 0) -and (-not($key.Contains("host"))) ) {
         Do {
             $input = Read-Host -Prompt "Are you sure the provided key is a host key? [Yes] Y; [No] N (default is `"Y`")"
@@ -57,16 +53,12 @@ if ($switch_count -eq 0)    {
     }
     $ssh_add_cmd += " $key"
 }
-elseif ($List_fingerprints) { $ssh_add_cmd += " -l" } 
-elseif ($List_pubkeys)      { $ssh_add_cmd += " -L" } 
-elseif ($Delete_key)        { $ssh_add_cmd += " -d $key" } 
-elseif ($Delete_all)        { $ssh_add_cmd += " -D" } 
 
 #globals
 $taskfolder = "\OpenSSHUtils\hostkey_tasks\"
 $taskname = "hostkey_task"
 $ssh_add_output = Join-Path (pwd).Path "ssh-add-hostkey-tmp.txt"
-$task_argument = "/c `"$ssh_add_cmd > $ssh_add_output 2>&1`""
+$task_argument = "/c `"$ssh_add_cmd 2>&1 > $ssh_add_output`""
 
 #create TaskScheduler task
 $ac = New-ScheduledTaskAction -Execute "cmd.exe" -Argument $task_argument -WorkingDirectory (pwd).path
@@ -77,7 +69,13 @@ if (Test-Path $ssh_add_output) {Remove-Item $ssh_add_output -Force}
 Start-ScheduledTask -TaskPath $taskfolder -TaskName $taskname
 
 #if still running, wait a little while for task to complete
-if ((Get-ScheduledTask -TaskName $taskname -TaskPath $taskfolder).State -eq "Running") {sleep 1}
+$num = 0
+while ((Get-ScheduledTask -TaskName $taskname -TaskPath $taskfolder).State -eq "Running")
+{
+    sleep 1
+    $num++
+    if($num -gt 20) { break }
+}
 if (-not(Test-Path $ssh_add_output)) {throw "cannot find task output file. Something went WRONG!!! "}
 
 #dump output to console
