@@ -161,7 +161,6 @@ WARNING: Following changes will be made to OpenSSH configuration
     Start-Service ssh-agent
 
     #copy sshtest keys
-    Push-Location $script:OpenSSHBinPath
     Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force    
     Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*"| % {
         #workaround for the cariggage new line added by git before copy them
@@ -172,7 +171,6 @@ WARNING: Following changes will be made to OpenSSH configuration
             ssh-add-hostkey.ps1 $_.FullName
         }
     }
-    Pop-Location
 
     Restart-Service sshd -Force
    
@@ -313,12 +311,12 @@ function Cleanup-OpenSSHTestEnvironment
     {
         Throw "Cannot find OpenSSH binaries under $script:OpenSSHBinPath. "
     }
-    Push-Location $sshBinPath
+    
     #unregister test host keys from agent
     Get-ChildItem "$sshBinPath\sshtest*hostkey*.pub"| % {
         ssh-add-hostkey.ps1 -Delete_key $_.FullName
     }
-    Pop-Location
+    
     Remove-Item $sshBinPath\sshtest*hostkey* -Force -ErrorAction SilentlyContinue    
     #Restore sshd_config
     $backupConfigPath = Join-Path $sshBinPath sshd_config.ori

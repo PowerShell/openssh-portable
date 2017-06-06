@@ -32,12 +32,18 @@ Param(
   [string]$key
 )
 
+$ssh_add_cmd = get-command ssh-add.exe -ErrorAction Ignore
+if($ssh_add_cmd -eq $null)
+{
+    Throw "Cannot find ssh-add.exe."
+}
+
 #create ssh-add cmdlinet
-$ssh_add_cmd = "ssh-add"
-if ($List_fingerprints) { $ssh_add_cmd += " -l" } 
-elseif ($List_pubkeys)      { $ssh_add_cmd += " -L" } 
-elseif ($Delete_key)        { $ssh_add_cmd += " -d $key" } 
-elseif ($Delete_all)        { $ssh_add_cmd += " -D" } 
+$ssh_add_cmd_str = $ssh_add_cmd.Path
+if ($List_fingerprints) { $ssh_add_cmd_str += " -l" } 
+elseif ($List_pubkeys)      { $ssh_add_cmd_str += " -L" } 
+elseif ($Delete_key)        { $ssh_add_cmd_str += " -d $key" } 
+elseif ($Delete_all)        { $ssh_add_cmd_str += " -D" } 
 else
 {
     if ( ($key.Length -gt 0) -and (-not($key.Contains("host"))) ) {
@@ -51,14 +57,14 @@ else
         $result = $Matches[0]
         if (-not($result.ToLower().Startswith('y'))) { exit }            
     }
-    $ssh_add_cmd += " $key"
+    $ssh_add_cmd_str += " $key"
 }
 
 #globals
 $taskfolder = "\OpenSSHUtils\hostkey_tasks\"
 $taskname = "hostkey_task"
 $ssh_add_output = Join-Path (pwd).Path "ssh-add-hostkey-tmp.txt"
-$task_argument = "/c `"$ssh_add_cmd > $ssh_add_output 2>&1 `""
+$task_argument = "/c `"$ssh_add_cmd_str > $ssh_add_output 2>&1 `""
 
 #create TaskScheduler task
 $ac = New-ScheduledTaskAction -Execute "cmd.exe" -Argument $task_argument -WorkingDirectory (pwd).path
