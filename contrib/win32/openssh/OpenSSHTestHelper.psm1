@@ -305,7 +305,6 @@ function Cleanup-OpenSSHTestEnvironment
     }
 
     $sshBinPath = $Global:OpenSSHTestInfo["OpenSSHBinPath"]
-    $curdir = (pwd).Path
 
     # .exe - Windows specific. TODO - PAL 
     if (-not (Test-Path (Join-Path $sshBinPath ssh.exe) -PathType Leaf))
@@ -313,13 +312,17 @@ function Cleanup-OpenSSHTestEnvironment
         Throw "Cannot find OpenSSH binaries under $script:OpenSSHBinPath. "
     }
 
+    # if sshbinpath is not set in system wide %PATH%, ssh-add-hostkey.ps1 -Delete_key doesn't work
+    # hence changing directory here as a work around to support dev environments where sshbinpath is 
+    # only set in local %PATH%
+    Push-Location .
     cd $sshBinPath
     #unregister test host keys from agent
     Get-ChildItem "sshtest*hostkey*.pub"| % {
         ssh-add-hostkey.ps1 -Delete_key $_.FullName
     }
     Remove-Item sshtest*hostkey* -Force -ErrorAction SilentlyContinue
-    cd $curdir
+    Pop-Location
     
     #Restore sshd_config
     $backupConfigPath = Join-Path $sshBinPath sshd_config.ori

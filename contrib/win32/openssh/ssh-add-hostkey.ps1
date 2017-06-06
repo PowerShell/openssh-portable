@@ -17,9 +17,14 @@
 
 # see https://linux.die.net/man/1/ssh-add for what the arguments mean
 Param(
+  ## if parametersets are specified, "ssh-add-hostkey hostkey" is not working
+  #[Parameter(ParameterSetName="List_fingerprints")]
   [switch]$List_fingerprints, #ssh-add -l 
+  #[Parameter(ParameterSetName="List_pubkeys")]
   [switch]$List_pubkeys,      #ssh-add -L 
+  #[Parameter(ParameterSetName="Delete_key")]
   [switch]$Delete_key,        #ssh-add -d 
+  #[Parameter(ParameterSetName="Delete_all")]
   [switch]$Delete_all,        #ssh-add -D
   [string]$key="" 
 
@@ -35,9 +40,23 @@ if ($switch_count -gt 1) {
     throw "Invalid usage: More than one operation specified"
 }
 
+
 #create ssh-add cmdlinet
 $ssh_add_cmd = "ssh-add"
-if ($switch_count -eq 0)    { $ssh_add_cmd += " $key"  }
+if ($switch_count -eq 0)    {
+    if ( ($key.Length -gt 0) -and (-not($key.Contains("host"))) ) {
+        Do {
+            $input = Read-Host -Prompt "Are you sure the provided key is a host key? [Yes] Y; [No] N (default is `"Y`")"
+            if([string]::IsNullOrEmpty($input))
+            {
+                $input = 'Y'
+            }        
+        } until ($input -match "^(y(es)?|N(o)?)$")
+        $result = $Matches[0]
+        if (-not($result.ToLower().Startswith('y'))) { exit }            
+    }
+    $ssh_add_cmd += " $key"
+}
 elseif ($List_fingerprints) { $ssh_add_cmd += " -l" } 
 elseif ($List_pubkeys)      { $ssh_add_cmd += " -L" } 
 elseif ($Delete_key)        { $ssh_add_cmd += " -d $key" } 
@@ -57,8 +76,8 @@ $task = Register-ScheduledTask -TaskName $taskname -User System -Action $ac -Tas
 if (Test-Path $ssh_add_output) {Remove-Item $ssh_add_output -Force}
 Start-ScheduledTask -TaskPath $taskfolder -TaskName $taskname
 
-#wait a little while for task to complete
-Sleep 1
+#if still running, wait a little while for task to complete
+if ((Get-ScheduledTask -TaskName $taskname -TaskPath $taskfolder).State -eq "Running") {sleep 1}
 if (-not(Test-Path $ssh_add_output)) {throw "cannot find task output file. Something went WRONG!!! "}
 
 #dump output to console
