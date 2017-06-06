@@ -371,7 +371,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 	wchar_t *exec_command_w = NULL, *pw_dir_w;
 
 	if (s->is_subsystem >= SUBSYSTEM_INT_SFTP_ERROR) {
-		error("sub system not supported, exiting");
+		error("This service allows sftp connections only.\n");
 		fflush(NULL);
 		exit(1);
 	}
@@ -412,7 +412,12 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 				fatal("%s, out of memory", __func__);
 			memcpy(exec_command, progdir, strlen(progdir));
 			exec_command[strlen(progdir)] = '\\';
-			memcpy(exec_command + strlen(progdir) + 1, command, strlen(command) + 1);
+
+			if(IS_INTERNAL_SFTP(command)) {
+				const char *s = "sftp-server.exe";
+				memcpy(exec_command + strlen(progdir) + 1, s, strlen(s) + 1);
+			} else
+				memcpy(exec_command + strlen(progdir) + 1, command, strlen(command) + 1);
 		}
 	} else {
 		/* 
