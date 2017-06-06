@@ -1049,15 +1049,21 @@ char *
 readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags) {
 	int currentIndex = 0;
 	char ch;
+	wchar_t* wtmp = NULL;
 
 	if (outBufLen == 0) {
 		errno = EINVAL;
-		return(NULL);
+		return NULL;
 	}
-	
+
+	if ((flags & RPP_REQUIRE_TTY) && (open(TTY_DEVICE, O_RDWR)) == -1) {
+		errno = ENOTTY;
+		return NULL;
+	}
+
 	while (_kbhit()) _getch();
 
-	wchar_t* wtmp = utf8_to_utf16(prompt);
+	wtmp = utf8_to_utf16(prompt);
 	if (wtmp == NULL)
 		fatal("unable to alloc memory");
 
@@ -1068,7 +1074,7 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags) {
 		ch = _getch();
 		
 		if (ch == '\r') {
-			if (_kbhit()) _getch(); /* read linefeed if its there */				
+			if (_kbhit()) _getch(); /* read linefeed if its there */
 			break;
 		} else if (ch == '\n') {
 			break;
