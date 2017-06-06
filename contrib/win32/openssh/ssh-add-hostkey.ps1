@@ -58,7 +58,7 @@ else
 $taskfolder = "\OpenSSHUtils\hostkey_tasks\"
 $taskname = "hostkey_task"
 $ssh_add_output = Join-Path (pwd).Path "ssh-add-hostkey-tmp.txt"
-$task_argument = "/c `"$ssh_add_cmd 2>&1 > $ssh_add_output`""
+$task_argument = "/c `"$ssh_add_cmd > $ssh_add_output 2>&1 `""
 
 #create TaskScheduler task
 $ac = New-ScheduledTaskAction -Execute "cmd.exe" -Argument $task_argument -WorkingDirectory (pwd).path
