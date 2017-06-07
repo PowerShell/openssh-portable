@@ -423,11 +423,9 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 			cmd += strlen(progdir);
 			*cmd++ = '\\';
 
-			/* Unix launches internal-sftp in the sshd context but in windows it will be launched as separate process.
-			 * In windows, sftp-server.exe runs in the user context and sshd runs in the sshd context.
-			 * To run internal-sftp in the sshd context, we need to impersonate the sshd process.
-			 * Impersonating can lead to a big security issue so the internal-sftp runs as a separate process.
-			 * Windwos doesn't support ChrootDirectory so launching sftp as separate process makes no difference.
+			/* In windows, SSHD always runs in the sshd context so we will create a separate process (sftp-server.exe) that runs in the user context.
+			 * This is a deviation from the UNIX implementation.
+			 * If we need to be aligned with the UNIX implementation then SSHD needs impersonate permissions which can lead to a big security issue.
 			 */
 			if(IS_INTERNAL_SFTP(command)) {
 				memcpy(cmd, sftp_exe, strlen(sftp_exe) + 1);
