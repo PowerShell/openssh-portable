@@ -1056,12 +1056,6 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags) {
 		return NULL;
 	}
 
-	//if ((flags & RPP_REQUIRE_TTY) && (open(TTY_DEVICE, O_RDWR)) == -1) {
-	//	error("Couldn't read from the tty");
-	//	errno = ENOTTY;
-	//	return NULL;
-	//}
-
 	while (_kbhit()) _getch();
 
 	wtmp = utf8_to_utf16(prompt);

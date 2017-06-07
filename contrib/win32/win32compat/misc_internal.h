@@ -11,7 +11,6 @@
     }                                       \
 } while(0)
 #define NULL_DEVICE "/dev/null"
-#define TTY_DEVICE "/dev/tty"
 
 #define IS_INVALID_HANDLE(h) ( ((NULL == h) || (INVALID_HANDLE_VALUE == h)) ? 1 : 0 )
 

@@ -433,9 +433,6 @@ file_miscellaneous_tests()
 	ASSERT_INT_NE(f, -1);
 	close(f);
 
-	f = open("/dev/tty", O_RDWR);
-	ASSERT_INT_NE(f, -1);
-
 	f = open(tmp_filename, O_RDWR | O_CREAT | O_TRUNC, 0600);
 	ASSERT_INT_NE(f, -1);
 	int f1 = dup(f);
