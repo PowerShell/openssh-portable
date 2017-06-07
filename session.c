@@ -367,8 +367,15 @@ int register_child(void* child, unsigned long pid);
 
 int do_exec_windows(Session *s, const char *command, int pty) {
 	int pipein[2], pipeout[2], pipeerr[2], r;
-	char *exec_command = NULL, *progdir = w32_programdir();
+	char *exec_command = NULL, *progdir = w32_programdir(), *cmd = NULL, *shell_host = NULL, *command_b64 = NULL;
 	wchar_t *exec_command_w = NULL, *pw_dir_w;
+	const char *sftp_exe = "sftp-server.exe";
+	size_t command_b64_len = 0;
+	PROCESS_INFORMATION pi;
+	STARTUPINFOW si;
+	BOOL create_process_ret_val;
+	HANDLE hToken = INVALID_HANDLE_VALUE;
+	extern int debug_flag;
 
 	if (s->is_subsystem >= SUBSYSTEM_INT_SFTP_ERROR) {
 		error("This service allows sftp connections only.\n");
@@ -406,28 +413,33 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		if (command[1] == ':') /* absolute */
 			exec_command = xstrdup(command);
 		else {/*relative*/
-			const int command_len = strlen(progdir) + 1 + strlen(command) + 2;
+			const int command_len = strlen(progdir) + 1 + strlen(command) + (strlen(sftp_exe) - strlen(INTERNAL_SFTP_NAME));
 			exec_command = malloc(command_len);
 			if (exec_command == NULL)
 				fatal("%s, out of memory", __func__);
 						
-			char *c = exec_command;
-			memcpy(c, progdir, strlen(progdir));
-			c += strlen(progdir);
-			*c++ = '\\';
+			cmd = exec_command;
+			memcpy(cmd, progdir, strlen(progdir));
+			cmd += strlen(progdir);
+			*cmd++ = '\\';
 
+			/* Unix launches internal-sftp in the sshd context but in windows it will be launched as separate process.
+			 * In windows, sftp-server.exe runs in the user context and sshd runs in the sshd context.
+			 * To run internal-sftp in the sshd context, we need to impersonate the sshd process.
+			 * Impersonating can lead to a big security issue so the internal-sftp runs as a separate process.
+			 * Windwos doesn't support ChrootDirectory so launching sftp as separate process makes no difference.
+			 */
 			if(IS_INTERNAL_SFTP(command)) {
-				const char *s = "sftp-server.exe";
-				memcpy(c, s, strlen(s) + 1);
-				c += strlen(s);
+				memcpy(cmd, sftp_exe, strlen(sftp_exe) + 1);
+				cmd += strlen(sftp_exe);
 				
 				// copy the arguments (if any).
 				if(strlen(command) > strlen(INTERNAL_SFTP_NAME)) {
 					char *argp = command + strlen(INTERNAL_SFTP_NAME);
-					memcpy(c, argp, strlen(argp)+1);
+					memcpy(cmd, argp, strlen(argp)+1);
 				}
 			} else
-				memcpy(c, command, strlen(command) + 1);
+				memcpy(cmd, command, strlen(command) + 1);
 		}
 	} else {
 		/* 
@@ -435,9 +447,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		 * command is base64 encoded to preserve original special charecters like '"'
 		 * else they will get lost in CreateProcess translation
 		 */
-		char *shell_host = pty ? "ssh-shellhost.exe " : "ssh-shellhost.exe -nopty ", *c;
-		char *command_b64 = NULL;
-		size_t command_b64_len = 0;
+		shell_host = pty ? "ssh-shellhost.exe " : "ssh-shellhost.exe -nopty ";
 		if (command) {
 			/* accomodate bas64 encoding bloat and null terminator */
 			command_b64_len = ((strlen(command) + 2) / 3) * 4 + 1;
@@ -448,27 +458,21 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		exec_command = malloc(strlen(progdir) + 1 + strlen(shell_host) + (command_b64 ? strlen(command_b64): 0) + 1);
 		if (exec_command == NULL)
 			fatal("%s, out of memory", __func__);
-		c = exec_command;
-		memcpy(c, progdir, strlen(progdir));
-		c += strlen(progdir);
-		*c++ = '\\';
-		memcpy(c, shell_host, strlen(shell_host));
-		c += strlen(shell_host);
+		cmd = exec_command;
+		memcpy(cmd, progdir, strlen(progdir));
+		cmd += strlen(progdir);
+		*cmd++ = '\\';
+		memcpy(cmd, shell_host, strlen(shell_host));
+		cmd += strlen(shell_host);
 		if (command_b64) {
-			memcpy(c, command_b64, strlen(command_b64));
-			c += strlen(command_b64);
+			memcpy(cmd, command_b64, strlen(command_b64));
+			cmd += strlen(command_b64);
 		}
-		*c = '\0';
+		*cmd = '\0';
 	}
 
 	/* start the process */
 	{
-		PROCESS_INFORMATION pi;
-		STARTUPINFOW si;
-		BOOL b;
-		HANDLE hToken = INVALID_HANDLE_VALUE;
-		extern int debug_flag;
-
 		memset(&si, 0, sizeof(STARTUPINFO));
 		si.cb = sizeof(STARTUPINFO);
 		si.dwXSize = 5;
@@ -493,11 +497,11 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 
 		/* in debug mode launch using sshd.exe user context */
 		if (debug_flag)
-			b = CreateProcessW(NULL, exec_command_w, NULL, NULL, TRUE,
+			create_process_ret_val = CreateProcessW(NULL, exec_command_w, NULL, NULL, TRUE,
 				DETACHED_PROCESS, NULL, pw_dir_w,
 				&si, &pi);
 		else /* launch as client user context */
-			b = CreateProcessAsUserW(hToken, NULL, exec_command_w, NULL, NULL, TRUE,
+			create_process_ret_val = CreateProcessAsUserW(hToken, NULL, exec_command_w, NULL, NULL, TRUE,
 				DETACHED_PROCESS , NULL, pw_dir_w,
 				&si, &pi);
 
@@ -505,7 +509,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		_putenv_s("SSH_ASYNC_STDOUT", "");
 		_putenv_s("SSH_ASYNC_STDERR", "");
 
-		if (!b)
+		if (!create_process_ret_val)
 			fatal("ERROR. Cannot create process (%u).\n", GetLastError());
 
 		CloseHandle(pi.hThread);
