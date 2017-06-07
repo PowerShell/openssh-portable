@@ -383,7 +383,6 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 	if ((pw_dir_w = utf8_to_utf16(s->pw->pw_dir)) == NULL)
 		fatal("%s: out of memory", __func__);
 
-
 	set_nonblock(pipein[0]);
 	set_nonblock(pipein[1]);
 	set_nonblock(pipeout[0]);
@@ -407,17 +406,28 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		if (command[1] == ':') /* absolute */
 			exec_command = xstrdup(command);
 		else {/*relative*/
-			exec_command = malloc(strlen(progdir) + 1 + strlen(command));
+			const int command_len = strlen(progdir) + 1 + strlen(command) + 2;
+			exec_command = malloc(command_len);
 			if (exec_command == NULL)
 				fatal("%s, out of memory", __func__);
-			memcpy(exec_command, progdir, strlen(progdir));
-			exec_command[strlen(progdir)] = '\\';
+						
+			char *c = exec_command;
+			memcpy(c, progdir, strlen(progdir));
+			c += strlen(progdir);
+			*c++ = '\\';
 
 			if(IS_INTERNAL_SFTP(command)) {
 				const char *s = "sftp-server.exe";
-				memcpy(exec_command + strlen(progdir) + 1, s, strlen(s) + 1);
+				memcpy(c, s, strlen(s) + 1);
+				c += strlen(s);
+				
+				// copy the arguments (if any).
+				if(strlen(command) > strlen(INTERNAL_SFTP_NAME)) {
+					char *argp = command + strlen(INTERNAL_SFTP_NAME);
+					memcpy(c, argp, strlen(argp)+1);
+				}
 			} else
-				memcpy(exec_command + strlen(progdir) + 1, command, strlen(command) + 1);
+				memcpy(c, command, strlen(command) + 1);
 		}
 	} else {
 		/* 
