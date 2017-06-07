@@ -367,7 +367,7 @@ int register_child(void* child, unsigned long pid);
 
 int do_exec_windows(Session *s, const char *command, int pty) {
 	int pipein[2], pipeout[2], pipeerr[2], r;
-	char *exec_command = NULL, *progdir = w32_programdir(), *cmd = NULL, *shell_host = NULL, *command_b64 = NULL;
+	char *exec_command = NULL, *progdir = w32_programdir(), *cmd = NULL, *shell_host = NULL, *command_b64 = NULL, *argp = NULL;
 	wchar_t *exec_command_w = NULL, *pw_dir_w;
 	const char *sftp_exe = "sftp-server.exe";
 	size_t command_b64_len = 0;
@@ -435,7 +435,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 				
 				// copy the arguments (if any).
 				if(strlen(command) > strlen(INTERNAL_SFTP_NAME)) {
-					char *argp = command + strlen(INTERNAL_SFTP_NAME);
+					argp = command + strlen(INTERNAL_SFTP_NAME);
 					memcpy(cmd, argp, strlen(argp)+1);
 				}
 			} else
