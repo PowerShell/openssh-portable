@@ -423,9 +423,17 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 			cmd += strlen(progdir);
 			*cmd++ = '\\';
 
-			/* In windows, SSHD always runs in the sshd context so we will create a separate process (sftp-server.exe) that runs in the user context.
-			 * This is a deviation from the UNIX implementation.
-			 * If we need to be aligned with the UNIX implementation then SSHD needs impersonate permissions which can lead to a big security issue.
+			/* In windows, INTERNAL_SFTP is supported via sftp-server.exe.
+			 * This is a deviation from the UNIX implementation that hosts sftp-server within sshd.
+			 * If sftp-server were to be hosted within sshd for Windows, following would be needed
+			 *  - Impersonate client user
+			 *  - call sftp-server-main
+			 *
+			 * SSHD service account would need impersonate privilege to impersonate client user, 
+			 * thereby needing elevation of SSHD account privileges
+			 * Apart from slight performance gain (by hosting sftp in process), there isn't a clear 
+			 * gain with this option over using and spawning sftp-server.exe.
+			 * Hence going with the later option. 
 			 */
 			if(IS_INTERNAL_SFTP(command)) {
 				memcpy(cmd, sftp_exe, strlen(sftp_exe) + 1);
