@@ -88,15 +88,15 @@ typedef struct consoleEvent {
 struct key_translation {
 	char incoming[6];
 	int vk;
-	char outgoing;
+	wchar_t outgoing;
 } key_translation;
 
 struct key_translation keys[] = {
-    { "\x1b",       VK_ESCAPE,  '\x1b' },
-    { "\r",         VK_RETURN,  '\r' },
-    { "\b",         VK_BACK,    '\b' },
-    { "\x7f",       VK_BACK,    '\b' },
-    { "\t",         VK_TAB,     '\t' },
+    { "\x1b",       VK_ESCAPE,  L'\x1b' },
+    { "\r",         VK_RETURN,  L'\r' },
+    { "\b",         VK_BACK,    L'\b' },
+    { "\x7f",       VK_BACK,    L'\b' },
+    { "\t",         VK_TAB,     L'\t' },
     { "\x1b[A",     VK_UP,       0 },
     { "\x1b[B",     VK_DOWN,     0 },
     { "\x1b[C",     VK_RIGHT,    0 },
@@ -130,7 +130,6 @@ consoleEvent* tail = NULL;
 BOOL bRet = FALSE;
 BOOL bNoScrollRegion = FALSE;
 BOOL bStartup = TRUE;
-BOOL bAnsi = FALSE;
 BOOL bHookEvents = FALSE;
 
 HANDLE child_out = INVALID_HANDLE_VALUE;
@@ -200,7 +199,7 @@ ConSRWidth()
  * This function will handle the console keystrokes.
  */
 void 
-SendKeyStroke(HANDLE hInput, int keyStroke, char character) 
+SendKeyStroke(HANDLE hInput, int keyStroke, wchar_t character) 
 {
 	DWORD wr = 0;
 	INPUT_RECORD ir;
@@ -211,13 +210,12 @@ SendKeyStroke(HANDLE hInput, int keyStroke, char character)
 	ir.Event.KeyEvent.wVirtualKeyCode = keyStroke;
 	ir.Event.KeyEvent.wVirtualScanCode = 0;
 	ir.Event.KeyEvent.dwControlKeyState = 0;
-	ir.Event.KeyEvent.uChar.UnicodeChar = 0;
-	ir.Event.KeyEvent.uChar.AsciiChar = character;
+	ir.Event.KeyEvent.uChar.UnicodeChar = character;
 
-	WriteConsoleInputA(hInput, &ir, 1, &wr);
+	WriteConsoleInputW(hInput, &ir, 1, &wr);
 
 	ir.Event.KeyEvent.bKeyDown = FALSE;
-	WriteConsoleInputA(hInput, &ir, 1, &wr);
+	WriteConsoleInputW(hInput, &ir, 1, &wr);
 }
 
 void 
@@ -235,8 +233,10 @@ ProcessIncomingKeys(char * ansikey)
 		}
 	}
 
-	for (int i=0; i < keylen; i++)
-		SendKeyStroke(child_in, 0, ansikey[i]);
+	wchar_t *unicode_key = utf8_to_utf16(ansikey);
+	if(unicode_key)
+		for (int i = 0; i < wcslen(unicode_key); i++)
+			SendKeyStroke(child_in, 0, unicode_key[i]);
 }
 
 /*
@@ -741,19 +741,6 @@ ProcessEvent(void *p)
 DWORD WINAPI 
 ProcessEventQueue(LPVOID p)
 {
-	if (child_in != INVALID_HANDLE_VALUE && child_in != NULL &&
-	    child_out != INVALID_HANDLE_VALUE && child_out != NULL) {
-		DWORD dwInputMode;
-		DWORD dwOutputMode;
-
-		if (GetConsoleMode(child_in, &dwInputMode) && GetConsoleMode(child_out, &dwOutputMode))
-			if (((dwOutputMode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) == ENABLE_VIRTUAL_TERMINAL_PROCESSING) &&
-			    ((dwInputMode & ENABLE_VIRTUAL_TERMINAL_INPUT) == ENABLE_VIRTUAL_TERMINAL_INPUT))
-				bAnsi = TRUE;
-			else
-				bAnsi = FALSE;
-	}
-
 	while (1) {
 		while (head) {
 			EnterCriticalSection(&criticalSection);
@@ -864,21 +851,11 @@ ProcessPipes(LPVOID p)
 
 		GOTO_CLEANUP_ON_FALSE(ReadFile(pipe_in, buf, sizeof(buf)-1, &rd, NULL)); /* read bufsize-1 */
 		bStartup = FALSE;
-		for (DWORD i=0; i < rd; i++) {
-			if (buf[i] == 0)
-				break;
-
-			if (buf[i] == 3) { /*Ctrl+C - Raise Ctrl+C*/
+		if(rd > 0) {
+			if (buf[0] == 3)/*Ctrl+C - Raise Ctrl+C*/
 				GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
-				continue;
-			}
-
-			if (bAnsi) {
-				SendKeyStroke(child_in, 0, buf[i]);
-			} else {
+			else
 				ProcessIncomingKeys(buf);
-				break;
-			}
 		}
 	}
 
