@@ -112,7 +112,7 @@ function Repair-UserKeyPermission
         if($PSBoundParameters["FilePath"].EndsWith(".pub"))
         {
             $PSBoundParameters["FilePath"] = $PSBoundParameters["FilePath"].Replace(".pub", "")
-        }        
+        }
         Repair-FilePermission -Owners $User, $adminsAccount,$systemAccount -AnyAccessOK $User @psBoundParameters
         
         $PSBoundParameters["FilePath"] += ".pub"
@@ -286,7 +286,7 @@ function Repair-FilePermissionInternal {
             $description = "Set'$($a.IdentityReference)' Read access only to '$FilePath'. "
 
             if($pscmdlet.ShouldProcess($description, $prompt, $caption))
-	        {            
+	        {
                 $needChange = $true
                 $idRefShortValue = ($a.IdentityReference.Value).split('\')[-1]
                 if ($specialIdRefs -icontains $idRefShortValue )
@@ -333,7 +333,7 @@ function Repair-FilePermissionInternal {
                     {
                         Write-Warning "Repair permission failed with error: $($e[0].ToString())."
                     }
-                }                
+                }
                 return Remove-RuleProtection @paras
             }
             

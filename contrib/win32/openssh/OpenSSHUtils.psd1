@@ -25,7 +25,7 @@ CompanyName = ''
 Copyright = ''
 
 # Description of the functionality provided by this module
-Description = 'Configure OpenSSH for windows related security settings like file owner and permissions.'
+Description = 'Configure OpenSSH for Windows related security settings like file owner and permissions.'
 
 # Functions to export from this module
 FunctionsToExport = '*'
@@ -42,6 +42,3 @@ AliasesToExport = '*'
 # Minimum version of the Windows PowerShell engine required by this module
 PowerShellVersion = '2.0'
 }
-
-
-
