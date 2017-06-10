@@ -172,6 +172,8 @@ agent_cleanup_connection(struct agent_connection* con)
                 UnloadUserProfile(con->auth_token, con->hProfile);
         if (con->auth_token)
                 CloseHandle(con->auth_token);
+        if (con->client_impersonation_token)
+                CloseHandle(con->client_impersonation_token);
 	free(con);
 	CloseHandle(ioc_port);
 	ioc_port = NULL;
@@ -212,8 +214,29 @@ agent_start(BOOL dbg_mode)
 	agent_listen_loop();
 }
 
+static char*
+con_type_to_string(struct agent_connection* con) 
+{
+	switch (con->client_type) {
+	case UNKNOWN:
+		return "unknown";
+	case NONADMIN_USER:
+		return "restricted user";
+	case ADMIN_USER:
+		return "administrator";
+	case SSHD_SERVICE:
+		return "sshd service";
+	case SYSTEM:
+		return "system";
+	case SERVICE:
+		return "service";
+	default:
+		return "unexpected";
+	}
+}
+
 static int
-get_con_client_type(struct agent_connection* con)
+get_con_client_info(struct agent_connection* con)
 {
 	int r = -1;
 	char sid[SECURITY_MAX_SID_SIZE];
@@ -223,22 +246,21 @@ get_con_client_type(struct agent_connection* con)
 	DWORD sshd_sid_len = 0;
 	PSID sshd_sid = NULL;
 	SID_NAME_USE nuse;
-	HANDLE token = NULL, client_proc_handle = NULL;
+	HANDLE client_primary_token = NULL, client_impersonation_token = NULL,  client_proc_handle = NULL;
 	TOKEN_USER* info = NULL;
 	BOOL isMember = FALSE;
 
-	if (GetNamedPipeClientProcessId(con->pipe_handle, &client_pid) == FALSE)
+	if (GetNamedPipeClientProcessId(con->pipe_handle, &client_pid) == FALSE ||
+	    (client_proc_handle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, client_pid)) == NULL ||
+	    OpenProcessToken(client_proc_handle, TOKEN_QUERY | TOKEN_DUPLICATE, &client_primary_token) == FALSE ||
+	    DuplicateToken(client_primary_token, SecurityImpersonation, &client_impersonation_token) == FALSE) {
+		error("cannot retrieve client impersonatin token");
 		goto done;
+	}
 
-	if ((client_proc_handle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, client_pid)) == NULL)
-		goto done;
-
-	if (OpenProcessToken(client_proc_handle, TOKEN_QUERY | TOKEN_DUPLICATE, &token) == FALSE)
-		goto done;
-
-	if (GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE ||
+	if (GetTokenInformation(client_primary_token, TokenUser, NULL, 0, &info_len) == TRUE ||
 	    (info = (TOKEN_USER*)malloc(info_len)) == NULL ||
-	    GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE)
+	    GetTokenInformation(client_primary_token, TokenUser, info, info_len, &info_len) == FALSE)
 		goto done;
 
 	/* check if its localsystem */
@@ -270,7 +292,7 @@ get_con_client_type(struct agent_connection* con)
 				r = 0;
 				goto done;
 			}
-			if (CheckTokenMembership(token, sshd_sid, &isMember) == FALSE)
+			if (CheckTokenMembership(client_impersonation_token, sshd_sid, &isMember) == FALSE)
 				goto done;
 			if (isMember) {
 				con->client_type = SSHD_SERVICE;
@@ -293,7 +315,7 @@ get_con_client_type(struct agent_connection* con)
 		sid_size = SECURITY_MAX_SID_SIZE;
 		if (CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, sid, &sid_size) == FALSE)
 			goto done;
-		if (CheckTokenMembership(token, sid, &isMember) == FALSE)
+		if (CheckTokenMembership(client_impersonation_token, sid, &isMember) == FALSE) 
 			goto done;
 		if (isMember) {
 			con->client_type = ADMIN_USER;
@@ -314,7 +336,16 @@ done:
 		free(ref_dom);
 	if (info)
 		free(info);
-	RevertToSelf();
+	if (client_proc_handle)
+		CloseHandle(client_proc_handle);
+	if (client_primary_token)
+		CloseHandle(client_primary_token);
+
+	if (r == 0)
+		con->client_impersonation_token = client_impersonation_token;
+	else if (client_impersonation_token)
+		CloseHandle(client_impersonation_token);
+
 	return r;
 }
 
@@ -336,7 +367,7 @@ agent_process_connection(HANDLE pipe)
 		fatal("failed to assign pipe to ioc_port");
 
 	/* get client details */
-	if (get_con_client_type(con) == -1)
+	if (get_con_client_info(con) == -1)
 		fatal("failed to retrieve client details");
 
 	agent_connection_on_io(con, 0, &con->ol);
