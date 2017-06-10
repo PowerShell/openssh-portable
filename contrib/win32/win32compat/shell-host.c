@@ -225,18 +225,25 @@ ProcessIncomingKeys(char * ansikey)
 
 	if (!keylen)
 		return;
+	
+	printf("received character:%s\n", ansikey);
 
-	for (int nKey=0; nKey < ARRAYSIZE(keys); nKey++) {
+	for (int nKey = 0; nKey < ARRAYSIZE(keys); nKey++) {
 		if (strcmp(ansikey, keys[nKey].incoming) == 0) {
 			SendKeyStroke(child_in, keys[nKey].vk, keys[nKey].outgoing);
-			return;
+			ansikey += strlen(keys[nKey].incoming);
+			printf("received keystroke:%d\n", keys[nKey].vk);
 		}
 	}
 
 	wchar_t *unicode_key = utf8_to_utf16(ansikey);
-	if(unicode_key)
-		for (int i = 0; i < wcslen(unicode_key); i++)
-			SendKeyStroke(child_in, 0, unicode_key[i]);
+	if (unicode_key)
+		for (int i = 0; i < wcslen(unicode_key); i++) {
+			if(unicode_key[i] == L'\x3') /*Ctrl+C - Raise Ctrl+C*/
+				GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
+			else
+				SendKeyStroke(child_in, 0, unicode_key[i]);
+		}			
 }
 
 /*
@@ -852,10 +859,7 @@ ProcessPipes(LPVOID p)
 		GOTO_CLEANUP_ON_FALSE(ReadFile(pipe_in, buf, sizeof(buf)-1, &rd, NULL)); /* read bufsize-1 */
 		bStartup = FALSE;
 		if(rd > 0) {
-			if (buf[0] == 3)/*Ctrl+C - Raise Ctrl+C*/
-				GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
-			else
-				ProcessIncomingKeys(buf);
+			ProcessIncomingKeys(buf);
 		}
 	}
 
