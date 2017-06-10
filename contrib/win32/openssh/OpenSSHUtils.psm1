@@ -190,7 +190,10 @@ function Repair-FilePermissionInternal {
     $needChange = $false
     $health = $true
     $paras = @{}
-    $PSBoundParameters.GetEnumerator() | % { if((-not $_.key.Contains("Owners")) -and (-not $_.key.Contains("Access"))) { $paras.Add($_.key,$_.Value) } }    
+    $PSBoundParameters.GetEnumerator() | % { if((-not $_.key.Contains("Owners")) -and (-not $_.key.Contains("Access"))) { $paras.Add($_.key,$_.Value) } }
+
+    $p = Resolve-Path $FilePath
+    $uncPath = $p.path.Replace("$($p.Drive):", "\\localhost\$($p.Drive)`$")
     
     $validOwner = $owners | ? { $_.equals([System.Security.Principal.NTAccount]$acl.owner)}
     if($validOwner -eq $null)
@@ -201,9 +204,7 @@ function Repair-FilePermissionInternal {
         if($pscmdlet.ShouldProcess($description, $prompt, $caption))
 	    {   
             #workaround for KB318744 on win7
-            #https://support.microsoft.com/en-us/help/318744/how-to-use-visual-basic-to-programmatically-change-ownership-of-a-file-or-folder
-            $p = Resolve-Path $FilePath
-            $uncPath = $p.path.Replace("$($p.Drive):", "\\localhost\$($p.Drive)`$")
+            #https://support.microsoft.com/en-us/help/318744/how-to-use-visual-basic-to-programmatically-change-ownership-of-a-file-or-folder            
             $acl.SetOwner($Owners[0])
             Set-Acl -Path $uncPath -AclObject $acl -ErrorVariable e -Confirm:$false
             if($e)
@@ -272,7 +273,7 @@ function Repair-FilePermissionInternal {
             {
                 if($needChange)    
                 {
-                    Set-Acl -Path $FilePath -AclObject $aclAccess -Path $FilePath -Confirm:$false -ErrorVariable e
+                    Set-Acl -Path $uncPath -AclObject $aclAccess -Path $FilePath -Confirm:$false -ErrorVariable e
                     if($e)
                     {
                         Write-Warning "Repair permission failed with error: $($e[0].ToString())."
@@ -328,7 +329,7 @@ function Repair-FilePermissionInternal {
             {
                 if($needChange)    
                 {
-                    Set-Acl -AclObject $aclAccess -Path $FilePath -Confirm:$false -ErrorVariable e
+                    Set-Acl -AclObject $aclAccess -Path $uncPath -Confirm:$false -ErrorVariable e
                     if($e)
                     {
                         Write-Warning "Repair permission failed with error: $($e[0].ToString())."
@@ -416,7 +417,7 @@ function Repair-FilePermissionInternal {
 
     if($needChange)    
     {        
-        Set-Acl -Path $FilePath -AclObject $aclAccess -ErrorVariable e -Confirm:$false
+        Set-Acl -Path $uncPath -AclObject $aclAccess -ErrorVariable e -Confirm:$false
         if($e)
         {
             Write-Warning "Repair permission failed with error: $($e[0].ToString())."
