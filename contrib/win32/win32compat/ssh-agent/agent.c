@@ -196,7 +196,7 @@ agent_start(BOOL dbg_mode)
 	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
 	sa.nLength = sizeof(sa);
 	/* allow access to Authenticated users and Network Service */
-	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;;GA;;;AU)(A;;GA;;;NS)", SDDL_REVISION_1,
+	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;;GRGW;;;AU)", SDDL_REVISION_1,
 	    &sa.lpSecurityDescriptor, &sa.nLength))
 		fatal("cannot convert sddl ERROR:%d", GetLastError());
 	if ((r = RegCreateKeyExW(HKEY_LOCAL_MACHINE, SSH_AGENT_ROOT, 0, 0, 0, KEY_WRITE, &sa, &agent_root, 0)) != ERROR_SUCCESS)
@@ -210,6 +210,112 @@ agent_start(BOOL dbg_mode)
 	pipe = INVALID_HANDLE_VALUE;
 	sa.bInheritHandle = FALSE;
 	agent_listen_loop();
+}
+
+static int
+get_con_client_type(struct agent_connection* con)
+{
+	int r = -1;
+	char sid[SECURITY_MAX_SID_SIZE];
+	wchar_t *sshd_act = L"NT SERVICE\\SSHD", *ref_dom = NULL;
+	ULONG client_pid;
+	DWORD reg_dom_len = 0, info_len = 0, sid_size;
+	DWORD sshd_sid_len = 0;
+	PSID sshd_sid = NULL;
+	SID_NAME_USE nuse;
+	HANDLE token = NULL, client_proc_handle = NULL;
+	TOKEN_USER* info = NULL;
+	BOOL isMember = FALSE;
+
+	if (GetNamedPipeClientProcessId(con->pipe_handle, &client_pid) == FALSE)
+		goto done;
+
+	if ((client_proc_handle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, client_pid)) == NULL)
+		goto done;
+
+	if (OpenProcessToken(client_proc_handle, TOKEN_QUERY | TOKEN_DUPLICATE, &token) == FALSE)
+		goto done;
+
+	if (GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE ||
+	    (info = (TOKEN_USER*)malloc(info_len)) == NULL ||
+	    GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE)
+		goto done;
+
+	/* check if its localsystem */
+	if (IsWellKnownSid(info->User.Sid, WinLocalSystemSid)) {
+		con->client_type = SYSTEM;
+		r = 0;
+		goto done;
+	}
+
+	/* check if its SSHD service */
+	{
+		/* Does NT Service/SSHD exist */
+		LookupAccountNameW(NULL, sshd_act, NULL, &sshd_sid_len, NULL, &reg_dom_len, &nuse);
+
+		if (GetLastError() == ERROR_NONE_MAPPED)
+			debug3("Cannot look up SSHD account, its likely not installed");
+		else if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
+			error("LookupAccountNameW on SSHD account failed with %d", GetLastError());
+			goto done;
+		}
+		else {
+			if ((sshd_sid = malloc(sshd_sid_len)) == NULL ||
+				(ref_dom = (wchar_t*)malloc(reg_dom_len * 2)) == NULL ||
+				LookupAccountNameW(NULL, sshd_act, sshd_sid, &sshd_sid_len, ref_dom, &reg_dom_len, &nuse) == FALSE)
+				goto done;
+
+			if (EqualSid(info->User.Sid, sshd_sid)) {
+				con->client_type = SSHD_SERVICE;
+				r = 0;
+				goto done;
+			}
+			if (CheckTokenMembership(token, sshd_sid, &isMember) == FALSE)
+				goto done;
+			if (isMember) {
+				con->client_type = SSHD_SERVICE;
+				r = 0;
+				goto done;
+			}
+		}
+	}
+
+	/* check if its LS or NS */
+	if (IsWellKnownSid(info->User.Sid, WinNetworkServiceSid) ||
+		IsWellKnownSid(info->User.Sid, WinLocalServiceSid)) {
+		con->client_type = SERVICE;
+		r = 0;
+		goto done;
+	}
+
+	/* check if its admin */
+	{
+		sid_size = SECURITY_MAX_SID_SIZE;
+		if (CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, sid, &sid_size) == FALSE)
+			goto done;
+		if (CheckTokenMembership(token, sid, &isMember) == FALSE)
+			goto done;
+		if (isMember) {
+			con->client_type = ADMIN_USER;
+			r = 0;
+			goto done;
+		}
+	}
+
+	/* none of above */
+	con->client_type = NONADMIN_USER;
+	r = 0;
+done:
+	debug("client type: %s", con_type_to_string(con));
+
+	if (sshd_sid)
+		free(sshd_sid);
+	if (ref_dom)
+		free(ref_dom);
+	if (info)
+		free(info);
+	RevertToSelf();
+	return r;
 }
 
 void 
@@ -228,6 +334,10 @@ agent_process_connection(HANDLE pipe)
 	con->pipe_handle = pipe;
 	if (CreateIoCompletionPort(pipe, ioc_port, (ULONG_PTR)con, 0) != ioc_port)
 		fatal("failed to assign pipe to ioc_port");
+
+	/* get client details */
+	if (get_con_client_type(con) == -1)
+		fatal("failed to retrieve client details");
 
 	agent_connection_on_io(con, 0, &con->ol);
 	iocp_work(NULL);
