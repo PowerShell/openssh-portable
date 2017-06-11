@@ -1,5 +1,6 @@
 ﻿[CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
 param ()
+Set-StrictMode -Version 2.0
 If (!(Test-Path variable:PSScriptRoot)) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition}
 
 Import-Module $PSScriptRoot\OpenSSHUtils -Force
