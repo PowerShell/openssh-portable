@@ -191,7 +191,6 @@ function Repair-FilePermissionInternal {
     $needChange = $false
     $health = $true
     $paras = @{}
-    $fileIO = Get-Item -Path $FilePath
     $PSBoundParameters.GetEnumerator() | % { if((-not $_.key.Contains("Owners")) -and (-not $_.key.Contains("Access"))) { $paras.Add($_.key,$_.Value) } }
     
     $validOwner = $owners | ? { $_.equals([System.Security.Principal.NTAccount]$acl.owner)}
@@ -207,7 +206,7 @@ function Repair-FilePermissionInternal {
             Set-Acl -Path $FilePath -AclObject $acl -ErrorVariable e -Confirm:$false
             if($e)
             {
-                Write-Warning "Repair permission failed with error: $($e[0].ToString())."
+                Write-Warning "Set owner failed with error: $($e[0].ToString())."
             }
             else
             {
@@ -240,9 +239,8 @@ function Repair-FilePermissionInternal {
     #'ALL APPLICATION PACKAGES' exists only on Win2k12 and Win2k16 and 'ALL RESTRICTED APPLICATION PACKAGES' exists only in Win2k16
     $specialIdRefs = "ALL APPLICATION PACKAGES","ALL RESTRICTED APPLICATION PACKAGES"
 
-    $aclAccess = $fileIO.GetAccessControl('Access')
-    foreach($a in $aclAccess.Access)
-    {        
+    foreach($a in $acl.Access)
+    {
         if($realAnyAccessOKList -and (($realAnyAccessOKList | ? { $_.equals($a.IdentityReference)}) -ne $null))
         {
             #ignore those accounts listed in the AnyAccessOK list.
@@ -272,7 +270,11 @@ function Repair-FilePermissionInternal {
                 if($needChange)    
                 {
                     Enable-Privilege SeRestorePrivilege | out-null
-                    $fileIO.SetAccessControl($aclAccess)
+                    Set-Acl -Path $FilePath -AclObject $acl -ErrorVariable e -Confirm:$false
+                    if($e)
+                    {
+                        Write-Warning "Repair permission failed with error: $($e[0].ToString())."
+                    }
                 }
                 
                 return Remove-RuleProtection @paras
@@ -304,7 +306,7 @@ function Repair-FilePermissionInternal {
                     $ace = New-Object System.Security.AccessControl.FileSystemAccessRule `
                         ($a.IdentityReference, "Read", "None", "None", "Allow")
                     }
-                $aclAccess.SetAccessRule($ace)
+                $acl.SetAccessRule($ace)
                 Write-Host "'$($a.IdentityReference)' now has Read access to '$FilePath'. "  -ForegroundColor Green
             }
             else
@@ -325,7 +327,11 @@ function Repair-FilePermissionInternal {
                 if($needChange)    
                 {
                     Enable-Privilege SeRestorePrivilege | out-null
-                    $fileIO.SetAccessControl($aclAccess)                    
+                    Set-Acl -Path $FilePath -AclObject $acl -ErrorVariable e -Confirm:$false
+                    if($e)
+                    {
+                        Write-Warning "Repair permission failed with error: $($e[0].ToString())."
+                    }
                 }
                 return Remove-RuleProtection @paras
             }
@@ -353,7 +359,7 @@ function Repair-FilePermissionInternal {
                     }
                 }
 
-                if(-not ($aclAccess.RemoveAccessRule($ace)))
+                if(-not ($acl.RemoveAccessRule($ace)))
                 {
                     Write-Warning "Failed to remove access of '$($a.IdentityReference)' from '$FilePath'."
                 }
@@ -392,7 +398,7 @@ function Repair-FilePermissionInternal {
                     $needChange = $true
                     $ace = New-Object System.Security.AccessControl.FileSystemAccessRule `
                             ($_, "Read", "None", "None", "Allow")
-                    $aclAccess.AddAccessRule($ace)
+                    $acl.AddAccessRule($ace)
                     Write-Host "'$_' now has Read access to '$FilePath'." -ForegroundColor Green
                 }
                 else
@@ -410,8 +416,11 @@ function Repair-FilePermissionInternal {
     if($needChange)    
     {
         Enable-Privilege SeRestorePrivilege | out-null
-        
-        $fileIO.SetAccessControl($aclAccess)
+        Set-Acl -Path $FilePath -AclObject $acl -ErrorVariable e -Confirm:$false
+        if($e)
+        {
+            Write-Warning "Repair permission failed with error: $($e[0].ToString())."
+        }
     }
     if($health)
     {
@@ -444,10 +453,15 @@ function Remove-RuleProtection
 
     if($pscmdlet.ShouldProcess($description, $prompt, $message))
 	{
-        $aclAccess = (Get-Item $FilePath).GetAccessControl('Access')
-        $aclAccess.SetAccessRuleProtection($True, $True)
+        $acl = Get-acl -Path $FilePath
+        $acl.SetAccessRuleProtection($True, $True)
         Enable-Privilege SeRestorePrivilege | out-null
-        (Get-Item $FilePath).SetAccessControl($aclAccess)        
+        Set-Acl -Path $FilePath -AclObject $acl -ErrorVariable e -Confirm:$false
+        if($e)
+        {
+            Write-Warning "Remove-RuleProtection failed with error: $($e[0].ToString())."
+        }
+              
         Write-Host "Inheritance is removed from '$FilePath'."  -ForegroundColor Green
         return $true
     }
@@ -509,12 +523,10 @@ function Enable-Privilege {
    "SeTakeOwnershipPrivilege", "SeTcbPrivilege", "SeTimeZonePrivilege", "SeTrustedCredManAccessPrivilege",
    "SeUndockPrivilege", "SeUnsolicitedInputPrivilege")]
   $Privilege,
-  ## The process on which to adjust the privilege. Defaults to the current process.
-  $ProcessId = $pid,
   ## Switch to disable the privilege, rather than enable it.
   [Switch] $Disable
  )
- 
+
  ## Taken from P/Invoke.NET with minor adjustments.
  $definition = @'
  using System;
@@ -525,7 +537,8 @@ function Enable-Privilege {
   [DllImport("advapi32.dll", ExactSpelling = true, SetLastError = true)]
   internal static extern bool AdjustTokenPrivileges(IntPtr htok, bool disall,
    ref TokPriv1Luid newst, int len, IntPtr prev, IntPtr relen);
-  
+  [DllImport("kernel32.dll", ExactSpelling = true, SetLastError = true)]
+  internal static extern IntPtr GetCurrentProcess();
   [DllImport("advapi32.dll", ExactSpelling = true, SetLastError = true)]
   internal static extern bool OpenProcessToken(IntPtr h, int acc, ref IntPtr phtok);
   [DllImport("advapi32.dll", SetLastError = true)]
@@ -542,11 +555,11 @@ function Enable-Privilege {
   internal const int SE_PRIVILEGE_DISABLED = 0x00000000;
   internal const int TOKEN_QUERY = 0x00000008;
   internal const int TOKEN_ADJUST_PRIVILEGES = 0x00000020;
-  public static bool EnablePrivilege(long processHandle, string privilege, bool disable)
+  public static bool EnablePrivilege(string privilege, bool disable)
   {
    bool retVal;
    TokPriv1Luid tp;
-   IntPtr hproc = new IntPtr(processHandle);
+   IntPtr hproc = GetCurrentProcess();
    IntPtr htok = IntPtr.Zero;
    retVal = OpenProcessToken(hproc, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, ref htok);
    tp.Count = 1;
@@ -566,9 +579,9 @@ function Enable-Privilege {
  }
 '@
 
- $processHandle = (Get-Process -id $ProcessId).Handle
+ 
  $type = Add-Type $definition -PassThru
- $type[0]::EnablePrivilege($processHandle, $Privilege, $Disable)
+ $type[0]::EnablePrivilege($Privilege, $Disable)
 }
 
 Export-ModuleMember -Function Repair-FilePermission, Repair-SshdConfigPermission, Repair-SshdHostKeyPermission, Repair-AuthorizedKeyPermission, Repair-UserKeyPermission, Repair-UserSshConfigPermission
