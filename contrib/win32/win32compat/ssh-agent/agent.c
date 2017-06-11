@@ -191,14 +191,19 @@ agent_start(BOOL dbg_mode)
 	int r;
 	HKEY agent_root = NULL;
 	DWORD process_id = GetCurrentProcessId();
+	wchar_t* sddl_str;
 	
 	verbose("%s pid:%d, dbg:%d", __FUNCTION__, process_id, dbg_mode);
 	debug_mode = dbg_mode;
 
 	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
 	sa.nLength = sizeof(sa);
-	/* allow access to Authenticated users and Network Service */
-	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(L"D:P(A;;GRGW;;;AU)", SDDL_REVISION_1,
+	/* 
+	 * SDDL - GA to System and Builtin/Admins and restricted access to Authenticated users
+	 * 0x12019b - FILE_GENERIC_READ/WRITE minus FILE_CREATE_PIPE_INSTANCE
+	 */
+	sddl_str = L"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x12019b;;;AU)";
+	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl_str, SDDL_REVISION_1,
 	    &sa.lpSecurityDescriptor, &sa.nLength))
 		fatal("cannot convert sddl ERROR:%d", GetLastError());
 	if ((r = RegCreateKeyExW(HKEY_LOCAL_MACHINE, SSH_AGENT_ROOT, 0, 0, 0, KEY_WRITE, &sa, &agent_root, 0)) != ERROR_SUCCESS)
