@@ -92,7 +92,7 @@ struct key_translation {
 	int in_key_len;
 } key_translation;
 
-/* All the substrings (Ex - "\x1b" should be in the end, otherwise ProcessIncomingKeys() will not wok as expected */
+/* All the substrings (Ex- "\x1b") should be in the end, otherwise ProcessIncomingKeys() will not work as expected */
 struct key_translation keys[] = {
     { L"\r",         VK_RETURN,  L'\r' , 0},
     { L"\b",         VK_BACK,    L'\b' , 0},
