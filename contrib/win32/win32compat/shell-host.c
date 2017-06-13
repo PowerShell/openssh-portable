@@ -225,8 +225,13 @@ initialize_keylen()
 
 void 
 ProcessIncomingKeys(char * ansikey)
-{	
+{
 	wchar_t *buf = utf8_to_utf16(ansikey);
+		
+	if (!buf) {
+		printf("\nFailed to deserialize the client data, error:%d\n", GetLastError());
+		exit(255);
+	}
 
 	loop:
 	while (buf && (wcslen(buf) > 0)) {
