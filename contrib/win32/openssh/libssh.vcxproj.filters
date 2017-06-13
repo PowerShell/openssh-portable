@@ -86,7 +86,6 @@
     <ClCompile Include="..\..\..\kexgexs.c" />
   </ItemGroup>
   <ItemGroup>
-<<<<<<< HEAD
     <ClCompile Include="$(OpenSSH-Src-Path)addrmatch.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -368,9 +367,5 @@
     <ClInclude Include="$(OpenSSH-Src-Path)sshfileperm.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-=======
-    <ClInclude Include="$(OpenSSH-Src-Path)crypto-wrap.h" />
-    <ClInclude Include="$(OpenSSH-Src-Path)sshfileperm.h" />
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
   </ItemGroup>
 </Project>

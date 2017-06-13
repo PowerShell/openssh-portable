@@ -100,15 +100,12 @@ opendir(const char *name)
 	DIR *pdir;
 	wchar_t searchstr[PATH_MAX];
 	wchar_t* wname = NULL;
-<<<<<<< HEAD
-=======
 	int needed;
 	size_t len;
 
 	/* Detect root dir */
 	if (name && strcmp(name, "/") == 0)
 		return openrootdir(name);
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 
 	if ((wname = utf8_to_utf16(sanitized_path(name))) == NULL) {
 		errno = ENOMEM;
@@ -253,11 +250,7 @@ readdir(void *avp)
 			return NULL;
 		}
 
-<<<<<<< HEAD
 		strncpy_s(pdirentry.d_name, PATH_MAX, tmp, strlen(tmp) + 1);		
-=======
-		strncpy(pdirentry.d_name, tmp, sizeof(pdirentry.d_name));
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 		free(tmp);
 
 		pdirentry.d_ino = 1; /* a fictious one like UNIX to say it is nonzero */

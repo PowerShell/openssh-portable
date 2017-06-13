@@ -563,10 +563,6 @@ function UnInstall-OpenSSH
         [string]$OpenSSHDir = "$env:SystemDrive\OpenSSH"
     )
 
-<<<<<<< HEAD
-    if((Get-Service ssh-agent -ErrorAction Ignore) -ne $null) {
-        Stop-Service ssh-agent -Force -ErrorAction SilentlyContinue
-=======
     if (-not (Test-Path $OpenSSHDir))
     {
         return
@@ -584,7 +580,6 @@ function UnInstall-OpenSSH
     {        
         $newMachineEnvironmentPath = $newMachineEnvironmentPath.Replace("$OpenSSHDir;", '')
         $env:Path = $env:Path.Replace("$OpenSSHDir;", '')
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
     }
 
     if(Test-Path -Path $OpenSSHDir)

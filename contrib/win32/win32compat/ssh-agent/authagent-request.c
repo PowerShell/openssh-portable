@@ -42,12 +42,7 @@
 
 #pragma warning(push, 3)
 
-<<<<<<< HEAD
 int pubkey_allowed(struct sshkey* pubkey, HANDLE user_token);
-=======
-int 
-pubkey_allowed(struct sshkey*, HANDLE);
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 
 static void
 InitLsaString(LSA_STRING *lsa_string, const char *str)

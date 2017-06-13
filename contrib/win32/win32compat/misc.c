@@ -269,7 +269,6 @@ w32_fopen_utf8(const char *path, const char *mode)
 		return NULL;
 	}
 
-<<<<<<< HEAD
 	if ((_wfopen_s(&f, wpath, wmode) != 0) || (f == NULL)) {
 		debug3("Failed to open file:%s error:%d", path, errno);
 		return NULL;
@@ -288,24 +287,6 @@ w32_fopen_utf8(const char *path, const char *mode)
 		if (fread(first3_bytes, 3, 1, f) != 1 ||
 			memcmp(first3_bytes, utf8_bom, 3) != 0) {
 			fseek(f, 0, SEEK_SET);
-=======
-	f = _wfopen(wpath, wmode);
-	if (f) {
-		/* BOM adjustments for file streams*/
-		if (mode[0] == 'w' && fseek(f, 0, SEEK_SET) != EBADF) {
-			/* write UTF-8 BOM - should we ?*/
-			/*if (fwrite(utf8_bom, sizeof(utf8_bom), 1, f) != 1) {
-				fclose(f);
-				return NULL;
-			}*/
-
-		} else if (mode[0] == 'r' && fseek(f, 0, SEEK_SET) != EBADF) {
-			/* read out UTF-8 BOM if present*/
-			if (fread(first3_bytes, 3, 1, f) != 1 ||
-			    memcmp(first3_bytes, utf8_bom, 3) != 0) {
-				fseek(f, 0, SEEK_SET);
-			}
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 		}
 	}
 
@@ -863,7 +844,6 @@ realpath(const char *path, char resolved[PATH_MAX])
 	char tempPath[PATH_MAX];
 	size_t path_len = strlen(path);
 
-<<<<<<< HEAD
 	if (path_len > PATH_MAX - 1) {
 		errno = EINVAL;
 		return NULL;
@@ -873,12 +853,6 @@ realpath(const char *path, char resolved[PATH_MAX])
 		strncpy_s(resolved, PATH_MAX, path + 1, path_len); /* skip the first '/' */
 	else
 		strncpy_s(resolved, PATH_MAX, path, path_len + 1);
-=======
-	if ((path[0] == '/') && path[1] && (path[2] == ':'))
-		strncpy(resolved, path + 1, PATH_MAX); /* skip the first '/' */
-	else
-		strncpy(resolved, path, PATH_MAX);
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 
 	if ((resolved[0]) && (resolved[1] == ':') && (resolved[2] == '\0')) { /* make "x:" as "x:\\" */
 		resolved[2] = '\\';
@@ -891,12 +865,8 @@ realpath(const char *path, char resolved[PATH_MAX])
 	convertToForwardslash(tempPath);
 
 	resolved[0] = '/'; /* will be our first slash in /x:/users/test1 format */
-<<<<<<< HEAD
 	if (strncpy_s(resolved+1, PATH_MAX - 1, tempPath, sizeof(tempPath) - 1) != 0)
 		return NULL;
-=======
-	strncpy(resolved + 1, tempPath, PATH_MAX - 1);
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 	return resolved;
 }
 
@@ -980,10 +950,6 @@ w32_strerror(int errnum)
 	return errorBuf;
 }
 
-<<<<<<< HEAD
-	size_t len = 0;
-	int retr = 0;
-=======
 char *
 readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags) {
 	int current_index = 0;
@@ -994,7 +960,6 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags) {
 		errno = EINVAL;
 		return NULL;
 	}
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 
 	while (_kbhit()) _getch();
 

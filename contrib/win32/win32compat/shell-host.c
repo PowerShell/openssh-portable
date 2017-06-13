@@ -219,11 +219,7 @@ SendKeyStroke(HANDLE hInput, int keyStroke, char character)
 void 
 ProcessIncomingKeys(char * ansikey)
 {
-<<<<<<< HEAD
 	int keylen = (int) strlen(ansikey);
-=======
-	int keylen = (int)strlen(ansikey);
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 
 	if (!keylen)
 		return;
@@ -483,13 +479,8 @@ SizeWindow(HANDLE hInput)
 		inputSi.dwYCountChars = 25;
 	}
 
-<<<<<<< HEAD
 	srWindowRect.Right = min((SHORT)inputSi.dwXCountChars, coordScreen.X) - 1;
 	srWindowRect.Bottom = min((SHORT)inputSi.dwYCountChars, coordScreen.Y) - 1;
-=======
-	srWindowRect.Right = (SHORT)(min(inputSi.dwXCountChars, (DWORD)coordScreen.X) - 1);
-	srWindowRect.Bottom = (SHORT)(min(inputSi.dwYCountChars, (DWORD)coordScreen.Y) - 1);
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 	srWindowRect.Left = srWindowRect.Top = (SHORT)0;
 
 	/* Define the new console buffer size to be the maximum possible */
@@ -645,8 +636,8 @@ ProcessEvent(void *p)
 			return dwError;
 		}
 
-		if ((DWORD)readRect.Top > currentLine)
-			for (DWORD n = currentLine; n < (DWORD)readRect.Top; n++)
+		if (readRect.Top > currentLine)
+			for (SHORT n = currentLine; n < readRect.Top; n++)
 				SendLF(pipe_out);
 
 		/* Set cursor location based on the reported location from the message */
@@ -786,10 +777,6 @@ ProcessEventQueue(LPVOID p)
 
 		if (child_in != INVALID_HANDLE_VALUE && child_in != NULL &&
 		    child_out != INVALID_HANDLE_VALUE && child_out != NULL) {
-<<<<<<< HEAD
-=======
-
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 			ZeroMemory(&consoleInfo, sizeof(consoleInfo));
 			consoleInfo.cbSize = sizeof(consoleInfo);
 
@@ -1055,30 +1042,18 @@ start_with_pty(wchar_t *command)
 	/* monitor child exist */
 	child = pi.hProcess;
 	monitor_thread = CreateThread(NULL, 0, MonitorChild, NULL, 0, NULL);
-<<<<<<< HEAD
-	if (monitor_thread == NULL)
-=======
 	if (IS_INVALID_HANDLE(monitor_thread))
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 		goto cleanup;
 
 	/* disable Ctrl+C hander in this process*/
 	SetConsoleCtrlHandler(NULL, TRUE);
 
 	io_thread = CreateThread(NULL, 0, ProcessPipes, NULL, 0, NULL);
-<<<<<<< HEAD
-	if (io_thread == NULL)
-		goto cleanup;
-
-	ux_thread = CreateThread(NULL, 0, ProcessEventQueue, NULL, 0, NULL);
-	if (ux_thread == NULL)
-=======
 	if (IS_INVALID_HANDLE(io_thread))
 		goto cleanup;
 
 	ux_thread = CreateThread(NULL, 0, ProcessEventQueue, NULL, 0, NULL);
 	if (IS_INVALID_HANDLE(ux_thread))
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 		goto cleanup;
 
 	ProcessMessages(NULL);
@@ -1086,20 +1061,7 @@ cleanup:
 	dwStatus = GetLastError();
 	if (child != INVALID_HANDLE_VALUE)
 		TerminateProcess(child, 0);
-<<<<<<< HEAD
 
-	if (monitor_thread != NULL) {
-		WaitForSingleObject(monitor_thread, INFINITE);
-		CloseHandle(monitor_thread);
-	}
-
-	if (ux_thread != NULL) {
-		TerminateThread(ux_thread, S_OK);
-		CloseHandle(ux_thread);
-	}
-
-	if (io_thread != NULL) {
-=======
 	if (!IS_INVALID_HANDLE(monitor_thread)) {
 		WaitForSingleObject(monitor_thread, INFINITE);
 		CloseHandle(monitor_thread);
@@ -1109,7 +1071,6 @@ cleanup:
 		CloseHandle(ux_thread);
 	}
 	if (!IS_INVALID_HANDLE(io_thread)) {
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 		TerminateThread(io_thread, 0);
 		CloseHandle(io_thread);
 	}
@@ -1319,23 +1280,7 @@ start_withno_pty(wchar_t *command)
 		}
 	}
 cleanup:
-<<<<<<< HEAD
-	if (child != INVALID_HANDLE_VALUE)
-		TerminateProcess(child, 0);
 
-	if (monitor_thread != INVALID_HANDLE_VALUE)
-		WaitForSingleObject(monitor_thread, INFINITE);
-
-	if(pi.hProcess != INVALID_HANDLE_VALUE)
-		CloseHandle(pi.hProcess);
-
-	if (pi.hThread != INVALID_HANDLE_VALUE)
-		CloseHandle(pi.hThread);
-
-	if (cmd != NULL)
-		free(cmd);
-
-=======
 	/* close child's stdin first */
 	if(!IS_INVALID_HANDLE(child_pipe_write))
 		CloseHandle(child_pipe_write);
@@ -1347,7 +1292,6 @@ cleanup:
 	if (!IS_INVALID_HANDLE(child))
 		TerminateProcess(child, 0);
 	
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 	return child_exit_code;
 }
 
@@ -1422,7 +1366,7 @@ static void setup_session_user_vars()
 			to_apply = data_expanded;
 		}
 
-		if (wcsicmp(name, L"PATH") == 0) {
+		if (_wcsicmp(name, L"PATH") == 0) {
 			if ((required = GetEnvironmentVariableW(L"PATH", NULL, 0)) != 0) {
 				/* "required" includes null term */
 				path_value = xmalloc((wcslen(to_apply) + 1 + required) * 2);

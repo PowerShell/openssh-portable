@@ -48,8 +48,6 @@
 #define READ_BUFFER_SIZE 100*1024
 /* internal write buffer size */
 #define WRITE_BUFFER_SIZE 100*1024
-<<<<<<< HEAD
-=======
 
 /*
 * A ACE is a binary data structure of changeable length
@@ -68,7 +66,6 @@
 #define MAX_ATTRIBUTE_LENGTH 10
 
 #define errno_from_Win32LastError() errno_from_Win32Error(GetLastError())
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 
 struct createFile_flags {
 	DWORD dwDesiredAccess;
@@ -132,7 +129,6 @@ fileio_connect(struct w32_io* pio, char* name)
 		errno = ENOMEM;
 		return -1;
 	}
-<<<<<<< HEAD
 	r = _snwprintf_s(pipe_name, PATH_MAX, PATH_MAX, L"\\\\.\\pipe\\%ls", name_w);
 	if (r < 0 || r >= PATH_MAX) {
 		debug3("cannot create pipe name with %s", name);
@@ -143,28 +139,17 @@ fileio_connect(struct w32_io* pio, char* name)
 
 	do {
 		h = CreateFileW(pipe_name, GENERIC_READ | GENERIC_WRITE, 0, 
-			NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+			NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, NULL);
 	
 		if (h != INVALID_HANDLE_VALUE)
 			break;
 		if (GetLastError() != ERROR_PIPE_BUSY)
 			break;
-=======
-	_snwprintf(pipe_name, PATH_MAX, L"\\\\.\\pipe\\%ls", name_w);
-	h = CreateFileW(pipe_name, GENERIC_READ | GENERIC_WRITE, 0, 
-		NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT  | SECURITY_IDENTIFICATION, NULL);
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 	
 		debug4("waiting for agent connection, retrying after 1 sec");
 		if ((ret = wait_for_any_event(NULL, 0, 1000) != 0) != 0)
 			goto cleanup;
-<<<<<<< HEAD
 	} while(1);
-=======
-		h = CreateFileW(pipe_name, GENERIC_READ | GENERIC_WRITE, 0,
-			NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, NULL);
-	}
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 
 	if (h == INVALID_HANDLE_VALUE) {
 		debug3("unable to connect to pipe %ls, error: %d", name_w, GetLastError());
@@ -772,14 +757,10 @@ fileio_stat(const char *path, struct _stat64 *buf)
 	WIN32_FILE_ATTRIBUTE_DATA attributes = { 0 };
 	int ret = -1, len = 0;	
 
-<<<<<<< HEAD
 	if ((wpath = utf8_to_utf16(path)) == NULL) {
 		errno = ENOMEM;
 		return -1;
 	}
-=======
-	memset(buf, 0, sizeof(struct _stat64));
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 
 	/* Detect root dir */
 	if (path && strcmp(path, "/") == 0) {
@@ -794,8 +775,6 @@ fileio_stat(const char *path, struct _stat64 *buf)
 		return -1;
 	}
 
-<<<<<<< HEAD
-=======
 	if (GetFileAttributesExW(wpath, GetFileExInfoStandard, &attributes) == FALSE) {
 		errno = errno_from_Win32LastError();
 		debug3("GetFileAttributesExW with last error %d", GetLastError());
@@ -831,7 +810,6 @@ fileio_stat(const char *path, struct _stat64 *buf)
 	}	
 	ret = 0;
 cleanup:
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 	if (wpath)
 		free(wpath);	
 	return ret;

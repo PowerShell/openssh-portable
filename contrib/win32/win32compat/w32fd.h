@@ -144,15 +144,9 @@ int fileio_close(struct w32_io* pio);
 int fileio_pipe(struct w32_io* pio[2]);
 struct w32_io* fileio_afunix_socket();
 int fileio_connect(struct w32_io*, char*);
-<<<<<<< HEAD
-struct w32_io* fileio_open(const char *pathname, int flags, int mode);
+struct w32_io* fileio_open(const char *pathname, int flags, u_short mode);
 int fileio_read(struct w32_io* pio, void *dst, size_t max);
 int fileio_write(struct w32_io* pio, const void *buf, size_t max);
-=======
-struct w32_io* fileio_open(const char *pathname, int flags, u_short mode);
-int fileio_read(struct w32_io* pio, void *dst, unsigned int max);
-int fileio_write(struct w32_io* pio, const void *buf, unsigned int max);
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 int fileio_fstat(struct w32_io* pio, struct _stat64 *buf);
 int fileio_stat(const char *path, struct _stat64 *buf);
 long fileio_lseek(struct w32_io* pio, long offset, int origin);

@@ -26,10 +26,7 @@ void convertToBackslash(char *str);
 void convertToBackslashW(wchar_t *str);
 void convertToForwardslash(char *str);
 
-<<<<<<< HEAD
 #define errno_from_Win32LastError() errno_from_Win32Error(GetLastError())
 int errno_from_Win32Error(int);
-=======
 void unix_time_to_file_time(ULONG, LPFILETIME);
 void file_time_unix_time(const LPFILETIME, time_t *);
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b

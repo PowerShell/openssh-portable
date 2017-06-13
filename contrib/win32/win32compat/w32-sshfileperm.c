@@ -1,9 +1,6 @@
 /*
 * Author: Yanbing Wang <yawang@microsoft.com>
 *
-* Copyright (c) 2009, 2011 NoMachine
-* All rights reserved
-*
 * Support file permission check on Win32 based operating systems.
 *
 * Redistribution and use in source and binary forms, with or without
@@ -117,38 +114,8 @@ check_secure_file_permission(const char *name, struct passwd * pw)
 		}
 
 		current_aceHeader = (PACE_HEADER)current_ace;
-<<<<<<< HEAD
-		// Determine the location of the trustee's sid and the value of the access mask
-		switch (current_aceHeader->AceType) {
-		case ACCESS_ALLOWED_ACE_TYPE: {
-			PACCESS_ALLOWED_ACE pAllowedAce = (PACCESS_ALLOWED_ACE)current_ace;
-			current_trustee_sid = &(pAllowedAce->SidStart);
-			current_access_mask = pAllowedAce->Mask;
-			break;
-		}
-		case ACCESS_DENIED_ACE_TYPE: {
-			PACCESS_DENIED_ACE pDeniedAce = (PACCESS_DENIED_ACE)current_ace;
-			current_trustee_sid = &(pDeniedAce->SidStart);			
-			if((pDeniedAce->Mask & (FILE_GENERIC_READ & ~(SYNCHRONIZE | READ_CONTROL))) != 0) {
-				if (EqualSid(current_trustee_sid, owner_sid)){
-					debug3("Bad permission on %s. The owner of the file should at least have read permission.", name);
-					ret = -1;
-					goto cleanup;
-				}
-				else if (EqualSid(current_trustee_sid, user_sid)) {
-					debug3("Bad permission on %s. The user should at least have read permission.", name);
-					ret = -1;
-					goto cleanup;
-				}
-			}
-			continue;
-		}
-		default: {
-			// Not interested ACE
-=======
 		/* only interested in Allow ACE */
 		if(current_aceHeader->AceType != ACCESS_ALLOWED_ACE_TYPE)
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 			continue;
 		
 		PACCESS_ALLOWED_ACE pAllowedAce = (PACCESS_ALLOWED_ACE)current_ace;
@@ -209,147 +176,4 @@ is_sshd_account(PSID user_sid) {
 	wmemcpy(full_name + domain_name_length + 1, user_name, wcslen(user_name)+1);
 	return (wcsicmp(full_name, SSHD_ACCOUNT) == 0);
 }
-<<<<<<< HEAD
 
-/*
- * Check if the user is in local administrators group 
- * currently only check if the user is directly in the group
- * Returns TRUE if the user is in administrators group; otherwise false; 
-*/
-static BOOL
-is_admin_account(PSID user_sid)
-{
-	DWORD entries_read = 0, total_entries = 0, i = 0, name_length = UNCLEN, domain_name_length = DNLEN, sid_size = SECURITY_MAX_SID_SIZE;
-	LPLOCALGROUP_MEMBERS_INFO_1 local_groups_member_info = NULL;
-	char admins_sid[SECURITY_MAX_SID_SIZE];
-	wchar_t admins_group_name[UNCLEN], domain_name[DNLEN];
-	SID_NAME_USE sid_type = SidTypeInvalid;
-	NET_API_STATUS status;
-	BOOL ret = FALSE;
-
-	if (CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, admins_sid, &sid_size) == FALSE) {
-		debug3("CreateWellKnownSid failed with error code: %d.", GetLastError());
-		goto done;
-	}
-
-	if (LookupAccountSidLocalW(admins_sid, admins_group_name, &name_length,
-		domain_name, &domain_name_length, &sid_type) == FALSE) {
-		debug3("LookupAccountSidLocalW() failed with error: %d. ", GetLastError());
-		errno = ENOENT;
-		goto done;
-	}
-
-	status = NetLocalGroupGetMembers(NULL, admins_group_name, 1, (LPBYTE*)&local_groups_member_info,
-		MAX_PREFERRED_LENGTH, &entries_read, &total_entries, NULL);
-	if (status != NERR_Success) {
-		debug3("NetLocalGroupGetMembers failed with error code: %d.", status);
-		goto done;
-	}
-
-	for (i = 0; i < entries_read; i++) {
-		if (local_groups_member_info[i].lgrmi1_sidusage == SidTypeDeletedAccount)
-			continue;
-		else if (EqualSid(local_groups_member_info[i].lgrmi1_sid, user_sid)) {
-			ret = TRUE;
-			break;
-		}
-	}
-
-done:
-	if (local_groups_member_info)
-		NetApiBufferFree(local_groups_member_info);
-	return ret;
-}
-
-/*
-* Set the owner of the secure file to the user represented by pw and only grant
-* it the full control access
-*/
-int
-set_secure_file_permission(const char *name, struct passwd * pw)
-{
-	PSECURITY_DESCRIPTOR pSD = NULL;
-	PSID owner_sid = NULL;
-	PACL dacl = NULL;
-	wchar_t *name_utf16 = NULL, *sid_utf16 = NULL, sddl[256];
-	DWORD error_code = ERROR_SUCCESS;
-	struct passwd * pwd = pw;
-	BOOL present, defaulted;
-	int ret = 0;
-
-	if (pwd == NULL)
-		if ((pwd = getpwuid(0)) == NULL)
-			fatal("getpwuid failed.");
-
-	if (ConvertStringSidToSid(pwd->pw_sid, &owner_sid) == FALSE) {
-		debug3("failed to retrieve the sid of the pwd with error code: %d", GetLastError());
-		ret = -1;
-		goto cleanup;
-	}
-	
-	if((IsValidSid(owner_sid) == FALSE)) {
-		debug3("IsValidSid(owner_sid): FALSE");
-		ret = -1;
-		goto cleanup;		
-	}	
-
-	if ((sid_utf16 = utf8_to_utf16(pwd->pw_sid)) == NULL) {
-		debug3("Failed to get utf16 of the sid string");
-		errno = ENOMEM;
-		ret = -1;
-		goto cleanup;
-	}
-	swprintf(sddl, sizeof(sddl) - 1, L"D:P(A;;FA;;;%s)", sid_utf16);
-	if(ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, SDDL_REVISION, &pSD, NULL) == FALSE) {
-		debug3("ConvertStringSecurityDescriptorToSecurityDescriptorW failed with error code %d", GetLastError());
-		ret = -1;
-		goto cleanup;
-	}
-
-	if (IsValidSecurityDescriptor(pSD) == FALSE) {
-		debug3("IsValidSecurityDescriptor return FALSE");
-		ret = -1;
-		goto cleanup;
-	}
-
-	if (GetSecurityDescriptorDacl(pSD, &present, &dacl, &defaulted) == FALSE) {
-		debug3("GetSecurityDescriptorDacl failed with error code %d", GetLastError());
-		ret = -1;
-		goto cleanup;
-	}
-	if (!present || dacl == NULL) {
-		debug3("failed to find the acl from security descriptior.");
-		ret = -1;
-		goto cleanup;
-	}	
-
-	if ((name_utf16 = utf8_to_utf16(name)) == NULL) {
-		debug3("Failed to get utf16 of the name");
-		errno = ENOMEM;
-		ret = -1;
-		goto cleanup;
-	}
-
-	/*Set the owner sid and acl of the file.*/
-	if ((error_code = SetNamedSecurityInfoW(name_utf16, SE_FILE_OBJECT,
-		OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
-		owner_sid, NULL, dacl, NULL)) != ERROR_SUCCESS) {
-		debug3("failed to set the owner sid and dacl of file %s with error code: %d", name, error_code);
-		errno = EOTHER;
-		ret = -1;
-		goto cleanup;
-	}
-cleanup:
-	if (pSD)
-		LocalFree(pSD);
-	if (name_utf16)
-		free(name_utf16);
-	if(sid_utf16)
-		free(sid_utf16);
-	if (owner_sid)
-		FreeSid(owner_sid);	
-	
-	return ret;
-}
-=======
->>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
