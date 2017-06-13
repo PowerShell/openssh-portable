@@ -155,7 +155,6 @@ DWORD childProcessId = 0;
 DWORD dwStatus = 0;
 DWORD in_cmd_len = 0;
 DWORD lastLineLength = 0;
-DWORD in_cmd_len = 0;
 
 UINT cp = 0;
 UINT ViewPortY = 0;
@@ -475,8 +474,7 @@ SizeWindow(HANDLE hInput)
 	matchingFont.dwFontSize.X = 0;
 	matchingFont.dwFontSize.Y = 16;
 	matchingFont.FontFamily = FF_DONTCARE;
-	matchingFont.FontWeight = FW_NORMAL;
-	//wcscpy(matchingFont.FaceName, L"Consolas");
+	matchingFont.FontWeight = FW_NORMAL;	
 	wcscpy_s(matchingFont.FaceName, LF_FACESIZE, L"Consolas");
 
 	bSuccess = __SetCurrentConsoleFontEx(child_out, FALSE, &matchingFont);
@@ -954,8 +952,8 @@ start_with_pty(wchar_t *command)
 	HMODULE hm_kernel32 = NULL, hm_user32 = NULL;
 
 	if(cmd == NULL) {
-		printf("ssh-shellhost - out of memory");
-		return -1;
+		printf("ssh-shellhost is out of memory");
+		exit(255);
 	}
 		
 	if ((hm_kernel32 = LoadLibraryW(L"kernel32.dll")) == NULL ||
@@ -1109,6 +1107,11 @@ start_withno_pty(wchar_t *command)
 	size_t command_len;
 	char buf[128];
 	DWORD rd = 0, wr = 0, i = 0;
+
+	if (cmd == NULL) {
+		printf("ssh-shellhost is out of memory");
+		exit(255);
+	}
 
 	pipe_in = GetStdHandle(STD_INPUT_HANDLE);
 	pipe_out = GetStdHandle(STD_OUTPUT_HANDLE);
