@@ -486,7 +486,6 @@ strmode(mode_t mode, char *p)
 	for(int i = 0; i < strlen(permissions); i++)
 		*p++ = permissions[i];
 	
-	p = p + strlen(p);
 	*p = '\0';
 }
 
