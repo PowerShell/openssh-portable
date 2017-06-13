@@ -137,6 +137,7 @@ con_type_to_string(struct agent_connection* con) {
 }
 
 static int
+<<<<<<< HEAD
 get_con_client_type(struct agent_connection* con) 
 {
 	int r = -1;
@@ -254,16 +255,13 @@ done:
 }
 
 static int
+=======
+>>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 process_request(struct agent_connection* con) 
 {
 	int r = -1;
 	struct sshbuf *request = NULL, *response = NULL;
 	u_char type;
-
-	if (con->client_type == UNKNOWN && get_con_client_type(con) == -1) {
-		debug("unable to get client process type");
-		goto done;
-	}
 
 	request = sshbuf_from(con->io_buf.buf, con->io_buf.num_bytes);
 	response = sshbuf_new();

@@ -31,26 +31,21 @@
 #include <Windows.h>
 #include <Sddl.h>
 #include <Aclapi.h>
-#include <Ntsecapi.h>
 #include <lm.h>
 #include <stdio.h> 
 
 #include "inc\pwd.h"
 #include "sshfileperm.h"
-#include "misc_internal.h"
 #include "debug.h"
 
 #define SSHD_ACCOUNT L"NT Service\\sshd"
 
 /*
-* The function is to check if user prepresented by pw is secure to access to the file. 
-* Check the owner of the file is one of these types: Local Administrators groups, system account,
-* direct user accounts in local administrators, or user represented by pw
+* The function is to check if current user is secure to access to the file. 
+* Check the owner of the file is one of these types: Local Administrators groups, system account, current user account
 * Check the users have access permission to the file don't voilate the following rules:	
-	1. no user other than local administrators group, system account, user represented by pw,
-	   and owner accounts have write permission on the file
-	2. sshd account can only have read permission
-	3. user represented by pw and file owner should at least have read permission.
+	1. no user other than local administrators group, system account, and pwd user have write permission on the file
+	2. sshd account can only have read permission	
 * Returns 0 on success and -1 on failure
 */
 int
@@ -72,11 +67,12 @@ check_secure_file_permission(const char *name, struct passwd * pw)
 	
 	if (ConvertStringSidToSid(pwd->pw_sid, &user_sid) == FALSE ||
 		(IsValidSid(user_sid) == FALSE)) {
-		debug3("failed to retrieve the sid of the pwd");
+		debug3("failed to retrieve sid of user %s", pwd->pw_name);
 		ret = -1;
 		goto cleanup;
 	}
 	if ((name_utf16 = utf8_to_utf16(name)) == NULL) {
+		ret = -1;
 		errno = ENOMEM;
 		goto cleanup;
 	}
@@ -97,17 +93,15 @@ check_secure_file_permission(const char *name, struct passwd * pw)
 	}
 	if (!IsWellKnownSid(owner_sid, WinBuiltinAdministratorsSid) &&
 		!IsWellKnownSid(owner_sid, WinLocalSystemSid) &&
-		!EqualSid(owner_sid, user_sid) &&
-		!is_admin_account(owner_sid)) {
+		!EqualSid(owner_sid, user_sid)) {
 		debug3("Bad owner on %s", name);
 		ret = -1;
 		goto cleanup;
 	}
 	/*
 	iterate all aces of the file to find out if there is voilation of the following rules:
-		1. no others than administrators group, system account, and current user, owner accounts have write permission on the file
+		1. no others than administrators group, system account, and current user account have write permission on the file
 		2. sshd account can only have read permission
-		3. this user and file owner should at least have read permission 
 	*/
 	for (DWORD i = 0; i < dacl->AceCount; i++) {
 		PVOID current_ace = NULL;
@@ -123,6 +117,7 @@ check_secure_file_permission(const char *name, struct passwd * pw)
 		}
 
 		current_aceHeader = (PACE_HEADER)current_ace;
+<<<<<<< HEAD
 		// Determine the location of the trustee's sid and the value of the access mask
 		switch (current_aceHeader->AceType) {
 		case ACCESS_ALLOWED_ACE_TYPE: {
@@ -150,16 +145,20 @@ check_secure_file_permission(const char *name, struct passwd * pw)
 		}
 		default: {
 			// Not interested ACE
+=======
+		/* only interested in Allow ACE */
+		if(current_aceHeader->AceType != ACCESS_ALLOWED_ACE_TYPE)
+>>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 			continue;
-		}
-		}
 		
-		/*no need to check administrators group, owner account, user account and system account*/
+		PACCESS_ALLOWED_ACE pAllowedAce = (PACCESS_ALLOWED_ACE)current_ace;
+		current_trustee_sid = &(pAllowedAce->SidStart);
+		current_access_mask = pAllowedAce->Mask;	
+		
+		/*no need to check administrators group, pwd user account, and system account*/
 		if (IsWellKnownSid(current_trustee_sid, WinBuiltinAdministratorsSid) ||
 			IsWellKnownSid(current_trustee_sid, WinLocalSystemSid) ||
-			EqualSid(current_trustee_sid, owner_sid) ||
-			EqualSid(current_trustee_sid, user_sid) ||
-			is_admin_account(current_trustee_sid)) {
+			EqualSid(current_trustee_sid, user_sid)) {
 			continue;
 		}
 		else if(is_sshd_account(current_trustee_sid)){
@@ -185,12 +184,13 @@ cleanup:
 	if (pSD)
 		LocalFree(pSD);
 	if (user_sid)
-		FreeSid(user_sid);
+		LocalFree(user_sid);
 	if(name_utf16)
 		free(name_utf16);
 	return ret;
 }
 
+/*TODO: optimize to get sshd sid first and then call EqualSid*/
 static BOOL
 is_sshd_account(PSID user_sid) {	
 	wchar_t user_name[UNCLEN], full_name[UNCLEN + DNLEN + 2];
@@ -209,6 +209,7 @@ is_sshd_account(PSID user_sid) {
 	wmemcpy(full_name + domain_name_length + 1, user_name, wcslen(user_name)+1);
 	return (wcsicmp(full_name, SSHD_ACCOUNT) == 0);
 }
+<<<<<<< HEAD
 
 /*
  * Check if the user is in local administrators group 
@@ -350,3 +351,5 @@ cleanup:
 	
 	return ret;
 }
+=======
+>>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b

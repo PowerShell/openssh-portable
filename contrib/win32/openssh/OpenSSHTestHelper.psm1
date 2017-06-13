@@ -1,5 +1,5 @@
 ﻿$ErrorActionPreference = 'Stop'
-Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -DisableNameChecking
+Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -DisableNameChecking -Force
 
 [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
 # test environment parameters initialized with defaults
@@ -119,6 +119,8 @@ WARNING: Following changes will be made to OpenSSH configuration
    - will be replaced with a test sshd_config
    - $HOME\.ssh\known_hosts will be backed up as known_hosts.ori
    - will be replaced with a test known_hosts
+   - $HOME\.ssh\config will be backed up as config.ori
+   - will be replaced with a test config
    - sshd test listener will be on port 47002
    - $HOME\.ssh\known_hosts will be modified with test host key entry
    - test accounts - ssouser, pubkeyuser, and passwduser will be added
@@ -156,32 +158,41 @@ WARNING: Following changes will be made to OpenSSH configuration
     # copy new sshd_config
     Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) (Join-Path $script:OpenSSHBinPath sshd_config) -Force
     
-    #workaround for the cariggage new line added by git before copy them
-    Get-ChildItem "$($Script:E2ETestDirectory)\sshtest_*key*" | % {
-        (Get-Content $_.FullName -Raw).Replace("`r`n","`n") | Set-Content $_.FullName -Force
-    }
+    Start-Service ssh-agent
 
     #copy sshtest keys
-    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force
-    $owner = New-Object System.Security.Principal.NTAccount($env:USERDOMAIN, $env:USERNAME)
-    Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*" -Exclude *.pub | % {
-        Cleanup-SecureFileACL -FilePath $_.FullName -Owner $owner
-        Add-PermissionToFileACL -FilePath $_.FullName -User "NT Service\sshd" -Perm "Read"
+    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force    
+    Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*"| % {
+        #workaround for the cariggage new line added by git before copy them
+        (Get-Content $_.FullName -Raw).Replace("`r`n","`n") | Set-Content $_.FullName -Force
+        Adjust-HostKeyFileACL -FilePath $_.FullName
+        if (-not ($_.Name.EndsWith(".pub"))) {
+            #register private key with agent
+            ssh-add-hostkey.ps1 $_.FullName
+        }
     }
+
     Restart-Service sshd -Force
    
     #Backup existing known_hosts and replace with test version
     #TODO - account for custom known_hosts locations
-    $knowHostsDirectoryPath = Join-Path $home .ssh
-    $knowHostsFilePath = Join-Path $knowHostsDirectoryPath known_hosts
-    if(-not (Test-Path $knowHostsDirectoryPath -PathType Container))
+    $dotSshDirectoryPath = Join-Path $home .ssh
+    $knowHostsFilePath = Join-Path $dotSshDirectoryPath known_hosts
+    if(-not (Test-Path $dotSshDirectoryPath -PathType Container))
     {
-        New-Item -ItemType Directory -Path $knowHostsDirectoryPath -Force -ErrorAction SilentlyContinue | out-null
+        New-Item -ItemType Directory -Path $dotSshDirectoryPath -Force -ErrorAction SilentlyContinue | out-null
     }
-    if ((Test-Path $knowHostsFilePath -PathType Leaf) -and (-not (Test-Path (Join-Path $knowHostsDirectoryPath known_hosts.ori) -PathType Leaf))) {
-        Copy-Item $knowHostsFilePath (Join-Path $knowHostsDirectoryPath known_hosts.ori) -Force
+    if ((Test-Path $knowHostsFilePath -PathType Leaf) -and (-not (Test-Path (Join-Path $dotSshDirectoryPath known_hosts.ori) -PathType Leaf))) {
+        Copy-Item $knowHostsFilePath (Join-Path $dotSshDirectoryPath known_hosts.ori) -Force
     }
     Copy-Item (Join-Path $Script:E2ETestDirectory known_hosts) $knowHostsFilePath -Force
+
+    $sshConfigFilePath = Join-Path $dotSshDirectoryPath config
+    if ((Test-Path $sshConfigFilePath -PathType Leaf) -and (-not (Test-Path (Join-Path $dotSshDirectoryPath config.ori) -PathType Leaf))) {
+        Copy-Item $sshConfigFilePath (Join-Path $dotSshDirectoryPath config.ori) -Force
+    }
+    Copy-Item (Join-Path $Script:E2ETestDirectory ssh_config) $sshConfigFilePath -Force
+    Adjust-UserKeyFileACL -FilePath $sshConfigFilePath -OwnerPerms "Read,Write"
 
     # create test accounts
     #TODO - this is Windows specific. Need to be in PAL
@@ -208,10 +219,14 @@ WARNING: Following changes will be made to OpenSSH configuration
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
     $testPubKeyPath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519.pub    
     Copy-Item $testPubKeyPath $authorizedKeyPath -Force -ErrorAction SilentlyContinue
+    $owner = New-Object System.Security.Principal.NTAccount($SSOUser)
+    Adjust-UserKeyFileACL -FilePath $authorizedKeyPath -Owner $owner -OwnerPerms "Read","Write"
     Add-PermissionToFileACL -FilePath $authorizedKeyPath -User "NT Service\sshd" -Perm "Read"
     $testPriKeypath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519
-    Cleanup-SecureFileACL -FilePath $testPriKeypath -owner $owner
+    (Get-Content $testPriKeypath -Raw).Replace("`r`n","`n") | Set-Content $testPriKeypath -Force
+    Adjust-UserKeyFileACL -FilePath $testPriKeypath -OwnerPerms "Read, Write"
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
+    Backup-OpenSSHTestInfo
 }
 #TODO - this is Windows specific. Need to be in PAL
 function Get-LocalUserProfile
@@ -236,7 +251,6 @@ function Get-LocalUserProfile
       .SYNOPSIS
       This function installs the tools required by our tests
       1) Pester for running the tests  
-      2) sysinternals required by the tests on windows.
 #>
 function Install-OpenSSHTestDependencies
 {
@@ -255,11 +269,6 @@ function Install-OpenSSHTestDependencies
     {      
       Write-Log -Message "Installing Pester..." 
       choco install Pester -y --force --limitoutput 2>&1 >> $Script:TestSetupLogFile
-    }
-
-    if ( -not (Test-Path "$env:ProgramData\chocolatey\lib\sysinternals\tools" ) ) {        
-        Write-Log -Message "sysinternals not present. Installing sysinternals."
-        choco install sysinternals -y --force --limitoutput 2>&1 >> $Script:TestSetupLogFile
     }
 }
 <#
@@ -290,19 +299,30 @@ function Get-UserSID
     Cleanup-OpenSSHTestEnvironment
 #>
 function Cleanup-OpenSSHTestEnvironment
-{    
+{   
+    if($Global:OpenSSHTestInfo -eq $null) {
+        throw "OpenSSHTestInfo is not set. Did you run Setup-OpenSShTestEnvironment?"
+    }
+
+    $sshBinPath = $Global:OpenSSHTestInfo["OpenSSHBinPath"]
+
     # .exe - Windows specific. TODO - PAL 
-    if (-not (Test-Path (Join-Path $script:OpenSSHBinPath ssh.exe) -PathType Leaf))
+    if (-not (Test-Path (Join-Path $sshBinPath ssh.exe) -PathType Leaf))
     {
         Throw "Cannot find OpenSSH binaries under $script:OpenSSHBinPath. "
     }
-
+    
+    #unregister test host keys from agent
+    Get-ChildItem "$sshBinPath\sshtest*hostkey*.pub"| % {
+        ssh-add-hostkey.ps1 -Delete_key $_.FullName
+    }
+    
+    Remove-Item $sshBinPath\sshtest*hostkey* -Force -ErrorAction SilentlyContinue    
     #Restore sshd_config
-    $backupConfigPath = Join-Path $Script:OpenSSHBinPath sshd_config.ori
+    $backupConfigPath = Join-Path $sshBinPath sshd_config.ori
     if (Test-Path $backupConfigPath -PathType Leaf) {        
-        Copy-Item $backupConfigPath (Join-Path $Script:OpenSSHBinPath sshd_config) -Force -ErrorAction SilentlyContinue
-        Remove-Item (Join-Path $Script:OpenSSHBinPath sshd_config.ori) -Force -ErrorAction SilentlyContinue
-        Remove-Item $Script:OpenSSHBinPath\sshtest*hostkey* -Force -ErrorAction SilentlyContinue
+        Copy-Item $backupConfigPath (Join-Path $sshBinPath sshd_config) -Force -ErrorAction SilentlyContinue
+        Remove-Item (Join-Path $sshBinPath sshd_config.ori) -Force -ErrorAction SilentlyContinue
         Restart-Service sshd
     }
     
@@ -312,6 +332,14 @@ function Cleanup-OpenSSHTestEnvironment
     {
         Copy-Item $originKnowHostsPath (Join-Path $home .ssh\known_hosts) -Force -ErrorAction SilentlyContinue
         Remove-Item $originKnowHostsPath -Force -ErrorAction SilentlyContinue
+    }
+
+    #Restore ssh_config
+    $originConfigPath = Join-Path $home .ssh\config.ori
+    if (Test-Path $originConfigPath)
+    {
+        Copy-Item $originConfigPath (Join-Path $home .ssh\config) -Force -ErrorAction SilentlyContinue
+        Remove-Item $originConfigPath -Force -ErrorAction SilentlyContinue
     }
 
     #Delete accounts
@@ -395,7 +423,7 @@ function Run-OpenSSHE2ETest
    # Discover all CI tests and run them.
     Push-Location $Script:E2ETestDirectory
     Write-Log -Message "Running OpenSSH E2E tests..."    
-    $testFolders = Get-ChildItem *.tests.ps1 -Recurse -Exclude SSHDConfig.tests.ps1, SSH.Tests.ps1 | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique
+    $testFolders = Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique
     Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $Script:E2ETestResultsFile -Tag 'CI'
     Pop-Location
 }
@@ -439,6 +467,56 @@ function Run-OpenSSHUnitTest
     $testfailed
 }
 
+function Backup-OpenSSHTestInfo
+{
+    param
+    (    
+        [string] $BackupFile = $null
+    )
+
+    if ($Global:OpenSSHTestInfo -eq $null) {
+        Throw "`$OpenSSHTestInfo is null. Did you run Setup-OpenSSHTestEnvironment yet?"
+    }
+    
+    $testInfo = $Global:OpenSSHTestInfo
+    
+    if ([String]::IsNullOrEmpty($BackupFile)) {
+        $BackupFile = Join-Path $testInfo["TestDataPath"] "OpenSSHTestInfo_backup.txt"
+    }
+    
+    $null | Set-Content $BackupFile
+
+    foreach ($key in $testInfo.Keys) {
+        $value = $testInfo[$key]
+        Add-Content $BackupFile "$key,$value"
+    }
+}
+
+function Recover-OpenSSHTestInfo
+{
+    param
+    (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string] $BackupFile
+    )
+
+    if($Global:OpenSSHTestInfo -ne $null)
+    {
+        $Global:OpenSSHTestInfo.Clear()
+        $Global:OpenSSHTestInfo = $null
+    }
+
+    $Global:OpenSSHTestInfo = @{}
+
+    $entries = Get-Content $BackupFile
+
+    foreach ($entry in $entries) {
+        $data = $entry.Split(",")
+        $Global:OpenSSHTestInfo[$data[0]] = $data[1] 
+    }
+}
+
 <#
     Write-Log 
 #>
@@ -460,4 +538,4 @@ function Write-Log
     }  
 }
 
-Export-ModuleMember -Function Setup-OpenSSHTestEnvironment, Cleanup-OpenSSHTestEnvironment, Run-OpenSSHUnitTest, Run-OpenSSHE2ETest
+Export-ModuleMember -Function Setup-OpenSSHTestEnvironment, Cleanup-OpenSSHTestEnvironment, Run-OpenSSHUnitTest, Run-OpenSSHE2ETest, Backup-OpenSSHTestInfo, Recover-OpenSSHTestInfo

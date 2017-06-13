@@ -1,4 +1,4 @@
-/* $OpenBSD: sshd.c,v 1.485 2017/03/15 03:52:30 deraadt Exp $ */
+/* $OpenBSD: sshd.c,v 1.490 2017/05/31 08:09:45 markus Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -200,10 +200,10 @@ int have_agent = 0;
  * not very useful.  Currently, memory locking is not implemented.
  */
 struct {
-	Key	**host_keys;		/* all private host keys */
-	Key	**host_pubkeys;		/* all public host keys */
-	Key	**host_certificates;	/* all public host certificates */
-	int	have_ssh2_key;
+	struct sshkey	**host_keys;		/* all private host keys */
+	struct sshkey	**host_pubkeys;		/* all public host keys */
+	struct sshkey	**host_certificates;	/* all public host certificates */
+	int		have_ssh2_key;
 } sensitive_data;
 
 /* This is set to true when a signal is received. */
@@ -468,10 +468,8 @@ sshd_exchange_identification(struct ssh *ssh, int sock_in, int sock_out)
 	chop(server_version_string);
 	debug("Local version string %.200s", server_version_string);
 
-	if (remote_major == 2 ||
-	    (remote_major == 1 && remote_minor == 99)) {
-		enable_compat20();
-	} else {
+	if (remote_major != 2 ||
+	    (remote_major == 1 && remote_minor != 99)) {
 		s = "Protocol major versions differ.\n";
 		(void) atomicio(vwrite, sock_out, s, strlen(s));
 		close(sock_in);
@@ -506,7 +504,7 @@ destroy_sensitive_data(void)
 void
 demote_sensitive_data(void)
 {
-	Key *tmp;
+	struct sshkey *tmp;
 	int i;
 
 	for (i = 0; i < options.num_host_key_files; i++) {
@@ -692,6 +690,7 @@ privsep_postauth(Authctxt *authctxt)
 	else if (pmonitor->m_pid != 0) {
 		verbose("User child is on pid %ld", (long)pmonitor->m_pid);
 		buffer_clear(&loginmsg);
+		monitor_clear_keystate(pmonitor);
 		monitor_child_postauth(pmonitor);
 
 		/* NEVERREACHED */
@@ -731,7 +730,7 @@ list_hostkey_types(void)
 	const char *p;
 	char *ret;
 	int i;
-	Key *key;
+	struct sshkey *key;
 
 	buffer_init(&b);
 	for (i = 0; i < options.num_host_key_files; i++) {
@@ -787,11 +786,11 @@ list_hostkey_types(void)
 	return ret;
 }
 
-static Key *
+static struct sshkey *
 get_hostkey_by_type(int type, int nid, int need_private, struct ssh *ssh)
 {
 	int i;
-	Key *key;
+	struct sshkey *key;
 
 	for (i = 0; i < options.num_host_key_files; i++) {
 		switch (type) {
@@ -815,19 +814,19 @@ get_hostkey_by_type(int type, int nid, int need_private, struct ssh *ssh)
 	return NULL;
 }
 
-Key *
+struct sshkey *
 get_hostkey_public_by_type(int type, int nid, struct ssh *ssh)
 {
 	return get_hostkey_by_type(type, nid, 0, ssh);
 }
 
-Key *
+struct sshkey *
 get_hostkey_private_by_type(int type, int nid, struct ssh *ssh)
 {
 	return get_hostkey_by_type(type, nid, 1, ssh);
 }
 
-Key *
+struct sshkey *
 get_hostkey_by_index(int ind)
 {
 	if (ind < 0 || ind >= options.num_host_key_files)
@@ -835,7 +834,7 @@ get_hostkey_by_index(int ind)
 	return (sensitive_data.host_keys[ind]);
 }
 
-Key *
+struct sshkey *
 get_hostkey_public_by_index(int ind, struct ssh *ssh)
 {
 	if (ind < 0 || ind >= options.num_host_key_files)
@@ -844,7 +843,7 @@ get_hostkey_public_by_index(int ind, struct ssh *ssh)
 }
 
 int
-get_hostkey_index(Key *key, int compare, struct ssh *ssh)
+get_hostkey_index(struct sshkey *key, int compare, struct ssh *ssh)
 {
 	int i;
 
@@ -1452,8 +1451,8 @@ main(int ac, char **av)
 	u_int n;
 	u_int64_t ibytes, obytes;
 	mode_t new_umask;
-	Key *key;
-	Key *pubkey;
+	struct sshkey *key;
+	struct sshkey *pubkey;
 	int keytype;
 	Authctxt *authctxt;
 	struct connection_info *connection_info = get_connection_info(0, 0);
@@ -1679,7 +1678,8 @@ main(int ac, char **av)
 	 * For windows, enable logging right away to capture failures while loading private host keys.
 	 * On Unix, logging at configured level is not done until private host keys are loaded. Why??
 	 */
-	log_init(__progname, options.log_level, options.log_facility, log_stderr);
+	if (!debug_flag)
+		log_init(__progname, options.log_level, options.log_facility, log_stderr);
 #endif // WINDOWS
 
 	/* challenge-response is implemented via keyboard interactive */
@@ -1751,9 +1751,9 @@ main(int ac, char **av)
 
 	/* load host keys */
 	sensitive_data.host_keys = xcalloc(options.num_host_key_files,
-	    sizeof(Key *));
+	    sizeof(struct sshkey *));
 	sensitive_data.host_pubkeys = xcalloc(options.num_host_key_files,
-	    sizeof(Key *));
+	    sizeof(struct sshkey *));
 
 	if (options.host_key_agent) {
 		if (strcmp(options.host_key_agent, SSH_AUTHSOCKET_ENV_NAME))
@@ -1774,14 +1774,6 @@ main(int ac, char **av)
 		key = key_load_private(options.host_key_files[i], "", NULL);
 		pubkey = key_load_public(options.host_key_files[i], NULL);
 
-		if ((pubkey != NULL && pubkey->type == KEY_RSA1) ||
-		    (key != NULL && key->type == KEY_RSA1)) {
-			verbose("Ignoring RSA1 key %s",
-			    options.host_key_files[i]);
-			key_free(key);
-			key_free(pubkey);
-			continue;
-		}
 		if (pubkey == NULL && key != NULL)
 			pubkey = key_demote(key);
 		sensitive_data.host_keys[i] = key;
@@ -1827,7 +1819,7 @@ main(int ac, char **av)
 	 * indices to the public keys that they relate to.
 	 */
 	sensitive_data.host_certificates = xcalloc(options.num_host_key_files,
-	    sizeof(Key *));
+	    sizeof(struct sshkey *));
 	for (i = 0; i < options.num_host_key_files; i++)
 		sensitive_data.host_certificates[i] = NULL;
 
@@ -2163,6 +2155,7 @@ main(int ac, char **av)
 	 */
 	if (use_privsep) {
 		mm_send_keystate(pmonitor);
+		packet_clear_keys();
 		exit(0);
 	}
 
@@ -2240,8 +2233,9 @@ main(int ac, char **av)
 }
 
 int
-sshd_hostkey_sign(Key *privkey, Key *pubkey, u_char **signature, size_t *slen,
-    const u_char *data, size_t dlen, const char *alg, u_int flag)
+sshd_hostkey_sign(struct sshkey *privkey, struct sshkey *pubkey,
+    u_char **signature, size_t *slen, const u_char *data, size_t dlen,
+    const char *alg, u_int flag)
 {
 	int r;
 	u_int xxx_slen, xxx_dlen = dlen;
@@ -2321,7 +2315,7 @@ do_ssh2_kex(void)
 	kex->host_key_index=&get_hostkey_index;
 	kex->sign = sshd_hostkey_sign;
 
-	dispatch_run(DISPATCH_BLOCK, &kex->done, active_state);
+	ssh_dispatch_run_fatal(active_state, DISPATCH_BLOCK, &kex->done);
 
 	session_id2 = kex->session_id;
 	session_id2_len = kex->session_id_len;

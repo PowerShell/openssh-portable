@@ -306,8 +306,9 @@ function Package-OpenSSH
     }
     $buildDir = Join-Path $repositoryRoot ("bin\" + $folderName + "\" + $Configuration)
     $payload = "sshd.exe", "ssh.exe", "ssh-agent.exe", "ssh-add.exe", "sftp.exe"
-    $payload += "sftp-server.exe", "scp.exe", "ssh-shellhost.exe", "ssh-keygen.exe" 
+    $payload += "sftp-server.exe", "scp.exe", "ssh-shellhost.exe", "ssh-keygen.exe", "ssh-keyscan.exe" 
     $payload += "sshd_config", "install-sshd.ps1", "uninstall-sshd.ps1"
+    $payload +="FixHostFilePermissions.ps1", "FixUserFilePermissions.ps1", "OpenSSHUtils.psm1", "ssh-add-hostkey.ps1"
 
     $packageName = "OpenSSH-Win64"
     if ($NativeHostArch -eq 'x86') {
@@ -345,7 +346,7 @@ function Package-OpenSSH
 
     if ($DestinationPath -ne "") {
         if (Test-Path $DestinationPath) {            
-            Remove-Item $DestinationPath\* -Force -Recurse
+            Remove-Item $DestinationPath\* -Force -Recurse -ErrorAction SilentlyContinue
         }
         else {
             New-Item -ItemType Directory $DestinationPath -Force | Out-Null
@@ -515,7 +516,7 @@ function Install-OpenSSH
     & "$OpenSSHDir\ssh-keygen.exe" -A
 
     $keyFiles = Get-ChildItem "$OpenSSHDir\ssh_host_*_key*" | % {        
-        Add-PermissionToFileACL -FilePath $_.FullName -User "NT Service\sshd" -Perm "Read"
+        Adjust-HostKeyFileACL -FilePath $_.FullName
     }
 
     #machine will be reboot after Install-openssh anyway
@@ -562,8 +563,28 @@ function UnInstall-OpenSSH
         [string]$OpenSSHDir = "$env:SystemDrive\OpenSSH"
     )
 
+<<<<<<< HEAD
     if((Get-Service ssh-agent -ErrorAction Ignore) -ne $null) {
         Stop-Service ssh-agent -Force -ErrorAction SilentlyContinue
+=======
+    if (-not (Test-Path $OpenSSHDir))
+    {
+        return
+    }
+
+    Push-Location $OpenSSHDir
+    if((Get-Service ssh-agent -ErrorAction Ignore) -ne $null) {
+        Stop-Service ssh-agent -Force
+    }
+    &( "$OpenSSHDir\uninstall-sshd.ps1")
+        
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
+    $newMachineEnvironmentPath = $machinePath
+    if ($machinePath.ToLower().Contains($OpenSSHDir.ToLower()))
+    {        
+        $newMachineEnvironmentPath = $newMachineEnvironmentPath.Replace("$OpenSSHDir;", '')
+        $env:Path = $env:Path.Replace("$OpenSSHDir;", '')
+>>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
     }
 
     if(Test-Path -Path $OpenSSHDir)

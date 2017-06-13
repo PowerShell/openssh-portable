@@ -1,4 +1,4 @@
-/* $OpenBSD: sshconnect.c,v 1.273 2017/03/10 03:22:40 dtucker Exp $ */
+/* $OpenBSD: sshconnect.c,v 1.280 2017/05/30 14:13:40 markus Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -67,7 +67,7 @@
 
 char *client_version_string = NULL;
 char *server_version_string = NULL;
-Key *previous_host_key = NULL;
+struct sshkey *previous_host_key = NULL;
 
 static int matching_host_key_dns = 0;
 
@@ -79,8 +79,8 @@ extern char *__progname;
 extern uid_t original_real_uid;
 extern uid_t original_effective_uid;
 
-static int show_other_keys(struct hostkeys *, Key *);
-static void warn_changed_key(Key *);
+static int show_other_keys(struct hostkeys *, struct sshkey *);
+static void warn_changed_key(struct sshkey *);
 
 /* Expand a proxy command */
 static char *
@@ -540,13 +540,8 @@ static void
 send_client_banner(int connection_out, int minor1)
 {
 	/* Send our own protocol version identification. */
-	if (compat20) {
-		xasprintf(&client_version_string, "SSH-%d.%d-%.100s\r\n",
-		    PROTOCOL_MAJOR_2, PROTOCOL_MINOR_2, SSH_VERSION);
-	} else {
-		xasprintf(&client_version_string, "SSH-%d.%d-%.100s\n",
-		    PROTOCOL_MAJOR_1, minor1, SSH_VERSION);
-	}
+	xasprintf(&client_version_string, "SSH-%d.%d-%.100s\r\n",
+	    PROTOCOL_MAJOR_2, PROTOCOL_MINOR_2, SSH_VERSION);
 	if (atomicio(vwrite, connection_out, client_version_string,
 	    strlen(client_version_string)) != strlen(client_version_string))
 		fatal("write: %.100s", strerror(errno));
@@ -565,25 +560,18 @@ ssh_exchange_identification(int timeout_ms)
 	int remote_major, remote_minor, mismatch;
 	int connection_in = packet_get_connection_in();
 	int connection_out = packet_get_connection_out();
-	int minor1 = PROTOCOL_MINOR_1, client_banner_sent = 0;
 	u_int i, n;
 	size_t len;
 	int fdsetsz, remaining, rc;
 	struct timeval t_start, t_remaining;
-	fd_set *fdset;
+	fd_set *readfds;
+	fd_set *exceptfds;
 
 	fdsetsz = howmany(connection_in + 1, NFDBITS) * sizeof(fd_mask);
-	fdset = xcalloc(1, fdsetsz);
+	readfds = xcalloc(1, fdsetsz);
+	exceptfds = xcalloc(1, fdsetsz);
 
-	/*
-	 * If we are SSH2-only then we can send the banner immediately and
-	 * save a round-trip.
-	 */
-	if (options.protocol == SSH_PROTO_2) {
-		enable_compat20();
-		send_client_banner(connection_out, 0);
-		client_banner_sent = 1;
-	}
+	send_client_banner(connection_out, 0);
 
 	/* Read other side's version identification. */
 	remaining = timeout_ms;
@@ -592,9 +580,10 @@ ssh_exchange_identification(int timeout_ms)
 			if (timeout_ms > 0) {
 				gettimeofday(&t_start, NULL);
 				ms_to_timeval(&t_remaining, remaining);
-				FD_SET(connection_in, fdset);
-				rc = select(connection_in + 1, fdset, NULL,
-				    fdset, &t_remaining);
+				FD_SET(connection_in, readfds);
+				FD_SET(connection_in, exceptfds);
+				rc = select(connection_in + 1, readfds, NULL,
+					exceptfds, &t_remaining);
 				ms_subtract_diff(&t_start, &remaining);
 				if (rc == 0 || remaining <= 0)
 					fatal("Connection timed out during "
@@ -634,7 +623,8 @@ ssh_exchange_identification(int timeout_ms)
 		debug("ssh_exchange_identification: %s", buf);
 	}
 	server_version_string = xstrdup(buf);
-	free(fdset);
+	free(readfds);
+	free(exceptfds);
 
 	/*
 	 * Check that the versions match.  In future this might accept
@@ -650,51 +640,25 @@ ssh_exchange_identification(int timeout_ms)
 	mismatch = 0;
 
 	switch (remote_major) {
-	case 1:
-		if (remote_minor == 99 &&
-		    (options.protocol & SSH_PROTO_2) &&
-		    !(options.protocol & SSH_PROTO_1_PREFERRED)) {
-			enable_compat20();
-			break;
-		}
-		if (!(options.protocol & SSH_PROTO_1)) {
-			mismatch = 1;
-			break;
-		}
-		if (remote_minor < 3) {
-			fatal("Remote machine has too old SSH software version.");
-		} else if (remote_minor == 3 || remote_minor == 4) {
-			/* We speak 1.3, too. */
-			enable_compat13();
-			minor1 = 3;
-			if (options.forward_agent) {
-				logit("Agent forwarding disabled for protocol 1.3");
-				options.forward_agent = 0;
-			}
-		}
-		break;
 	case 2:
-		if (options.protocol & SSH_PROTO_2) {
-			enable_compat20();
-			break;
-		}
-		/* FALLTHROUGH */
+		break;
+	case 1:
+		if (remote_minor != 99)
+			mismatch = 1;
+		break;
 	default:
 		mismatch = 1;
 		break;
 	}
 	if (mismatch)
 		fatal("Protocol major versions differ: %d vs. %d",
-		    (options.protocol & SSH_PROTO_2) ? PROTOCOL_MAJOR_2 : PROTOCOL_MAJOR_1,
-		    remote_major);
+		    PROTOCOL_MAJOR_2, remote_major);
 	if ((datafellows & SSH_BUG_DERIVEKEY) != 0)
 		fatal("Server version \"%.100s\" uses unsafe key agreement; "
 		    "refusing connection", remote_version);
 	if ((datafellows & SSH_BUG_RSASIGMD5) != 0)
 		logit("Server version \"%.100s\" uses unsafe RSA signature "
 		    "scheme; disabling use of RSA keys", remote_version);
-	if (!client_banner_sent)
-		send_client_banner(connection_out, minor1);
 	chop(server_version_string);
 }
 
@@ -723,7 +687,7 @@ confirm(const char *prompt)
 }
 
 static int
-check_host_cert(const char *host, const Key *host_key)
+check_host_cert(const char *host, const struct sshkey *host_key)
 {
 	const char *reason;
 
@@ -821,13 +785,13 @@ get_hostfile_hostname_ipaddr(char *hostname, struct sockaddr *hostaddr,
 #define ROQUIET	2
 static int
 check_host_key(char *hostname, struct sockaddr *hostaddr, u_short port,
-    Key *host_key, int readonly,
+    struct sshkey *host_key, int readonly,
     char **user_hostfiles, u_int num_user_hostfiles,
     char **system_hostfiles, u_int num_system_hostfiles)
 {
 	HostStatus host_status;
 	HostStatus ip_status;
-	Key *raw_key = NULL;
+	struct sshkey *raw_key = NULL;
 	char *ip = NULL, *host = NULL;
 	char hostline[1000], *hostp, *fp, *ra;
 	char msg[1024];
@@ -835,7 +799,7 @@ check_host_key(char *hostname, struct sockaddr *hostaddr, u_short port,
 	const struct hostkey_entry *host_found, *ip_found;
 	int len, cancelled_forwarding = 0;
 	int local = sockaddr_is_local(hostaddr);
-	int r, want_cert = key_is_cert(host_key), host_ip_differ = 0;
+	int r, want_cert = sshkey_is_cert(host_key), host_ip_differ = 0;
 	int hostkey_trusted = 0; /* Known or explicitly accepted by user */
 	struct hostkeys *host_hostkeys, *ip_hostkeys;
 	u_int i;
@@ -886,8 +850,8 @@ check_host_key(char *hostname, struct sockaddr *hostaddr, u_short port,
 
  retry:
 	/* Reload these as they may have changed on cert->key downgrade */
-	want_cert = key_is_cert(host_key);
-	type = key_type(host_key);
+	want_cert = sshkey_is_cert(host_key);
+	type = sshkey_type(host_key);
 
 	/*
 	 * Check if the host key is present in the user's list of known
@@ -907,7 +871,7 @@ check_host_key(char *hostname, struct sockaddr *hostaddr, u_short port,
 		if (host_status == HOST_CHANGED &&
 		    (ip_status != HOST_CHANGED || 
 		    (ip_found != NULL &&
-		    !key_equal(ip_found->key, host_found->key))))
+		    !sshkey_equal(ip_found->key, host_found->key))))
 			host_ip_differ = 1;
 	} else
 		ip_status = host_status;
@@ -1104,7 +1068,8 @@ check_host_key(char *hostname, struct sockaddr *hostaddr, u_short port,
 		warn_changed_key(host_key);
 		error("Add correct host key in %.100s to get rid of this message.",
 		    user_hostfiles[0]);
-		error("Offending %s key in %s:%lu", key_type(host_found->key),
+		error("Offending %s key in %s:%lu",
+		    sshkey_type(host_found->key),
 		    host_found->file, host_found->line);
 
 		/*
@@ -1233,14 +1198,16 @@ fail:
 		 * search normally.
 		 */
 		debug("No matching CA found. Retry with plain key");
-		raw_key = key_from_private(host_key);
-		if (key_drop_cert(raw_key) != 0)
-			fatal("Couldn't drop certificate");
+		if ((r = sshkey_from_private(host_key, &raw_key)) != 0)
+			fatal("%s: sshkey_from_private: %s",
+			    __func__, ssh_err(r));
+		if ((r = sshkey_drop_cert(raw_key)) != 0)
+			fatal("Couldn't drop certificate: %s", ssh_err(r));
 		host_key = raw_key;
 		goto retry;
 	}
 	if (raw_key != NULL)
-		key_free(raw_key);
+		sshkey_free(raw_key);
 	free(ip);
 	free(host);
 	if (host_hostkeys != NULL)
@@ -1252,7 +1219,7 @@ fail:
 
 /* returns 0 if key verifies or -1 if key does NOT verify */
 int
-verify_host_key(char *host, struct sockaddr *hostaddr, Key *host_key)
+verify_host_key(char *host, struct sockaddr *hostaddr, struct sshkey *host_key)
 {
 	u_int i;
 	int r = -1, flags = 0;
@@ -1288,8 +1255,7 @@ verify_host_key(char *host, struct sockaddr *hostaddr, Key *host_key)
 			    host_key->cert->principals[i]);
 		}
 	} else {
-		debug("Server host key: %s %s", compat20 ?
-		    sshkey_ssh_name(host_key) : sshkey_type(host_key), fp);
+		debug("Server host key: %s %s", sshkey_ssh_name(host_key), fp);
 	}
 
 	if (sshkey_equal(previous_host_key, host_key)) {
@@ -1357,8 +1323,8 @@ out:
 	free(fp);
 	free(cafp);
 	if (r == 0 && host_key != NULL) {
-		key_free(previous_host_key);
-		previous_host_key = key_from_private(host_key);
+		sshkey_free(previous_host_key);
+		r = sshkey_from_private(host_key, &previous_host_key);
 	}
 
 	return r;
@@ -1394,17 +1360,8 @@ ssh_login(Sensitive *sensitive, const char *orighost,
 	/* key exchange */
 	/* authenticate user */
 	debug("Authenticating to %s:%d as '%s'", host, port, server_user);
-	if (compat20) {
-		ssh_kex2(host, hostaddr, port);
-		ssh_userauth2(local_user, server_user, host, sensitive);
-	} else {
-#ifdef WITH_SSH1
-		ssh_kex(host, hostaddr);
-		ssh_userauth1(local_user, server_user, host, sensitive);
-#else
-		fatal("ssh1 is not supported");
-#endif
-	}
+	ssh_kex2(host, hostaddr, port);
+	ssh_userauth2(local_user, server_user, host, sensitive);
 	free(local_user);
 }
 
@@ -1428,10 +1385,9 @@ ssh_put_password(char *password)
 
 /* print all known host keys for a given host, but skip keys of given type */
 static int
-show_other_keys(struct hostkeys *hostkeys, Key *key)
+show_other_keys(struct hostkeys *hostkeys, struct sshkey *key)
 {
 	int type[] = {
-		KEY_RSA1,
 		KEY_RSA,
 		KEY_DSA,
 		KEY_ECDSA,
@@ -1469,7 +1425,7 @@ show_other_keys(struct hostkeys *hostkeys, Key *key)
 }
 
 static void
-warn_changed_key(Key *host_key)
+warn_changed_key(struct sshkey *host_key)
 {
 	char *fp;
 
@@ -1537,7 +1493,7 @@ ssh_local_cmd(const char *args)
 }
 
 void
-maybe_add_key_to_agent(char *authfile, Key *private, char *comment,
+maybe_add_key_to_agent(char *authfile, struct sshkey *private, char *comment,
     char *passphrase)
 {
 	int auth_sock = -1, r;

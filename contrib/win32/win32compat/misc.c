@@ -62,6 +62,10 @@ static char* s_programdir = NULL;
 #define IO_REPARSE_TAG_SIS (0x80000007L) /* winnt ntifs */
 #define REPARSE_MOUNTPOINT_HEADER_SIZE 8
 
+ /* Difference in us between UNIX Epoch and Win32 Epoch */
+#define EPOCH_DELTA_US  116444736000000000ULL
+#define RATE_DIFF 10000000ULL /* 1000 nsecs */
+
 typedef struct _REPARSE_DATA_BUFFER {
 	ULONG  ReparseTag;
 	USHORT ReparseDataLength;
@@ -120,7 +124,7 @@ char* _sys_errlist_ext[] = {
 	"No STREAM resources",					/* ENOSR           124 */
 	"Not a STREAM",						/* ENOSTR          125 */
 	"The socket is not connected",				/* ENOTCONN        126 */
-	"enotecoverable",					/* ENOTRECOVERABLE 127 */
+	"enotrecoverable",					/* ENOTRECOVERABLE 127 */
 	"Not a socket",						/* ENOTSOCK        128 */
 	"Operation not supported",				/* ENOTSUP         129 */
 	"Operation not supported on socket",			/* EOPNOTSUPP      130 */
@@ -177,9 +181,6 @@ nanosleep(const struct timespec *req, struct timespec *rem)
 	}
 }
 
-/* Difference in us between UNIX Epoch and Win32 Epoch */
-#define EPOCH_DELTA_US  11644473600000000ULL
-
 /* This routine is contributed by  * Author: NoMachine <developers@nomachine.com>
  * Copyright (c) 2009, 2010 NoMachine
  * All rights reserved
@@ -194,17 +195,14 @@ gettimeofday(struct timeval *tv, void *tz)
 	unsigned long long us;
 
 	/* Fetch time since Jan 1, 1601 in 100ns increments */
-	GetSystemTimeAsFileTime(&timehelper.ft);
-
-	/* Convert to microseconds from 100 ns units */
-	us = timehelper.ns / 10;
+	GetSystemTimeAsFileTime(&timehelper.ft);	
 
 	/* Remove the epoch difference */
-	us -= EPOCH_DELTA_US;
+	us = timehelper.ns - EPOCH_DELTA_US;
 
 	/* Stuff result into the timeval */
-	tv->tv_sec = (long)(us / 1000000ULL);
-	tv->tv_usec = (long)(us % 1000000ULL);
+	tv->tv_sec = (long)(us / RATE_DIFF);
+	tv->tv_usec = (long)(us % RATE_DIFF);
 
 	return 0;
 }
@@ -245,19 +243,33 @@ w32_fopen_utf8(const char *path, const char *mode)
 	FILE* f;
 	char utf8_bom[] = { 0xEF,0xBB,0xBF };
 	char first3_bytes[3];
+	int status = 1;
 
 	if (mode[1] != '\0') {
 		errno = ENOTSUP;
 		return NULL;
 	}
 
-	if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, PATH_MAX) == 0 ||
-	    MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, 5) == 0) {
+	if(NULL == path) { 
+		errno = EINVAL;
+		debug3("fopen - ERROR:%d", errno);
+		return NULL; 
+	}
+
+	/* if opening null device, point to Windows equivalent */
+	if (0 == strncmp(path, NULL_DEVICE, strlen(NULL_DEVICE)+1))
+		wcsncpy_s(wpath, PATH_MAX, L"NUL", 3);
+	else
+		status = MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, PATH_MAX);
+
+	if ((0 == status) ||
+	    (0 == MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, 5))) {
 		errno = EFAULT;
 		debug3("WideCharToMultiByte failed for %c - ERROR:%d", path, GetLastError());
 		return NULL;
 	}
 
+<<<<<<< HEAD
 	if ((_wfopen_s(&f, wpath, wmode) != 0) || (f == NULL)) {
 		debug3("Failed to open file:%s error:%d", path, errno);
 		return NULL;
@@ -276,6 +288,24 @@ w32_fopen_utf8(const char *path, const char *mode)
 		if (fread(first3_bytes, 3, 1, f) != 1 ||
 			memcmp(first3_bytes, utf8_bom, 3) != 0) {
 			fseek(f, 0, SEEK_SET);
+=======
+	f = _wfopen(wpath, wmode);
+	if (f) {
+		/* BOM adjustments for file streams*/
+		if (mode[0] == 'w' && fseek(f, 0, SEEK_SET) != EBADF) {
+			/* write UTF-8 BOM - should we ?*/
+			/*if (fwrite(utf8_bom, sizeof(utf8_bom), 1, f) != 1) {
+				fclose(f);
+				return NULL;
+			}*/
+
+		} else if (mode[0] == 'r' && fseek(f, 0, SEEK_SET) != EBADF) {
+			/* read out UTF-8 BOM if present*/
+			if (fread(first3_bytes, 3, 1, f) != 1 ||
+			    memcmp(first3_bytes, utf8_bom, 3) != 0) {
+				fseek(f, 0, SEEK_SET);
+			}
+>>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 		}
 	}
 
@@ -291,6 +321,8 @@ w32_fopen_utf8(const char *path, const char *mode)
 */
 char*
  w32_fgets(char *str, int n, FILE *stream) {
+	if (!str || !n || !stream) return NULL;
+
 	HANDLE h = (HANDLE)_get_osfhandle(_fileno(stream));
 	wchar_t* str_w = NULL;
 	char *ret = NULL, *str_tmp = NULL, *cp = NULL;
@@ -498,14 +530,81 @@ w32_chown(const char *pathname, unsigned int owner, unsigned int group)
 	return -1;
 }
 
-static void
+/* Convert a UNIX time into a Windows file time */
+void
 unix_time_to_file_time(ULONG t, LPFILETIME pft)
 {
 	ULONGLONG ull;
-	ull = UInt32x32To64(t, 10000000) + 116444736000000000;
+	ull = UInt32x32To64(t, RATE_DIFF) + EPOCH_DELTA_US;
 
 	pft->dwLowDateTime = (DWORD)ull;
 	pft->dwHighDateTime = (DWORD)(ull >> 32);
+}
+
+/* Convert a Windows file time into a UNIX time_t */
+void
+file_time_to_unix_time(const LPFILETIME pft, time_t * winTime)
+{
+	*winTime = ((long long)pft->dwHighDateTime << 32) + pft->dwLowDateTime;
+	*winTime -= EPOCH_DELTA_US;
+	*winTime /= RATE_DIFF;		 /* Nano to seconds resolution */
+}
+
+static BOOL
+is_root_or_empty(wchar_t * path)
+{
+	wchar_t * path_start;
+	BOOL has_drive_letter_and_colon;
+	int len;
+	if (!path) 
+		return FALSE;
+	len = wcslen(path);
+	if((len > 1) && __ascii_iswalpha(path[0]) && path[1] == L':')
+		path_start = path + 2;
+	else
+		path_start = path;
+	/*path like  c:\, /, \ are root directory*/
+	if ((*path_start == L'\0') || ((*path_start == L'\\' || *path_start == L'/' ) && path_start[1] == L'\0'))
+		return TRUE;
+	return FALSE;
+}
+
+static BOOL
+has_executable_extension(wchar_t * path)
+{
+	wchar_t * last_dot;
+	if (!path)
+		return FALSE;
+
+	last_dot = wcsrchr(path, L'.');
+	if (!last_dot)
+		return FALSE;
+	if (_wcsnicmp(last_dot, L".exe", 4) != 0 && _wcsnicmp(last_dot, L".cmd", 4) != 0 &&
+	_wcsnicmp(last_dot, L".bat", 4) != 0 && _wcsnicmp(last_dot, L".com", 4) != 0)
+		return FALSE; 
+	return TRUE;
+}
+
+int
+file_attr_to_st_mode(wchar_t * path, DWORD attributes)
+{
+	int mode = S_IREAD;	
+	if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 || is_root_or_empty(path))
+		mode |= S_IFDIR | _S_IEXEC;
+	else {
+		mode |= S_IFREG;
+		/* See if file appears to be an executable by checking its extension */
+		if (has_executable_extension(path))
+			mode |= _S_IEXEC;
+
+	}
+	if (!(attributes & FILE_ATTRIBUTE_READONLY))
+		mode |= S_IWRITE;
+
+	// propagate owner read/write/execute bits to group/other fields.
+	mode |= (mode & 0700) >> 3;
+	mode |= (mode & 0700) >> 6;
+	return mode;
 }
 
 static int
@@ -656,6 +755,8 @@ w32_chdir(const char *dirname_utf8)
 char *
 w32_getcwd(char *buffer, int maxlen)
 {
+	if(!buffer) return NULL;
+
 	wchar_t wdirname[PATH_MAX];
 	char* putf8 = NULL;
 
@@ -729,6 +830,16 @@ convertToBackslash(char *str)
 	}
 }
 
+void
+convertToBackslashW(wchar_t *str)
+{
+	while (*str) {
+		if (*str == L'/')
+			*str = L'\\';
+		str++;
+	}
+}
+
 /* convert back slash to forward slash */
 void
 convertToForwardslash(char *str)
@@ -747,9 +858,12 @@ convertToForwardslash(char *str)
 char *
 realpath(const char *path, char resolved[PATH_MAX])
 {
+	if (!path || !resolved) return NULL;
+
 	char tempPath[PATH_MAX];
 	size_t path_len = strlen(path);
 
+<<<<<<< HEAD
 	if (path_len > PATH_MAX - 1) {
 		errno = EINVAL;
 		return NULL;
@@ -759,6 +873,12 @@ realpath(const char *path, char resolved[PATH_MAX])
 		strncpy_s(resolved, PATH_MAX, path + 1, path_len); /* skip the first '/' */
 	else
 		strncpy_s(resolved, PATH_MAX, path, path_len + 1);
+=======
+	if ((path[0] == '/') && path[1] && (path[2] == ':'))
+		strncpy(resolved, path + 1, PATH_MAX); /* skip the first '/' */
+	else
+		strncpy(resolved, path, PATH_MAX);
+>>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 
 	if ((resolved[0]) && (resolved[1] == ':') && (resolved[2] == '\0')) { /* make "x:" as "x:\\" */
 		resolved[2] = '\\';
@@ -771,14 +891,20 @@ realpath(const char *path, char resolved[PATH_MAX])
 	convertToForwardslash(tempPath);
 
 	resolved[0] = '/'; /* will be our first slash in /x:/users/test1 format */
+<<<<<<< HEAD
 	if (strncpy_s(resolved+1, PATH_MAX - 1, tempPath, sizeof(tempPath) - 1) != 0)
 		return NULL;
+=======
+	strncpy(resolved + 1, tempPath, PATH_MAX - 1);
+>>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
 	return resolved;
 }
 
 char*
 sanitized_path(const char *path)
 {
+	if(!path) return NULL;
+
 	static char newPath[PATH_MAX] = { '\0', };
 
 	if (path[0] == '/' && path[1]) {
@@ -806,8 +932,8 @@ statvfs(const char *path, struct statvfs *buf)
 	DWORD totalClusters;
 
 	wchar_t* path_utf16 = utf8_to_utf16(sanitized_path(path));
-	if (GetDiskFreeSpaceW(path_utf16, &sectorsPerCluster, &bytesPerSector,
-	    &freeClusters, &totalClusters) == TRUE) {
+	if (path_utf16 && (GetDiskFreeSpaceW(path_utf16, &sectorsPerCluster, &bytesPerSector,
+	    &freeClusters, &totalClusters) == TRUE)) {
 		debug5("path              : [%s]", path);
 		debug5("sectorsPerCluster : [%lu]", sectorsPerCluster);
 		debug5("bytesPerSector    : [%lu]", bytesPerSector);
@@ -853,57 +979,68 @@ w32_strerror(int errnum)
 	strerror_s(errorBuf, ERROR_MSG_MAXLEN, errnum);
 	return errorBuf;
 }
-/* 
- * Temporary implementation of readpassphrase. 
- * TODO - this needs to be reimplemented as per 
- * https://linux.die.net/man/3/readpassphrase
- */
-char * 
-readpassphrase(const char *prompt, char *out, size_t out_len, int flags) {
-	char *askpass = NULL;
-	char *ret = NULL;
 
+<<<<<<< HEAD
 	size_t len = 0;
 	int retr = 0;
+=======
+char *
+readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags) {
+	int current_index = 0;
+	char ch;
+	wchar_t* wtmp = NULL;
 
-	/* prompt user */
-	wchar_t* wtmp = utf8_to_utf16(prompt);
+	if (outBufLen == 0) {
+		errno = EINVAL;
+		return NULL;
+	}
+>>>>>>> 4a1980e059c84a6a08abf5463953e1c51f0faa0b
+
+	while (_kbhit()) _getch();
+
+	wtmp = utf8_to_utf16(prompt);
 	if (wtmp == NULL)
 		fatal("unable to alloc memory");
+
 	_cputws(wtmp);
 	free(wtmp);
 
-	len = retr = 0;
-
-	while (_kbhit())
-		_getch();
-
-	while (len < out_len) {
-		out[len] = (unsigned char)_getch();
-
-		if (out[len] == '\r') {
-			if (_kbhit()) /* read linefeed if its there */
-				_getch();
+	while (current_index < outBufLen - 1) {
+		ch = _getch();
+		
+		if (ch == '\r') {
+			if (_kbhit()) _getch(); /* read linefeed if its there */
 			break;
-		}
-		else if (out[len] == '\n') {
+		} else if (ch == '\n') {
 			break;
-		}
-		else if (out[len] == '\b') { /* backspace */
-			if (len > 0)
-				len--; /* overwrite last character */
-		}
-		else if (out[len] == '\003') {
-			/* exit on Ctrl+C */
+		} else if (ch == '\b') { /* backspace */
+			if (current_index > 0) {
+				if (flags & RPP_ECHO_ON)
+					printf("%c \b", ch);
+
+				current_index--; /* overwrite last character */
+			}
+		} else if (ch == '\003') { /* exit on Ctrl+C */
 			fatal("");
-		}
-		else {
-			len++; /* keep reading in the loop */
+		} else {
+			if (flags & RPP_SEVENBIT)
+				ch &= 0x7f;
+
+			if (isalpha((unsigned char)ch)) {
+				if(flags & RPP_FORCELOWER)
+					ch = tolower((unsigned char)ch);
+				if(flags & RPP_FORCEUPPER)
+					ch = toupper((unsigned char)ch);
+			}
+
+			outBuf[current_index++] = ch;
+			if(flags & RPP_ECHO_ON)
+				printf("%c", ch);
 		}
 	}
 
-	out[len] = '\0'; /* get rid of the cr/lf */
-	_cputs("\n"); /*show a newline as we do not echo password or the line */
+	outBuf[current_index] = '\0';
+	_cputs("\n");
 
-	return out;
+	return outBuf;
 }
