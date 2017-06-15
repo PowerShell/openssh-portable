@@ -7,23 +7,41 @@
 
 #include "console.h"
 
+static char buf[1024];
 
 int
-vfmprintf(FILE *stream, const char *fmt, va_list ap)
-{
+vfmprintf(FILE *stream, const char *fmt, va_list valist)
+{	
 	DWORD saved_mode = 0, new_mode = 0;
-	int ret;
-	HANDLE hFile;
-	hFile = get_console_handle(stream, &saved_mode);
-	if(hFile != INVALID_HANDLE_VALUE &&
-		((saved_mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) == ENABLE_VIRTUAL_TERMINAL_PROCESSING)) {
+	int ret = 0;
+	HANDLE hFile = get_console_handle(stream, &saved_mode);	
+	wchar_t* wtmp = NULL;
+
+	if (hFile != INVALID_HANDLE_VALUE) {
+		/* writing to a console */
+		if ((saved_mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) == ENABLE_VIRTUAL_TERMINAL_PROCESSING) {
 			new_mode = saved_mode & (~ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 			SetConsoleMode(hFile, new_mode);
+		}
+				
+		SecureZeroMemory(buf, sizeof(buf));
+		vsnprintf(buf, sizeof(buf) - 1, fmt, valist);		
+
+		if ((wtmp = utf8_to_utf16(buf)) == NULL)
+			fatal("unable to allocate memory");
+
+		WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), wtmp, wcslen(wtmp), 0, 0);
+
+		if (saved_mode != 0 && new_mode != saved_mode)
+			SetConsoleMode(hFile, saved_mode);
+	} else {
+		/* writing to a file */		
+		ret = vfprintf(stream, fmt, valist);
 	}
-	
-	ret = vfprintf(stream, fmt, ap);
-	if (saved_mode != 0 && new_mode != saved_mode)
-		SetConsoleMode(hFile, saved_mode);
+
+	if(wtmp)
+		free(wtmp);
+
 	return ret;
 }
 
