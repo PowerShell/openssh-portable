@@ -215,8 +215,8 @@ userauth_pubkey(struct ssh *ssh)
 				msg = sshbuf_new();
 				if (!msg)
 					fatal("%s: out of memory", __func__);
-				if ((r = sshbuf_put_u8(msg, SSH_AGENT_AUTHENTICATE)) != 0 ||
-				    (r = sshbuf_put_cstring(msg, PUBKEY_AUTH_REQUEST)) != 0 ||
+				if ((r = sshbuf_put_u8(msg, 0)) != 0 ||
+				    (r = sshbuf_put_cstring(msg, "pubkeyauth")) != 0 ||
 				    (r = sshkey_to_blob(key, &blob, &blen)) != 0 ||
 				    (r = sshbuf_put_string(msg, blob, blen)) != 0 ||
 				    (r = sshbuf_put_cstring(msg, authctxt->pw->pw_name)) != 0 ||
