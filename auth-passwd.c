@@ -226,9 +226,7 @@ sys_auth_passwd(Authctxt *authctxt, const char *password)
 
 #elif defined(WINDOWS)
 /*
-* Authenticate on Windows - Pass credentials to ssh-agent and retrieve token
-* upon successful authentication
-* TODO - password is sent in plain text over IPC. Consider implications. 
+* Authenticate on Windows - Call LogonUser and retrieve user token
 */
 int sys_auth_passwd(Authctxt *authctxt, const char *password)
 {
@@ -260,7 +258,7 @@ int sys_auth_passwd(Authctxt *authctxt, const char *password)
 		goto done;
 	}
 
-	authctxt->methoddata = (void*)(INT_PTR)token;
+	authctxt->auth_token = (void*)(INT_PTR)token;
 	r = 1;
 done:
 	if (user_utf16)

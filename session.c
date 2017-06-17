@@ -492,7 +492,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		si.hStdError = (HANDLE)w32_fd_to_handle(pipeerr[1]);
 		si.lpDesktop = NULL;
 
-		hToken = s->authctxt->methoddata;
+		hToken = s->authctxt->auth_token;
 
 		debug("Executing command: %s", exec_command);
 		UTF8_TO_UTF16_FATAL(exec_command_w, exec_command);
