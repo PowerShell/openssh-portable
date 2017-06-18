@@ -70,7 +70,7 @@ void* mm_auth_pubkey(const char* user_name, const struct sshkey *key,
 	int agent_fd;
 
 	while (1) {
-		if ((agent_fd == get_priv_agent_sock()) == -1)
+		if ((agent_fd = get_priv_agent_sock()) == -1)
 			break;
 
 		msg = sshbuf_new();
