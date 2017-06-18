@@ -47,38 +47,51 @@
 #include "servconf.h"
 
 #include "ssherr.h"
+#include "priv-agent.h"
+
+int priv_agent_sock = -1;
+int ssh_request_reply(int, struct sshbuf *, struct sshbuf *);
+
+int get_priv_agent_sock() 
+{
+	extern int auth_sock;
+	return auth_sock;
+}
 
 
 void* mm_auth_pubkey(const char* user_name, const struct sshkey *key, 
     const u_char *sig, size_t slen, struct sshbuf* b) 
 {
-	/* Pass key challenge material to ssh-agent to retrieve token upon successful authentication */
+	/* Pass key challenge material to privileged agent to retrieve token upon successful authentication */
 	struct sshbuf *msg = NULL;
 	u_char *blob = NULL;
 	size_t blen = 0;
 	DWORD token = 0;
-	extern int auth_sock;
-	int r = 0;
-	int ssh_request_reply(int, struct sshbuf *, struct sshbuf *);
+	int agent_fd;
 
 	while (1) {
+		if ((agent_fd == get_priv_agent_sock()) == -1)
+			break;
+
 		msg = sshbuf_new();
 		if (!msg)
 			fatal("%s: out of memory", __func__);
-		if ((r = sshbuf_put_u8(msg, 0)) != 0 ||
-			(r = sshbuf_put_cstring(msg, "pubkeyauth")) != 0 ||
-			(r = sshkey_to_blob(key, &blob, &blen)) != 0 ||
-			(r = sshbuf_put_string(msg, blob, blen)) != 0 ||
-			(r = sshbuf_put_cstring(msg, user_name)) != 0 ||
-			(r = sshbuf_put_string(msg, sig, slen)) != 0 ||
-			(r = sshbuf_put_string(msg, sshbuf_ptr(b), sshbuf_len(b))) != 0 ||
-			(r = ssh_request_reply(auth_sock, msg, msg)) != 0 ||
-			(r = sshbuf_get_u32(msg, &token)) != 0) {
-			debug("auth agent did not authorize client %s", user_name);
+		if (sshbuf_put_u8(msg, SSH_PRIV_AGENT_MSG_ID) != 0 ||
+		    sshbuf_put_cstring(msg, PUBKEY_AUTH_REQUEST) != 0 ||
+		    sshkey_to_blob(key, &blob, &blen) != 0 ||
+		    sshbuf_put_string(msg, blob, blen) != 0 ||
+		    sshbuf_put_cstring(msg, user_name) != 0 ||
+		    sshbuf_put_string(msg, sig, slen) != 0 ||
+		    sshbuf_put_string(msg, sshbuf_ptr(b), sshbuf_len(b)) != 0 ||
+		    ssh_request_reply(agent_fd, msg, msg) != 0) {
+			debug("unable to send pubkeyauth request");
 			break;
 		}
 
-		debug3("auth agent authenticated %s", user_name);
+		if (sshbuf_get_u32(msg, &token) != 0) 
+			break;
+
+		debug3("%s authenticated via pubkey", user_name);
 		break;
 
 	}
@@ -87,5 +100,38 @@ void* mm_auth_pubkey(const char* user_name, const struct sshkey *key,
 	if (msg)
 		sshbuf_free(msg);
 
-	return NULL;
+	return (void*)token;
+}
+
+int mm_load_profile(const char* user_name, u_int token)
+{
+	struct sshbuf *msg = NULL;
+	int agent_fd;
+	u_char result = 0;
+
+	while (1) {
+		if ((agent_fd == get_priv_agent_sock()) == -1)
+			break;
+
+		msg = sshbuf_new();
+		if (!msg)
+			fatal("%s: out of memory", __func__);
+		if (sshbuf_put_u8(msg, SSH_PRIV_AGENT_MSG_ID) != 0 ||
+			sshbuf_put_cstring(msg, PUBKEY_AUTH_REQUEST) != 0 ||
+			sshbuf_put_cstring(msg, user_name) != 0 ||
+			sshbuf_put_u32(msg, token) != 0 ||
+			ssh_request_reply(agent_fd, msg, msg) != 0) {
+			debug("unable to send loadprofile request %s", user_name);
+			break;
+		}
+
+		if (sshbuf_get_u8(msg, &result) != 0)
+			break;
+
+		debug3("%s authenticated via pubkey", user_name);
+		break;
+
+	}
+
+	return result;
 }
