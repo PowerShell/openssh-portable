@@ -1,8 +1,48 @@
 ﻿Set-StrictMode -Version 2.0
-$systemAccount = New-Object System.Security.Principal.NTAccount("NT AUTHORITY", "SYSTEM")
-$adminsAccount = New-Object System.Security.Principal.NTAccount("BUILTIN","Administrators")            
+
+<#
+    .Synopsis
+    Get-UserAccount
+#>
+function Get-UserAccount
+{
+    [CmdletBinding(DefaultParameterSetName='SidString')]
+    param
+        (   [parameter(Mandatory=$true, ParameterSetName="SidString")]
+            [ValidateNotNullOrEmpty()]
+            [string]$UserSid,
+            [parameter(Mandatory=$true, ParameterSetName="WellKnownSidType")]
+            [ValidateNotNull()]
+            [System.Security.Principal.WellKnownSidType]$WellKnownSidType
+        )
+    try
+    {
+        if($UserSid)
+        {
+            $objSID = New-Object System.Security.Principal.SecurityIdentifier($UserSid) 
+            $objUser = $objSID.Translate( [System.Security.Principal.NTAccount])
+        }
+        elseif($WellKnownSidType)
+        {            
+            $sid = New-Object System.Security.Principal.SecurityIdentifier($WellKnownSidType, $null)
+            $objUser = $sid.Translate( [System.Security.Principal.NTAccount])
+        }
+        $objUser
+    }
+    catch {
+    }
+}
+
+# get the local System user
+$systemAccount = Get-UserAccount -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::LocalSystemSid)
+
+# get the Administrators group
+$adminsAccount = Get-UserAccount -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid)
+
+# get the everyone
+$everyone = Get-UserAccount -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::WorldSid)
+
 $currentUser = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
-$everyone =  New-Object System.Security.Principal.NTAccount("EveryOne")
 $sshdAccount = New-Object System.Security.Principal.NTAccount("NT SERVICE","sshd")
 
 #Taken from P/Invoke.NET with minor adjustments.
@@ -525,25 +565,7 @@ function Remove-RuleProtection
         return $false
     }
 }
-<#
-    .Synopsis
-    Get-UserAccount
-#>
-function Get-UserAccount
-{
-    param
-        (   [parameter(Mandatory=$true)]      
-            [string]$UserSid
-        )
-    try
-    {
-        $objSID = New-Object System.Security.Principal.SecurityIdentifier($UserSid) 
-        $objUser = $objSID.Translate( [System.Security.Principal.NTAccount]) 
-        $objUser
-    }
-    catch {
-    }
-}
+
 
 <#
     .Synopsis
