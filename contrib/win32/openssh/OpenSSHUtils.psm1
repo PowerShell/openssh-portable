@@ -17,12 +17,12 @@ function Get-UserAccount
         )
     try
     {
-        if($UserSid)
+        if($PSBoundParameters.ContainsKey("UserSid"))
         {
             $objSID = New-Object System.Security.Principal.SecurityIdentifier($UserSid) 
             $objUser = $objSID.Translate( [System.Security.Principal.NTAccount])
         }
-        elseif($WellKnownSidType)
+        elseif($PSBoundParameters.ContainsKey("WellKnownSidType"))
         {            
             $sid = New-Object System.Security.Principal.SecurityIdentifier($WellKnownSidType, $null)
             $objUser = $sid.Translate( [System.Security.Principal.NTAccount])
