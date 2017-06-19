@@ -327,11 +327,7 @@ function Repair-FilePermissionInternal {
     $realReadAcessOKList = $ReadAccessOK + $ReadAccessNeeded
 
     #this is orginal list requested by the user, the account will be removed from the list if they already part of the dacl
-    $realReadAccessNeeded = $ReadAccessNeeded
-
-    #'APPLICATION PACKAGE AUTHORITY\ALL RESTRICTED APPLICATION PACKAGES'- can't translate fully qualified name. it is a win32 API bug.
-    #'ALL APPLICATION PACKAGES' exists only on Win2k12 and Win2k16 and 'ALL RESTRICTED APPLICATION PACKAGES' exists only in Win2k16
-    $specialIdRefs = "ALL APPLICATION PACKAGES","ALL RESTRICTED APPLICATION PACKAGES"
+    $realReadAccessNeeded = $ReadAccessNeeded    
 
     foreach($a in $acl.Access)
     {
@@ -379,10 +375,15 @@ function Repair-FilePermissionInternal {
 
             if($pscmdlet.ShouldProcess($description, $prompt, $caption))
             {
-                $needChange = $true
-                $idRefShortValue = ($a.IdentityReference.Value).split('\')[-1]
-                if ($specialIdRefs -icontains $idRefShortValue )
+                $needChange = $true                
+                if(Get-UserSID -User $a.IdentityReference)
                 {
+                    $ace = New-Object System.Security.AccessControl.FileSystemAccessRule `
+                        ($a.IdentityReference, "Read", "None", "None", "Allow")
+                }
+                else
+                {
+                    $idRefShortValue = ($a.IdentityReference.Value).split('\')[-1]
                     $ruleIdentity = Get-UserSID -User (New-Object Security.Principal.NTAccount $idRefShortValue)
                     if($ruleIdentity)
                     {
@@ -394,12 +395,7 @@ function Repair-FilePermissionInternal {
                         Write-Warning "Can't translate '$idRefShortValue'. "
                         continue
                     }                    
-                }
-                else
-                {
-                    $ace = New-Object System.Security.AccessControl.FileSystemAccessRule `
-                        ($a.IdentityReference, "Read", "None", "None", "Allow")
-                    }
+                }                
                 $acl.SetAccessRule($ace)
                 Write-Host "'$($a.IdentityReference)' now has Read access to '$FilePath'. "  -ForegroundColor Green
             }
@@ -435,11 +431,14 @@ function Repair-FilePermissionInternal {
 
             if($pscmdlet.ShouldProcess($description, $prompt, "$caption."))
             {  
-                $needChange = $true
-                $ace = $a
-                $idRefShortValue = ($a.IdentityReference.Value).split('\')[-1]
-                if ($specialIdRefs -icontains $idRefShortValue)
-                {                    
+                $needChange = $true                
+                if(Get-UserSID -User $a.IdentityReference)
+                {
+                    $ace = $a
+                }                
+                else
+                {
+                    $idRefShortValue = ($a.IdentityReference.Value).split('\')[-1]                 
                     $ruleIdentity = Get-UserSID -User (New-Object Security.Principal.NTAccount $idRefShortValue)
                     if($ruleIdentity)
                     {
@@ -579,6 +578,7 @@ function Get-UserSID
         $User.Translate([System.Security.Principal.SecurityIdentifier])
     }
     catch {
+        return $null
     }
 }
 
