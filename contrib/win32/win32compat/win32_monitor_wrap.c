@@ -3,6 +3,7 @@
 #include "includes.h"
 
 #include <sys/types.h>
+#include <sys/un.h>
 #include <sys/uio.h>
 
 #include <errno.h>
@@ -55,7 +56,42 @@ int ssh_request_reply(int, struct sshbuf *, struct sshbuf *);
 int get_priv_agent_sock() 
 {
 	extern int auth_sock;
-	return auth_sock;
+	char env_value[12]; /* enough to accomodate "ssh-agent"*/
+	size_t tmp;
+
+	if (priv_agent_sock != -1)
+		return priv_agent_sock;
+
+	/* check if auth_sock is populated and connected to "ssh-agent"*/
+	if (auth_sock != -1 &&
+	    getenv_s(&tmp, env_value, 12, SSH_AUTHSOCKET_ENV_NAME) == 0 &&
+	    strncmp(env_value, "ssh-agent", 12) == 0 )
+		priv_agent_sock = auth_sock;
+	else {
+		struct sockaddr_un sunaddr;
+		int sock;
+
+		memset(&sunaddr, 0, sizeof(sunaddr));
+		sunaddr.sun_family = AF_UNIX;
+		strlcpy(sunaddr.sun_path, "ssh-agent", sizeof(sunaddr.sun_path));
+
+		if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
+			debug("%s: unable to create AF_UNIX socket, errno:%d", __func__, errno);
+			return -1;
+		}
+
+		/* close on exec */
+		if (fcntl(sock, F_SETFD, FD_CLOEXEC) == -1 ||
+		    connect(sock, (struct sockaddr *)&sunaddr, sizeof(sunaddr)) < 0) {
+			close(sock);
+			debug("%s: unable to connect to privileged agent, errno:%d", __func__, errno);
+			return -1;
+		}
+
+		priv_agent_sock = sock;
+	}
+
+	return priv_agent_sock;
 }
 
 
@@ -110,7 +146,7 @@ int mm_load_profile(const char* user_name, u_int token)
 	u_char result = 0;
 
 	while (1) {
-		if ((agent_fd == get_priv_agent_sock()) == -1)
+		if ((agent_fd = get_priv_agent_sock()) == -1)
 			break;
 
 		msg = sshbuf_new();
