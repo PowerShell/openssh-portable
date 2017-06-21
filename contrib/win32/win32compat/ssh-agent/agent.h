@@ -14,7 +14,7 @@
 struct agent_connection {
 	OVERLAPPED ol;
 	HANDLE pipe_handle;
-        HANDLE client_impersonation_token;
+	HANDLE client_impersonation_token;
 	HANDLE client_process_handle;
 	struct {
 		DWORD num_bytes;
@@ -39,7 +39,7 @@ struct agent_connection {
 	} client_type;
 	/* user profile related members */
 	HANDLE profile_token;
-        HANDLE profile_handle;
+	HANDLE profile_handle;
 };
 
 void agent_connection_on_io(struct agent_connection*, DWORD, OVERLAPPED*);

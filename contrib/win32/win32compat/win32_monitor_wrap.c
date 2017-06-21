@@ -153,7 +153,7 @@ int mm_load_profile(const char* user_name, u_int token)
 		if (!msg)
 			fatal("%s: out of memory", __func__);
 		if (sshbuf_put_u8(msg, SSH_PRIV_AGENT_MSG_ID) != 0 ||
-		    sshbuf_put_cstring(msg, PUBKEY_AUTH_REQUEST) != 0 ||
+		    sshbuf_put_cstring(msg, LOAD_USER_PROFILE_REQUEST) != 0 ||
 		    sshbuf_put_cstring(msg, user_name) != 0 ||
 		    sshbuf_put_u32(msg, token) != 0 ||
 		    ssh_request_reply(agent_fd, msg, msg) != 0) {

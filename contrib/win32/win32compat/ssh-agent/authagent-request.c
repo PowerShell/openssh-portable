@@ -378,7 +378,7 @@ int process_privagent_request(struct sshbuf* request, struct sshbuf* response, s
 		
 	if (memcmp(opn, PUBKEY_AUTH_REQUEST, opn_len) == 0)
 		return process_pubkeyauth_request(request, response, con);
-	else if (memcmp(opn, LOAD_USER_PROFILE, opn_len) == 0)
+	else if (memcmp(opn, LOAD_USER_PROFILE_REQUEST, opn_len) == 0)
 		return process_loadprofile_request(request, response, con);
 	else {
 		debug("unknown auth request: %s", opn);

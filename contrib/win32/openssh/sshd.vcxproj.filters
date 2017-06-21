@@ -150,7 +150,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\win32_sshpty.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\win32compat\win32_monitor_wrap.c">
+    <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\win32_monitor_wrap.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
