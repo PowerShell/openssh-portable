@@ -4,10 +4,10 @@
 #include "log.h"
 #define MAX_MESSAGE_SIZE 256 * 1024
 
-#define SSH_ROOT L"SOFTWARE\\SSH"
+#define SSH_ROOT L"SOFTWARE\\OpenSSH"
 #define SSH_AGENT_ROOT SSH_ROOT L"\\Agent"
 #define SSH_KEYS_KEY L"Keys"
-#define SSH_KEYS_ROOT SSH_ROOT L"\\" SSH_KEYS_KEY
+#define SSH_KEYS_ROOT SSH_AGENT_ROOT L"\\" SSH_KEYS_KEY
 
 #define HEADER_SIZE 4
 

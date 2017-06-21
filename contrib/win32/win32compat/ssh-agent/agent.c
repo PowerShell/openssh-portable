@@ -37,7 +37,7 @@
 static HANDLE ioc_port = NULL;
 static BOOL debug_mode = FALSE;
 
-#define AGENT_PIPE_ID L"\\\\.\\pipe\\ssh-agent"
+#define AGENT_PIPE_ID L"\\\\.\\pipe\\openssh-ssh-agent"
 
 static HANDLE event_stop_agent;
 static OVERLAPPED ol;

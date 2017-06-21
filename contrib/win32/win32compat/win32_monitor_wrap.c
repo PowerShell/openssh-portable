@@ -73,7 +73,7 @@ int get_priv_agent_sock()
 
 		memset(&sunaddr, 0, sizeof(sunaddr));
 		sunaddr.sun_family = AF_UNIX;
-		strlcpy(sunaddr.sun_path, "ssh-agent", sizeof(sunaddr.sun_path));
+		strlcpy(sunaddr.sun_path, "\\\\.\\pipe\\openssh-ssh-agent", sizeof(sunaddr.sun_path));
 
 		if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0) {
 			debug("%s: unable to create AF_UNIX socket, errno:%d", __func__, errno);
