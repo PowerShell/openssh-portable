@@ -332,8 +332,8 @@ int process_loadprofile_request(struct sshbuf* request, struct sshbuf* response,
 		debug("invalid loadprofile request");
 		goto done;
 	}
-
-	if (DuplicateHandle(con->client_process_handle, (HANDLE)user_token_int, GetCurrentProcess(),
+	
+	if (DuplicateHandle(con->client_process_handle, (HANDLE)(INT_PTR)user_token_int, GetCurrentProcess(),
 		&user_token, TOKEN_IMPERSONATE | TOKEN_DUPLICATE, FALSE, 0) == FALSE) {
 		debug("cannot duplicate user token");
 		goto done;

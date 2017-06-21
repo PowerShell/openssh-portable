@@ -478,7 +478,7 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 	}
 
 	/* load user profile */
-	mm_load_profile(s->pw->pw_name, (u_int)s->authctxt->auth_token);
+	mm_load_profile(s->pw->pw_name, ((INT_PTR)s->authctxt->auth_token) & 0xffffffff);
 
 	/* start the process */
 	{

@@ -136,7 +136,7 @@ void* mm_auth_pubkey(const char* user_name, const struct sshkey *key,
 	if (msg)
 		sshbuf_free(msg);
 
-	return (void*)token;
+	return (void*)(INT_PTR)token;
 }
 
 int mm_load_profile(const char* user_name, u_int token)
@@ -153,18 +153,19 @@ int mm_load_profile(const char* user_name, u_int token)
 		if (!msg)
 			fatal("%s: out of memory", __func__);
 		if (sshbuf_put_u8(msg, SSH_PRIV_AGENT_MSG_ID) != 0 ||
-			sshbuf_put_cstring(msg, PUBKEY_AUTH_REQUEST) != 0 ||
-			sshbuf_put_cstring(msg, user_name) != 0 ||
-			sshbuf_put_u32(msg, token) != 0 ||
-			ssh_request_reply(agent_fd, msg, msg) != 0) {
+		    sshbuf_put_cstring(msg, PUBKEY_AUTH_REQUEST) != 0 ||
+		    sshbuf_put_cstring(msg, user_name) != 0 ||
+		    sshbuf_put_u32(msg, token) != 0 ||
+		    ssh_request_reply(agent_fd, msg, msg) != 0) {
 			debug("unable to send loadprofile request %s", user_name);
 			break;
 		}
 
-		if (sshbuf_get_u8(msg, &result) != 0)
+		if (sshbuf_get_u8(msg, &result) != 0) {
+			debug("agent failed to load profile for user %s", user_name);
 			break;
+		}
 
-		debug3("%s authenticated via pubkey", user_name);
 		break;
 
 	}
