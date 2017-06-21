@@ -477,6 +477,9 @@ int do_exec_windows(Session *s, const char *command, int pty) {
 		*cmd = '\0';
 	}
 
+	/* load user profile */
+	mm_load_profile(s->pw->pw_name, (u_int)s->authctxt->auth_token);
+
 	/* start the process */
 	{
 		memset(&si, 0, sizeof(STARTUPINFO));

@@ -319,6 +319,12 @@ int process_loadprofile_request(struct sshbuf* request, struct sshbuf* response,
 	u_int32_t user_token_int = 0;
 	HANDLE user_token = NULL;
 	wchar_t *user_utf16 = NULL, *dom_utf16, *tmp;
+
+	/* is profile already loaded */
+	if (con->profile_handle) {
+		r = 0;
+		goto done;
+	}
 	
 	if (sshbuf_get_cstring(request, &user, &user_len) != 0 ||
 	    user_len > MAX_USER_LEN ||
@@ -344,7 +350,7 @@ int process_loadprofile_request(struct sshbuf* request, struct sshbuf* response,
 		*tmp = L'\0';
 	}
 
-	if ((con->profile_handle = LoadProfile(con, user_token, user_utf16, dom_utf16)) == NULL)
+	if ((con->profile_handle = LoadProfile(user_token, user_utf16, dom_utf16)) == NULL)
 		goto done;
 	
 	con->profile_token = user_token;
