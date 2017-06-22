@@ -313,16 +313,16 @@ done:
 }
 
 int process_loadprofile_request(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con) {
-	int r = -1;
+	int r = 0, success = 0;
 	char *user;
 	size_t user_len;
 	u_int32_t user_token_int = 0;
 	HANDLE user_token = NULL;
-	wchar_t *user_utf16 = NULL, *dom_utf16, *tmp;
+	wchar_t *user_utf16 = NULL, *dom_utf16 = NULL, *tmp;
 
 	/* is profile already loaded */
 	if (con->profile_handle) {
-		r = 0;
+		success = 1;
 		goto done;
 	}
 	
@@ -334,8 +334,8 @@ int process_loadprofile_request(struct sshbuf* request, struct sshbuf* response,
 	}
 	
 	if (DuplicateHandle(con->client_process_handle, (HANDLE)(INT_PTR)user_token_int, GetCurrentProcess(),
-		&user_token, TOKEN_IMPERSONATE | TOKEN_DUPLICATE, FALSE, 0) == FALSE) {
-		debug("cannot duplicate user token");
+		&user_token, TOKEN_QUERY | TOKEN_IMPERSONATE | TOKEN_DUPLICATE, FALSE, 0) == FALSE) {
+		debug("cannot duplicate user token, error: %d", GetLastError());
 		goto done;
 	}
 	
@@ -355,8 +355,11 @@ int process_loadprofile_request(struct sshbuf* request, struct sshbuf* response,
 	
 	con->profile_token = user_token;
 	user_token = NULL;
-	r = 0;
+	success = 1;
 done:
+	if (sshbuf_put_u8(response, success ? SSH_AGENT_SUCCESS : SSH_AGENT_FAILURE) != 0)
+		r = -1;
+
 	if (user_token)
 		CloseHandle(user_token);
 	return r;

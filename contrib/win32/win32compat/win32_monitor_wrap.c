@@ -79,6 +79,7 @@
 
 #include "ssherr.h"
 #include "priv-agent.h"
+#include "authfd.h"
 
 int priv_agent_sock = -1;
 int ssh_request_reply(int, struct sshbuf *, struct sshbuf *);
@@ -200,7 +201,7 @@ int mm_load_profile(const char* user_name, u_int token)
 			break;
 		}
 
-		if (sshbuf_get_u8(msg, &result) != 0) {
+		if (sshbuf_get_u8(msg, &result) != 0 || result == SSH_AGENT_FAILURE) {
 			debug("agent failed to load profile for user %s", user_name);
 			break;
 		}
