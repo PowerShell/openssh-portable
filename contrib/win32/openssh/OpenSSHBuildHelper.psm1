@@ -175,21 +175,10 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsVerbose -Message "$gitCmdPath already present in Path environment variable" -Silent:$silent
     }
 
-    $packageName = "microsoft-visual-cpp-build-tools"
     $nativeMSBuildPath = "${env:ProgramFiles(x86)}\MSBuild\14.0\bin"
     if($script:platform -ieq "AMD64")
     {
         $nativeMSBuildPath += "\amd64"
-    }
-    
-    if(-not (Test-Path $nativeMSBuildPath))
-    {    
-        Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName."
-        choco install $packageName -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
-    }
-    else
-    {
-        Write-BuildMsg -AsVerbose -Message "$packageName present. Skipping installation." -Silent:$silent
     }
 
     if (-not ($machinePath.ToLower().Contains($nativeMSBuildPath.ToLower())))
@@ -241,7 +230,7 @@ function Start-OpenSSHBootstrap
     # Require restarting PowerShell session
     if ($null -eq $VSPackageInstalled)
     {
-        Write-Host "To apply changes, please close this PowerShell window, open a new one and call Start-SSHBuild or Start-DscBootstrap again." -ForegroundColor Black -BackgroundColor Yellow
+        Write-Host "To apply changes, please close this PowerShell window, open a new one and call Start-OpenSSHBuild or Start-DscBootstrap again." -ForegroundColor Black -BackgroundColor Yellow
         Write-Host -NoNewLine 'Press any key to close this PowerShell window...' -ForegroundColor Black -BackgroundColor Yellow
         $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
         exit
