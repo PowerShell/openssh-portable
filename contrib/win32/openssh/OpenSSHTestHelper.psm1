@@ -23,7 +23,7 @@ $Script:WindowsInBox = $false
 
 <#
     .Synopsis
-    Setup-OpenSSHTestEnvironment
+    Set-OpenSSHTestEnvironment
     TODO - split these steps into client and server side 
 #>
 function Set-OpenSSHTestEnvironment
@@ -177,7 +177,7 @@ WARNING: Following changes will be made to OpenSSH configuration
             if($psversiontable.BuildVersion.Major -gt 6)
             {                
                 #register private key with agent
-                ssh-add-hostkey.ps1 $_.FullName                
+                ssh-add-hostkey.ps1 $_.FullName
             }
         }        
     }

@@ -1,5 +1,5 @@
 ﻿Set-StrictMode -Version 2.0
-If (!(Test-Path variable:PSScriptRoot)) { $PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition }
+If (!(Test-Path variable:PSScriptRoot) -or ($PSScriptRoot -eq $null)) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -Force
 Import-Module $PSScriptRoot\OpenSSHUtils -Force
 
