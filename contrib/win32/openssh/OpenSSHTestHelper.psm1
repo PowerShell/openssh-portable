@@ -170,18 +170,22 @@ WARNING: Following changes will be made to OpenSSH configuration
         #workaround for the cariggage new line added by git before copy them
         $filePath = "$($_.FullName)"
         $con = (Get-Content $filePath | Out-String).Replace("`r`n","`n")
-        Set-Content -Path $filePath -Value "$con"        
-        Repair-SshdHostKeyPermission -FilePath $_.FullName -confirm:$false
-        if($psversiontable.BuildVersion.Major -gt 6)
+        Set-Content -Path $filePath -Value "$con"
+        if (-not ($_.Name.EndsWith(".pub")))
         {
-            #register private key with agent            
-            ssh-add-hostkey.ps1 $_.FullName
-        }
-        else
-        {
-            #surpress the blocking windows on win7
-            netsh advfirewall firewall set rule name="sshd" dir=in protocol=tcp new action=allow
-        }
+            Repair-SshdHostKeyPermission -FilePath $_.FullName -confirm:$false
+            if($psversiontable.BuildVersion.Major -gt 6)
+            {                
+                #register private key with agent
+                ssh-add-hostkey.ps1 $_.FullName                
+            }
+        }        
+    }
+
+    if($psversiontable.BuildVersion.Major -le 6)
+    {            
+        #suppress the firewall blocking dialogue on win7
+        netsh advfirewall firewall set rule name="sshd" dir=in protocol=tcp new action=allow
     }
 
     Restart-Service sshd -Force
