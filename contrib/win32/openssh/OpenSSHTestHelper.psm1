@@ -172,8 +172,16 @@ WARNING: Following changes will be made to OpenSSH configuration
         $con = (Get-Content $filePath | Out-String).Replace("`r`n","`n")
         Set-Content -Path $filePath -Value "$con"        
         Repair-SshdHostKeyPermission -FilePath $_.FullName -confirm:$false
-        #register private key with agent
-        #ssh-add-hostkey.ps1 $_.FullName
+        if($psversiontable.BuildVersion.Major -gt 6)
+        {
+            #register private key with agent            
+            ssh-add-hostkey.ps1 $_.FullName
+        }
+        else
+        {
+            #surpress the blocking windows on win7
+            netsh advfirewall firewall set rule name="sshd" dir=in protocol=tcp new action=allow
+        }
     }
 
     Restart-Service sshd -Force
@@ -268,7 +276,7 @@ function Install-OpenSSHTestDependencies
         Write-Log -Message "Installing Module OpenSSHUtils..."
         Install-OpenSSHUtilsModule -SourceDir $PSScriptRoot
     #}
-    Import-Module Opensshutils -Force
+    Import-Module OpensshUtils -Force
 
     if($Script:WindowsInBox)
     {
@@ -502,10 +510,10 @@ function Get-UnitTestDirectory
 function Invoke-OpenSSHE2ETest
 {     
     # Discover all CI tests and run them.
-    Import-Module pester
+    Import-Module pester -force
     Push-Location $Script:E2ETestDirectory
     Write-Log -Message "Running OpenSSH E2E tests..."    
-    $testFolders = Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique
+    $testFolders = @(Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique)
     Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $Script:E2ETestResultsFile -Tag 'CI'
     Pop-Location
 }
