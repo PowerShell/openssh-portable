@@ -1,4 +1,4 @@
-﻿If (!(Test-Path variable:PSScriptRoot) -or ($PSScriptRoot -eq $null)) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
+﻿If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
 Import-Module OpenSSHUtils -Force
 $tC = 1
@@ -8,7 +8,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
     BeforeAll {    
         if($OpenSSHTestInfo -eq $null)
         {
-            Throw "`$OpenSSHTestInfo is null. Please run Setup-OpenSSHTestEnvironment to setup test environment."
+            Throw "`$OpenSSHTestInfo is null. Please run Set-OpenSSHTestEnvironment to set test environments."
         }
         
         $testDir = "$($OpenSSHTestInfo["TestDataPath"])\$suite"

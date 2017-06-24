@@ -1,10 +1,12 @@
-﻿If (!(Test-Path variable:PSScriptRoot) -or ($PSScriptRoot -eq $null)) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
+﻿If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
 Describe "SFTP Test Cases" -Tags "CI" {
     BeforeAll {
+        $serverDirectory = $null
+        $clientDirectory = $null
         if($OpenSSHTestInfo -eq $null)
         {
-            Throw "`$OpenSSHTestInfo is null. Please run Setup-OpenSSHTestEnvironment to setup test environment."
+            Throw "`$OpenSSHTestInfo is null. Please run Set-OpenSSHTestEnvironment to set test environments."
         }
 
         $rootDirectory = "$($OpenSSHTestInfo["TestDataPath"])\SFTP"
@@ -187,13 +189,13 @@ Describe "SFTP Test Cases" -Tags "CI" {
     }
 
     AfterAll {
-       Get-ChildItem $serverDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-       Get-ChildItem $clientDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+       if($serverDirectory) { Get-ChildItem $serverDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }
+       if($clientDirectory) { Get-ChildItem $clientDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }
     }
 
     BeforeEach {
-       Get-ChildItem $serverDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-       Get-ChildItem $clientDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue       
+       if($serverDirectory) { Get-ChildItem $serverDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }
+       if($clientDirectory) { Get-ChildItem $clientDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }
        $outputFilePath = Join-Path $rootDirectory "$($script:testId).$outputFileName"
        $batchFilePath = Join-Path $rootDirectory "$($script:testId).$batchFileName"
     }

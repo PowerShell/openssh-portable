@@ -1,5 +1,5 @@
 ﻿$ErrorActionPreference = 'Stop'
-If (!(Test-Path variable:PSScriptRoot) -or ($PSScriptRoot -eq $null)) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
+If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -Force
 Import-Module $PSScriptRoot\OpenSSHUtils -Force
 
@@ -514,7 +514,7 @@ function Get-UnitTestDirectory
 function Invoke-OpenSSHE2ETest
 {     
     # Discover all CI tests and run them.
-    Import-Module pester -force
+    Import-Module pester -force -global
     Push-Location $Script:E2ETestDirectory
     Write-Log -Message "Running OpenSSH E2E tests..."    
     $testFolders = @(Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique)

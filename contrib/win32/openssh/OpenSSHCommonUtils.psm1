@@ -1,4 +1,4 @@
-﻿If (!(Test-Path variable:PSScriptRoot) -or ($PSScriptRoot -eq $null)) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
+﻿If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\OpenSSHUtils -Force
 <#
 .Synopsis
