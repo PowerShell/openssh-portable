@@ -1,4 +1,6 @@
-﻿$tC = 1
+﻿If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
+Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
+$tC = 1
 $tI = 0
 $suite = "log_fileperm"
 
@@ -22,6 +24,13 @@ Describe "Tests for log file permission" -Tags "CI" {
         $currentUserSid = Get-UserSID -User "$($env:USERDOMAIN)\$($env:USERNAME)"        
 
         Remove-Item (Join-Path $testDir "*$logName") -Force -ErrorAction SilentlyContinue
+        
+        $platform = Get-Platform
+        if(($platform -eq [PlatformType]::Windows) -and ($psversiontable.BuildVersion.Major -le 6))
+        {
+            #suppress the firewall blocking dialogue on win7
+            netsh advfirewall firewall add rule name="sshd" program="$($OpenSSHTestInfo['OpenSSHBinPath'])\sshd.exe" protocol=any action=allow dir=in
+        }
 
         #only validate owner and ACEs of the file
         function ValidateLogFilePerm {
@@ -70,7 +79,13 @@ Describe "Tests for log file permission" -Tags "CI" {
         $logPath = Join-Path $testDir "$tC.$tI.$logName"
     }
 
-    AfterEach {$tI++;} 
+    AfterEach {$tI++;}
+    AfterAll {
+        if(($platform -eq [PlatformType]::Windows) -and ($psversiontable.BuildVersion.Major -le 6))
+        {            
+            netsh advfirewall firewall delete rule name="sshd" program="$($OpenSSHTestInfo['OpenSSHBinPath'])\sshd.exe" protocol=any dir=in
+        }    
+    }
 
     Context "$tC-SSHD -E Log file permission" {
         BeforeAll {            

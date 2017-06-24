@@ -182,12 +182,6 @@ WARNING: Following changes will be made to OpenSSH configuration
         }        
     }
 
-    if($psversiontable.BuildVersion.Major -le 6)
-    {            
-        #suppress the firewall blocking dialogue on win7
-        netsh advfirewall firewall set rule name="sshd" dir=in protocol=tcp new action=allow
-    }
-
     Restart-Service sshd -Force
    
     #Backup existing known_hosts and replace with test version

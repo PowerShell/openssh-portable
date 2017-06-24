@@ -20,12 +20,23 @@ Describe "Tests for host keys file permission" -Tags "CI" {
         $port = 47003
         $ssouser = $OpenSSHTestInfo["SSOUser"]
         $script:logNum = 0
-        Remove-Item -Path (Join-Path $testDir "*$logName") -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path (Join-Path $testDir "*$logName") -Force -ErrorAction SilentlyContinue        
         $platform = Get-Platform
         $skip = ($platform -eq [PlatformType]::Windows) -and ($PSVersionTable.PSVersion.Major -le 2)
+        if(($platform -eq [PlatformType]::Windows) -and ($psversiontable.BuildVersion.Major -le 6))
+        {
+            #suppress the firewall blocking dialogue on win7
+            netsh advfirewall firewall add rule name="sshd" program="$($OpenSSHTestInfo['OpenSSHBinPath'])\sshd.exe" protocol=any action=allow dir=in
+        }
     }
 
     AfterEach { $tI++ }
+    AfterAll {
+        if(($platform -eq [PlatformType]::Windows) -and ($psversiontable.BuildVersion.Major -le 6))
+        {            
+            netsh advfirewall firewall delete rule name="sshd" program="$($OpenSSHTestInfo['OpenSSHBinPath'])\sshd.exe" protocol=any dir=in
+        }    
+    }
 
     Context "$tC - Host key files permission" {
         BeforeAll {
