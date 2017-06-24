@@ -529,7 +529,7 @@ function Invoke-OpenSSHUnitTest
     {
         $null = Remove-Item -Path $Script:UnitTestResultsFile -Force -ErrorAction SilentlyContinue
     }
-    $testFolders = Get-ChildItem unittest-*.exe -Recurse -Exclude unittest-sshkey.exe,unittest-kex.exe |
+    $testFolders = Get-ChildItem -filter unittest-*.exe -Recurse -Exclude unittest-sshkey.exe,unittest-kex.exe |
                  ForEach-Object{ Split-Path $_.FullName} |
                  Sort-Object -Unique
     $testfailed = $false
