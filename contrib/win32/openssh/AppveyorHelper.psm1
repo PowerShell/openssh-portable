@@ -79,11 +79,10 @@ function Invoke-AppVeyorFull
     {
         $env:APPVEYOR_SCHEDULED_BUILD = 'True'
     }
-    try {
-        Set-OpenSSHTestParams
+    try {        
         Invoke-AppVeyorBuild
         Install-OpenSSH
-        Set-OpenSSHTestEnvironment
+        Set-OpenSSHTestEnvironment -confirm:$false
         Invoke-OpenSSHTests
         Publish-Artifact
     }
@@ -287,7 +286,7 @@ function Add-Artifact
 function Publish-Artifact
 {
     Write-Host -ForegroundColor Yellow "Publishing project artifacts"
-    [System.Collections.ArrayList] $artifacts = [System.Collections.ArrayList]::new()   
+    [System.Collections.ArrayList] $artifacts = new-object System.Collections.ArrayList
     
     # Get the build.log file for each build configuration        
     Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Release -NativeHostArch x64)
@@ -336,7 +335,7 @@ function Invoke-OpenSSHTests
         Write-BuildMessage -Message "Test result file $OpenSSHTestInfo["E2ETestResultsFile"] not found after tests." -Category Error
         Set-BuildVariable TestPassed False
     }
-    $xml = [xml](Get-Content -raw $OpenSSHTestInfo["E2ETestResultsFile"])
+    $xml = [xml](Get-Content $OpenSSHTestInfo["E2ETestResultsFile"] | out-string)
     if ([int]$xml.'test-results'.failures -gt 0) 
     {
         $errorMessage = "$($xml.'test-results'.failures) tests in regress\pesterTests failed. Detail test log is at $($OpenSSHTestInfo["E2ETestResultsFile"])."

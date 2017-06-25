@@ -523,9 +523,13 @@ function Invoke-OpenSSHE2ETest
 function Invoke-OpenSSHUnitTest
 {     
     # Discover all CI tests and run them.
+    if([string]::Isnullorempty($Script:UnitTestDirectory))
+    {
+        $Script:UnitTestDirectory = $OpenSSHTestInfo["UnitTestDirectory"]
+    }
     Push-Location $Script:UnitTestDirectory
     Write-Log -Message "Running OpenSSH unit tests..."
-    if (Test-Path $Script:UnitTestResultsFile)    
+    if (Test-Path $Script:UnitTestResultsFile)
     {
         $null = Remove-Item -Path $Script:UnitTestResultsFile -Force -ErrorAction SilentlyContinue
     }
@@ -535,20 +539,26 @@ function Invoke-OpenSSHUnitTest
     $testfailed = $false
     if ($testFolders -ne $null)
     {
-        $testFolders | % {
-            Push-Location $_
+        $testFolders | % {            
             $unittestFile = "$(Split-Path $_ -Leaf).exe"
-            Write-log "Running OpenSSH unit $unittestFile ..."
-            & .\$unittestFile >> $Script:UnitTestResultsFile
+            $unittestFilePath = join-path $_ $unittestFile
+            $Error.clear()
+            $LASTEXITCODE=0
+            if(Test-Path $unittestFilePath -pathtype leaf)
+            {
+                Push-Location $_
+                Write-Log "Running OpenSSH unit $unittestFile ..."
+                & "$unittestFilePath" >> $Script:UnitTestResultsFile
+                Pop-Location
+            }
             
             $errorCode = $LASTEXITCODE
             if ($errorCode -ne 0)
             {
                 $testfailed = $true
-                $errorMessage = "$($_.FullName) test failed for OpenSSH.`nExitCode: $errorCode. Detail test log is at $($Script:UnitTestResultsFile)."
+                $errorMessage = "$_ test failed for OpenSSH.`nExitCode: $errorCode. Detail test log is at $($Script:UnitTestResultsFile)."
                 Write-Warning $errorMessage                         
-            }
-            Pop-Location
+            }            
         }
     }
     Pop-Location
