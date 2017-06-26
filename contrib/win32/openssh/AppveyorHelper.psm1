@@ -99,7 +99,7 @@ function Invoke-AppVeyorBuild
 {
       Set-BuildVariable TestPassed True
       Start-OpenSSHBuild -Configuration Release -NativeHostArch x64
-      Start-OpenSSHBuild -Configuration Debug -NativeHostArch x86
+      Start-OpenSSHBuild -Configuration Release -NativeHostArch x86
       Write-BuildMessage -Message "OpenSSH binaries build success!" -Category Information
 }
 
@@ -269,7 +269,7 @@ function Publish-Artifact
     
     # Get the build.log file for each build configuration        
     Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Release -NativeHostArch x64)
-    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Debug -NativeHostArch x86)
+    Add-BuildLog -artifacts $artifacts -buildLog (Get-BuildLogFile -root $repoRoot.FullName -Configuration Release -NativeHostArch x86)
 
     if($Global:OpenSSHTestInfo)
     {
@@ -281,7 +281,6 @@ function Publish-Artifact
     foreach ($artifact in $artifacts)
     {
         Write-Host "Publishing $artifact as Appveyor artifact"
-        # NOTE: attempt to publish subsequent artifacts even if the current one fails        
         Push-AppveyorArtifact $artifact -ErrorAction Continue
     }
 }

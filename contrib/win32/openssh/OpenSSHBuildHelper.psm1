@@ -484,7 +484,7 @@ function Get-BuildLogFile
         [ValidateSet('x86', 'x64')]
         [string]$NativeHostArch = "x64",
                 
-        [ValidateSet('Debug', 'Release', '')]
+        [ValidateSet('Debug', 'Release')]
         [string]$Configuration = "Release"
         
     )    
