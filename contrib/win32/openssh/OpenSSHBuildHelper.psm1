@@ -1,7 +1,6 @@
 ﻿Set-StrictMode -Version 2.0
 If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -Force
-Import-Module $PSScriptRoot\OpenSSHUtils -Force
 
 [string] $script:platform = $env:PROCESSOR_ARCHITECTURE
 [string] $script:vcPath = $null
@@ -297,7 +296,7 @@ function Start-OpenSSHPackage
         [ValidateSet('x86', 'x64')]
         [string]$NativeHostArch = "x64",
 
-        [ValidateSet('Debug', 'Release', '')]
+        [ValidateSet('Debug', 'Release')]
         [string]$Configuration = "Release",
 
         # Copy payload to DestinationPath instead of packaging
@@ -408,7 +407,7 @@ function Start-OpenSSHBuild
         [ValidateSet('x86', 'x64')]
         [string]$NativeHostArch = "x64",
 
-        [ValidateSet('Debug', 'Release', '')]
+        [ValidateSet('Debug', 'Release')]
         [string]$Configuration = "Release",
 
         [switch]$NoOpenSSL

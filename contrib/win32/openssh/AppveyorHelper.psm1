@@ -146,19 +146,14 @@ function Install-OpenSSH
     [CmdletBinding()]
     param
     ( 
-        [ValidateSet('Debug', 'Release', '')]
-        [string]$Configuration = "",
+        [ValidateSet('Debug', 'Release')]
+        [string]$Configuration = "Release",
 
         [ValidateSet('x86', 'x64', '')]
         [string]$NativeHostArch = "",
 
         [string]$OpenSSHDir = "$env:SystemDrive\OpenSSH"
     )
-
-    if ($Configuration -eq "")
-    {
-        $Configuration = 'Release'
-    }
 
     if ($NativeHostArch -eq "") 
     {
@@ -198,7 +193,7 @@ function Install-OpenSSH
 
 <#
     .Synopsis
-    uninstalled sshd and sshla
+    uninstalled sshd
 #>
 function UnInstall-OpenSSH
 {
@@ -208,7 +203,7 @@ function UnInstall-OpenSSH
         [string]$OpenSSHDir = "$env:SystemDrive\OpenSSH"
     )
 
-    if (-not (Test-Path $OpenSSHDir))
+    if (-not (Test-Path $OpenSSHDir -PathType Container))
     {
         return
     }
@@ -226,30 +221,14 @@ function UnInstall-OpenSSH
         $newMachineEnvironmentPath = $newMachineEnvironmentPath.Replace("$OpenSSHDir;", '')
         $env:Path = $env:Path.Replace("$OpenSSHDir;", '')
     }
-
-    if(Test-Path -Path $OpenSSHDir)
+    
+    if ($newMachineEnvironmentPath -ne $machinePath)
     {
-        Push-Location $OpenSSHDir
-        &( "$OpenSSHDir\uninstall-sshd.ps1")
-
-        $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
-        $newMachineEnvironmentPath = $machinePath
-        if ($machinePath.ToLower().Contains($OpenSSHDir.ToLower()))
-        {
-            $newMachineEnvironmentPath.Replace("$OpenSSHDir;", '')
-            $env:Path = $env:Path.Replace("$OpenSSHDir;", '')
-        }
-
-        # Update machine environment path
-        # machine will be reboot after Uninstall-OpenSSH
-        if ($newMachineEnvironmentPath -ne $machinePath)
-        {
-            [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
-        }
-        Pop-Location
-
-        Remove-Item -Path $OpenSSHDir -Recurse -Force -ErrorAction SilentlyContinue
+        [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
     }
+    
+    Pop-Location
+    Remove-Item -Path $OpenSSHDir -Recurse -Force -ErrorAction SilentlyContinue    
 }
 
 <#
