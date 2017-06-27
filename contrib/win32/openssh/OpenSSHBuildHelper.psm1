@@ -168,6 +168,10 @@ function Start-OpenSSHBootstrap
     {
         Write-BuildMsg -AsVerbose -Message "Adding $gitCmdPath to Path environment variable" -Silent:$silent
         $newMachineEnvironmentPath = "$gitCmdPath;$newMachineEnvironmentPath"
+        if($env:Path.ToLower().Contains($gitCmdPath.ToLower()))
+        {
+            $env:Path += ";$gitCmdPath"
+        }
     }
     else
     {
@@ -184,7 +188,10 @@ function Start-OpenSSHBootstrap
     {
         Write-BuildMsg -AsVerbose -Message "Adding $nativeMSBuildPath to Path environment variable" -Silent:$silent
         $newMachineEnvironmentPath += ";$nativeMSBuildPath"
-        $env:Path += ";$nativeMSBuildPath"
+        if($env:Path.ToLower().Contains($nativeMSBuildPath.ToLower()))
+        {
+            $env:Path += ";$nativeMSBuildPath"
+        }
     }
     else
     {
@@ -201,14 +208,12 @@ function Start-OpenSSHBootstrap
     [Environment]::SetEnvironmentVariable('VCTargetsPath', $VCTargetsPath, 'MACHINE')
     $env:VCTargetsPath= $VCTargetsPath
 
-    $vcVars = ${env:ProgramFiles(x86)}+'\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat'
-    $vcBld = ${env:ProgramFiles(x86)}+'\Microsoft Visual C++ Build Tools\vcbuildtools.bat'
+    $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
+    $vcBld = "${env:ProgramFiles(x86)}\Microsoft Visual C++ Build Tools\vcbuildtools.bat"
     $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"
     $packageName = "vcbuildtools"
-    $packageName = "windows-sdk-8.1"
-    $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"
     If ((-not (Test-Path $nativeMSBuildPath)) -or (-not (Test-Path $vcBld)) -or (-not (Test-Path $VcVars)) -or (-not (Test-Path $sdkPath))) {
-        Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName."
+        Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
         choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK;Win10SDK_VisibleV1" -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
         $errorCode = $LASTEXITCODE
         if ($errorCode -ne 0)
@@ -381,7 +386,6 @@ function Start-OpenSSHPackage
         }
     }
     Remove-Item $packageDir -Recurse -Force -ErrorAction SilentlyContinue
-
     
     if ($DestinationPath -ne "") {
         Copy-Item -Path $symbolsDir\* -Destination $DestinationPath -Force -Recurse
