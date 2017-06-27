@@ -216,7 +216,7 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
         choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK;Win10SDK_VisibleV1" -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
         $errorCode = $LASTEXITCODE
-        if ($errorCode -ne 0)
+        if ($errorCode -eq 3010)
         {
             Write-Host "To apply changes, please restart the machine, open a new powershell window and call Start-SSHBuild or Start-OpenSSHBootstrap again." -ForegroundColor Black -BackgroundColor Yellow
             Do {
@@ -236,7 +236,11 @@ function Start-OpenSSHBootstrap
             {
                 Write-BuildMsg -AsWarning "User choose not to restart the machine to apply the changes."
             }
-        } 
+        }
+        else
+        {
+            Write-BuildMsg -AsError "$packageName installation failed with error code $errorCode"
+        }
     }
     else
     {
