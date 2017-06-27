@@ -168,7 +168,7 @@ function Start-OpenSSHBootstrap
     {
         Write-BuildMsg -AsVerbose -Message "Adding $gitCmdPath to Path environment variable" -Silent:$silent
         $newMachineEnvironmentPath = "$gitCmdPath;$newMachineEnvironmentPath"
-        if($env:Path.ToLower().Contains($gitCmdPath.ToLower()))
+        if(-not ($env:Path.ToLower().Contains($gitCmdPath.ToLower())))
         {
             $env:Path += ";$gitCmdPath"
         }
@@ -188,7 +188,7 @@ function Start-OpenSSHBootstrap
     {
         Write-BuildMsg -AsVerbose -Message "Adding $nativeMSBuildPath to Path environment variable" -Silent:$silent
         $newMachineEnvironmentPath += ";$nativeMSBuildPath"
-        if($env:Path.ToLower().Contains($nativeMSBuildPath.ToLower()))
+        if(-not ($env:Path.ToLower().Contains($nativeMSBuildPath.ToLower())))
         {
             $env:Path += ";$nativeMSBuildPath"
         }
@@ -218,33 +218,34 @@ function Start-OpenSSHBootstrap
         $errorCode = $LASTEXITCODE
         if ($errorCode -eq 3010)
         {
-            Write-Host "To apply changes, please restart the machine, open a new powershell window and call Start-SSHBuild or Start-OpenSSHBootstrap again." -ForegroundColor Black -BackgroundColor Yellow
+            Write-Host "The recent package changes indicate a reboot is necessary. please reboot the machine, open a new powershell window and call Start-SSHBuild or Start-OpenSSHBootstrap again." -ForegroundColor Black -BackgroundColor Yellow
             Do {
-                $input = Read-Host -Prompt "Restart the machine? [Yes] Y; [No] N (default is `"Y`")"
+                $input = Read-Host -Prompt "Reboot the machine? [Yes] Y; [No] N (default is `"Y`")"
                 if([string]::IsNullOrEmpty($input))
                 {
                     $input = 'Y'
                 }
             } until ($input -match "^(y(es)?|N(o)?)$")
-            $result = $Matches[0]
-            if ($result.ToLower().Startswith('y'))
+            [string]$ret = $Matches[0]
+            if ($ret.ToLower().Startswith('y'))
             {
-                Write-BuildMsg -AsWarning "restarting machine ..."
+                Write-BuildMsg -AsWarning -Message "restarting machine ..."
                 Restart-Computer -Force
+                exit
             }
             else
             {
-                Write-BuildMsg -AsWarning "User choose not to restart the machine to apply the changes."
+                Write-BuildMsg -AsError -ErrorAction Stop -Message "User choose not to restart the machine to apply the changes."
             }
         }
         else
         {
-            Write-BuildMsg -AsError "$packageName installation failed with error code $errorCode"
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $errorCode"
         }
     }
     else
     {
-        Write-BuildMsg -AsVerbose -Message 'VC++ 2015 Build Tools already present.'`
+        Write-BuildMsg -AsVerbose -Message 'VC++ 2015 Build Tools already present.'
     }
 
     # Ensure the VS C toolset is installed
