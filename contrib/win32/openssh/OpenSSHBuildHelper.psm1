@@ -209,12 +209,11 @@ function Start-OpenSSHBootstrap
     $env:VCTargetsPath= $VCTargetsPath
 
     $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
-    $vcBld = "${env:ProgramFiles(x86)}\Microsoft Visual C++ Build Tools\vcbuildtools.bat"
     $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"
     $packageName = "vcbuildtools"
-    If ((-not (Test-Path $nativeMSBuildPath)) -or (-not (Test-Path $vcBld)) -or (-not (Test-Path $VcVars)) -or (-not (Test-Path $sdkPath))) {
+    If ((-not (Test-Path $nativeMSBuildPath)) -or (-not (Test-Path $VcVars)) -or (-not (Test-Path $sdkPath))) {
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
-        choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK;Win10SDK_VisibleV1" -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
+        choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK;Win81SDK_CppBuildSKUV1" -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
         $errorCode = $LASTEXITCODE
         if ($errorCode -eq 3010)
         {
