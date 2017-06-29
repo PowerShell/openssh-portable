@@ -297,8 +297,8 @@ local_do_shell(const char *args)
 {
   #ifdef WINDOWS
 	/* execute via system call in Windows*/
+	char cmd_path[PATH_MAX] = { 0, };
 	if (!*args){
-		char cmd_path[PATH_MAX] = {0,};
 		if (!GetSystemDirectory(cmd_path, sizeof(cmd_path)))
 			fatal("GetSystemDirectory failed");
 

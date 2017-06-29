@@ -413,9 +413,9 @@ expand_authorized_keys(const char *filename, struct passwd *pw)
 	i = snprintf(ret, sizeof(ret), "%s\\%s", pw->pw_dir, file);
 #else
 	/*
-	* Ensure that filename starts anchored. If not, be backward
-	* compatible and prepend the '%h/'
-	*/
+	 * Ensure that filename starts anchored. If not, be backward
+	 * compatible and prepend the '%h/'
+	 */
 	if (*file == '/')
 		return (file);
 

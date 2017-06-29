@@ -125,7 +125,7 @@ struct key_translation keys[] = {
 
 static SHORT lastX = 0;
 static SHORT lastY = 0;
-static wchar_t cmd_path[PATH_MAX];
+static wchar_t cmd_exe_path[PATH_MAX];
 
 SHORT currentLine = 0;
 consoleEvent* head = NULL;
@@ -944,14 +944,14 @@ cleanup:
 wchar_t *
 w32_cmd_path()
 {
-	SecureZeroMemory(cmd_path, PATH_MAX);
-	if (!GetSystemDirectory(cmd_path, sizeof(cmd_path))) {
+	ZeroMemory(cmd_exe_path, PATH_MAX);
+	if (!GetSystemDirectory(cmd_exe_path, sizeof(cmd_exe_path))) {
 		printf("GetSystemDirectory failed");
 		exit(255);
 	}
 
-	wcscat_s(cmd_path, sizeof(cmd_path), L"\\cmd.exe");
-	return cmd_path;
+	wcscat_s(cmd_exe_path, sizeof(cmd_exe_path), L"\\cmd.exe");
+	return cmd_exe_path;
 }
 
 int 
