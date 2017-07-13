@@ -98,6 +98,7 @@ syslog(int priority, const char *format, const char *formatBuffer)
 	r = _snprintf_s(msgbufTimestamp, sizeof(msgbufTimestamp), _TRUNCATE, "%d %02d:%02d:%02d:%03d %s\n",
 		GetCurrentProcessId(), st.wHour, st.wMinute, st.wSecond,
 		st.wMilliseconds, formatBuffer);
+	msgbufTimestamp[sizeof(msgbufTimestamp) - 1] = '\0';
 	if (r > 0)
-		_write(logfd, msgbufTimestamp, r);
+		_write(logfd, msgbufTimestamp, (unsigned int)strlen(msgbufTimestamp));
 }
