@@ -51,25 +51,25 @@ openlog(char *ident, unsigned int option, int facility)
 	if (logfd != -1 || ident == NULL)
 		return;
 
-	wchar_t path[PATH_MAX], log_file[PATH_MAX + 12];
+	wchar_t path[PATH_MAX] = { 0 }, log_file[PATH_MAX + 12] = { 0 };
 	if (GetModuleFileNameW(NULL, path, PATH_MAX) == 0)
 		return;
 
-	path[PATH_MAX - 1] = '\0';
+	path[PATH_MAX - 1] = L'\0';	
 
 	if (wcsnlen(path, MAX_PATH) > MAX_PATH - wcslen(logs_dir) )
 		return;
 
 	/* split path root and module */
 	{
-		wchar_t* tail = path + wcsnlen(path, MAX_PATH), *p;
+		wchar_t* tail = path + wcsnlen(path, MAX_PATH);
 		while (tail > path && *tail != L'\\' && *tail != L'/')
 			tail--;
 
-		wmemcpy_s(log_file, PATH_MAX + 12, path, tail - path);
+		wcsncat_s(log_file, PATH_MAX + 12, path, tail - path);
 		wcsncat_s(log_file, PATH_MAX + 12, logs_dir, 6);
 		wcsncat_s(log_file, PATH_MAX + 12, tail + 1, wcslen(tail + 1) - 3);
-		wcsncat_s(log_file, PATH_MAX + 12, L"log\0", 4);
+		wcsncat_s(log_file, PATH_MAX + 12, L"log", 3);
 	}
 	
 	errno_t err = _wsopen_s(&logfd, log_file, O_WRONLY | O_CREAT | O_APPEND, SH_DENYNO, S_IREAD | S_IWRITE);

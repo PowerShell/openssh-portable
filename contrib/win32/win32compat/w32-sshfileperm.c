@@ -160,7 +160,7 @@ cleanup:
 /*TODO: optimize to get sshd sid first and then call EqualSid*/
 static BOOL
 is_sshd_account(PSID user_sid) {	
-	wchar_t user_name[UNCLEN], full_name[UNCLEN + DNLEN + 2];
+	wchar_t user_name[UNCLEN] = { 0 }, full_name[UNCLEN + DNLEN + 2] = { 0 };
 	DWORD name_length = UNCLEN, full_name_len = UNCLEN + DNLEN + 2;
 	SID_NAME_USE sid_type = SidTypeInvalid;
 	BOOL ret = FALSE;
