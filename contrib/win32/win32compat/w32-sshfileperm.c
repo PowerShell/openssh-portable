@@ -171,7 +171,7 @@ is_sshd_account(PSID user_sid) {
 		errno = ENOENT;
 		return FALSE;
 	}	
-	wcsncat_s(full_name, UNCLEN + DNLEN + 2, L'\\', 1);
+	wcsncat_s(full_name, UNCLEN + DNLEN + 2, L"\\", 1);
 	wcsncat_s(full_name, UNCLEN + DNLEN + 2, user_name, wcsnlen_s(user_name, UNCLEN));
 	return (wcsicmp(full_name, SSHD_ACCOUNT) == 0);
 }
