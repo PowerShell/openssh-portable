@@ -173,11 +173,12 @@ get_passwd(const char *user_utf8, LPWSTR user_sid)
 		errno = ENOMEM;
 		goto done;
 	}
-	uname_len = (DWORD)strlen(uname_utf8);
-	udom_len = (DWORD)strlen(udom_utf8);
+	uname_len = (DWORD)strlen(uname_utf8);	
 	uname_upn_len = uname_len + 1;
-	if (udom_utf8)
+	if (udom_utf8) {
+		udom_len = (DWORD)strlen(udom_utf8);
 		uname_upn_len += udom_len + 1;
+	}
 
 	if ((uname_upn = malloc(uname_upn_len)) == NULL) {
 		errno = ENOMEM;
