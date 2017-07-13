@@ -161,7 +161,7 @@ cleanup:
 static BOOL
 is_sshd_account(PSID user_sid) {	
 	wchar_t user_name[UNCLEN], full_name[UNCLEN + DNLEN + 2];
-	DWORD name_length = UNCLEN, domain_name_length = 0, full_name_len = UNCLEN + DNLEN + 2;
+	DWORD name_length = UNCLEN, full_name_len = UNCLEN + DNLEN + 2;
 	SID_NAME_USE sid_type = SidTypeInvalid;
 	BOOL ret = FALSE;
 
@@ -170,10 +170,8 @@ is_sshd_account(PSID user_sid) {
 		debug3("LookupAccountSidLocalW() failed with error: %d. ", GetLastError());
 		errno = ENOENT;
 		return FALSE;
-	}
-	domain_name_length = wcslen(full_name);
-	full_name[domain_name_length] = L'\\';
-	wmemcpy(full_name + domain_name_length + 1, user_name, wcslen(user_name)+1);
+	}	
+	wcsncat_s(full_name, UNCLEN + DNLEN + 2, L'\\', 1);
+	wcsncat_s(full_name, UNCLEN + DNLEN + 2, user_name, wcsnlen_s(user_name, UNCLEN));
 	return (wcsicmp(full_name, SSHD_ACCOUNT) == 0);
 }
-

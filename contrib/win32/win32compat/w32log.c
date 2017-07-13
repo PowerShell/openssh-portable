@@ -62,17 +62,14 @@ openlog(char *ident, unsigned int option, int facility)
 
 	/* split path root and module */
 	{
-		wchar_t* tail = path + wcslen(path), *p;
+		wchar_t* tail = path + wcsnlen(path, MAX_PATH), *p;
 		while (tail > path && *tail != L'\\' && *tail != L'/')
 			tail--;
 
-		memcpy(log_file, path, (tail - path) * sizeof(wchar_t));
-		p = log_file + (tail - path);
-		memcpy(p, logs_dir, wcslen(logs_dir) * sizeof(wchar_t));
-		p += 6;
-		memcpy(p, tail + 1, (wcslen(tail + 1) - 3) * sizeof(wchar_t));
-		p += wcslen(tail + 1) - 3;
-		memcpy(p, L"log\0", 8);
+		wmemcpy_s(log_file, PATH_MAX + 12, path, tail - path);
+		wcsncat_s(log_file, PATH_MAX + 12, logs_dir, 6);
+		wcsncat_s(log_file, PATH_MAX + 12, tail + 1, wcslen(tail + 1) - 3);
+		wcsncat_s(log_file, PATH_MAX + 12, L"log\0", 4);
 	}
 	
 	errno_t err = _wsopen_s(&logfd, log_file, O_WRONLY | O_CREAT | O_APPEND, SH_DENYNO, S_IREAD | S_IWRITE);
@@ -98,10 +95,9 @@ syslog(int priority, const char *format, const char *formatBuffer)
 		return;
 
 	GetLocalTime(&st);
-	r = snprintf(msgbufTimestamp, sizeof(msgbufTimestamp), "%d %02d:%02d:%02d:%03d %s\n",
+	r = _snprintf_s(msgbufTimestamp, sizeof(msgbufTimestamp), _TRUNCATE, "%d %02d:%02d:%02d:%03d %s\n",
 		GetCurrentProcessId(), st.wHour, st.wMinute, st.wSecond,
 		st.wMilliseconds, formatBuffer);
-	msgbufTimestamp[sizeof(msgbufTimestamp) - 1] = '\0';
-	if (r > 0 && r < sizeof(msgbufTimestamp))
-		_write(logfd, msgbufTimestamp, (unsigned int)strlen(msgbufTimestamp));
+	if (r > 0)
+		_write(logfd, msgbufTimestamp, r);
 }

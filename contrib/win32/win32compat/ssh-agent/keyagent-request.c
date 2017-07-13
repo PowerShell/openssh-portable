@@ -98,7 +98,7 @@ convert_blob(struct agent_connection* con, const char *blob, DWORD blen, char **
 	if (*eblob == NULL) 
 		goto done;
 
-	memcpy(*eblob, out.pbData, out.cbData);
+	memcpy_s(*eblob, out.cbData, out.pbData, out.cbData);
 	*eblen = out.cbData;
 	success = 1;
 done:

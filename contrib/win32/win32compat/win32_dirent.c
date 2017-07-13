@@ -84,7 +84,7 @@ openrootdir(const char *name)
 	}
 	memset(pdir, 0, sizeof(DIR));
 	pdir->hFile = 0;
-	memcpy(&pdir->c_file, &c_file, sizeof(c_file));
+	memcpy_s(&pdir->c_file, sizeof(c_file), &c_file, sizeof(c_file));
 	pdir->first = 1;
 
 	return pdir;
@@ -138,7 +138,7 @@ opendir(const char *name)
 
 		memset(pdir, 0, sizeof(DIR));
 		pdir->hFile = hFile;
-		memcpy(&pdir->c_file, &c_file, sizeof(c_file));
+		memcpy_s(&pdir->c_file, sizeof(c_file), &c_file, sizeof(c_file));
 		pdir->first = 1;
 
 		return pdir;
@@ -236,7 +236,7 @@ readdir(void *avp)
 
 	for (;;) {
 		if (dirp->first) {
-			memcpy(&c_file, &dirp->c_file, sizeof(c_file));
+			memcpy_s(&c_file, sizeof(c_file), &dirp->c_file, sizeof(c_file));
 			dirp->first = 0;
 		} else if (_wfindnext(dirp->hFile, &c_file) != 0)
 			return NULL;

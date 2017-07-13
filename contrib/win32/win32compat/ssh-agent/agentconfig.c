@@ -123,11 +123,11 @@ load_config() {
 	if (GetCurrentModulePath(basePath, PATH_MAX) == -1)
 		return -1;
 
-	if (wcslen(basePath) + wcslen(config_file) + 1 > PATH_MAX)
+	if (wcsnlen_s(basePath, PATH_MAX) + wcslen(config_file) + 1 > PATH_MAX)
 		fatal("unexpected config file path length");
 	
-	wcsncpy_s(path, PATH_MAX, basePath, PATH_MAX);
-	wcsncat_s(path, PATH_MAX, L"/sshd_config", PATH_MAX - wcslen(basePath));
+	wcsncpy_s(path, PATH_MAX, basePath, wcsnlen_s(basePath, PATH_MAX));
+	wcsncat_s(path, PATH_MAX, L"/sshd_config", PATH_MAX - wcsnlen_s(basePath, PATH_MAX));
 	
 	if ((config_file_name = utf16_to_utf8(path)) == NULL)
 		return -1;

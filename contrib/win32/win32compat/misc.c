@@ -338,7 +338,7 @@ char*
 			
 			if((actual_read + strlen(str_tmp)) >= n)
 				break;
-			memcpy(cp, str_tmp, strlen(str_tmp));
+			memcpy_s(cp, n - actual_read, str_tmp, strlen(str_tmp));
 			actual_read += (int)strlen(str_tmp);
 			cp += strlen(str_tmp);
 			
@@ -993,7 +993,7 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags)
 		} else if (ch == '\b') { /* backspace */
 			if (current_index > 0) {
 				if (flags & RPP_ECHO_ON)
-					printf("%c \b", ch);
+					printf_s("%c \b", ch);
 
 				current_index--; /* overwrite last character */
 			}
@@ -1012,7 +1012,7 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags)
 
 			outBuf[current_index++] = ch;
 			if(flags & RPP_ECHO_ON)
-				printf("%c", ch);
+				printf_s("%c", ch);
 		}
 	}
 

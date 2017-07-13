@@ -524,12 +524,12 @@ ConWriteString(char* pszString, int cbString)
 	if ((needed = MultiByteToWideChar(CP_UTF8, 0, pszString, cbString, NULL, 0)) == 0 ||
 	    (utf16 = malloc(needed * sizeof(wchar_t))) == NULL ||
 	    (cnt = MultiByteToWideChar(CP_UTF8, 0, pszString, cbString, utf16, needed)) == 0) {
-		Result = (DWORD)printf(pszString);
+		Result = (DWORD)printf_s(pszString);
 	} else {
 		if (hOutputConsole)
 			WriteConsoleW(hOutputConsole, utf16, cnt, &Result, 0);
 		else
-			Result = (DWORD)wprintf(utf16);
+			Result = (DWORD)wprintf_s(utf16);
 	}
 
 	if (utf16)
@@ -546,7 +546,7 @@ ConTranslateAndWriteString(char* pszString, int cbString)
 	if (hOutputConsole)
 		WriteConsole(hOutputConsole, pszString, cbString, &Result, 0);
 	else
-		Result = (DWORD)printf(pszString);
+		Result = (DWORD)printf_s(pszString);
 
 	return Result;
 }
@@ -836,7 +836,10 @@ Con_printf(const char *Format, ...)
 
 	memset(temp, '\0', sizeof(temp));
 	va_start(va_data, Format);
-	len = vsnprintf(temp, sizeof(temp), Format, va_data);
+	len = vsnprintf_s(temp, sizeof(temp), _TRUNCATE, Format, va_data);
+	if (len == -1) {
+		error("Error from vsnprintf_s!");
+	}
 	ConWriteConsole(temp, len);
 	va_end(va_data);
 
@@ -1091,13 +1094,13 @@ ConMoveVisibleWindow(int offset)
 				ConScrollDown(0, consoleInfo.dwSize.Y - 1);
 
 			if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
-				memcpy(&visibleWindowRect, &consoleInfo.srWindow, sizeof(visibleWindowRect));
+				memcpy_s(&visibleWindowRect, sizeof(visibleWindowRect), &consoleInfo.srWindow, sizeof(visibleWindowRect));
 			else {
 				error("GetConsoleScreenBufferInfo failed with %d", GetLastError());
 				return;
 			}
 		} else {
-			memcpy(&visibleWindowRect, &consoleInfo.srWindow, sizeof(visibleWindowRect));
+			memcpy_s(&visibleWindowRect, sizeof(visibleWindowRect), &consoleInfo.srWindow, sizeof(visibleWindowRect));
 			visibleWindowRect.Top += offset;
 			visibleWindowRect.Bottom += offset;
 		}
