@@ -726,7 +726,6 @@ fileio_write(struct w32_io* pio, const void *buf, size_t max_bytes)
 	}
 	debug4("write - reporting %d bytes written, io:%p", bytes_copied, pio);
 	return bytes_copied;
-
 }
 
 /* fstat() implemetation */
