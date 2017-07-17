@@ -957,7 +957,10 @@ w32_cmd_path()
 		exit(255);
 	}
 
-	wcscat_s(cmd_exe_path, sizeof(cmd_exe_path), L"\\cmd.exe");
+	if (wcscat_s(cmd_exe_path, sizeof(cmd_exe_path), L"\\cmd.exe")) {
+		printf_s("wcscat_s failed: %d.", errno);
+		exit(255);
+	}
 	return cmd_exe_path;
 }
 
@@ -1387,7 +1390,7 @@ static void setup_session_user_vars()
 				path_value = xmalloc((wcslen(to_apply) + 1 + required) * 2);
 				GetEnvironmentVariableW(L"PATH", path_value, required);
 				path_value[required - 1] = L';';
-				wmemcpy_s(path_value + required, wcslen(to_apply) + 1, to_apply, wcslen(to_apply) + 1);
+				memcpy_s(path_value + required, (wcslen(to_apply) + 1) * 2, to_apply, (wcslen(to_apply) + 1) * 2);
 				to_apply = path_value;
 			}
 

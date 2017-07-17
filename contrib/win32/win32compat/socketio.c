@@ -393,8 +393,11 @@ socketio_recv(struct w32_io* pio, void *buf, size_t len, int flags)
 	/* if we have some buffer copy it and return #bytes copied */
 	if (pio->read_details.remaining) {
 		int num_bytes_copied = min((int)len, pio->read_details.remaining);
-		memcpy_s(buf, len, pio->read_details.buf + pio->read_details.completed,
-			num_bytes_copied);
+		if (memcpy_s(buf, len, pio->read_details.buf + pio->read_details.completed,
+			num_bytes_copied)) {
+			debug4("memcpy_s failed: %d.", errno);
+			return -1;
+		}
 		pio->read_details.remaining -= num_bytes_copied;
 		pio->read_details.completed += num_bytes_copied;
 		debug5("recv - returning %d bytes from prior completed IO, remaining:%d, io:%p",
@@ -465,7 +468,10 @@ socketio_recv(struct w32_io* pio, void *buf, size_t len, int flags)
 
 	if (pio->read_details.remaining) {
 		int num_bytes_copied = min((int)len, pio->read_details.remaining);
-		memcpy_s(buf, len, pio->read_details.buf, num_bytes_copied);
+		if (memcpy_s(buf, len, pio->read_details.buf, num_bytes_copied)) {
+			debug3("memcpy_s failed: %d.", errno);
+			return -1;
+		}
 		pio->read_details.remaining -= num_bytes_copied;
 		pio->read_details.completed = num_bytes_copied;
 		debug4("recv - (2) returning %d bytes from completed IO, remaining:%d, io:%p",
@@ -558,7 +564,10 @@ socketio_send(struct w32_io* pio, const void *buf, size_t len, int flags)
 		wsabuf.buf = pio->write_details.buf;
 
 	wsabuf.len = min(wsabuf.len, (int)len);
-	memcpy_s(wsabuf.buf, wsabuf.len, buf, wsabuf.len);
+	if (memcpy_s(wsabuf.buf, wsabuf.len, buf, wsabuf.len)) {
+		debug3("memcpy_s failed: %d.", errno);
+		return -1;
+	}
 
 	/* TODO - implement flags support if needed */
 	ret = WSASend(pio->sock, &wsabuf, 1, NULL, 0, &pio->write_overlapped, &WSASendCompletionRoutine);
@@ -718,7 +727,10 @@ socketio_accept(struct w32_io* pio, struct sockaddr* addr, int* addrlen)
 			sizeof(SOCKADDR_STORAGE) + 16, &local_address,
 			&local_address_len, &remote_address, &remote_address_len);
 		if (remote_address_len) {
-			memcpy_s(addr, remote_address_len, remote_address, remote_address_len);
+			if(memcpy_s(addr, remote_address_len, remote_address, remote_address_len)) {
+				debug3("memcpy_s failed: %d.", errno);
+				goto on_error;
+			}
 			*addrlen = remote_address_len;
 		}
 	}
@@ -1018,7 +1030,10 @@ w32_getaddrinfo(const char *node_utf8, const char *service_utf8,
 				ret = EAI_MEMORY;
 				goto done;
 			}
-			memcpy_s(*cur, sizeof(struct addrinfo), *cur_w, sizeof(struct addrinfo));
+			if (memcpy_s(*cur, sizeof(struct addrinfo), *cur_w, sizeof(struct addrinfo))) {
+				ret = EAI_MEMORY;
+				goto done;
+			}
 			(*cur)->ai_next = NULL;
 			if (((*cur_w)->ai_canonname && ((*cur)->ai_canonname = utf16_to_utf8((*cur_w)->ai_canonname)) == NULL) ||
 			    ((*cur_w)->ai_addrlen && ((*cur)->ai_addr = malloc((*cur_w)->ai_addrlen)) == NULL)) {
@@ -1027,7 +1042,10 @@ w32_getaddrinfo(const char *node_utf8, const char *service_utf8,
 
 			}
 			if ((*cur_w)->ai_addrlen)
-				memcpy_s((*cur)->ai_addr, (*cur_w)->ai_addrlen, (*cur_w)->ai_addr, (*cur_w)->ai_addrlen);
+				if (memcpy_s((*cur)->ai_addr, (*cur_w)->ai_addrlen, (*cur_w)->ai_addr, (*cur_w)->ai_addrlen)) {
+					ret = EAI_MEMORY;
+					goto done;
+				}
 			cur_w = &(*cur_w)->ai_next;
 			cur = &(*cur)->ai_next;
 		}

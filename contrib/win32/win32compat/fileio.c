@@ -605,7 +605,10 @@ fileio_read(struct w32_io* pio, void *dst, size_t max_bytes)
 	}
 
 	bytes_copied = min((DWORD)max_bytes, pio->read_details.remaining);
-	memcpy_s(dst, max_bytes, pio->read_details.buf + pio->read_details.completed, bytes_copied);
+	if (memcpy_s(dst, max_bytes, pio->read_details.buf + pio->read_details.completed, bytes_copied)) {
+		debug3("memcpy_s failed: %d.", errno);
+		return -1;
+	}
 	pio->read_details.remaining -= bytes_copied;
 	pio->read_details.completed += bytes_copied;
 	debug4("read - io:%p read: %d remaining: %d", pio, bytes_copied,
@@ -678,7 +681,10 @@ fileio_write(struct w32_io* pio, const void *buf, size_t max_bytes)
 	}
 
 	bytes_copied = min((int)max_bytes, pio->write_details.buf_size);
-	memcpy_s(pio->write_details.buf, max_bytes, buf, bytes_copied);
+	if(memcpy_s(pio->write_details.buf, max_bytes, buf, bytes_copied)) {
+		debug3("memcpy_s failed: %d.", errno);
+		return -1;
+	}
 
 	if (pio->type == NONSOCK_SYNC_FD || FILETYPE(pio) == FILE_TYPE_CHAR) {
 		if (syncio_initiate_write(pio, bytes_copied) == 0) {

@@ -263,8 +263,11 @@ wait_for_any_event(HANDLE* events, int num_events, DWORD milli_seconds)
 		return -1;
 	}
 
-	memcpy_s(all_events, MAXIMUM_WAIT_OBJECTS, children.handles, live_children * sizeof(HANDLE));
-	memcpy_s(all_events + live_children, MAXIMUM_WAIT_OBJECTS - live_children, events, num_events * sizeof(HANDLE));
+	if (memcpy_s(all_events, MAXIMUM_WAIT_OBJECTS, children.handles, live_children * sizeof(HANDLE)) || 
+	memcpy_s(all_events + live_children, MAXIMUM_WAIT_OBJECTS - live_children, events, num_events * sizeof(HANDLE))) {
+		debug3("memcpy_s failed: %d.", errno);
+		return -1;
+	}
 
 	debug5("wait() on %d events and %d children", num_events, live_children);
 	/* TODO - implement signal catching and handling */

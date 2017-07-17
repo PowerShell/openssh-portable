@@ -338,7 +338,10 @@ char*
 			
 			if((actual_read + strlen(str_tmp)) >= n)
 				break;
-			memcpy_s(cp, n - actual_read, str_tmp, strlen(str_tmp));
+			if (memcpy_s(cp, n - actual_read, str_tmp, strlen(str_tmp))) {
+				debug3("memcpy_s failed: %d.", errno);
+				goto cleanup;
+			}
 			actual_read += (int)strlen(str_tmp);
 			cp += strlen(str_tmp);
 			
@@ -766,7 +769,8 @@ w32_getcwd(char *buffer, int maxlen)
 		return NULL;
 	}
 
-	strcpy_s(buffer, maxlen, putf8);
+	if (strcpy_s(buffer, maxlen, putf8)) 
+		return NULL;
 	free(putf8);
 
 	return buffer;
@@ -807,7 +811,8 @@ w32_stat(const char *path, struct w32_stat *buf)
 int
 readlink(const char *path, char *link, int linklen)
 {
-	strcpy_s(link, linklen, sanitized_path(path));
+	if(strcpy_s(link, linklen, sanitized_path(path)))
+		return -1;
 	return 0;
 }
 
