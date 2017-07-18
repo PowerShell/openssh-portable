@@ -1390,10 +1390,7 @@ static void setup_session_user_vars()
 				path_value = xmalloc((wcslen(to_apply) + 1 + required) * 2);
 				GetEnvironmentVariableW(L"PATH", path_value, required);
 				path_value[required - 1] = L';';
-				if (memcpy_s(path_value + required, (wcslen(to_apply) + 1) * 2, to_apply, (wcslen(to_apply) + 1) * 2)) {
-					error("memcpy_s failed: %d.", errno);
-					return;
-				}
+				GOTO_CLEANUP_ON_ERR(memcpy_s(path_value + required, (wcslen(to_apply) + 1) * 2, to_apply, (wcslen(to_apply) + 1) * 2));
 				to_apply = path_value;
 			}
 
@@ -1401,6 +1398,7 @@ static void setup_session_user_vars()
 		if (to_apply)
 			SetEnvironmentVariableW(name, to_apply);
 	}
+cleanup:
 	if (reg_key)
 		RegCloseKey(reg_key);
 	if (data)
