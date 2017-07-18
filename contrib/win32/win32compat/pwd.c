@@ -189,7 +189,10 @@ get_passwd(const char *user_utf8, LPWSTR user_sid)
 		goto done;
 	}
 
-	memcpy_s(uname_upn, uname_upn_len, uname_utf8, uname_len + 1);
+	if (memcpy_s(uname_upn, uname_upn_len, uname_utf8, uname_len + 1)) {
+		debug3("memcpy_s failed: %d.", errno);
+		goto done;
+	}
 	if (udom_utf8) {
 		/* TODO - get domain FQDN */
 		uname_upn[uname_len] = '@';
