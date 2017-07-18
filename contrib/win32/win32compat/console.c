@@ -839,6 +839,7 @@ Con_printf(const char *Format, ...)
 	len = vsnprintf_s(temp, sizeof(temp), _TRUNCATE, Format, va_data);
 	if (len == -1) {
 		error("Error from vsnprintf_s!");
+		return;
 	}
 	ConWriteConsole(temp, len);
 	va_end(va_data);
@@ -1093,14 +1094,12 @@ ConMoveVisibleWindow(int offset)
 			for (int i = 0; i < offset; i++)
 				ConScrollDown(0, consoleInfo.dwSize.Y - 1);
 
-			if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
-				if (memcpy_s(&visibleWindowRect, sizeof(visibleWindowRect), &consoleInfo.srWindow, sizeof(visibleWindowRect))) {					
-					error("memcpy_s failed: %d.", errno);
-					return;
-				}
-
-			else {
+			if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo) == FALSE) {			
 				error("GetConsoleScreenBufferInfo failed with %d", GetLastError());
+				return;
+			}
+			if (memcpy_s(&visibleWindowRect, sizeof(visibleWindowRect), &consoleInfo.srWindow, sizeof(visibleWindowRect))) {
+				error("memcpy_s failed: %d.", errno);
 				return;
 			}
 		} else {

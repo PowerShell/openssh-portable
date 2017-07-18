@@ -59,9 +59,13 @@ initialize_pw()
 			fatal("initialize_pw - out of memory");
 		else {
 			char* head = pw_shellpath;
-			memcpy_s(head, program_dir_len + shell_host_len + 1, w32_programdir(), program_dir_len);
+			if (memcpy_s(head, program_dir_len + shell_host_len + 1, w32_programdir(), program_dir_len)) {
+				fatal("memcpy_s failed: %d.", errno);
+			}
 			head += program_dir_len;
-			memcpy_s(head, shell_host_len + 1, SHELL_HOST, shell_host_len);
+			if (memcpy_s(head, shell_host_len + 1, SHELL_HOST, shell_host_len)) {
+				fatal("memcpy_s failed: %d.", errno);
+			}
 			head += shell_host_len;
 			*head = '\0';
 		}
