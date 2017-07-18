@@ -244,6 +244,7 @@ w32_fopen_utf8(const char *path, const char *mode)
 	char utf8_bom[] = { 0xEF,0xBB,0xBF };
 	char first3_bytes[3];
 	int status = 1;
+	errno_t r = 0;
 
 	if (mode[1] != '\0') {
 		errno = ENOTSUP;
@@ -257,8 +258,12 @@ w32_fopen_utf8(const char *path, const char *mode)
 	}
 
 	/* if opening null device, point to Windows equivalent */
-	if (0 == strncmp(path, NULL_DEVICE, strlen(NULL_DEVICE)+1))
-		wcsncpy_s(wpath, PATH_MAX, L"NUL", 3);
+	if (0 == strncmp(path, NULL_DEVICE, strlen(NULL_DEVICE)+1)) {
+		if ((r = wcsncpy_s(wpath, PATH_MAX, L"NUL", 3)) != 0) {
+			debug3("wcsncpy_s failed: %d.", r);
+			return NULL;
+		}
+	}
 	else
 		status = MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, PATH_MAX);
 
@@ -308,6 +313,7 @@ char*
 	wchar_t* str_w = NULL;
 	char *ret = NULL, *str_tmp = NULL, *cp = NULL;
 	int actual_read = 0;
+	errno_t r = 0;
 
 	if (h != NULL && h != INVALID_HANDLE_VALUE
 	    && GetFileType(h) == FILE_TYPE_CHAR) {
@@ -338,8 +344,8 @@ char*
 			
 			if((actual_read + strlen(str_tmp)) >= n)
 				break;
-			if (memcpy_s(cp, n - actual_read, str_tmp, strlen(str_tmp))) {
-				debug3("memcpy_s failed: %d.", errno);
+			if ((r = memcpy_s(cp, n - actual_read, str_tmp, strlen(str_tmp))) != 0) {
+				debug3("memcpy_s failed: %d.", r);
 				goto cleanup;
 			}
 			actual_read += (int)strlen(str_tmp);
@@ -855,6 +861,7 @@ convertToForwardslash(char *str)
 char *
 realpath(const char *path, char resolved[PATH_MAX])
 {
+	errno_t r = 0;
 	if (!path || !resolved) return NULL;
 
 	char tempPath[PATH_MAX];
@@ -865,10 +872,16 @@ realpath(const char *path, char resolved[PATH_MAX])
 		return NULL;
 	}
 
-	if ((path_len >= 2) && (path[0] == '/') && path[1] && (path[2] == ':'))
-		strncpy_s(resolved, PATH_MAX, path + 1, path_len); /* skip the first '/' */
-	else
-		strncpy_s(resolved, PATH_MAX, path, path_len + 1);
+	if ((path_len >= 2) && (path[0] == '/') && path[1] && (path[2] == ':')) {
+		if((r = strncpy_s(resolved, PATH_MAX, path + 1, path_len)) != 0 ) /* skip the first '/' */ {
+			debug3("memcpy_s failed: %d.", r);
+			return NULL;
+		}
+	}
+	else if(( r = strncpy_s(resolved, PATH_MAX, path, path_len + 1)) != 0) {
+		debug3("memcpy_s failed: %d.", r);
+		return NULL;
+	}
 
 	if ((resolved[0]) && (resolved[1] == ':') && (resolved[2] == '\0')) { /* make "x:" as "x:\\" */
 		resolved[2] = '\\';
@@ -881,8 +894,10 @@ realpath(const char *path, char resolved[PATH_MAX])
 	convertToForwardslash(tempPath);
 
 	resolved[0] = '/'; /* will be our first slash in /x:/users/test1 format */
-	if (strncpy_s(resolved+1, PATH_MAX - 1, tempPath, sizeof(tempPath) - 1) != 0)
+	if ((r = strncpy_s(resolved+1, PATH_MAX - 1, tempPath, sizeof(tempPath) - 1)) != 0) {
+		debug3("memcpy_s failed: %d.", r);
 		return NULL;
+	}
 	return resolved;
 }
 
@@ -892,11 +907,15 @@ sanitized_path(const char *path)
 	if(!path) return NULL;
 
 	static char newPath[PATH_MAX] = { '\0', };
+	errno_t r = 0;
 
 	if (path[0] == '/' && path[1]) {
 		if (path[2] == ':') {
 			if (path[3] == '\0') { /* make "/x:" as "x:\\" */
-				strncpy_s(newPath, sizeof(PATH_MAX), path + 1, strlen(path) - 1);
+				if((r = strncpy_s(newPath, sizeof(PATH_MAX), path + 1, strlen(path) - 1)) != 0 ) {
+					debug3("memcpy_s failed: %d.", r);
+					return NULL;
+				}
 				newPath[2] = '\\';
 				newPath[3] = '\0';
 

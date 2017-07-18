@@ -254,6 +254,7 @@ wait_for_any_event(HANDLE* events, int num_events, DWORD milli_seconds)
 	HANDLE all_events[MAXIMUM_WAIT_OBJECTS];
 	DWORD num_all_events;
 	DWORD live_children = children.num_children - children.num_zombies;
+	errno_t r = 0;
 
 	num_all_events = num_events + live_children;
 
@@ -263,9 +264,9 @@ wait_for_any_event(HANDLE* events, int num_events, DWORD milli_seconds)
 		return -1;
 	}
 
-	if (memcpy_s(all_events, MAXIMUM_WAIT_OBJECTS, children.handles, live_children * sizeof(HANDLE)) || 
-	memcpy_s(all_events + live_children, MAXIMUM_WAIT_OBJECTS - live_children, events, num_events * sizeof(HANDLE))) {
-		debug3("memcpy_s failed: %d.", errno);
+	if ((r = memcpy_s(all_events, MAXIMUM_WAIT_OBJECTS, children.handles, live_children * sizeof(HANDLE)) != 0) || 
+	( r = memcpy_s(all_events + live_children, MAXIMUM_WAIT_OBJECTS - live_children, events, num_events * sizeof(HANDLE)) != 0)) {
+		debug3("memcpy_s failed: %d.", r);
 		return -1;
 	}
 

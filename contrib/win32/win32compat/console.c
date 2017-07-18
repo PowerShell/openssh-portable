@@ -839,7 +839,7 @@ Con_printf(const char *Format, ...)
 	len = vsnprintf_s(temp, sizeof(temp), _TRUNCATE, Format, va_data);
 	if (len == -1) {
 		error("Error from vsnprintf_s!");
-		return;
+		return -1;
 	}
 	ConWriteConsole(temp, len);
 	va_end(va_data);
@@ -1084,6 +1084,7 @@ ConMoveVisibleWindow(int offset)
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 	SMALL_RECT visibleWindowRect;
+	errno_t r = 0;
 
 	memset(&visibleWindowRect, 0, sizeof(SMALL_RECT));
 	if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo)) {
@@ -1098,13 +1099,13 @@ ConMoveVisibleWindow(int offset)
 				error("GetConsoleScreenBufferInfo failed with %d", GetLastError());
 				return;
 			}
-			if (memcpy_s(&visibleWindowRect, sizeof(visibleWindowRect), &consoleInfo.srWindow, sizeof(visibleWindowRect))) {
-				error("memcpy_s failed: %d.", errno);
+			if ((r = memcpy_s(&visibleWindowRect, sizeof(visibleWindowRect), &consoleInfo.srWindow, sizeof(visibleWindowRect))) != 0) {
+				error("memcpy_s failed: %d.", r);
 				return;
 			}
 		} else {
-			if (memcpy_s(&visibleWindowRect, sizeof(visibleWindowRect), &consoleInfo.srWindow, sizeof(visibleWindowRect))) {
-				error("memcpy_s failed: %d.", errno);
+			if ((r = memcpy_s(&visibleWindowRect, sizeof(visibleWindowRect), &consoleInfo.srWindow, sizeof(visibleWindowRect))) != 0) {
+				error("memcpy_s failed: %d.", r);
 				return;
 			}
 			visibleWindowRect.Top += offset;

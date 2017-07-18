@@ -51,6 +51,7 @@ static char* pw_shellpath = NULL;
 int
 initialize_pw()
 {
+	errno_t r = 0;
 	char* program_dir = w32_programdir();
 	int program_dir_len = strlen(program_dir);
 	int shell_host_len = strlen(SHELL_HOST);
@@ -59,12 +60,12 @@ initialize_pw()
 			fatal("initialize_pw - out of memory");
 		else {
 			char* head = pw_shellpath;
-			if (memcpy_s(head, program_dir_len + shell_host_len + 1, w32_programdir(), program_dir_len)) {
-				fatal("memcpy_s failed: %d.", errno);
+			if ((r= memcpy_s(head, program_dir_len + shell_host_len + 1, w32_programdir(), program_dir_len)) != 0) {
+				fatal("memcpy_s failed: %d.", r);
 			}
 			head += program_dir_len;
-			if (memcpy_s(head, shell_host_len + 1, SHELL_HOST, shell_host_len)) {
-				fatal("memcpy_s failed: %d.", errno);
+			if ((r = memcpy_s(head, shell_host_len + 1, SHELL_HOST, shell_host_len)) != 0) {
+				fatal("memcpy_s failed: %d.", r);
 			}
 			head += shell_host_len;
 			*head = '\0';
@@ -110,6 +111,7 @@ get_passwd(const char *user_utf8, LPWSTR user_sid)
 	int tmp_len = PATH_MAX;
 	PDOMAIN_CONTROLLER_INFOW pdc = NULL;
 	DWORD dsStatus, uname_upn_len = 0, uname_len = 0, udom_len = 0;
+	errno_t r = 0;
 
 	errno = 0;
 	reset_pw();
@@ -189,15 +191,15 @@ get_passwd(const char *user_utf8, LPWSTR user_sid)
 		goto done;
 	}
 
-	if (memcpy_s(uname_upn, uname_upn_len, uname_utf8, uname_len + 1)) {
-		debug3("memcpy_s failed: %d.", errno);
+	if ((r = memcpy_s(uname_upn, uname_upn_len, uname_utf8, uname_len + 1)) != 0) {
+		debug3("memcpy_s failed: %d.", r);
 		goto done;
 	}
 	if (udom_utf8) {
 		/* TODO - get domain FQDN */
 		uname_upn[uname_len] = '@';
-		if (memcpy_s(uname_upn + uname_len + 1, udom_len + 1, udom_utf8, udom_len + 1)) {
-			debug3("memcpy_s failed: %d.", errno);
+		if ((r = memcpy_s(uname_upn + uname_len + 1, udom_len + 1, udom_utf8, udom_len + 1)) != 0) {
+			debug3("memcpy_s failed: %d.", r);
 			goto done;
 		}
 	}

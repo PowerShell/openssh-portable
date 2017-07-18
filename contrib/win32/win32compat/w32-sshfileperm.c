@@ -164,6 +164,7 @@ is_sshd_account(PSID user_sid) {
 	DWORD name_length = UNCLEN, domain_name_length = 0, full_name_len = UNCLEN + DNLEN + 2;
 	SID_NAME_USE sid_type = SidTypeInvalid;
 	BOOL ret = FALSE;
+	errno_t r = 0;
 
 	if (LookupAccountSidLocalW(user_sid, user_name, &name_length, full_name, &full_name_len, &sid_type) == FALSE)
 	{
@@ -173,8 +174,8 @@ is_sshd_account(PSID user_sid) {
 	}
 	domain_name_length = wcsnlen(full_name, sizeof(full_name));
 	full_name[domain_name_length] = L'\\';
-	if (wmemcpy_s(full_name + domain_name_length + 1, sizeof(full_name)- domain_name_length -1, user_name, wcsnlen_s(user_name, UNCLEN) + 1)) {
-		debug3("wmemcpy_s failed: %d.", errno);
+	if ((r = wmemcpy_s(full_name + domain_name_length + 1, sizeof(full_name)- domain_name_length -1, user_name, wcsnlen_s(user_name, UNCLEN) + 1)) != 0) {	
+		debug3("wmemcpy_s failed: %d.", r);
 		return FALSE;
 	}
 	return (wcsicmp(full_name, SSHD_ACCOUNT) == 0);

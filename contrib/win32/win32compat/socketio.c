@@ -359,6 +359,7 @@ int
 socketio_recv(struct w32_io* pio, void *buf, size_t len, int flags)
 {
 	BOOL completed = FALSE;
+	errno_t r = 0;
 	debug5("recv - io:%p state:%d", pio, pio->internal.state);
 
 	if ((buf == NULL) || (len == 0)) {
@@ -393,9 +394,9 @@ socketio_recv(struct w32_io* pio, void *buf, size_t len, int flags)
 	/* if we have some buffer copy it and return #bytes copied */
 	if (pio->read_details.remaining) {
 		int num_bytes_copied = min((int)len, pio->read_details.remaining);
-		if (memcpy_s(buf, len, pio->read_details.buf + pio->read_details.completed,
-			num_bytes_copied)) {
-			debug4("memcpy_s failed: %d.", errno);
+		if ((r = memcpy_s(buf, len, pio->read_details.buf + pio->read_details.completed,
+			num_bytes_copied)) != 0) {
+			debug4("memcpy_s failed: %d.", r);
 			return -1;
 		}
 		pio->read_details.remaining -= num_bytes_copied;
@@ -468,8 +469,8 @@ socketio_recv(struct w32_io* pio, void *buf, size_t len, int flags)
 
 	if (pio->read_details.remaining) {
 		int num_bytes_copied = min((int)len, pio->read_details.remaining);
-		if (memcpy_s(buf, len, pio->read_details.buf, num_bytes_copied)) {
-			debug3("memcpy_s failed: %d.", errno);
+		if ((r = memcpy_s(buf, len, pio->read_details.buf, num_bytes_copied)) != 0) {
+			debug3("memcpy_s failed: %d.", r);
 			return -1;
 		}
 		pio->read_details.remaining -= num_bytes_copied;
@@ -512,6 +513,7 @@ socketio_send(struct w32_io* pio, const void *buf, size_t len, int flags)
 {
 	int ret = 0;
 	WSABUF wsabuf;
+	errno_t r = 0;
 		
 	debug5("send - io:%p state:%d", pio, pio->internal.state);
 
@@ -564,8 +566,8 @@ socketio_send(struct w32_io* pio, const void *buf, size_t len, int flags)
 		wsabuf.buf = pio->write_details.buf;
 
 	wsabuf.len = min(wsabuf.len, (int)len);
-	if (memcpy_s(wsabuf.buf, wsabuf.len, buf, wsabuf.len)) {
-		debug3("memcpy_s failed: %d.", errno);
+	if ((r = memcpy_s(wsabuf.buf, wsabuf.len, buf, wsabuf.len)) != 0) {
+		debug3("memcpy_s failed: %d.", r);
 		return -1;
 	}
 
@@ -668,6 +670,7 @@ socketio_accept(struct w32_io* pio, struct sockaddr* addr, int* addrlen)
 	struct acceptEx_context* context;
 	struct sockaddr *local_address, *remote_address;
 	int local_address_len, remote_address_len;
+	errno_t r = 0;
 
 	debug5("accept - io:%p", pio);
 	/* start io if not already started */
@@ -727,8 +730,8 @@ socketio_accept(struct w32_io* pio, struct sockaddr* addr, int* addrlen)
 			sizeof(SOCKADDR_STORAGE) + 16, &local_address,
 			&local_address_len, &remote_address, &remote_address_len);
 		if (remote_address_len) {
-			if(memcpy_s(addr, remote_address_len, remote_address, remote_address_len)) {
-				debug3("memcpy_s failed: %d.", errno);
+			if((r = memcpy_s(addr, remote_address_len, remote_address, remote_address_len)) != 0) {
+				debug3("memcpy_s failed: %d.", r);
 				goto on_error;
 			}
 			*addrlen = remote_address_len;

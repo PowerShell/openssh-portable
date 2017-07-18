@@ -532,6 +532,7 @@ int
 fileio_read(struct w32_io* pio, void *dst, size_t max_bytes)
 {
 	int bytes_copied;
+	errno_t r = 0;
 
 	debug5("read - io:%p remaining:%d", pio, pio->read_details.remaining);
 
@@ -605,8 +606,8 @@ fileio_read(struct w32_io* pio, void *dst, size_t max_bytes)
 	}
 
 	bytes_copied = min((DWORD)max_bytes, pio->read_details.remaining);
-	if (memcpy_s(dst, max_bytes, pio->read_details.buf + pio->read_details.completed, bytes_copied)) {
-		debug3("memcpy_s failed: %d.", errno);
+	if ((r = memcpy_s(dst, max_bytes, pio->read_details.buf + pio->read_details.completed, bytes_copied)) != 0) {
+		debug3("memcpy_s failed: %d.", r);
 		return -1;
 	}
 	pio->read_details.remaining -= bytes_copied;
@@ -644,6 +645,7 @@ fileio_write(struct w32_io* pio, const void *buf, size_t max_bytes)
 {
 	int bytes_copied;
 	DWORD pipe_flags = 0, pipe_instances = 0;
+	errno_t r = 0;
 
 	debug4("write - io:%p", pio);
 	if (pio->write_details.pending) {
@@ -681,8 +683,8 @@ fileio_write(struct w32_io* pio, const void *buf, size_t max_bytes)
 	}
 
 	bytes_copied = min((int)max_bytes, pio->write_details.buf_size);
-	if(memcpy_s(pio->write_details.buf, max_bytes, buf, bytes_copied)) {
-		debug3("memcpy_s failed: %d.", errno);
+	if((r = memcpy_s(pio->write_details.buf, max_bytes, buf, bytes_copied)) != 0) {
+		debug3("memcpy_s failed: %d.", r);
 		return -1;
 	}
 

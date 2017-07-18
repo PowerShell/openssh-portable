@@ -143,6 +143,7 @@ process_request(struct agent_connection* con)
 	int r = -1;
 	struct sshbuf *request = NULL, *response = NULL;
 	u_char type;
+	errno_t err = 0;
 
 	request = sshbuf_from(con->io_buf.buf, con->io_buf.num_bytes);
 	response = sshbuf_new();
@@ -185,8 +186,8 @@ done:
 	ZeroMemory(&con->io_buf, sizeof(con->io_buf));
 	if (r == 0) {
 		POKE_U32(con->io_buf.buf, (u_int32_t)sshbuf_len(response));
-		if (memcpy_s(con->io_buf.buf + 4, sizeof(con->io_buf.buf) - 4, sshbuf_ptr(response), sshbuf_len(response))) {
-			debug("memcpy_s failed: %d.", errno);
+		if ((err = memcpy_s(con->io_buf.buf + 4, sizeof(con->io_buf.buf) - 4, sshbuf_ptr(response), sshbuf_len(response))) != 0) {
+			debug("memcpy_s failed: %d.", err);
 			r = -1;
 		}
 		con->io_buf.num_bytes = (DWORD)sshbuf_len(response) + 4;

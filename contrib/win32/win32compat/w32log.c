@@ -39,7 +39,7 @@
 #define MSGBUFSIZ 1024
 static int logfd = -1;
 
-/* 
+/*
  * open a log file using the name of executable under logs folder
  * Ex. if called from c:\windows\system32\openssh\sshd.exe
  * logfile - c:\windows\system32\openssh\logs\sshd.log
@@ -52,12 +52,13 @@ openlog(char *ident, unsigned int option, int facility)
 		return;
 
 	wchar_t path[PATH_MAX] = { 0 }, log_file[PATH_MAX + 12] = { 0 };
+	errno_t r = 0;
 	if (GetModuleFileNameW(NULL, path, PATH_MAX) == 0)
 		return;
 
-	path[PATH_MAX - 1] = L'\0';	
+	path[PATH_MAX - 1] = L'\0';
 
-	if (wcsnlen(path, MAX_PATH) > MAX_PATH - wcslen(logs_dir) )
+	if (wcsnlen(path, MAX_PATH) > MAX_PATH - wcslen(logs_dir))
 		return;
 
 	/* split path root and module */
@@ -66,11 +67,16 @@ openlog(char *ident, unsigned int option, int facility)
 		while (tail > path && *tail != L'\\' && *tail != L'/')
 			tail--;
 
-		wcsncat_s(log_file, PATH_MAX + 12, path, tail - path);
-		wcsncat_s(log_file, PATH_MAX + 12, logs_dir, 6);
-		wcsncat_s(log_file, PATH_MAX + 12, tail + 1, wcslen(tail + 1) - 3);
-		wcsncat_s(log_file, PATH_MAX + 12, L"log", 3);
+		if (((r = wcsncat_s(log_file, PATH_MAX + 12, path, tail - path)) != 0 ) ||
+			(r = wcsncat_s(log_file, PATH_MAX + 12, logs_dir, 6) != 0 )||
+			(r = wcsncat_s(log_file, PATH_MAX + 12, tail + 1, wcslen(tail + 1) - 3) != 0 ) ||
+			(r = wcsncat_s(log_file, PATH_MAX + 12, L"log", 3) != 0 )) {
+			debug3("wcsncat_s failed: %d.", r);
+			return;
+		}
+
 	}
+	
 	
 	errno_t err = _wsopen_s(&logfd, log_file, O_WRONLY | O_CREAT | O_APPEND, SH_DENYNO, S_IREAD | S_IWRITE);
 		
