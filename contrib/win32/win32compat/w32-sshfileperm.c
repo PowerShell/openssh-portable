@@ -172,9 +172,9 @@ is_sshd_account(PSID user_sid) {
 		errno = ENOENT;
 		return FALSE;
 	}	
-	domain_name_length = wcsnlen(full_name, full_name_len);
+	domain_name_length = wcsnlen(full_name, UNCLEN + DNLEN + 2);
 	full_name[domain_name_length] = L'\\';
-	if ((r = wmemcpy_s(full_name + domain_name_length + 1, full_name_len - domain_name_length -1, user_name, wcsnlen_s(user_name, UNCLEN) + 1)) != 0) {
+	if ((r = wmemcpy_s(full_name + domain_name_length + 1, UNCLEN + DNLEN + 2 - domain_name_length -1, user_name, wcsnlen_s(user_name, UNCLEN) + 1)) != 0) {
 		debug3("wmemcpy_s failed with error: %d.", r);
 		return FALSE;
 	}
