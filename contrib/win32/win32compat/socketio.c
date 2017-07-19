@@ -389,7 +389,7 @@ socketio_recv(struct w32_io* pio, void *buf, size_t len, int flags)
 			debug4("recv - io is already pending, io:%p", pio);
 			return -1;
 		}
-	}
+	}	
 
 	/* if we have some buffer copy it and return #bytes copied */
 	if (pio->read_details.remaining) {
