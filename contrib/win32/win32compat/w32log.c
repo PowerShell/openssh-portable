@@ -71,7 +71,7 @@ openlog(char *ident, unsigned int option, int facility)
 			(r = wcsncat_s(log_file, PATH_MAX + 12, logs_dir, 6) != 0 )||
 			(r = wcsncat_s(log_file, PATH_MAX + 12, tail + 1, wcslen(tail + 1) - 3) != 0 ) ||
 			(r = wcsncat_s(log_file, PATH_MAX + 12, L"log", 3) != 0 )) {
-			debug3("wcsncat_s failed: %d.", r);
+			debug3("wcscat_s failed with error: %d.", r);
 			return;
 		}
 

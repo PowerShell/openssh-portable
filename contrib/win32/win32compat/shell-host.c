@@ -1028,12 +1028,12 @@ w32_cmd_path()
 {
 	errno_t r = 0;
 	if ((r = wcsncpy_s(cmd_exe_path, _countof(cmd_exe_path), system32_path, wcsnlen(system32_path, _countof(system32_path)) + 1)) != 0) {
-		printf_s("wcsncpy_s failed: %d.", r);
+		printf_s("wcsncpy_s failed with error: %d.", r);
 		exit(255);
 	}
 
 	if ((r = wcscat_s(cmd_exe_path, _countof(cmd_exe_path), L"\\cmd.exe")) != 0) {
-		printf_s("wcscat_s failed: %d.", r);
+		printf_s("wcscat_s failed with error: %d.", r);
 		exit(255);
 	}
 	return cmd_exe_path;

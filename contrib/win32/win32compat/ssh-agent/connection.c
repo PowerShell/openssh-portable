@@ -187,7 +187,7 @@ done:
 	if (r == 0) {
 		POKE_U32(con->io_buf.buf, (u_int32_t)sshbuf_len(response));
 		if ((err = memcpy_s(con->io_buf.buf + 4, sizeof(con->io_buf.buf) - 4, sshbuf_ptr(response), sshbuf_len(response))) != 0) {
-			debug("memcpy_s failed: %d.", err);
+			debug("memcpy_s failed with error: %d.", err);
 			r = -1;
 		}
 		con->io_buf.num_bytes = (DWORD)sshbuf_len(response) + 4;

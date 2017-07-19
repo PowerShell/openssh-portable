@@ -61,11 +61,11 @@ initialize_pw()
 		else {
 			char* head = pw_shellpath;
 			if ((r= memcpy_s(head, program_dir_len + shell_host_len + 1, w32_programdir(), program_dir_len)) != 0) {
-				fatal("memcpy_s failed: %d.", r);
+				fatal("memcpy_s failed with error: %d.", r);
 			}
 			head += program_dir_len;
 			if ((r = memcpy_s(head, shell_host_len + 1, SHELL_HOST, shell_host_len)) != 0) {
-				fatal("memcpy_s failed: %d.", r);
+				fatal("memcpy_s failed with error: %d.", r);
 			}
 			head += shell_host_len;
 			*head = '\0';
@@ -192,14 +192,14 @@ get_passwd(const char *user_utf8, LPWSTR user_sid)
 	}
 
 	if ((r = memcpy_s(uname_upn, uname_upn_len, uname_utf8, uname_len + 1)) != 0) {
-		debug3("memcpy_s failed: %d.", r);
+		debug3("memcpy_s failed with error: %d.", r);
 		goto done;
 	}
 	if (udom_utf8) {
 		/* TODO - get domain FQDN */
 		uname_upn[uname_len] = '@';
 		if ((r = memcpy_s(uname_upn + uname_len + 1, udom_len + 1, udom_utf8, udom_len + 1)) != 0) {
-			debug3("memcpy_s failed: %d.", r);
+			debug3("memcpy_s failed with error: %d.", r);
 			goto done;
 		}
 	}

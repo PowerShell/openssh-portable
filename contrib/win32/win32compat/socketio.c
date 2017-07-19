@@ -396,7 +396,7 @@ socketio_recv(struct w32_io* pio, void *buf, size_t len, int flags)
 		int num_bytes_copied = min((int)len, pio->read_details.remaining);
 		if ((r = memcpy_s(buf, len, pio->read_details.buf + pio->read_details.completed,
 			num_bytes_copied)) != 0) {
-			debug4("memcpy_s failed: %d.", r);
+			debug4("memcpy_s failed with error: %d.", r);
 			return -1;
 		}
 		pio->read_details.remaining -= num_bytes_copied;
@@ -470,7 +470,7 @@ socketio_recv(struct w32_io* pio, void *buf, size_t len, int flags)
 	if (pio->read_details.remaining) {
 		int num_bytes_copied = min((int)len, pio->read_details.remaining);
 		if ((r = memcpy_s(buf, len, pio->read_details.buf, num_bytes_copied)) != 0) {
-			debug3("memcpy_s failed: %d.", r);
+			debug3("memcpy_s failed with error: %d.", r);
 			return -1;
 		}
 		pio->read_details.remaining -= num_bytes_copied;
@@ -567,7 +567,7 @@ socketio_send(struct w32_io* pio, const void *buf, size_t len, int flags)
 
 	wsabuf.len = min(wsabuf.len, (int)len);
 	if ((r = memcpy_s(wsabuf.buf, wsabuf.len, buf, wsabuf.len)) != 0) {
-		debug3("memcpy_s failed: %d.", r);
+		debug3("memcpy_s failed with error: %d.", r);
 		return -1;
 	}
 
@@ -731,7 +731,7 @@ socketio_accept(struct w32_io* pio, struct sockaddr* addr, int* addrlen)
 			&local_address_len, &remote_address, &remote_address_len);
 		if (remote_address_len) {
 			if((r = memcpy_s(addr, remote_address_len, remote_address, remote_address_len)) != 0) {
-				debug3("memcpy_s failed: %d.", r);
+				debug3("memcpy_s failed with error: %d.", r);
 				goto on_error;
 			}
 			*addrlen = remote_address_len;

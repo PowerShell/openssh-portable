@@ -100,7 +100,7 @@ convert_blob(struct agent_connection* con, const char *blob, DWORD blen, char **
 		goto done;
 
 	if((r = memcpy_s(*eblob, out.cbData, out.pbData, out.cbData)) != 0) {
-		debug("memcpy_s failed: %d.", r);
+		debug("memcpy_s failed with error: %d.", r);
 		goto done;
 	}
 	*eblen = out.cbData;

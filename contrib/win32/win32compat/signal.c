@@ -266,7 +266,7 @@ wait_for_any_event(HANDLE* events, int num_events, DWORD milli_seconds)
 
 	if ((r = memcpy_s(all_events, MAXIMUM_WAIT_OBJECTS, children.handles, live_children * sizeof(HANDLE)) != 0) || 
 	( r = memcpy_s(all_events + live_children, MAXIMUM_WAIT_OBJECTS - live_children, events, num_events * sizeof(HANDLE)) != 0)) {
-		debug3("memcpy_s failed: %d.", r);
+		debug3("memcpy_s failed with error: %d.", r);
 		return -1;
 	}
 

@@ -260,7 +260,7 @@ w32_fopen_utf8(const char *path, const char *mode)
 	/* if opening null device, point to Windows equivalent */
 	if (0 == strncmp(path, NULL_DEVICE, strlen(NULL_DEVICE)+1)) {
 		if ((r = wcsncpy_s(wpath, PATH_MAX, L"NUL", 3)) != 0) {
-			debug3("wcsncpy_s failed: %d.", r);
+			debug3("wcsncpy_s failed with error: %d.", r);
 			return NULL;
 		}
 	}
@@ -345,7 +345,7 @@ char*
 			if((actual_read + strlen(str_tmp)) >= n)
 				break;
 			if ((r = memcpy_s(cp, n - actual_read, str_tmp, strlen(str_tmp))) != 0) {
-				debug3("memcpy_s failed: %d.", r);
+				debug3("memcpy_s failed with error: %d.", r);
 				goto cleanup;
 			}
 			actual_read += (int)strlen(str_tmp);
@@ -874,12 +874,12 @@ realpath(const char *path, char resolved[PATH_MAX])
 
 	if ((path_len >= 2) && (path[0] == '/') && path[1] && (path[2] == ':')) {
 		if((r = strncpy_s(resolved, PATH_MAX, path + 1, path_len)) != 0 ) /* skip the first '/' */ {
-			debug3("memcpy_s failed: %d.", r);
+			debug3("memcpy_s failed with error: %d.", r);
 			return NULL;
 		}
 	}
 	else if(( r = strncpy_s(resolved, PATH_MAX, path, path_len + 1)) != 0) {
-		debug3("memcpy_s failed: %d.", r);
+		debug3("memcpy_s failed with error: %d.", r);
 		return NULL;
 	}
 
@@ -895,7 +895,7 @@ realpath(const char *path, char resolved[PATH_MAX])
 
 	resolved[0] = '/'; /* will be our first slash in /x:/users/test1 format */
 	if ((r = strncpy_s(resolved+1, PATH_MAX - 1, tempPath, sizeof(tempPath) - 1)) != 0) {
-		debug3("memcpy_s failed: %d.", r);
+		debug3("memcpy_s failed with error: %d.", r);
 		return NULL;
 	}
 	return resolved;
@@ -913,7 +913,7 @@ sanitized_path(const char *path)
 		if (path[2] == ':') {
 			if (path[3] == '\0') { /* make "/x:" as "x:\\" */
 				if((r = strncpy_s(newPath, sizeof(PATH_MAX), path + 1, strlen(path) - 1)) != 0 ) {
-					debug3("memcpy_s failed: %d.", r);
+					debug3("memcpy_s failed with error: %d.", r);
 					return NULL;
 				}
 				newPath[2] = '\\';

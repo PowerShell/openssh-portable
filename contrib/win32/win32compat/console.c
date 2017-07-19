@@ -1088,17 +1088,17 @@ ConMoveVisibleWindow(int offset)
 			for (int i = 0; i < offset; i++)
 				ConScrollDown(0, consoleInfo.dwSize.Y - 1);
 
-			if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo) == FALSE) {			
+			if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo) == FALSE) {
 				error("GetConsoleScreenBufferInfo failed with %d", GetLastError());
 				return;
 			}
 			if ((r = memcpy_s(&visibleWindowRect, sizeof(visibleWindowRect), &consoleInfo.srWindow, sizeof(visibleWindowRect))) != 0) {
-				error("memcpy_s failed: %d.", r);
+				error("memcpy_s failed with error: %d.", r);
 				return;
 			}
 		} else {
 			if ((r = memcpy_s(&visibleWindowRect, sizeof(visibleWindowRect), &consoleInfo.srWindow, sizeof(visibleWindowRect))) != 0) {
-				error("memcpy_s failed: %d.", r);
+				error("memcpy_s failed with error: %d.", r);
 				return;
 			}
 			visibleWindowRect.Top += offset;

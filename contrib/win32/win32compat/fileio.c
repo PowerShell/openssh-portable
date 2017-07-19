@@ -607,7 +607,7 @@ fileio_read(struct w32_io* pio, void *dst, size_t max_bytes)
 
 	bytes_copied = min((DWORD)max_bytes, pio->read_details.remaining);
 	if ((r = memcpy_s(dst, max_bytes, pio->read_details.buf + pio->read_details.completed, bytes_copied)) != 0) {
-		debug3("memcpy_s failed: %d.", r);
+		debug3("memcpy_s failed with error: %d.", r);
 		return -1;
 	}
 	pio->read_details.remaining -= bytes_copied;
@@ -684,7 +684,7 @@ fileio_write(struct w32_io* pio, const void *buf, size_t max_bytes)
 
 	bytes_copied = min((int)max_bytes, pio->write_details.buf_size);
 	if((r = memcpy_s(pio->write_details.buf, max_bytes, buf, bytes_copied)) != 0) {
-		debug3("memcpy_s failed: %d.", r);
+		debug3("memcpy_s failed with error: %d.", r);
 		return -1;
 	}
 

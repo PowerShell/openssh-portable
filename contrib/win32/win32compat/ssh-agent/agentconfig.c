@@ -128,11 +128,11 @@ load_config() {
 		fatal("unexpected config file path length");
 
 	if(( r = wcsncpy_s(path, PATH_MAX, basePath, wcsnlen_s(basePath, PATH_MAX))) != 0) {
-		debug3("memcpy_s failed: %d.", r);
+		debug3("memcpy_s failed with error: %d.", r);
 		return -1;
 	}
 	if (( r = wcsncat_s(path, PATH_MAX, L"/sshd_config", PATH_MAX - wcsnlen_s(basePath, PATH_MAX))) != 0) {
-		debug3("wcsncat_s failed: %d.", r);
+		debug3("wcscat_s failed with error: %d.", r);
 		return -1;
 	}
 	
