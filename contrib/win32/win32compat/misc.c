@@ -1049,5 +1049,5 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags)
 void invalid_parameter_handler(const wchar_t* expression, const wchar_t* function, const wchar_t* file, unsigned int line, uintptr_t pReserved)
 {	
 	debug3("Invalid parameter in function: %ls. File: %ls Line: %d.", function, file, line);
-	debug3("Expression: %s\n", expression);
+	debug3("Expression: %s", expression);
 }

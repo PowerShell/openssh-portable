@@ -214,7 +214,7 @@ void
 my_invalid_parameter_handler(const wchar_t* expression, const wchar_t* function,
 	 const wchar_t* file, unsigned int line, uintptr_t pReserved)
 {
-	wprintf_s(L"Invalid parameter in function: %s. File: %s Line: %d.", function, file, line);
+	wprintf_s(L"Invalid parameter in function: %s. File: %s Line: %d\n", function, file, line);
 	wprintf_s(L"Expression: %s\n", expression);
 }
 
