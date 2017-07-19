@@ -70,11 +70,8 @@ openlog(char *ident, unsigned int option, int facility)
 		if (((r = wcsncat_s(log_file, PATH_MAX + 12, path, tail - path)) != 0 ) ||
 			(r = wcsncat_s(log_file, PATH_MAX + 12, logs_dir, 6) != 0 )||
 			(r = wcsncat_s(log_file, PATH_MAX + 12, tail + 1, wcslen(tail + 1) - 3) != 0 ) ||
-			(r = wcsncat_s(log_file, PATH_MAX + 12, L"log", 3) != 0 )) {
-			debug3("wcscat_s failed with error: %d.", r);
+			(r = wcsncat_s(log_file, PATH_MAX + 12, L"log", 3) != 0 ))
 			return;
-		}
-
 	}
 	
 	
@@ -105,7 +102,7 @@ syslog(int priority, const char *format, const char *formatBuffer)
 		GetCurrentProcessId(), st.wHour, st.wMinute, st.wSecond,
 		st.wMilliseconds, formatBuffer);
 	if (r == -1) {
-		debug3("_snprintf_s failed.");
+		_write(logfd, "_snprintf_s failed.", 30);
 		return;
 	}
 	msgbufTimestamp[strnlen(msgbufTimestamp, MSGBUFSIZ)] = '\0';

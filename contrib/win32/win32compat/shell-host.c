@@ -210,6 +210,14 @@ ConSRWidth()
 	return consoleBufferInfo.srWindow.Right;
 }
 
+void
+my_invalid_parameter_handler(const wchar_t* expression, const wchar_t* function,
+	 const wchar_t* file, unsigned int line, uintptr_t pReserved)
+{
+	wprintf_s(L"Invalid parameter in function: %s. File: %s Line: %d.", function, file, line);
+	wprintf_s(L"Expression: %s\n", expression);
+}
+
 struct key_translation *
 FindKeyTransByMask(wchar_t prefix, const wchar_t * value, int vlen, wchar_t suffix)
 {
@@ -1497,6 +1505,7 @@ wmain(int ac, wchar_t **av)
 	int pty_requested = 0;
 	wchar_t *cmd = NULL, *cmd_b64 = NULL;
 
+	_set_invalid_parameter_handler(my_invalid_parameter_handler);
 	if ((ac == 1) || (ac == 2 && wcscmp(av[1], L"-nopty"))) {
 		pty_requested = 1;
 		cmd_b64 = ac == 2? av[1] : NULL;

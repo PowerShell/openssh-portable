@@ -53,8 +53,8 @@ initialize_pw()
 {
 	errno_t r = 0;
 	char* program_dir = w32_programdir();
-	int program_dir_len = strlen(program_dir);
-	int shell_host_len = strlen(SHELL_HOST);
+	size_t program_dir_len = strlen(program_dir);
+	size_t shell_host_len = strlen(SHELL_HOST);
 	if (pw_shellpath == NULL) {
 		if ((pw_shellpath = malloc(program_dir_len + shell_host_len + 1)) == NULL)
 			fatal("initialize_pw - out of memory");
