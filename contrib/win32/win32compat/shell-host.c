@@ -415,11 +415,11 @@ void
 SendSetCursor(HANDLE hInput, int X, int Y)
 {
 	DWORD wr = 0;
-	DWORD out = 0;
+	int out = 0;
 	char formatted_output[255];
 
 	out = _snprintf_s(formatted_output, sizeof(formatted_output), _TRUNCATE, "\033[%d;%dH", Y, X);
-	if (bUseAnsiEmulation)
+	if (out > 0 && bUseAnsiEmulation)
 		WriteFile(hInput, formatted_output, out, &wr, NULL);
 }
 
@@ -427,7 +427,7 @@ void
 SendVerticalScroll(HANDLE hInput, int lines)
 {
 	DWORD wr = 0;
-	DWORD out = 0;
+	int out = 0;
 	char formatted_output[255];
 
 	LONG vn = abs(lines);
@@ -435,7 +435,7 @@ SendVerticalScroll(HANDLE hInput, int lines)
 	if (lines > 0) {
 		out = _snprintf_s(formatted_output, sizeof(formatted_output), _TRUNCATE, "\033[%dT", vn);
 
-		if (bUseAnsiEmulation)
+		if (out > 0 && bUseAnsiEmulation)
 			WriteFile(hInput, formatted_output, out, &wr, NULL);
 	}	
 }
@@ -444,12 +444,12 @@ void
 SendHorizontalScroll(HANDLE hInput, int cells)
 {
 	DWORD wr = 0;
-	DWORD out = 0;
+	int out = 0;
 	char formatted_output[255];
 
 	out = _snprintf_s(formatted_output, sizeof(formatted_output), _TRUNCATE, "\033[%dG", cells);
 
-	if (bUseAnsiEmulation)
+	if (out > 0 && bUseAnsiEmulation)
 		WriteFile(hInput, formatted_output, out, &wr, NULL);
 }
 
