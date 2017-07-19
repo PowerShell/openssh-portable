@@ -56,7 +56,7 @@ check_secure_file_permission(const char *name, struct passwd * pw)
 	BOOL is_valid_sid = FALSE, is_valid_acl = FALSE;
 	struct passwd * pwd = pw;
 	char *bad_user = NULL;
-	int ret = 0;	
+	int ret = 0;
 
 	if (pwd == NULL)
 		if ((pwd = getpwuid(0)) == NULL) 
@@ -165,7 +165,7 @@ is_sshd_account(PSID user_sid) {
 	SID_NAME_USE sid_type = SidTypeInvalid;
 	BOOL ret = FALSE;
 	errno_t r = 0;
-
+	debug3("is_sshd_account");
 	if (LookupAccountSidLocalW(user_sid, user_name, &name_length, full_name, &full_name_len, &sid_type) == FALSE)
 	{
 		debug3("LookupAccountSidLocalW() failed with error: %d. ", GetLastError());
@@ -174,7 +174,7 @@ is_sshd_account(PSID user_sid) {
 	}
 	domain_name_length = wcsnlen(full_name, sizeof(full_name));
 	full_name[domain_name_length] = L'\\';
-	if ((r = wmemcpy_s(full_name + domain_name_length + 1, sizeof(full_name)- domain_name_length -1, user_name, wcsnlen_s(user_name, UNCLEN) + 1)) != 0) {	
+	if ((r = wmemcpy_s(full_name + domain_name_length + 1, sizeof(full_name)- domain_name_length -1, user_name, wcsnlen_s(user_name, UNCLEN) + 1)) != 0) {
 		debug3("wmemcpy_s failed: %d.", r);
 		return FALSE;
 	}

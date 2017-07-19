@@ -268,7 +268,7 @@ void
 initialize_keylen()
 {
 	for(int i = 0; i < ARRAYSIZE(keys); i++)
-		keys[i].in_key_len = (int) wcslen(keys[i].in);
+		keys[i].in_key_len = (int) wcsnlen(keys[i].in, _countof(keys[i].in));
 }
 
 int
@@ -1027,12 +1027,12 @@ wchar_t *
 w32_cmd_path()
 {
 	errno_t r = 0;
-	if ((r = wcsncpy_s(cmd_exe_path, (sizeof(cmd_exe_path) / sizeof(wchar_t)), system32_path, wcslen(system32_path) + 1)) != 0) {
+	if ((r = wcsncpy_s(cmd_exe_path, _countof(cmd_exe_path), system32_path, wcsnlen(system32_path, _countof(system32_path)) + 1)) != 0) {
 		printf_s("wcsncpy_s failed: %d.", r);
 		exit(255);
 	}
 
-	if ((r = wcscat_s(cmd_exe_path, (sizeof(cmd_exe_path) / sizeof(wchar_t)), L"\\cmd.exe")) != 0) {
+	if ((r = wcscat_s(cmd_exe_path, _countof(cmd_exe_path), L"\\cmd.exe")) != 0) {
 		printf_s("wcscat_s failed: %d.", r);
 		exit(255);
 	}
@@ -1057,11 +1057,11 @@ start_with_pty(wchar_t *command)
 		exit(255);
 	}
 
-	wcsncpy_s(kernel32_dll_path, (sizeof(kernel32_dll_path)/sizeof(wchar_t)), system32_path, wcslen(system32_path)+1);
-	wcscat_s(kernel32_dll_path, (sizeof(kernel32_dll_path)/sizeof(wchar_t)), L"\\kernel32.dll");
+	GOTO_CLEANUP_ON_ERR(wcsncpy_s(kernel32_dll_path, _countof(kernel32_dll_path), system32_path, wcsnlen(system32_path, _countof(system32_path)) + 1));
+	GOTO_CLEANUP_ON_ERR(wcscat_s(kernel32_dll_path, _countof(kernel32_dll_path), L"\\kernel32.dll"));
 
-	wcsncpy_s(user32_dll_path, (sizeof(user32_dll_path)/sizeof(wchar_t)), system32_path, wcslen(system32_path)+1);
-	wcscat_s(user32_dll_path, (sizeof(user32_dll_path)/sizeof(wchar_t)), L"\\user32.dll");
+	GOTO_CLEANUP_ON_ERR(wcsncpy_s(user32_dll_path, _countof(user32_dll_path), system32_path, wcsnlen(system32_path, _countof(system32_path)) + 1));
+	GOTO_CLEANUP_ON_ERR(wcscat_s(user32_dll_path, _countof(user32_dll_path), L"\\user32.dll"));
 
 	if ((hm_kernel32 = LoadLibraryW(kernel32_dll_path)) == NULL ||
 	    (hm_user32 = LoadLibraryW(user32_dll_path)) == NULL ||
@@ -1530,9 +1530,9 @@ wmain(int ac, wchar_t **av)
 		free(cmd_utf8);
 	}
 
-	ZeroMemory(system32_path, sizeof(system32_path) / sizeof(wchar_t));
-	if (!GetSystemDirectory(system32_path, sizeof(system32_path)/sizeof(wchar_t))) {
-		printf("GetSystemDirectory failed");
+	ZeroMemory(system32_path, _countof(system32_path));
+	if (!GetSystemDirectory(system32_path, _countof(system32_path))) {
+		printf_s("GetSystemDirectory failed");
 		exit(255);
 	}
 
