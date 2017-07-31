@@ -315,7 +315,7 @@ function Install-OpenSSHUtilsModule
     $modulePath = Join-Path -Path $env:ProgramFiles -ChildPath WindowsPowerShell\Modules
     if(-not (Test-Path "$targetDirectory" -PathType Container))
     {
-        New-Item -ItemType Directory -Path "$targetDirectory" -Force # -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Path "$targetDirectory" -Force -ErrorAction SilentlyContinue | out-null
     }
     Copy-item "$manifestFile" -Destination "$targetDirectory" -Force -ErrorAction SilentlyContinue | out-null
     Copy-item "$moduleFile" -Destination "$targetDirectory" -Force -ErrorAction SilentlyContinue | out-null
