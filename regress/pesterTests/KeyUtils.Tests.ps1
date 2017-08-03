@@ -27,7 +27,6 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
         {
             $keytypes = @("rsa","dsa","ecdsa","ed25519")            
         }
-        $keytypes = @("ed25519") #@("rsa","dsa","ecdsa","ed25519")
         
         $ssouser = $OpenSSHTestInfo["SSOUser"]
         
