@@ -243,17 +243,20 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     #Enable AppVerifier
     if($EnableAppVerifier)
-    {
+    {        
+        # clear all applications in application verifier first
+        &  $env:windir\System32\appverif.exe -disable * -for *
+        Get-ChildItem "$($script:OpenSSHBinPath)\*.exe" | % {
+            & $env:windir\System32\appverif.exe -verify $_.Name  | out-null            
+        }
+
         <#$folderName = "x86"    
         if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
         {
             $folderName = "x64"
         }#>
-        &  $env:windir\System32\appverif.exe -disable * -for *
-        Get-ChildItem "$($script:OpenSSHBinPath)\*.exe" -Exclude sftp.exe | % {
-            & $env:windir\System32\appverif.exe -verify $_.Name  | out-null            
-            #reg add "HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug" /v "Debugger" /t REG_SZ /d "`"${env:ProgramFiles(x86)}\Windows Kits\8.1\Debuggers\$folderName\Debuggers\windbg.exe`"  -p %ld -e %ld -g" /f
-        }
+        # enable Postmortem debugger            
+        #reg add "HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug" /v "Debugger" /t REG_SZ /d "`"${env:ProgramFiles(x86)}\Windows Kits\8.1\Debuggers\$folderName\Debuggers\windbg.exe`"  -p %ld -e %ld -g" /f
     }
 
     Backup-OpenSSHTestInfo
@@ -423,6 +426,7 @@ function Clear-OpenSSHTestEnvironment
 
     if($Global:OpenSSHTestInfo["EnableAppVerifier"] -and (Test-path $env:windir\System32\appverif.exe))
     {
+        # clear all applications in application verifier
         &  $env:windir\System32\appverif.exe -disable * -for *
     }
     
