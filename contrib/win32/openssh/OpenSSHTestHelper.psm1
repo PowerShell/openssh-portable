@@ -20,6 +20,7 @@ $Script:UnitTestResultsFile = Join-Path $TestDataPath $UnitTestResultsFileName
 $Script:TestSetupLogFile = Join-Path $TestDataPath $TestSetupLogFileName
 $Script:E2ETestDirectory = Join-Path $repositoryRoot.FullName -ChildPath "regress\pesterTests"
 $Script:WindowsInBox = $false
+$Script:EnableAppVerifier = $true
 
 <#
     .Synopsis
@@ -32,8 +33,9 @@ function Set-OpenSSHTestEnvironment
     param
     (   
         [string] $OpenSSHBinPath,
-        [string] $TestDataPath = "$env:SystemDrive\OpenSSHTests",
-        [Boolean] $DebugMode = $false
+        [string] $TestDataPath = "$env:SystemDrive\OpenSSHTests",        
+        [Boolean] $DebugMode = $false,
+        [Switch] $NoAppVerifier
     )
     
     if($PSBoundParameters.ContainsKey("Verbose"))
@@ -51,7 +53,7 @@ function Set-OpenSSHTestEnvironment
     $Script:UnitTestResultsFile = Join-Path $TestDataPath "UnitTestResults.txt"
     $Script:TestSetupLogFile = Join-Path $TestDataPath "TestSetupLog.txt"
     $Script:UnitTestDirectory = Get-UnitTestDirectory
-    
+    $Script:EnableAppVerifier = -not ($NoAppVerifier.IsPresent)
 
     $Global:OpenSSHTestInfo = @{        
         "Target"= "localhost";                                 # test listener name
@@ -67,6 +69,7 @@ function Set-OpenSSHTestEnvironment
         "E2ETestDirectory" = $Script:E2ETestDirectory          # the directory of E2E tests
         "UnitTestDirectory" = $Script:UnitTestDirectory        # the directory of unit tests
         "DebugMode" = $DebugMode                               # run openssh E2E in debug mode
+        "EnableAppVerifier" = $Script:EnableAppVerifier
         }
         
     #if user does not set path, pick it up
@@ -237,6 +240,22 @@ WARNING: Following changes will be made to OpenSSH configuration
     cmd /c "ssh-add -D 2>&1 >> $Script:TestSetupLogFile"
     Repair-UserKeyPermission -FilePath $testPriKeypath -confirm:$false
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
+
+    #Enable AppVerifier
+    if($EnableAppVerifier)
+    {
+        <#$folderName = "x86"    
+        if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
+        {
+            $folderName = "x64"
+        }#>
+        &  $env:windir\System32\appverif.exe -disable * -for *
+        Get-ChildItem "$($script:OpenSSHBinPath)\*.exe" -Exclude sftp.exe | % {
+            & $env:windir\System32\appverif.exe -verify $_.Name  | out-null            
+            #reg add "HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug" /v "Debugger" /t REG_SZ /d "`"${env:ProgramFiles(x86)}\Windows Kits\8.1\Debuggers\$folderName\Debuggers\windbg.exe`"  -p %ld -e %ld -g" /f
+        }
+    }
+
     Backup-OpenSSHTestInfo
 }
 #TODO - this is Windows specific. Need to be in PAL
@@ -293,6 +312,11 @@ function Install-OpenSSHTestDependencies
     {      
         Write-Log -Message "Installing Pester..." 
         choco install Pester -y --force --limitoutput 2>&1 >> $Script:TestSetupLogFile
+    }
+
+    if(($Script:EnableAppVerifier -or (($OpenSSHTestInfo -ne $null) -and ($OpenSSHTestInfo["EnableAppVerifier"]))) -and (-not (Test-path $env:windir\System32\appverif.exe)))
+    {
+        choco install appverifier -y --force --limitoutput 2>&1 >> $Script:TestSetupLogFile
     }
 }
 
@@ -396,6 +420,11 @@ function Clear-OpenSSHTestEnvironment
     Get-ChildItem "$sshBinPath\sshtest*hostkey*.pub"| % {
         ssh-add-hostkey.ps1 -Delete_key $_.FullName
     }
+
+    if($Global:OpenSSHTestInfo["EnableAppVerifier"] -and (Test-path $env:windir\System32\appverif.exe))
+    {
+        &  $env:windir\System32\appverif.exe -disable * -for *
+    }
     
     Remove-Item $sshBinPath\sshtest*hostkey* -Force -ErrorAction SilentlyContinue    
     #Restore sshd_config
@@ -442,7 +471,7 @@ function Clear-OpenSSHTestEnvironment
     {      
         Write-Log -Message "Uninstalling Module OpenSSHUtils..."
         Uninstall-OpenSSHUtilsModule
-    }    
+    }
 }
 
 <#
