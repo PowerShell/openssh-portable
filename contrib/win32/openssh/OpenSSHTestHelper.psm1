@@ -245,9 +245,9 @@ WARNING: Following changes will be made to OpenSSH configuration
     if($EnableAppVerifier)
     {        
         # clear all applications in application verifier first
-        &  $env:windir\System32\appverif.exe -disable * -for *
+        &  $env:windir\System32\appverif.exe -disable * -for *  | out-null
         Get-ChildItem "$($script:OpenSSHBinPath)\*.exe" | % {
-            & $env:windir\System32\appverif.exe -verify $_.Name  | out-null            
+            & $env:windir\System32\appverif.exe -verify $_.Name  | out-null
         }
 
         <#$folderName = "x86"    
@@ -427,7 +427,7 @@ function Clear-OpenSSHTestEnvironment
     if($Global:OpenSSHTestInfo["EnableAppVerifier"] -and (Test-path $env:windir\System32\appverif.exe))
     {
         # clear all applications in application verifier
-        &  $env:windir\System32\appverif.exe -disable * -for *
+        &  $env:windir\System32\appverif.exe -disable * -for * | out-null
     }
     
     Remove-Item $sshBinPath\sshtest*hostkey* -Force -ErrorAction SilentlyContinue    
