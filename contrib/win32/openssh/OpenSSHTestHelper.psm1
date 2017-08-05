@@ -21,6 +21,7 @@ $Script:TestSetupLogFile = Join-Path $TestDataPath $TestSetupLogFileName
 $Script:E2ETestDirectory = Join-Path $repositoryRoot.FullName -ChildPath "regress\pesterTests"
 $Script:WindowsInBox = $false
 $Script:EnableAppVerifier = $true
+$Script:PostmortemDebugging = $false
 
 <#
     .Synopsis
@@ -35,7 +36,8 @@ function Set-OpenSSHTestEnvironment
         [string] $OpenSSHBinPath,
         [string] $TestDataPath = "$env:SystemDrive\OpenSSHTests",        
         [Boolean] $DebugMode = $false,
-        [Switch] $NoAppVerifier
+        [Switch] $NoAppVerifier,
+        [Switch] $PostmortemDebugging
     )
     
     if($PSBoundParameters.ContainsKey("Verbose"))
@@ -54,6 +56,10 @@ function Set-OpenSSHTestEnvironment
     $Script:TestSetupLogFile = Join-Path $TestDataPath "TestSetupLog.txt"
     $Script:UnitTestDirectory = Get-UnitTestDirectory
     $Script:EnableAppVerifier = -not ($NoAppVerifier.IsPresent)
+    if($Script:EnableAppVerifier)
+    {
+        $Script:PostmortemDebugging = $PostmortemDebugging.IsPresent
+    }
 
     $Global:OpenSSHTestInfo = @{        
         "Target"= "localhost";                                 # test listener name
@@ -70,6 +76,7 @@ function Set-OpenSSHTestEnvironment
         "UnitTestDirectory" = $Script:UnitTestDirectory        # the directory of unit tests
         "DebugMode" = $DebugMode                               # run openssh E2E in debug mode
         "EnableAppVerifier" = $Script:EnableAppVerifier
+        "PostmortemDebugging" = $Script:PostmortemDebugging
         }
         
     #if user does not set path, pick it up
@@ -250,13 +257,12 @@ WARNING: Following changes will be made to OpenSSH configuration
             & $env:windir\System32\appverif.exe -verify $_.Name  | out-null
         }
 
-        <#$folderName = "x86"    
-        if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
-        {
-            $folderName = "x64"
-        }#>
-        # enable Postmortem debugger            
-        #reg add "HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug" /v "Debugger" /t REG_SZ /d "`"${env:ProgramFiles(x86)}\Windows Kits\8.1\Debuggers\$folderName\Debuggers\windbg.exe`"  -p %ld -e %ld -g" /f
+        if($Script:PostmortemDebugging -and (Test-path $Script:WindbgPath))
+        {            
+            # enable Postmortem debugger            
+            New-ItemProperty "HKLM:Software\Microsoft\Windows NT\CurrentVersion\AeDebug" -Name Debugger -Type String -Value "`"$Script:WindbgPath`" -p %ld -e %ld -g" -Force | Out-Null
+            New-ItemProperty "HKLM:Software\Microsoft\Windows NT\CurrentVersion\AeDebug" -Name Auto -Type String -Value "1" -Force | Out-Null
+        }
     }
 
     Backup-OpenSSHTestInfo
@@ -315,6 +321,26 @@ function Install-OpenSSHTestDependencies
     {      
         Write-Log -Message "Installing Pester..." 
         choco install Pester -y --force --limitoutput 2>&1 >> $Script:TestSetupLogFile
+    }
+
+    if($Script:PostmortemDebugging -or (($OpenSSHTestInfo -ne $null) -and ($OpenSSHTestInfo["PostmortemDebugging"])))
+    {
+        $folderName = "x86"
+        $pathroot = $env:ProgramFiles
+        if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
+        {
+            $folderName = "x64"
+            $pathroot = ${env:ProgramFiles(x86)}
+        }
+        $Script:WindbgPath = "$pathroot\Windows Kits\8.1\Debuggers\$folderName\windbg.exe"
+        if(-not (Test-Path $Script:WindbgPath))
+        {
+            $Script:WindbgPath = "$pathroot\Windows Kits\10\Debuggers\$folderName\windbg.exe"
+            if(-not (Test-Path $Script:WindbgPath))
+            {
+                choco install windbg -y --force --limitoutput 2>&1 >> $Script:TestSetupLogFile
+            }            
+        }        
     }
 
     if(($Script:EnableAppVerifier -or (($OpenSSHTestInfo -ne $null) -and ($OpenSSHTestInfo["EnableAppVerifier"]))) -and (-not (Test-path $env:windir\System32\appverif.exe)))
