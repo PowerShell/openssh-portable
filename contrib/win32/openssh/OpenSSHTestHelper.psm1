@@ -260,8 +260,8 @@ WARNING: Following changes will be made to OpenSSH configuration
         if($Script:PostmortemDebugging -and (Test-path $Script:WindbgPath))
         {            
             # enable Postmortem debugger            
-            New-ItemProperty "HKLM:Software\Microsoft\Windows NT\CurrentVersion\AeDebug" -Name Debugger -Type String -Value "`"$Script:WindbgPath`" -p %ld -e %ld -g" -Force | Out-Null
-            New-ItemProperty "HKLM:Software\Microsoft\Windows NT\CurrentVersion\AeDebug" -Name Auto -Type String -Value "1" -Force | Out-Null
+            New-ItemProperty "HKLM:Software\Microsoft\Windows NT\CurrentVersion\AeDebug" -Name Debugger -Type String -Value "`"$Script:WindbgPath`" -p %ld -e %ld -g" -Force -ErrorAction SilentlyContinue | Out-Null
+            New-ItemProperty "HKLM:Software\Microsoft\Windows NT\CurrentVersion\AeDebug" -Name Auto -Type String -Value "1" -Force -ErrorAction SilentlyContinue | Out-Null
         }
     }
 
@@ -454,6 +454,12 @@ function Clear-OpenSSHTestEnvironment
     {
         # clear all applications in application verifier
         &  $env:windir\System32\appverif.exe -disable * -for * | out-null
+    }
+
+    if($Global:OpenSSHTestInfo["PostmortemDebugging"])
+    {
+        Remove-ItemProperty "HKLM:Software\Microsoft\Windows NT\CurrentVersion\AeDebug" -Name Debugger -ErrorAction SilentlyContinue -Force | Out-Null
+        Remove-ItemProperty "HKLM:Software\Microsoft\Windows NT\CurrentVersion\AeDebug" -Name Auto -ErrorAction SilentlyContinue -Force | Out-Null
     }
     
     Remove-Item $sshBinPath\sshtest*hostkey* -Force -ErrorAction SilentlyContinue    
