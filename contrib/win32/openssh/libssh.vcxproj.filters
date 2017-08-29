@@ -57,7 +57,6 @@
     <ClCompile Include="$(OpenSSH-Src-Path)opacket.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)packet.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)poly1305.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)rsa.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sc25519.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)smult_curve25519_ref.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-dss.c" />
