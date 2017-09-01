@@ -97,7 +97,7 @@ ga_match(char * const *groups, int n)
 
 	for (i = 0; i < ngroups; i++)
 		for (j = 0; j < n; j++)
-			if (match_pattern(groups_byname[i], groups[j])) 
+			if (match_pattern(groups_byname[i], groups[j]))
 				return 1;
 	return 0;
 }

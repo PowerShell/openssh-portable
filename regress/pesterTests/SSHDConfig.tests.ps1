@@ -31,11 +31,9 @@ Describe "Tests of sshd_config" -Tags "CI" {
         function Add-LocalUser
         {
             param([string] $UserName, [string] $Password)
-    
-            try {
-                $user = [System.DirectoryServices.AccountManagement.UserPrincipal]::FindByIdentity($PrincipalContext, $IdentityType, $UserName)
-            }
-            finally {            
+            $user = [System.DirectoryServices.AccountManagement.UserPrincipal]::FindByIdentity($PrincipalContext, $IdentityType, $UserName)
+            if($user -eq $null)
+            {
                 try {
                     $user = [System.DirectoryServices.AccountManagement.UserPrincipal]::new($PrincipalContext,$UserName,$Password, $true)
                     $user.Save()
@@ -43,7 +41,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
                 finally {
                     $user.Dispose()
                 }
-            }            
+            }
         }
 
         function Add-LocalGroup
