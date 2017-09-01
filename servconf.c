@@ -2085,9 +2085,9 @@ parse_server_config(ServerOptions *options, const char *filename, Buffer *conf,
 		    filename, bad_options);
 	process_queued_listen_addrs(options);
 
-#ifdef WINDOWS
-	/* convert the users, user groups to lower case */
-	/* TODO - support all forms of username, groupname.
+#ifdef WINDOWS	
+	/* TODO - Refactor this into a platform specific post-read config processing routine.
+	 * TODO - support all forms of username, groupname.
 	 *   a) domain\groupname
 	 *   b) domain\groupname@hostip
 	 *   c) full_domain_name\groupname
@@ -2097,6 +2097,7 @@ parse_server_config(ServerOptions *options, const char *filename, Buffer *conf,
 	 *   g) fulldomain\user
 	 *   h) user@domain@hostip
 	 */
+	/* convert the users, user groups to lower case */
 	for(int i = 0; i < options->num_allow_users; i++)
 		lowercase(options->allow_users[i]);
 

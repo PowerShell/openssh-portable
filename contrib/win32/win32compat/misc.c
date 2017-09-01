@@ -1056,7 +1056,7 @@ invalid_parameter_handler(const wchar_t* expression, const wchar_t* function, co
 }
 
 int
-getDomainName(wchar_t *domain, int size)
+get_machine_domain_name(wchar_t *domain, int size)
 {
 	LPWKSTA_INFO_100 pBuf = NULL;
 	NET_API_STATUS nStatus;
@@ -1103,6 +1103,11 @@ getusergroups(const char *user, int *ngroups)
 	char *user_domain = NULL;	
 	LPWSTR wszDCName = NULL;
 	char *user_name = malloc(strlen(user)+1);
+	if(!user_name) {
+		error("failed to allocate memory!");
+		return 0;
+	}
+
 	memcpy(user_name, user, strlen(user)+1);
 
 	if (user_domain = strchr(user_name, '@')) {
@@ -1119,7 +1124,7 @@ getusergroups(const char *user, int *ngroups)
 
 	/* Fetch groups on the Local machine */
 	wchar_t w_machine_domain_name[64] = { 0, };
-	if (getDomainName(w_machine_domain_name, 64)) {
+	if (get_machine_domain_name(w_machine_domain_name, 64)) {
 		if(!machine_domain_name)
 			machine_domain_name = utf16_to_utf8(w_machine_domain_name);
 
@@ -1208,7 +1213,7 @@ getusergroups(const char *user, int *ngroups)
 	return user_groups;
 }
 
-/* This method will return in "user?group" format */
+/* This method will return in "group@domain" format */
 char *
 append_domain_to_groupname(char *groupname)
 {
@@ -1218,7 +1223,7 @@ append_domain_to_groupname(char *groupname)
 	char *groupname_with_domain = malloc(len);
 
 	strcpy_s(groupname_with_domain, len, groupname);
-	strcat_s(groupname_with_domain, len, "?");
+	strcat_s(groupname_with_domain, len, "@");
 	strcat_s(groupname_with_domain, len, machine_domain_name);	
 
 	groupname_with_domain[len-1]= '\0';
