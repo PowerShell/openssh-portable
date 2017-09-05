@@ -1130,7 +1130,7 @@ getusergroups(const char *user, int *ngroups)
 	}
 
 	/* Fetch groups on the Local machine */	
-	if(get_machine_domain_name(machine_domain_name_utf16, DNLEN)) {
+	if(get_machine_domain_name(machine_domain_name_utf16, DNLEN+1)) {
 		if (machine_domain_name_utf16) {
 			if(!machine_domain_name)
 				machine_domain_name = utf16_to_utf8(machine_domain_name_utf16);
