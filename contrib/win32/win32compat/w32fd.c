@@ -556,17 +556,18 @@ w32_io_process_fd_flags(struct w32_io* pio, int flags)
 
 	shi_flags = (flags & FD_CLOEXEC) ? 0 : HANDLE_FLAG_INHERIT;
 
-	if (SetHandleInformation(WINHANDLE(pio), HANDLE_FLAG_INHERIT, shi_flags) == FALSE) {
-		/* 
-		 * Ignore if handle is not valid yet. It will not be valid for 
-		 * UF_UNIX sockets that are not connected yet 
-		 */
-		if (GetLastError() != ERROR_INVALID_HANDLE) {
-			debug3("fcntl - SetHandleInformation failed  %d, io:%p",
-				GetLastError(), pio);
-			errno = EOTHER;
-			return -1;
-		}
+	HANDLE h = WINHANDLE(pio);
+	if (IS_INVALID_HANDLE(h)) {
+		/*
+		* Ignore if handle is not valid yet. It will not be valid for
+		* UF_UNIX sockets that are not connected yet
+		*/
+	}
+	else if (SetHandleInformation(h, HANDLE_FLAG_INHERIT, shi_flags) == FALSE) {
+		debug3("fcntl - SetHandleInformation failed  %d, io:%p",
+			GetLastError(), pio);
+		errno = EOTHER;
+		return -1;
 	}
 
 	pio->fd_flags = flags;
