@@ -130,8 +130,7 @@ ReadThread(_In_ LPVOID lpParameter)
 			return -1;
 		}
 	}
-	if (0 == QueueUserAPC(ReadAPCProc, main_thread, (ULONG_PTR)pio)) {
-		debug3("TermRead thread - ERROR QueueUserAPC failed %d, io:%p", GetLastError(), pio);
+	if (0 == QueueUserAPC(ReadAPCProc, main_thread, (ULONG_PTR)pio)) {		
 		pio->read_details.pending = FALSE;
 		pio->read_details.error = GetLastError();
 		DebugBreak();
@@ -245,19 +244,6 @@ syncio_initiate_write(struct w32_io* pio, DWORD num_bytes)
 	return 0;
 }
 
-static BOOL
-is_windows8_or_Later()
-{
-	OSVERSIONINFO osvi;
-
-	ZeroMemory(&osvi, sizeof(OSVERSIONINFO));
-	osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-
-	GetVersionEx(&osvi);
-
-	return (osvi.dwMajorVersion > 6) || ((osvi.dwMajorVersion == 6) && (osvi.dwMinorVersion >= 2));
-}
-
 /* tty close */
 int 
 syncio_close(struct w32_io* pio)
@@ -268,7 +254,7 @@ syncio_close(struct w32_io* pio)
 	/* If io is pending, let worker threads exit. */
 	if (pio->read_details.pending) {
 		/* For console - the read thread is blocked so terminate it. */
-		if (FILETYPE(pio) == FILE_TYPE_CHAR && (!is_windows8_or_Later() || in_raw_mode))
+		if (FILETYPE(pio) == FILE_TYPE_CHAR && (!IsWindows8OrGreater() || in_raw_mode))
 			TerminateThread(pio->read_overlapped.hEvent, 0);
 		else
 			WaitForSingleObject(pio->read_overlapped.hEvent, INFINITE);
