@@ -563,7 +563,7 @@ w32_io_process_fd_flags(struct w32_io* pio, int flags)
 	* UF_UNIX sockets that are not connected yet
 	*/
 	if (!IS_INVALID_HANDLE(h) && (SetHandleInformation(h, HANDLE_FLAG_INHERIT, shi_flags) == FALSE)) {
-		debug3("fcntl - SetHandleInformation failed  %d, io:%p",
+		debug3("fcntl - SetHandleInformation failed with error:%d, io:%p",
 			GetLastError(), pio);
 		errno = EOTHER;
 		return -1;
