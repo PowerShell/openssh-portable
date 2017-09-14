@@ -103,7 +103,7 @@ ReadThread(_In_ LPVOID lpParameter)
 
 				if (!SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), dwAttributes))
 					error("SetConsoleMode on STD_INPUT_HANDLE failed with %d\n", GetLastError());
-			}			
+			}
 
 			if (!ReadFile(WINHANDLE(pio), pio->read_details.buf,
 				pio->read_details.buf_size, &read_status.transferred, NULL)) { 
@@ -254,7 +254,7 @@ syncio_close(struct w32_io* pio)
 	/* If io is pending, let worker threads exit. */
 	if (pio->read_details.pending) {
 		/* For console - the read thread is blocked so terminate it. */
-		if (FILETYPE(pio) == FILE_TYPE_CHAR && (!IsWindows8OrGreater() || in_raw_mode))
+		if (FILETYPE(pio) == FILE_TYPE_CHAR && (IsWin7OrLess() || in_raw_mode))
 			TerminateThread(pio->read_overlapped.hEvent, 0);
 		else
 			WaitForSingleObject(pio->read_overlapped.hEvent, INFINITE);
