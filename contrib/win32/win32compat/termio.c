@@ -253,7 +253,11 @@ syncio_close(struct w32_io* pio)
 
 	/* If io is pending, let worker threads exit. */
 	if (pio->read_details.pending) {
-		/* For console - the read thread is blocked so terminate it. */
+		/*
+		Terminate the read thread at the below situations:
+		1. For console - the read thread is blocked by the while loop on raw mode
+		2. On Win7 machine, ReadFile dees not return when no content to read in non-interactive mode.
+		*/
 		if (FILETYPE(pio) == FILE_TYPE_CHAR && (IsWin7OrLess() || in_raw_mode))
 			TerminateThread(pio->read_overlapped.hEvent, 0);
 		else
