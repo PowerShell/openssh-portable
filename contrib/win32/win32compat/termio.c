@@ -256,7 +256,7 @@ syncio_close(struct w32_io* pio)
 		/*
 		Terminate the read thread at the below situations:
 		1. For console - the read thread is blocked by the while loop on raw mode
-		2. On Win7 machine, ReadFile dees not return when no content to read in non-interactive mode.
+		2. Function ReadFile on Win7 machine dees not return when no content to read in non-interactive mode.
 		*/
 		if (FILETYPE(pio) == FILE_TYPE_CHAR && (IsWin7OrLess() || in_raw_mode))
 			TerminateThread(pio->read_overlapped.hEvent, 0);
