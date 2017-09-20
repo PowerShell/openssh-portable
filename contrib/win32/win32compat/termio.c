@@ -107,7 +107,8 @@ ReadThread(_In_ LPVOID lpParameter)
 
 			if (!ReadFile(WINHANDLE(pio), pio->read_details.buf,
 				pio->read_details.buf_size, &read_status.transferred, NULL)) { 
-				read_status.error = GetLastError();				
+				debug4("ReadThread - ReadFile failed %d, io:%p", GetLastError(), pio); 
+				read_status.error = GetLastError();
 				return -1;
 			}
 
@@ -126,7 +127,8 @@ ReadThread(_In_ LPVOID lpParameter)
 	} else {
 		if (!ReadFile(WINHANDLE(pio), pio->read_details.buf,
 		    pio->read_details.buf_size, &read_status.transferred, NULL)) {
-			read_status.error = GetLastError();			
+			debug4("ReadThread - ReadFile failed %d, io:%p", GetLastError(), pio); 
+			read_status.error = GetLastError();
 			return -1;
 		}
 	}
@@ -209,7 +211,7 @@ WriteThread(_In_ LPVOID lpParameter)
 		if (!WriteFile(WINHANDLE(pio), pio->write_details.buf, write_status.to_transfer,
 		    &write_status.transferred, NULL)) {
 			write_status.error = GetLastError();
-			debug("WriteThread - ReadFile WriteFile %d, io:%p", GetLastError(), pio);
+			debug4("WriteThread - ReadFile WriteFile %d, io:%p", GetLastError(), pio);
 		}
 	}
 
