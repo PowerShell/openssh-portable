@@ -1101,6 +1101,19 @@ w32_cmd_path()
 static int
 create_job_object()
 {
+	JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info;
+	if ((job = CreateJobObjectW(NULL, NULL)) == NULL) {
+		printf_s("cannot create job object, error: %d", GetLastError());
+		return -1;
+	}
+	
+	memset(&job_info, 0, sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+	job_info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+	if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &job_info, sizeof(job_info)) ||
+		AssignProcessToJobObject(job, child) {
+
+	}
 	
 	return 0;
 }
