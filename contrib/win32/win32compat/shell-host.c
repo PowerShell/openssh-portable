@@ -215,6 +215,7 @@ HANDLE pipe_in = INVALID_HANDLE_VALUE;
 HANDLE pipe_out = INVALID_HANDLE_VALUE;
 HANDLE pipe_err = INVALID_HANDLE_VALUE;
 HANDLE child = INVALID_HANDLE_VALUE;
+HANDLE job = NULL;
 HANDLE hConsoleBuffer = INVALID_HANDLE_VALUE;
 HANDLE monitor_thread = INVALID_HANDLE_VALUE;
 HANDLE io_thread = INVALID_HANDLE_VALUE;
@@ -1095,6 +1096,13 @@ w32_cmd_path()
 		exit(255);
 	}
 	return cmd_exe_path;
+}
+
+static int
+create_job_object()
+{
+	
+	return 0;
 }
 
 int 
