@@ -222,7 +222,6 @@ namespace MyLsaWrapper
 '@
 
 $references = @("System.Security.Principal.Windows", "Microsoft.Win32.Primitives")
-
 try {
     $null = [MyLsaWrapper.LsaWrapperCaller]
 }
@@ -230,8 +229,7 @@ catch {
     try {
         $types = Add-Type $definition -ref $references -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
     }
-    catch
-    {	
+    catch {	
 	    $types = Add-Type $definition -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
     }
 }
