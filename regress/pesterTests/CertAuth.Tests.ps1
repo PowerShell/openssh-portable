@@ -46,7 +46,10 @@ Describe "E2E scenarios for certificate authentication" -Tags "CI" {
             Remove-Item "$($user_key)*"
             ssh-keygen -t ed25519 -f $user_key  -P $keypassphrase
             $user_key | Should Exist
-            ssh-keygen -s $cakey -I $pkuser -V -1w:+54w5d  -n $pkuser ($user_key + ".pub")
+            $nullFile = join-path $testDir ("$tC.$tI.nullfile")
+            $null > $nullFile
+            $user_key_pub = ($user_key + ".pub")
+            iex "cmd /c `"ssh-keygen -s $cakey -I $pkuser -V -1w:+54w5d  -n $pkuser $user_key_pub < $nullFile 2> nul `""
         }
 
     }
