@@ -175,7 +175,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     Start-Service ssh-agent
 
     #copy sshtest keys
-    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force    
+    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force  
     Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*"| % {
         #workaround for the cariggage new line added by git before copy them
         $filePath = "$($_.FullName)"
@@ -191,6 +191,14 @@ WARNING: Following changes will be made to OpenSSH configuration
             }
         }        
     }
+
+    #copy ca pubkey to SSHD bin path
+    Copy-Item "$($Script:E2ETestDirectory)\sshtest_ca_userkeys.pub"  $script:OpenSSHBinPath -Force 
+
+    #copy ca private key to test dir
+    $Global:OpenSSHTestInfo["CA_Private_Key"] = (Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_ca_userkeys)
+    Copy-Item (Join-Path $Script:E2ETestDirectory sshtest_ca_userkeys) $Global:OpenSSHTestInfo["CA_Private_Key"] -Force
+    Repair-UserSshConfigPermission -FilePath $Global:OpenSSHTestInfo[""] -confirm:$false    
 
     Restart-Service sshd -Force
    
@@ -462,7 +470,9 @@ function Clear-OpenSSHTestEnvironment
         Remove-ItemProperty "HKLM:Software\Microsoft\Windows NT\CurrentVersion\AeDebug" -Name Auto -ErrorAction SilentlyContinue -Force | Out-Null
     }
     
-    Remove-Item $sshBinPath\sshtest*hostkey* -Force -ErrorAction SilentlyContinue    
+    Remove-Item "$sshBinPath\sshtest*hostkey*" -Force -ErrorAction SilentlyContinue   
+    Remove-Item "$sshBinPath\sshtest*ca_userkeys*" -Force -ErrorAction SilentlyContinue   
+     
     #Restore sshd_config
     $backupConfigPath = Join-Path $sshBinPath sshd_config.ori
     if (Test-Path $backupConfigPath -PathType Leaf) {        
