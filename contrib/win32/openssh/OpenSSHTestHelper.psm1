@@ -196,9 +196,12 @@ WARNING: Following changes will be made to OpenSSH configuration
     Copy-Item "$($Script:E2ETestDirectory)\sshtest_ca_userkeys.pub"  $script:OpenSSHBinPath -Force 
 
     #copy ca private key to test dir
-    $Global:OpenSSHTestInfo["CA_Private_Key"] = (Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_ca_userkeys)
-    Copy-Item (Join-Path $Script:E2ETestDirectory sshtest_ca_userkeys) $Global:OpenSSHTestInfo["CA_Private_Key"] -Force
-    Repair-UserSshConfigPermission -FilePath $Global:OpenSSHTestInfo[""] -confirm:$false    
+    $ca_priv_key = (Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_ca_userkeys)
+    Copy-Item (Join-Path $Script:E2ETestDirectory sshtest_ca_userkeys) $ca_priv_key -Force
+    $con = (Get-Content $ca_priv_key | Out-String).Replace("`r`n","`n")
+    Set-Content -Path $ca_priv_key -Value "$con"
+    Repair-UserSshConfigPermission -FilePath $ca_priv_key -confirm:$false    
+    $Global:OpenSSHTestInfo["CA_Private_Key"] = $ca_priv_key
 
     Restart-Service sshd -Force
    
@@ -249,7 +252,8 @@ WARNING: Following changes will be made to OpenSSH configuration
     Copy-Item $testPubKeyPath $authorizedKeyPath -Force -ErrorAction SilentlyContinue
     Repair-AuthorizedKeyPermission -FilePath $authorizedKeyPath -confirm:$false
     
-    $testPriKeypath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519
+    copy-item (Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519) $Global:OpenSSHTestInfo["TestDataPath"]
+    $testPriKeypath = Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_userssokey_ed25519
     $con = (Get-Content $testPriKeypath | Out-String).Replace("`r`n","`n")
     Set-Content -Path $testPriKeypath -Value "$con"
     cmd /c "ssh-add -D 2>&1 >> $Script:TestSetupLogFile"
