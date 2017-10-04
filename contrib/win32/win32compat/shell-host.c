@@ -1207,12 +1207,8 @@ get_default_shell_path()
 	memset(default_shell_path, 0, _countof(default_shell_path));
 
 	if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\OpenSSH", 0, mask, &reg_key) == ERROR_SUCCESS) &&
-		(RegQueryValueExW(reg_key, L"DefaultShell", 0, NULL, (LPBYTE)tmp, &tmp_len) == ERROR_SUCCESS) &&
-		(tmp)) {
-		is_default_shell_configured = TRUE;
-		if (wcsstr(default_shell_path, L"bash.exe"))
-			is_bash_default_shell = TRUE;
-
+	    (RegQueryValueExW(reg_key, L"DefaultShell", 0, NULL, (LPBYTE)tmp, &tmp_len) == ERROR_SUCCESS) &&
+	    (tmp)) {
 		/* If required, add quotes to the default shell. */
 		if (tmp[0] != L'"') {
 			default_shell_path[0] = L'\"';
@@ -1220,10 +1216,14 @@ get_default_shell_path()
 			wcscat_s(default_shell_path, _countof(default_shell_path), L"\"");
 		} else
 			wcscat_s(default_shell_path, _countof(default_shell_path), tmp);
+		
+		is_default_shell_configured = TRUE;
+		if (wcsstr(default_shell_path, L"bash.exe"))
+			is_bash_default_shell = TRUE;
 	}
 
 	if (((r = wcsncpy_s(w32_cmd_exe_path, _countof(w32_cmd_exe_path), system32_path, wcsnlen(system32_path, _countof(system32_path)) + 1)) != 0) ||
-		((r = wcscat_s(w32_cmd_exe_path, _countof(w32_cmd_exe_path), L"\\cmd.exe")) != 0)) {
+	    ((r = wcscat_s(w32_cmd_exe_path, _countof(w32_cmd_exe_path), L"\\cmd.exe")) != 0)) {
 		printf_s("get_default_shell_path(), wcscat_s failed with error: %d.", r);
 		exit(255);
 	}
