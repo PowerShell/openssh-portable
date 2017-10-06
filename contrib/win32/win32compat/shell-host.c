@@ -1322,8 +1322,8 @@ start_with_pty(wchar_t *command)
 
 		GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, command));
 	} else {
-		/* If the user configures the default shell then launch it through cmd.exe,
-		 * so that the colors are rendered properly to the ssh client (incase of powershell).		 
+		/* If the user configures the default shell then launch it through cmd.exe.
+		 * If we don't launch default shell through cmd.exe then the powershell colors are rendered badly to the ssh client.
 		 */
 		if (is_default_shell_configured) {
 			wchar_t tmp_cmd[PATH_MAX + 1] = {0,};
