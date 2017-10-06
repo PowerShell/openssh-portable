@@ -1203,6 +1203,11 @@ get_default_shell_path()
 	REGSAM mask = STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY;
 	wchar_t *tmp = malloc(PATH_MAX + 1);
 
+	if (!tmp) {
+		printf_s("get_default_shell_path(),  Unable to allocate memory");
+		exit(255);
+	}
+
 	memset(tmp, 0, PATH_MAX + 1);
 	memset(default_shell_path, 0, _countof(default_shell_path));
 
@@ -1217,7 +1222,7 @@ get_default_shell_path()
 		} else
 			wcscat_s(default_shell_path, _countof(default_shell_path), tmp);
 		
-		is_default_shell_configured = TRUE;
+		is_default_shell_configured = TRUE;		
 		if (wcsstr(default_shell_path, L"bash.exe"))
 			is_bash_default_shell = TRUE;
 	}
@@ -1317,7 +1322,9 @@ start_with_pty(wchar_t *command)
 
 		GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, command));
 	} else {
-		/* If the user configures the default shell then launch it through cmd.exe */
+		/* If the user configures the default shell then launch it through cmd.exe,
+		 * so that the colors are rendered properly to the ssh client (incase of powershell).		 
+		 */
 		if (is_default_shell_configured) {
 			wchar_t tmp_cmd[PATH_MAX + 1] = {0,};
 			wcscat_s(tmp_cmd, _countof(tmp_cmd), cmd);
