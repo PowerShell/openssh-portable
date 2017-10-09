@@ -145,7 +145,7 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         }#>
     }    
     
-    Context "$tC - configuring default shell Scenarios" {
+    Context "$tC - configure default shell Scenarios" {
         BeforeAll {$tI=1}
         AfterAll{$tC++}
         AfterEach {
@@ -157,7 +157,7 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             if($shell_path -ne $null) {
                 ConfigureDefaultShell -default_shell_path $shell_path
 
-                $o = ssh test_target echo 1234
+                $o = ssh test_target Write-Output 1234
                 $o | Should Be "1234"
             }
         }
@@ -167,8 +167,8 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             if($shell_path -ne $null) {
                 ConfigureDefaultShell -default_shell_path $shell_path
 
-                $o = ssh test_target echo 1234
-                $o | Should Be "1234"
+                $o = ssh test_target where cmd
+                $o | Should Contain "cmd.exe"
             }
         }
 
@@ -177,8 +177,8 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             if($shell_path -ne $null) {
                 ConfigureDefaultShell -default_shell_path $shell_path
 
-                $o = ssh test_target echo 1234
-                $o | Should Be "1234"
+                $o = ssh test_target ifconfig
+                $o | Should Contain "inet addr"
             }
         }
     }
