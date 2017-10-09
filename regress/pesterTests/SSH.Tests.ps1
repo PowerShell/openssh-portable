@@ -168,17 +168,7 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
                 ConfigureDefaultShell -default_shell_path $shell_path
 
                 $o = ssh test_target where cmd
-                $o | Should Contain "cmd.exe"
-            }
-        }
-
-        It "$tC.$tI - default shell as bash" {
-            $shell_path = (Get-Command bash.exe -ErrorAction SilentlyContinue).path
-            if($shell_path -ne $null) {
-                ConfigureDefaultShell -default_shell_path $shell_path
-
-                $o = ssh test_target ifconfig
-                $o | Should Contain "inet addr"
+                $o | Should Contain "cmd"
             }
         }
     }
