@@ -198,10 +198,18 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="$(OpenSSH-Src-Path)regress\unittests\kex\tests.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)regress\unittests\kex\test_kex.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)regress\unittests\test_helper\test_helper.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\wmain_common.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)regress\unittests\kex\tests.c">
+        <ExcludedFromBuild Condition="$(UseOpenSSL)=='false'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="$(OpenSSH-Src-Path)regress\unittests\kex\test_kex.c">
+        <ExcludedFromBuild Condition="$(UseOpenSSL)=='false'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="$(OpenSSH-Src-Path)regress\unittests\test_helper\test_helper.c">
+        <ExcludedFromBuild Condition="$(UseOpenSSL)=='false'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\wmain_common.c">
+        <ExcludedFromBuild Condition="$(UseOpenSSL)=='false'">true</ExcludedFromBuild>
+    </ClCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
