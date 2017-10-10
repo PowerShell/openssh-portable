@@ -21,7 +21,7 @@
 
 #define READ_PERMISSIONS (FILE_READ_DATA | FILE_READ_ATTRIBUTES | FILE_READ_EA)
 #define WRITE_PERMISSIONS (FILE_WRITE_DATA | FILE_APPEND_DATA | FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA)
-#define EXECUTE_PERMISSIONS (FILE_READ_ATTRIBUTES | FILE_EXECUTE)
+#define EXECUTE_PERMISSIONS (READ_PERMISSIONS | FILE_EXECUTE)
 
 int w32_fstat(int fd, struct w32_stat *buf);
 #define fstat(a,b)	w32_fstat((a), (b))
@@ -53,4 +53,4 @@ struct w32_stat {
 
 void strmode(mode_t mode, char *p);
 
-int get_others_file_permissions(wchar_t * file_name);
+int get_others_file_permissions(wchar_t * file_name, int isReadOnlyFile);
