@@ -143,7 +143,7 @@ function Write-BuildMsg
 #>
 function Start-OpenSSHBootstrap
 {
-    param([switch]$onecore)
+    param([switch]$OneCore)
 
     [bool] $silent = -not $script:Verbose
     Write-BuildMsg -AsInfo -Message "Checking tools and dependencies" -Silent:$silent
@@ -268,7 +268,7 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsVerbose -Message 'VC++ 2015 Build Tools already present.'
     }
 
-    if($onecore)
+    if($OneCore)
     {
         $win10sdk = Get-Windows10SDKVersion
         if($win10sdk -eq $null)
@@ -455,7 +455,7 @@ function Start-OpenSSHBuild
 
         [switch]$NoOpenSSL,
 
-        [switch]$onecore
+        [switch]$OneCore
     )    
     $script:BuildLogFile = $null
 
@@ -479,7 +479,7 @@ function Start-OpenSSHBuild
     
     Write-BuildMsg -AsInfo -Message "Starting Open SSH build; Build Log: $($script:BuildLogFile)"
 
-    Start-OpenSSHBootstrap -onecore:$onecore
+    Start-OpenSSHBootstrap -OneCore:$OneCore
 
     $script:win32OpenSSHPath = join-path $script:gitRoot "Win32-OpenSSH"
     if (-not (Test-Path (Join-Path $PSScriptRoot LibreSSLSDK)))
@@ -490,7 +490,7 @@ function Start-OpenSSHBuild
     }
 
     $PathTargets = Join-Path $PSScriptRoot paths.targets
-    if ($NoOpenSSL -or $onecore) 
+    if ($NoOpenSSL -or $OneCore) 
     {        
         [XML]$xml = Get-Content $PathTargets
         $xml.Project.PropertyGroup.UseOpenSSL = 'false'
@@ -501,7 +501,7 @@ function Start-OpenSSHBuild
         (Get-Content $f).Replace('#define OPENSSL_HAS_NISTP521 1','') | Set-Content $f
     }
 
-    if($onecore)
+    if($OneCore)
     {
         $win10SDKVer = Get-Windows10SDKVersion
         [XML]$xml = Get-Content $PathTargets
@@ -515,7 +515,7 @@ function Start-OpenSSHBuild
     $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
     $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/m", "/noconlog", "/nologo", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
 
-    if ($onecore -or $NoOpenSSL) {
+    if ($OneCore -or $NoOpenSSL) {
         $cmdMsg += @("/t:core\scp", "/t:core\sftp", "/t:core\sftp-server", "/t:core\ssh", "/t:core\ssh-add", "/t:core\ssh-agent", "/t:core\sshd", "/t:core\ssh-keygen", "/t:core\ssh-shellhost")
     }
 
@@ -536,7 +536,7 @@ function Get-Windows10SDKVersion
    $windowsSDKPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Lib"
    $minSDKVersion = [version]"10.0.14393.0"
    $versionsAvailable = @()
-   $versionsAvailable += Get-ChildItem $windowsSDKPath | %{$version = [version]$_.Name; if($version.CompareTo($minSDKVersion) -ge 0) {$version}}
+   $versionsAvailable += Get-ChildItem $windowsSDKPath | ? {$_.Name.StartsWith("10.")} | % {$version = [version]$_.Name; if($version.CompareTo($minSDKVersion) -ge 0) {$version}}
    if(0 -eq $versionsAvailable.count)
    {
         return $null
