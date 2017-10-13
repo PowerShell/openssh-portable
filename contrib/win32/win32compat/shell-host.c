@@ -256,10 +256,10 @@ struct key_translation keys[] = {
 static SHORT lastX = 0;
 static SHORT lastY = 0;
 static wchar_t system32_path[PATH_MAX + 1] = { 0, };
+static wchar_t cmd_exe_path[PATH_MAX + 1] = { 0, };
 static wchar_t default_shell_path[PATH_MAX + 3] = { 0, }; /* 2 - quotes, 1 - Null terminator */
-static wchar_t w32_cmd_exe_path[PATH_MAX + 1] = { 0, };
+static wchar_t default_shell_cmd_option[10] = { 0, }; /* for cmd.exe/powershell it is "/c", for bash.exe it is "-c" */
 static BOOL is_default_shell_configured = FALSE;
-static BOOL is_bash_default_shell = FALSE;
 
 SHORT currentLine = 0;
 consoleEvent* head = NULL;
@@ -1214,6 +1214,8 @@ get_default_shell_path()
 	if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\OpenSSH", 0, mask, &reg_key) == ERROR_SUCCESS) &&
 	    (RegQueryValueExW(reg_key, L"DefaultShell", 0, NULL, (LPBYTE)tmp, &tmp_len) == ERROR_SUCCESS) &&
 	    (tmp)) {
+		is_default_shell_configured = TRUE;
+
 		/* If required, add quotes to the default shell. */
 		if (tmp[0] != L'"') {
 			default_shell_path[0] = L'\"';
@@ -1222,20 +1224,36 @@ get_default_shell_path()
 		} else
 			wcscat_s(default_shell_path, _countof(default_shell_path), tmp);
 		
-		is_default_shell_configured = TRUE;		
-		if (wcsstr(default_shell_path, L"bash.exe"))
-			is_bash_default_shell = TRUE;
+		/* Fetch the default shell command option.
+		 * For cmd.exe/powershell.exe it is "/c", for bash.exe it is "-c".
+		 * For cmd.exe/powershell.exe/bash.exe, verify if present otherwise auto-populate.
+		 */
+		memset(tmp, 0, PATH_MAX + 1);
+		memset(default_shell_cmd_option, 0, _countof(default_shell_cmd_option));
+		if ((RegQueryValueExW(reg_key, L"DefaultShellCommandOption", 0, NULL, (LPBYTE)tmp, &tmp_len) == ERROR_SUCCESS)) {
+			wcscat_s(default_shell_cmd_option, _countof(default_shell_cmd_option), L" ");
+			wcscat_s(default_shell_cmd_option, _countof(default_shell_cmd_option), tmp);
+			wcscat_s(default_shell_cmd_option, _countof(default_shell_cmd_option), L" ");
+		} else {
+			if (wcsstr(default_shell_path, L"cmd.exe") || wcsstr(default_shell_path, L"powershell.exe"))
+				wcscat_s(default_shell_cmd_option, _countof(default_shell_cmd_option), L" /c ");
+			else if (wcsstr(default_shell_path, L"bash.exe"))
+				wcscat_s(default_shell_cmd_option, _countof(default_shell_cmd_option), L" -c ");
+		}
 	}
 
-	if (((r = wcsncpy_s(w32_cmd_exe_path, _countof(w32_cmd_exe_path), system32_path, wcsnlen(system32_path, _countof(system32_path)) + 1)) != 0) ||
-	    ((r = wcscat_s(w32_cmd_exe_path, _countof(w32_cmd_exe_path), L"\\cmd.exe")) != 0)) {
+	if (((r = wcsncpy_s(cmd_exe_path, _countof(cmd_exe_path), system32_path, wcsnlen(system32_path, _countof(system32_path)) + 1)) != 0) ||
+	    ((r = wcscat_s(cmd_exe_path, _countof(cmd_exe_path), L"\\cmd.exe")) != 0)) {
 		printf_s("get_default_shell_path(), wcscat_s failed with error: %d.", r);
 		exit(255);
 	}
 
 	/* if default shell is not configured then use cmd.exe as the default shell */
 	if (!is_default_shell_configured)
-		wcscat_s(default_shell_path, _countof(default_shell_path), w32_cmd_exe_path);
+		wcscat_s(default_shell_path, _countof(default_shell_path), cmd_exe_path);
+
+	if (tmp)
+		free(tmp);
 
 	return default_shell_path;
 }
@@ -1315,10 +1333,8 @@ start_with_pty(wchar_t *command)
 	cmd[0] = L'\0';
 	GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, get_default_shell_path()));
 	if (command) {
-		if(is_bash_default_shell)
-			GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L" -c "));
-		else
-			GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L" /c "));
+		if(default_shell_cmd_option[0])
+			GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, default_shell_cmd_option));
 
 		GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, command));
 	} else {
@@ -1329,7 +1345,7 @@ start_with_pty(wchar_t *command)
 			wchar_t tmp_cmd[PATH_MAX + 1] = {0,};
 			wcscat_s(tmp_cmd, _countof(tmp_cmd), cmd);
 			cmd[0] = L'\0';
-			GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, w32_cmd_exe_path));
+			GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, cmd_exe_path));
 			GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L" /c "));
 			GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, tmp_cmd));
 		}
@@ -1505,10 +1521,8 @@ start_withno_pty(wchar_t *command)
 		cmd[0] = L'\0';
 		GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, get_default_shell_path()));
 		if (command) {
-			if (is_bash_default_shell)
-				GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L" -c "));
-			else
-				GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L" /c "));
+			if (default_shell_cmd_option[0])
+				GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, default_shell_cmd_option));
 
 			GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, command));
 		}
