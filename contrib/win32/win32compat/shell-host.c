@@ -1229,16 +1229,11 @@ get_default_shell_path()
 		 * For cmd.exe/powershell.exe/bash.exe, verify if present otherwise auto-populate.
 		 */
 		memset(tmp, 0, PATH_MAX + 1);
-		memset(default_shell_cmd_option, 0, _countof(default_shell_cmd_option));
+		
 		if ((RegQueryValueExW(reg_key, L"DefaultShellCommandOption", 0, NULL, (LPBYTE)tmp, &tmp_len) == ERROR_SUCCESS)) {
 			wcscat_s(default_shell_cmd_option, _countof(default_shell_cmd_option), L" ");
 			wcscat_s(default_shell_cmd_option, _countof(default_shell_cmd_option), tmp);
 			wcscat_s(default_shell_cmd_option, _countof(default_shell_cmd_option), L" ");
-		} else {
-			if (wcsstr(default_shell_path, L"cmd.exe") || wcsstr(default_shell_path, L"powershell.exe"))
-				wcscat_s(default_shell_cmd_option, _countof(default_shell_cmd_option), L" /c ");
-			else if (wcsstr(default_shell_path, L"bash.exe"))
-				wcscat_s(default_shell_cmd_option, _countof(default_shell_cmd_option), L" -c ");
 		}
 	}
 
@@ -1251,6 +1246,14 @@ get_default_shell_path()
 	/* if default shell is not configured then use cmd.exe as the default shell */
 	if (!is_default_shell_configured)
 		wcscat_s(default_shell_path, _countof(default_shell_path), cmd_exe_path);
+
+	memset(default_shell_cmd_option, 0, _countof(default_shell_cmd_option));
+	if (!default_shell_cmd_option[0]) {
+		if (wcsstr(default_shell_path, L"cmd.exe") || wcsstr(default_shell_path, L"powershell.exe"))
+			wcscat_s(default_shell_cmd_option, _countof(default_shell_cmd_option), L" /c ");
+		else if (wcsstr(default_shell_path, L"bash.exe"))
+			wcscat_s(default_shell_cmd_option, _countof(default_shell_cmd_option), L" -c ");
+	}
 
 	if (tmp)
 		free(tmp);
