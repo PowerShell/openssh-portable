@@ -810,7 +810,7 @@ cleanup:
 }
 
 long
-fileio_lseek(struct w32_io* pio, unsigned long long int offset, int origin)
+fileio_lseek(struct w32_io* pio, unsigned __int64 offset, int origin)
 {
 	debug4("lseek - pio:%p", pio);
 	if (origin != SEEK_SET) {
