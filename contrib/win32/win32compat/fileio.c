@@ -810,7 +810,7 @@ cleanup:
 }
 
 long
-fileio_lseek(struct w32_io* pio, long offset, int origin)
+fileio_lseek(struct w32_io* pio, unsigned long long int offset, int origin)
 {
 	debug4("lseek - pio:%p", pio);
 	if (origin != SEEK_SET) {
@@ -819,8 +819,9 @@ fileio_lseek(struct w32_io* pio, long offset, int origin)
 		return -1;
 	}
 
-	pio->read_overlapped.Offset = offset;
-	pio->write_overlapped.Offset = offset;
+	pio->write_overlapped.Offset = pio->read_overlapped.Offset = offset & 0xffffffff;
+	pio->write_overlapped.OffsetHigh = pio->read_overlapped.OffsetHigh = (offset & 0xffffffff00000000) >> 32;
+	 
 	return 0;
 }
 
