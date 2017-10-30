@@ -505,7 +505,6 @@ function Start-OpenSSHBuild
     {
         $win10SDKVer = Get-Windows10SDKVersion
         [XML]$xml = Get-Content $PathTargets
-        $xml.Project.PropertyGroup.UseOpenSSL = 'false'
         $xml.Project.PropertyGroup.WindowsSDKVersion = $win10SDKVer.ToString()
         $xml.Project.PropertyGroup.AdditionalDependentLibs = 'onecore.lib'
         $xml.Save($PathTargets)
