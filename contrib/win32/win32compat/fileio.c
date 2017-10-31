@@ -450,7 +450,7 @@ fileio_open(const char *path_utf8, int flags, mode_t mode)
 		cf_flags.dwFlagsAndAttributes, NULL);	
 
 	if (handle == INVALID_HANDLE_VALUE) {
-		errno = errno_from_Win32LastError();
+		errno = ENOENT;
 		debug3("failed to open file:%s error:%d", path_utf8, GetLastError());
 		goto cleanup;
 	}
@@ -770,7 +770,7 @@ fileio_stat(const char *path, struct _stat64 *buf)
 	}
 
 	if (GetFileAttributesExW(wpath, GetFileExInfoStandard, &attributes) == FALSE) {
-		errno = errno_from_Win32LastError();
+		errno = ENOENT;
 		debug3("GetFileAttributesExW with last error %d", GetLastError());
 		goto cleanup;
 	}
