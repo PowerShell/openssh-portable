@@ -91,6 +91,7 @@ errno_from_Win32Error(int win32_error)
 	case ERROR_FILE_EXISTS:
 		return EEXIST;
 	case ERROR_FILE_NOT_FOUND:
+	case ERROR_PATH_NOT_FOUND:
 		return ENOENT;
 	default:
 		return win32_error;
@@ -450,7 +451,7 @@ fileio_open(const char *path_utf8, int flags, mode_t mode)
 		cf_flags.dwFlagsAndAttributes, NULL);	
 
 	if (handle == INVALID_HANDLE_VALUE) {
-		errno = ENOENT;
+		errno = errno_from_Win32LastError();
 		debug3("failed to open file:%s error:%d", path_utf8, GetLastError());
 		goto cleanup;
 	}
@@ -770,7 +771,7 @@ fileio_stat(const char *path, struct _stat64 *buf)
 	}
 
 	if (GetFileAttributesExW(wpath, GetFileExInfoStandard, &attributes) == FALSE) {
-		errno = ENOENT;
+		errno = errno_from_Win32LastError();
 		debug3("GetFileAttributesExW with last error %d", GetLastError());
 		goto cleanup;
 	}
