@@ -151,6 +151,31 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             $o = $h | ssh test_target PowerShell -NoProfile -NonInteractive -ExecutionPolicy Unrestricted -EncodedCommand $EncodedText 2> $null
             $o | Should Be "8"
         }
+
+        It "$tC.$tI - stream file in and out" {
+            # prep a file of size > 10KB (https://github.com/PowerShell/Win32-OpenSSH/issues/908 was caught with such file size)
+            $str = ""
+            (1..100) | foreach {$str += "1234567890"}
+            #strem file from local to remote
+            $testsrc = Join-Path $testDir "$tC.$tI.testsrc"
+            $testdst1 = Join-Path $testDir "$tC.$tI.testdst1"
+            $null | Set-Content $testsrc
+            $null | Set-Content $testdst1
+            (1..105) | foreach {Add-Content -Encoding Ascii -Path $testsrc -Value $str}
+            # execute this script that dumps input stream in target file, on the remote end
+            $str = "begin {} process { Add-Content -Encoding Ascii -path $testdst1 -Value ([string]`$input)} end { }"
+            $EncodedText =[Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($str))
+            # ignore error stream using 2> $null
+            get-content $testsrc | ssh test_target PowerShell -NoProfile -NonInteractive -ExecutionPolicy Unrestricted -EncodedCommand $EncodedText 2> $null
+            (dir $testdst1).Length | Should Be (dir $testsrc).Length
+
+            # stream file from remote to local
+            $testdst2 = Join-Path $testDir "$tC.$tI.testdst2"
+            $null | Set-Content $testdst2
+            (ssh test_target powershell get-content $testdst1 -Encoding Ascii) | Set-Content $testdst2 -Encoding ASCII
+            (dir $testdst2).Length | Should Be (dir $testsrc).Length
+
+        }
     }    
     
     Context "$tC - configure default shell Scenarios" {

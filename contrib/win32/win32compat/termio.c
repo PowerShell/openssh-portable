@@ -58,7 +58,7 @@ ReadAPCProc(_In_ ULONG_PTR dwParam)
 {
 	struct w32_io* pio = (struct w32_io*)dwParam;
 	debug5("TermRead CB - io:%p, bytes: %d, pending: %d, error: %d", pio, read_status.transferred,
-		pio->read_details.pending, read_status.error);
+		pio->read_details.pending, pio->sync_read_status.error);
 	pio->read_details.error = pio->sync_read_status.error;
 	pio->read_details.remaining = pio->sync_read_status.transferred;
 	pio->read_details.completed = 0;
@@ -170,7 +170,7 @@ WriteAPCProc(_In_ ULONG_PTR dwParam)
 {
 	struct w32_io* pio = (struct w32_io*)dwParam;
 	debug5("TermWrite CB - io:%p, bytes: %d, pending: %d, error: %d", pio, write_status.transferred,
-		pio->write_details.pending, write_status.error);
+		pio->write_details.pending, pio->sync_write_status.error);
 	pio->write_details.error = pio->sync_write_status.error;
 	pio->write_details.remaining -= pio->sync_write_status.transferred;
 	/* TODO- assert that reamining is 0 by now */
