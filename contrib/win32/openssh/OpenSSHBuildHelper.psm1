@@ -219,15 +219,15 @@ function Start-OpenSSHBootstrap
         [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
     }
 
-    $VCTargetsPath = "${env:ProgramFiles(x86)}\MSBuild\Microsoft.Cpp\v4.0\V140\"
-    if([Environment]::GetEnvironmentVariable('VCTargetsPath', 'MACHINE') -eq $null)
-    {
-        [Environment]::SetEnvironmentVariable('VCTargetsPath', $VCTargetsPath, 'MACHINE')
-    }
-    if ($env:VCTargetsPath -eq $null)
-    {
-        $env:VCTargetsPath = $VCTargetsPath
-    }
+    #$VCTargetsPath = "${env:ProgramFiles(x86)}\MSBuild\Microsoft.Cpp\v4.0\V140\"
+    #if([Environment]::GetEnvironmentVariable('VCTargetsPath', 'MACHINE') -eq $null)
+    #{
+    #    [Environment]::SetEnvironmentVariable('VCTargetsPath', $VCTargetsPath, 'MACHINE')
+    #}
+    #if ($env:VCTargetsPath -eq $null)
+    #{
+    #    $env:VCTargetsPath = $VCTargetsPath
+    #}
 
     $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
     $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"
