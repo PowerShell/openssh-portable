@@ -22,6 +22,11 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         {
             $null = New-Item $testDir -ItemType directory -Force -ErrorAction SilentlyContinue
         }
+        $acl = Get-Acl $testDir
+        $rights = [System.Security.AccessControl.FileSystemRights]"Read, Write"
+        $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($ssouser, $rights, "ContainerInherit,Objectinherit", "None", "Allow")
+        $acl.SetAccessRule($accessRule)
+        Set-Acl -Path $testDir -AclObject $acl
         $platform = Get-Platform
         $skip = ($platform -eq [PlatformType]::Windows) -and ($PSVersionTable.PSVersion.Major -le 2)
 
