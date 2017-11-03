@@ -217,7 +217,7 @@ WriteThread(_In_ LPVOID lpParameter)
 
 	
 	if (0 == QueueUserAPC(WriteAPCProc, main_thread, (ULONG_PTR)pio)) {
-		debug3("WriteThread thread - ERROR QueueUserAPC failed %d, io:%p", GetLastError(), pio);
+		error("WriteThread thread - ERROR QueueUserAPC failed %d, io:%p", GetLastError(), pio);
 		pio->write_details.pending = FALSE;
 		pio->write_details.error = GetLastError();
 		DebugBreak();
