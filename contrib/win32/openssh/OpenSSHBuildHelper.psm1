@@ -196,42 +196,18 @@ function Start-OpenSSHBootstrap
     {
         Write-BuildMsg -AsVerbose -Message "$gitCmdPath already present in Path environment variable" -Silent:$silent
     }
-        
-    $nativeMSBuildPath = "${env:ProgramFiles(x86)}\MSBuild\14.0\bin"    
+
+    $nativeMSBuildPath = "${env:ProgramFiles(x86)}\MSBuild\14.0\bin"
     if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
     {
         $nativeMSBuildPath += "\amd64"
     }
 
-    if (-not ($machinePath.ToLower().Contains($nativeMSBuildPath.ToLower())))
-    {
-        Write-BuildMsg -AsVerbose -Message "Adding $nativeMSBuildPath to Path environment variable" -Silent:$silent
-        $newMachineEnvironmentPath += ";$nativeMSBuildPath"
-        if(-not ($env:Path.ToLower().Contains($nativeMSBuildPath.ToLower())))
-        {
-            $env:Path += ";$nativeMSBuildPath"
-        }
-    }
-    else
-    {
-        Write-BuildMsg -AsVerbose -Message "$nativeMSBuildPath already present in Path environment variable" -Silent:$silent
-    } 
-
     # Update machine environment path
     if ($newMachineEnvironmentPath -ne $machinePath)
     {
         [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
-    }
-
-    #$VCTargetsPath = "${env:ProgramFiles(x86)}\MSBuild\Microsoft.Cpp\v4.0\V140\"
-    #if([Environment]::GetEnvironmentVariable('VCTargetsPath', 'MACHINE') -eq $null)
-    #{
-    #    [Environment]::SetEnvironmentVariable('VCTargetsPath', $VCTargetsPath, 'MACHINE')
-    #}
-    #if ($env:VCTargetsPath -eq $null)
-    #{
-    #    $env:VCTargetsPath = $VCTargetsPath
-    #}
+    }    
 
     $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
     $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"
@@ -273,11 +249,19 @@ function Start-OpenSSHBootstrap
     }
 
     if($NativeHostArch.ToLower().Startswith('arm'))
-    {
-		#todo, check and install vs 2017 build tools
+    {		
+        $nativeMSBuildPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Preview\Enterprise\MSBuild\15.0\bin"
+        if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
+        {
+            $nativeMSBuildPath += "\amd64"
+        }
+        If ((-not (Test-Path $nativeMSBuildPath)))
+        {
+            #todo, install vs 2017 build tools
+        }
     }
 
-    if($OneCore)
+    if($OneCore -or ($NativeHostArch.ToLower().Startswith('arm')))
     {
         $win10sdk = Get-Windows10SDKVersion
         if($win10sdk -eq $null)
@@ -374,6 +358,13 @@ function Start-OpenSSHPackage
     if ($NativeHostArch -ieq 'x86') {
         $packageName = "OpenSSH-Win32"
     }
+    elseif ($NativeHostArch -ieq 'arm64') {
+        $packageName = "OpenSSH-ARM64"
+    }
+    elseif ($NativeHostArch -ieq 'arm') {
+        $packageName = "OpenSSH-ARM"
+    }
+
     while((($service = Get-Service ssh-agent -ErrorAction SilentlyContinue) -ne $null) -and ($service.Status -ine 'Stopped'))
     {        
         Stop-Service ssh-agent -Force
@@ -503,14 +494,14 @@ function Start-OpenSSHBuild
     {        
         [XML]$xml = Get-Content $PathTargets
         $xml.Project.PropertyGroup.UseOpenSSL = 'false'
-		$xml.Project.PropertyGroup.SSLLib = ''
+		$xml.Project.PropertyGroup.SSLLib = [string]::Empty
         $xml.Save($PathTargets)
         $f = Join-Path $PSScriptRoot config.h.vs
         (Get-Content $f).Replace('#define WITH_OPENSSL 1','') | Set-Content $f
         (Get-Content $f).Replace('#define OPENSSL_HAS_ECC 1','') | Set-Content $f
         (Get-Content $f).Replace('#define OPENSSL_HAS_NISTP521 1','') | Set-Content $f
     }
-
+    
     if($NativeHostArch.ToLower().Startswith('arm'))
     {
         $win10SDKVer = Get-Windows10SDKVersion
@@ -527,12 +518,24 @@ function Start-OpenSSHBuild
         $xml.Project.PropertyGroup.AdditionalDependentLibs = 'onecore.lib'
         $xml.Save($PathTargets)
     }
-
-    $msbuildCmd = "msbuild.exe"
+    
     $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
     $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/m", "/noconlog", "/nologo", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
+    $nativeMSBuildPath = "${env:ProgramFiles(x86)}\MSBuild\14.0\bin"
 
-    & $msbuildCmd $cmdMsg
+    if($NativeHostArch.ToLower().Startswith('arm'))
+    {
+		$nativeMSBuildPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Preview\Enterprise\MSBuild\15.0\bin"
+    }
+
+    if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
+    {
+        $nativeMSBuildPath += "\amd64"
+    }
+
+    $msbuildCmd = $nativeMSBuildPath+ "\msbuild.exe"
+
+    & "$msbuildCmd" $cmdMsg
     $errorCode = $LASTEXITCODE
 
     if ($errorCode -ne 0)
