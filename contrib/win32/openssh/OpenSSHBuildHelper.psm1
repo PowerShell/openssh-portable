@@ -143,7 +143,11 @@ function Write-BuildMsg
 #>
 function Start-OpenSSHBootstrap
 {
-    param([switch]$OneCore)
+    param(
+        [ValidateSet('x86', 'x64', 'arm64', 'arm')]
+        [string]$NativeHostArch = "x64",
+
+        [switch]$OneCore)
 
     [bool] $silent = -not $script:Verbose
     Write-BuildMsg -AsInfo -Message "Checking tools and dependencies" -Silent:$silent
@@ -268,6 +272,11 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsVerbose -Message 'VC++ 2015 Build Tools already present.'
     }
 
+    if($NativeHostArch.ToLower().Startswith('arm'))
+    {
+		#todo, check and install vs 2017 build tools
+    }
+
     if($OneCore)
     {
         $win10sdk = Get-Windows10SDKVersion
@@ -337,7 +346,7 @@ function Start-OpenSSHPackage
     [CmdletBinding(SupportsShouldProcess=$false)]    
     param
     (        
-        [ValidateSet('x86', 'x64')]
+        [ValidateSet('x86', 'x64', 'arm64', 'arm')]
         [string]$NativeHostArch = "x64",
 
         [ValidateSet('Debug', 'Release')]
@@ -447,7 +456,7 @@ function Start-OpenSSHBuild
     [CmdletBinding(SupportsShouldProcess=$false)]    
     param
     (        
-        [ValidateSet('x86', 'x64')]
+        [ValidateSet('x86', 'x64', 'arm64', 'arm')]
         [string]$NativeHostArch = "x64",
 
         [ValidateSet('Debug', 'Release')]
@@ -494,11 +503,20 @@ function Start-OpenSSHBuild
     {        
         [XML]$xml = Get-Content $PathTargets
         $xml.Project.PropertyGroup.UseOpenSSL = 'false'
+		$xml.Project.PropertyGroup.SSLLib = ''
         $xml.Save($PathTargets)
         $f = Join-Path $PSScriptRoot config.h.vs
         (Get-Content $f).Replace('#define WITH_OPENSSL 1','') | Set-Content $f
         (Get-Content $f).Replace('#define OPENSSL_HAS_ECC 1','') | Set-Content $f
         (Get-Content $f).Replace('#define OPENSSL_HAS_NISTP521 1','') | Set-Content $f
+    }
+
+    if($NativeHostArch.ToLower().Startswith('arm'))
+    {
+        $win10SDKVer = Get-Windows10SDKVersion
+        [XML]$xml = Get-Content $PathTargets
+        $xml.Project.PropertyGroup.WindowsSDKVersion = $win10SDKVer.ToString()
+        $xml.Save($PathTargets)
     }
 
     if($OneCore)
@@ -548,7 +566,7 @@ function Get-BuildLogFile
         [ValidateNotNull()]
         [System.IO.DirectoryInfo] $root,
 
-        [ValidateSet('x86', 'x64')]
+        [ValidateSet('x86', 'x64', 'arm64', 'arm')]
         [string]$NativeHostArch = "x64",
                 
         [ValidateSet('Debug', 'Release')]
