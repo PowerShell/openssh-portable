@@ -915,7 +915,8 @@ fileio_close(struct w32_io* pio)
 	* scenarios.
 	*/
 	while (pio->write_details.pending)
-		SleepEx(INFINITE, TRUE);
+		if (0 != wait_for_any_event(NULL, 0, INFINITE))
+			return -1;
 
 	CancelIo(WINHANDLE(pio));
 	/* let queued APCs (if any) drain */
