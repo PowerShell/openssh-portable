@@ -487,7 +487,7 @@ function Start-OpenSSHBuild
     {        
         [XML]$xml = Get-Content $PathTargets
         $xml.Project.PropertyGroup.UseOpenSSL = 'false'
-		$xml.Project.PropertyGroup.SSLLib = [string]::Empty
+        $xml.Project.PropertyGroup.SSLLib = [string]::Empty
         $xml.Save($PathTargets)
         $f = Join-Path $PSScriptRoot config.h.vs
         (Get-Content $f).Replace('#define WITH_OPENSSL 1','') | Set-Content $f
