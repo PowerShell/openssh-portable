@@ -197,11 +197,7 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsVerbose -Message "$gitCmdPath already present in Path environment variable" -Silent:$silent
     }
 
-    $nativeMSBuildPath = "${env:ProgramFiles(x86)}\MSBuild\14.0\bin"
-    if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
-    {
-        $nativeMSBuildPath += "\amd64"
-    }
+    $nativeMSBuildPath = Get-VS2015BuildToolPath
 
     # Update machine environment path
     if ($newMachineEnvironmentPath -ne $machinePath)
@@ -212,7 +208,7 @@ function Start-OpenSSHBootstrap
     $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
     $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"
     $packageName = "vcbuildtools"
-    If ((-not (Test-Path $nativeMSBuildPath)) -or (-not (Test-Path $VcVars)) -or (-not (Test-Path $sdkPath))) {
+    If (($nativeMSBuildPath -eq $null) -or (-not (Test-Path $VcVars)) -or (-not (Test-Path $sdkPath))) {
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
         choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK;Win81SDK_CppBuildSKUV1" -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
         $errorCode = $LASTEXITCODE
@@ -250,14 +246,11 @@ function Start-OpenSSHBootstrap
 
     if($NativeHostArch.ToLower().Startswith('arm'))
     {		
-        $nativeMSBuildPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Preview\Enterprise\MSBuild\15.0\bin"
-        if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
-        {
-            $nativeMSBuildPath += "\amd64"
-        }
-        If ((-not (Test-Path $nativeMSBuildPath)))
+        $nativeMSBuildPath = Get-VS2017BuildToolPath
+        If ($nativeMSBuildPath -eq $null)
         {
             #todo, install vs 2017 build tools
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "The required msbuild 15.0 is not installed on the machine."
         }
     }
 
@@ -521,19 +514,12 @@ function Start-OpenSSHBuild
     
     $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
     $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/m", "/noconlog", "/nologo", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
-    $nativeMSBuildPath = "${env:ProgramFiles(x86)}\MSBuild\14.0\bin"
+    $msbuildCmd = Get-VS2015BuildToolPath
 
     if($NativeHostArch.ToLower().Startswith('arm'))
     {
-		$nativeMSBuildPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Preview\Enterprise\MSBuild\15.0\bin"
+        $msbuildCmd = Get-VS2017BuildToolPath
     }
-
-    if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
-    {
-        $nativeMSBuildPath += "\amd64"
-    }
-
-    $msbuildCmd = $nativeMSBuildPath+ "\msbuild.exe"
 
     & "$msbuildCmd" $cmdMsg
     $errorCode = $LASTEXITCODE
@@ -544,6 +530,38 @@ function Start-OpenSSHBuild
     }    
 
     Write-BuildMsg -AsInfo -Message "SSH build successful."
+}
+
+function Get-VS2017BuildToolPath
+{
+    $searchPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2017\*\MSBuild\15.0\Bin"
+    if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
+    {
+        $searchPath += "\amd64"
+    }
+    $toolAvailable = @()
+    $toolAvailable += Get-ChildItem -path $searchPath\* -Filter "MSBuild.exe"
+    if($toolAvailable.count -eq 0)
+    {
+        return $null
+    }
+   return $toolAvailable[0].FullName
+}
+
+function Get-VS2015BuildToolPath
+{
+    $searchPath = "${env:ProgramFiles(x86)}\MSBuild\14.0\Bin"
+    if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
+    {
+        $searchPath += "\amd64"
+    }
+    $toolAvailable = @()
+    $toolAvailable += Get-ChildItem -path $searchPath\* -Filter "MSBuild.exe"
+    if($toolAvailable.count -eq 0)
+    {
+        return $null
+    }
+   return $toolAvailable[0].FullName
 }
 
 function Get-Windows10SDKVersion
