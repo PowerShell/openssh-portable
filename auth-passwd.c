@@ -56,6 +56,12 @@
 #include "auth-options.h"
 #include "authfd.h"
 
+#if defined(WINDOWS)
+#include "authconfig.h"
+#include "monitor_wrap.h"
+extern AuthConfig authconfig;
+#endif
+
 extern Buffer loginmsg;
 extern ServerOptions options;
 
@@ -225,17 +231,13 @@ sys_auth_passwd(Authctxt *authctxt, const char *password)
 }
 
 #elif defined(WINDOWS)
-/*
-* Authenticate on Windows - Call LogonUser and retrieve user token
-*/
-int sys_auth_passwd(Authctxt *authctxt, const char *password)
+int sys_auth_passwd_default(Authctxt *authctxt, const char *password)
 {
 	wchar_t *user_utf16 = NULL, *udom_utf16 = NULL, *pwd_utf16 = NULL, *tmp;
 	HANDLE token = NULL;
-	int r = 0;
-
+	int exitCode = 0;
 	if ((user_utf16 = utf8_to_utf16(authctxt->pw->pw_name)) == NULL ||
-	    (pwd_utf16 = utf8_to_utf16(password)) == NULL) {
+		(pwd_utf16 = utf8_to_utf16(password)) == NULL) {
 		fatal("out of memory");
 		goto done;
 	}
@@ -245,13 +247,13 @@ int sys_auth_passwd(Authctxt *authctxt, const char *password)
 		*tmp = L'\0';
 	}
 
-	if (LogonUserW(user_utf16, udom_utf16, pwd_utf16, LOGON32_LOGON_NETWORK_CLEARTEXT, 
-	    LOGON32_PROVIDER_DEFAULT, &token) == FALSE) {
-		if (GetLastError() == ERROR_PASSWORD_MUST_CHANGE) 
-			/* 
-			 * TODO - need to add support to force password change
-			 * by sending back SSH_MSG_USERAUTH_PASSWD_CHANGEREQ
-			 */
+	if (LogonUserW(user_utf16, udom_utf16, pwd_utf16, LOGON32_LOGON_NETWORK_CLEARTEXT,
+		LOGON32_PROVIDER_DEFAULT, &token) == FALSE) {
+		if (GetLastError() == ERROR_PASSWORD_MUST_CHANGE)
+			/*
+			* TODO  need to add support to force password change
+			* by sending back SSH_MSG_USERAUTH_PASSWD_CHANGEREQ
+			*/
 			error("password for user %s has expired", authctxt->pw->pw_name);
 		else
 			debug("failed to logon user: %ls domain: %ls error:%d", user_utf16, udom_utf16, GetLastError());
@@ -259,12 +261,47 @@ int sys_auth_passwd(Authctxt *authctxt, const char *password)
 	}
 
 	authctxt->auth_token = (void*)(INT_PTR)token;
-	r = 1;
+	exitCode = 1;
 done:
 	if (user_utf16)
 		free(user_utf16);
 	if (pwd_utf16)
 		SecureZeroMemory(pwd_utf16, sizeof(wchar_t) * wcslen(pwd_utf16));
-	return r;
+	return exitCode;
+}
+
+int sys_auth_passwd_custom_lsa(Authctxt *authctxt, const char *password)
+{
+	char *tmp, *dom = NULL;
+	int dom_len = 0, exitCode = 0;
+	if ((tmp = strchr(authctxt->pw->pw_name, '@') != NULL))
+	{
+		dom_len = strlen(tmp) + 1;
+		dom = (char*)malloc(dom_len * sizeof(char));
+		memcpy(dom, tmp, dom_len);
+		dom[dom_len] = '\0';
+	}
+	if ((authctxt->auth_token = mm_auth_custompwd(authctxt->pw->pw_name, password, dom, authconfig.authProvider)) != NULL)
+	{
+		exitCode = 1;
+	}
+done:
+	if (dom)
+		free(dom);
+	return exitCode;
+}
+/*
+* Authenticate on Windows - Call LogonUser and retrieve user token
+*/
+int sys_auth_passwd(Authctxt *authctxt, const char *password)
+{
+	if (0 == strcmp(DEFAULT_AUTH_PROVIDER, authconfig.authProvider))
+	{
+		return sys_auth_passwd_default(authctxt, password);
+	}
+	else
+	{
+		return sys_auth_passwd_custom_lsa(authctxt, password);
+	}
 }
 #endif   /* WINDOWS */

@@ -121,7 +121,9 @@
 #include "ssh-sandbox.h"
 #include "version.h"
 #include "ssherr.h"
-
+#if defined(WINDOWS)
+#include "authconfig.h"
+#endif
 /* Re-exec fds */
 #define REEXEC_DEVCRYPTO_RESERVED_FD	(STDERR_FILENO + 1)
 #define REEXEC_STARTUP_PIPE_FD		(STDERR_FILENO + 2)
@@ -136,6 +138,11 @@ ServerOptions options;
 /* Name of the server configuration file. */
 char *config_file_name = _PATH_SERVER_CONFIG_FILE;
 
+/* Auth coniguration provider info*/
+AuthConfig authconfig;
+
+/* Auth coniguration file name*/
+char *auth_config_file_name = _PATH_AUTH_CONFIG_FILE;
 /*
  * Debug mode flag.  This can be set on the command line.  If debug
  * mode is enabled, extra debugging output will be sent to the system
@@ -1486,6 +1493,10 @@ main(int ac, char **av)
 	/* Initialize configuration options to their default values. */
 	initialize_server_options(&options);
 
+#if defined(WINDOWS)
+	/*Initialize auth configuration with default values*/
+	initialize_auth_config(&authconfig);
+#endif
 	/* Parse command-line arguments. */
 	while ((opt = getopt(ac, av,
 	    "C:E:b:c:f:g:h:k:o:p:u:46DQRTdeiqrt")) != -1) {
@@ -1673,6 +1684,11 @@ main(int ac, char **av)
 	fill_default_server_options(&options);
 
 #ifdef WINDOWS
+
+	/*
+	* For Windows, Check if the auth_config_file is present.
+	*/
+	load_auth_config(auth_config_file_name, &authconfig);
 	/*
 	 * For windows, enable logging right away to capture failures while loading private host keys.
 	 * On Unix, logging at configured level is not done until private host keys are loaded. Why??

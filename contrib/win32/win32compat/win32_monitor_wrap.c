@@ -212,3 +212,46 @@ int mm_load_profile(const char* user_name, u_int token)
 
 	return result;
 }
+
+void* 
+mm_auth_custompwd(const char* user, const char* password, const char* dom, const char* lsaProviderName)
+{
+	/* Pass key challenge material to privileged agent to retrieve token upon successful authentication */
+	struct sshbuf *msg = NULL;
+	u_char *blob = NULL;
+	size_t blen = 0;
+	HANDLE token = 0;
+	int agent_fd;
+
+	while (1) {
+		if ((agent_fd = get_priv_agent_sock()) == -1)
+			break;
+
+		msg = sshbuf_new();
+		if (!msg)
+			fatal("%s: out of memory", __func__);
+		if (sshbuf_put_u8(msg, SSH_PRIV_AGENT_MSG_ID) != 0 ||
+			sshbuf_put_cstring(msg, CUSTOMPWDAUTH_REQUEST) != 0 ||
+			sshbuf_put_cstring(msg, user) != 0 ||
+			sshbuf_put_cstring(msg, password) != 0 ||
+			sshbuf_put_cstring(msg, dom) != 0 ||
+			sshbuf_put_cstring(msg, lsaProviderName) != 0 ||
+			ssh_request_reply(agent_fd, msg, msg) != 0) {
+			debug("unable to send custompwdauth request");
+			break;
+		}
+
+		if (sshbuf_get_u32(msg, &token) != 0)
+			break;
+
+		debug3("%s authenticated via custompwd auth", user);
+		break;
+
+	}
+	if (blob)
+		free(blob);
+	if (msg)
+		sshbuf_free(msg);
+
+	return (void*)(INT_PTR)token;
+}
