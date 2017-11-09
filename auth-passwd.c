@@ -245,8 +245,8 @@ int sys_auth_passwd(Authctxt *authctxt, const char *password)
 		*tmp = L'\0';
 	}
 
-	if (LogonUserW(user_utf16, udom_utf16, pwd_utf16, LOGON32_LOGON_NETWORK_CLEARTEXT, 
-	    LOGON32_PROVIDER_DEFAULT, &token) == FALSE) {
+	if (LogonUserExExW(user_utf16, udom_utf16, pwd_utf16, LOGON32_LOGON_NETWORK_CLEARTEXT,
+	    LOGON32_PROVIDER_DEFAULT, NULL, &token, NULL, NULL, NULL, NULL) == FALSE) {
 		if (GetLastError() == ERROR_PASSWORD_MUST_CHANGE) 
 			/* 
 			 * TODO - need to add support to force password change
