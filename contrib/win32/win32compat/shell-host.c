@@ -1673,7 +1673,7 @@ static void setup_session_user_vars()
 		SetEnvironmentVariableW(L"USERPROFILE", userprofile_path);
 		swprintf_s(path, _countof(path), L"%s\\AppData\\Local", userprofile_path);
 		SetEnvironmentVariableW(L"LOCALAPPDATA", path);
-		swprintf_s(path, _countof(path), L"%s\\AppData\Roaming", userprofile_path);
+		swprintf_s(path, _countof(path), L"%s\\AppData\\Roaming", userprofile_path);
 		SetEnvironmentVariableW(L"APPDATA", path);
 	}
 
