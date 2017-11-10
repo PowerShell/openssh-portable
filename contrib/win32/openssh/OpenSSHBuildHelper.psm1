@@ -514,7 +514,7 @@ function Start-OpenSSHBuild
     }
     
     $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
-    $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/m", "/noconlog", "/nologo", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
+    $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/m", "/noconlog", "/nologo", "/pp", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
     $msbuildCmd = Get-VS2015BuildToolPath
 
     if($NativeHostArch.ToLower().Startswith('arm'))
@@ -541,7 +541,7 @@ function Get-VS2017BuildToolPath
         $searchPath += "\amd64"
     }
     $toolAvailable = @()
-    $toolAvailable += Get-ChildItem -path $searchPath\* -Filter "MSBuild.exe"
+    $toolAvailable += Get-ChildItem -path $searchPath\* -Filter "MSBuild.exe" -ErrorAction SilentlyContinue
     if($toolAvailable.count -eq 0)
     {
         return $null
@@ -557,7 +557,7 @@ function Get-VS2015BuildToolPath
         $searchPath += "\amd64"
     }
     $toolAvailable = @()
-    $toolAvailable += Get-ChildItem -path $searchPath\* -Filter "MSBuild.exe"
+    $toolAvailable += Get-ChildItem -path $searchPath\* -Filter "MSBuild.exe" -ErrorAction SilentlyContinue
     if($toolAvailable.count -eq 0)
     {
         return $null
