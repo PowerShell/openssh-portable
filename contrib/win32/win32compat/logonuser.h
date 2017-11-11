@@ -11,6 +11,6 @@
 #define LOGONUSER_H
 
 BOOL
-LogonUserExExWHelper(wchar_t *, wchar_t *, wchar_t *, DWORD, DWORD, PTOKEN_GROUPS, PHANDLE, PSID *, 	PVOID *, LPDWORD, PQUOTA_LIMITS);
+LogonUserExExWHelper(wchar_t *, wchar_t *, wchar_t *, DWORD, DWORD, PTOKEN_GROUPS, PHANDLE, PSID *, PVOID *, LPDWORD, PQUOTA_LIMITS);
 
 #endif

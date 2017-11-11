@@ -31,7 +31,7 @@
 static HMODULE hMod = NULL;
 
 /* Define the function prototype */
-typedef BOOL(WINAPI *LogonUserExExWType)(wchar_t*, wchar_t*, wchar_t, DWORD, DWORD, PTOKEN_GROUPS, PHANDLE, PSID, PVOID, LPDWORD, PQUOTA_LIMITS);
+typedef BOOL(WINAPI *LogonUserExExWType)(wchar_t*, wchar_t*, wchar_t*, DWORD, DWORD, PTOKEN_GROUPS, PHANDLE, PSID, PVOID, LPDWORD, PQUOTA_LIMITS);
 
 /*
 * The function uses LoadLibrary and GetProcAddress to access
