@@ -261,7 +261,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
 
     #Enable AppVerifier
-    if($EnableAppVerifier)
+    if((-not $Script:WindowsInBox) -and $EnableAppVerifier)
     {        
         # clear all applications in application verifier first
         &  $env:windir\System32\appverif.exe -disable * -for *  | out-null
