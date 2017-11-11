@@ -8,11 +8,9 @@
 */
 
 #ifndef LOGONUSER_H
-#define LOGONUSER_H 1
-
-#include <windows.h> 
+#define LOGONUSER_H
 
 BOOL
-LogonUserExExWHelper(wchar_t, wchar_t *, wchar_t *, DWORD, DWORD, PTOKEN_GROUPS, PHANDLE, PSID *, PVOID *, LPDWORD, PQUOTA_LIMITS);
+LogonUserExExWHelper(wchar_t *, wchar_t *, wchar_t *, DWORD, DWORD, PTOKEN_GROUPS, PHANDLE, PSID *, 	PVOID *, LPDWORD, PQUOTA_LIMITS);
 
 #endif
