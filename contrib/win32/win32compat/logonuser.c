@@ -35,7 +35,7 @@ typedef BOOL(WINAPI *LogonUserExExWType)(wchar_t*, wchar_t*, wchar_t*, DWORD, DW
 
 /*
 * The function uses LoadLibrary and GetProcAddress to access
-* LogonUserExExW function from onecore.dll o advapi32.dll.
+* LogonUserExExW function from sspicli.dll.
 */
 BOOL
 LogonUserExExWHelper(wchar_t *user_name, wchar_t *domain, wchar_t *password, DWORD logon_type,
@@ -43,25 +43,28 @@ LogonUserExExWHelper(wchar_t *user_name, wchar_t *domain, wchar_t *password, DWO
 	PVOID *profile_buffer, LPDWORD profile_length, PQUOTA_LIMITS quota_limits)
 {
 	LogonUserExExWType func = NULL;
+	wchar_t sspicli_dll_path[MAX_PATH + 1] = { 0, };
+	wchar_t system32_path[MAX_PATH + 1] = { 0, };
+	
+	if (!GetSystemDirectoryW(system32_path, _countof(system32_path))) {
+		debug3("GetSystemDirectory failed with error %d", GetLastError());
+		return FALSE;
+	}
+	wcsncpy_s(sspicli_dll_path, _countof(sspicli_dll_path), system32_path, wcsnlen(system32_path, _countof(system32_path)) + 1);
+	wcscat_s(sspicli_dll_path, _countof(sspicli_dll_path), L"\\sspicli.dll");
+
+	if (hMod == NULL)
+		hMod = LoadLibraryW(sspicli_dll_path);
+
 	if (hMod == NULL) {
-		hMod = LoadLibraryW(L"onecore.dll");
-		if (hMod == NULL) {
-			hMod = LoadLibraryW(L"advapi32.dll");
-		}
-	}
-
-	if (hMod)
-		func = (LogonUserExExWType)GetProcAddress(hMod, "LogonUserExExW");
-	else {
-		debug3("Failed to retrieve the module handle of onecore.dll or advapi32.dll");
+		debug3("Failed to retrieve the module handle of sspicli.dll with error %d", GetLastError());
 		return FALSE;
 	}
-
-	if (func)
-		return func(user_name, domain, password, logon_type, logon_provider,
-			token_groups, token, logon_sid, profile_buffer, profile_length, quota_limits);
-	else {
-		debug3("GetProcAddress(\"LogonUserExExW\") failed.");
+	if ((func = (LogonUserExExWType)GetProcAddress(hMod, "LogonUserExExW")) == NULL) {
+		debug3("GetProcAddress of LogonUserExExW failed with error $d.", GetLastError());
 		return FALSE;
 	}
+	
+	return func(user_name, domain, password, logon_type, logon_provider,
+			token_groups, token, logon_sid, profile_buffer, profile_length, quota_limits);	
 }
