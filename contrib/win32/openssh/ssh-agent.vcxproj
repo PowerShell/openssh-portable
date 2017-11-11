@@ -402,6 +402,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)auth-options.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)auth2-pubkey.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)groupaccess.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\logonuser.c" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="version.rc" />
