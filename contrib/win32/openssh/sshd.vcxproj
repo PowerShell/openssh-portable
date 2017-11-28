@@ -448,6 +448,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\wmain_sshd.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\win32_monitor_wrap.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\logonuser.c" />
+    <ClCompile Include="..\..\..\authconfig.c" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="version.rc" />

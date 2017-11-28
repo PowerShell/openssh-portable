@@ -43,6 +43,9 @@
 #include <pwd.h>
 #ifdef WINDOWS
 #include <logonuser.h>
+#include "authconfig.h"
+#include "monitor_wrap.h"
+extern AuthConfig authconfig;
 #endif
 #include <stdio.h>
 #include <string.h>
@@ -231,7 +234,7 @@ sys_auth_passwd(Authctxt *authctxt, const char *password)
 /*
 * Authenticate on Windows - Call LogonUser and retrieve user token
 */
-int sys_auth_passwd(Authctxt *authctxt, const char *password)
+int sys_auth_passwd_default(Authctxt *authctxt, const char *password)
 {
 	wchar_t *user_utf16 = NULL, *udom_utf16 = NULL, *pwd_utf16 = NULL, *tmp;
 	HANDLE token = NULL;
@@ -269,5 +272,38 @@ done:
 	if (pwd_utf16)
 		SecureZeroMemory(pwd_utf16, sizeof(wchar_t) * wcslen(pwd_utf16));
 	return r;
+}
+
+int sys_auth_passwd_custom_lsa(Authctxt *authctxt, const char *password)
+{
+	char *tmp, *dom = NULL;
+	int dom_len = 0, exitCode = 0;
+	if ((tmp = strchr(authctxt->pw->pw_name, '@') != NULL))
+	{
+		dom_len = strlen(tmp) + 1;
+		dom = (char*)malloc(dom_len * sizeof(char));
+		memcpy(dom, tmp, dom_len);
+		dom[dom_len] = '\0';
+	}
+	if ((authctxt->auth_token = mm_auth_custompwd(authctxt->pw->pw_name, password, dom, authconfig.authProvider)) != NULL)
+	{
+		exitCode = 1;
+	}
+done:
+	if (dom)
+		free(dom);
+	return exitCode;
+}
+
+int sys_auth_passwd(Authctxt *authctxt, const char *password)
+{
+	if (0 == strcmp(DEFAULT_AUTH_PROVIDER, authconfig.authProvider))
+	{
+		return sys_auth_passwd_default(authctxt, password);
+	}
+	else
+	{
+		return sys_auth_passwd_custom_lsa(authctxt, password);
+	}
 }
 #endif   /* WINDOWS */

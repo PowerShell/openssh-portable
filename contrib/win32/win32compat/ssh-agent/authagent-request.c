@@ -41,6 +41,8 @@
 #include "inc\utf.h"
 #include "..\priv-agent.h"
 #include "logonuser.h"
+#include <Ntsecapi.h>
+#include <ntstatus.h>
 
 #pragma warning(push, 3)
 
@@ -250,6 +252,118 @@ done:
 	return dup_t;
 }
 
+int process_custompwdauth_request(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con)
+{
+	int r = -1;
+	char *user, *pwd, *dom = NULL, *provider;
+	size_t user_len, pwd_len, dom_len, provider_len;
+	wchar_t *userw = NULL, *pwdw = NULL, *domw = NULL, *providerw = NULL;
+	HANDLE token = NULL, dup_token = NULL, lsa_handle = 0;
+	LSA_OPERATIONAL_MODE mode;
+	ULONG auth_package_id;
+	NTSTATUS ret, subStatus;
+	void * logon_info = NULL;
+	size_t logon_info_size;
+	LSA_STRING logon_process_name, auth_package_name, originName;
+	TOKEN_SOURCE sourceContext;
+	PKERB_INTERACTIVE_PROFILE pProfile = NULL;
+	LUID logonId;
+	QUOTA_LIMITS quotas;
+	DWORD cbProfile;
+	int exitCode = -1;
+	if (sshbuf_get_string_direct(request, &user, &user_len) != 0 ||
+		sshbuf_get_cstring(request, &pwd, &pwd_len) != 0 ||
+		sshbuf_get_string_direct(request, &dom, &dom_len) != 0 ||
+		user_len > MAX_USER_LEN || pwd_len == 0 ||
+		sshbuf_get_string_direct(request, &provider, &provider_len) != 0) {
+		debug("invalid custompwdauth auth request");
+		goto done;
+	}
+
+	/* convert everything to utf16 only if its not NULL */
+	if ((userw = utf8_to_utf16(user)) == NULL ||
+		(pwdw = utf8_to_utf16(pwd)) == NULL ||
+		(dom && (domw = utf8_to_utf16(dom)) == NULL))
+	{
+		debug("out of memory");
+		goto done;
+	}
+
+	/* call into LSA provider , get and duplicate token */
+	InitLsaString(&logon_process_name, "ssh-agent");
+	InitLsaString(&auth_package_name, provider);
+	InitLsaString(&originName, "sshd");
+
+	if ((ret = LsaRegisterLogonProcess(&logon_process_name, &lsa_handle, &mode)) != STATUS_SUCCESS)
+		goto done;
+
+	if ((ret = LsaLookupAuthenticationPackage(lsa_handle, &auth_package_name, &auth_package_id)) != STATUS_SUCCESS)
+		goto done;
+
+	logon_info_size = ((wcslen(userw) + wcslen(pwdw) + wcslen(domw) + 3) * sizeof(wchar_t));
+	logon_info = (wchar_t *)malloc(logon_info_size);
+	if (NULL == logon_info)
+	{
+		debug("out of memory");
+		goto done;
+	}
+	wcscpy(logon_info, userw);
+	wcscat(logon_info, L";");
+	wcscat(logon_info, pwdw);
+	wcscat(logon_info, L";");
+	wcscat(logon_info, domw);
+
+	memcpy(sourceContext.SourceName, "sshd", sizeof(sourceContext.SourceName));
+
+	if (AllocateLocallyUniqueId(&sourceContext.SourceIdentifier) != TRUE)
+		goto done;
+
+	if ((ret = LsaLogonUser(lsa_handle,
+		&originName,
+		Network,
+		auth_package_id,
+		logon_info,
+		logon_info_size,
+		NULL,
+		&sourceContext,
+		(PVOID*)&pProfile,
+		&cbProfile,
+		&logonId,
+		&token,
+		&quotas,
+		&subStatus)) != STATUS_SUCCESS) {
+		debug("LsaLogonUser failed %d", ret);
+		goto done;
+	}
+
+	if ((dup_token = duplicate_token_for_client(con, token)) == NULL)
+		goto done;
+
+	if (sshbuf_put_u32(response, (int)(intptr_t)dup_token) != 0)
+		goto done;
+
+	exitCode = 0;
+done:
+	/* delete allocated memory*/
+	if ((exitCode == -1) && (sshbuf_put_u8(response, SSH_AGENT_FAILURE) == 0))
+		exitCode = 0;
+	if (lsa_handle)
+		LsaDeregisterLogonProcess(lsa_handle);
+	if (logon_info)
+		free(logon_info);
+	if (pProfile)
+		LsaFreeReturnBuffer(pProfile);
+	if (userw)
+		free(userw);
+	if (pwdw)
+		free(pwdw);
+	if (domw)
+		free(domw);
+	if (token)
+		CloseHandle(token);
+	return exitCode;
+}
+
 int process_pubkeyauth_request(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con) {
 	int r = -1;
 	char *key_blob, *user, *sig, *blob;
@@ -394,6 +508,8 @@ int process_privagent_request(struct sshbuf* request, struct sshbuf* response, s
 		return process_pubkeyauth_request(request, response, con);
 	else if (memcmp(opn, LOAD_USER_PROFILE_REQUEST, opn_len) == 0)
 		return process_loadprofile_request(request, response, con);
+	else if (memcmp(opn, CUSTOMPWDAUTH_REQUEST, opn_len) == 0)
+		return process_custompwdauth_request(request, response, con);
 	else {
 		debug("unknown auth request: %s", opn);
 		return -1;

@@ -156,6 +156,9 @@
     <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\logonuser.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\authconfig.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="version.rc">
