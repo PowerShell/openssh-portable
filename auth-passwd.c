@@ -41,12 +41,6 @@
 #include <sys/types.h>
 
 #include <pwd.h>
-#ifdef WINDOWS
-#include <logonuser.h>
-#include "authconfig.h"
-#include "monitor_wrap.h"
-extern AuthConfig authconfig;
-#endif
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -61,6 +55,13 @@ extern AuthConfig authconfig;
 #include "auth.h"
 #include "auth-options.h"
 #include "authfd.h"
+
+#ifdef WINDOWS
+#include <logonuser.h>
+#include "authconfig.h"
+#include "monitor_wrap.h"
+extern AuthConfig authconfig;
+#endif
 
 extern Buffer loginmsg;
 extern ServerOptions options;
