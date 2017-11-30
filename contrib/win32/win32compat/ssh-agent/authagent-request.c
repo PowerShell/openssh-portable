@@ -51,7 +51,7 @@ int pubkey_allowed(struct sshkey* pubkey, char*  user_utf8);
 static void
 InitLsaString(LSA_STRING *lsa_string, const char *str)
 {
-	if (str == NULL)
+	if (!str)
 		memset(lsa_string, 0, sizeof(LSA_STRING));
 	else {
 		lsa_string->Buffer = (char *)str;
@@ -252,71 +252,76 @@ done:
 	return dup_t;
 }
 
-int process_custompwdauth_request(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con)
+int
+process_custom_lsa_auth_req(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con)
 {
-	int r = -1;
-	char *user, *pwd, *dom = NULL, *provider;
-	size_t user_len, pwd_len, dom_len, provider_len;
+	char *user = NULL, *pwd = NULL, *domain = NULL, *lsa_pkg = NULL;
+	size_t user_len = 0, pwd_len = 0, domain_len = 0, lsa_pkg_len = 0;
 	wchar_t *userw = NULL, *pwdw = NULL, *domw = NULL, *providerw = NULL;
-	HANDLE token = NULL, dup_token = NULL, lsa_handle = 0;
+	HANDLE token = NULL, dup_token = NULL, lsa_handle = NULL;
 	LSA_OPERATIONAL_MODE mode;
-	ULONG auth_package_id;
+	ULONG auth_package_id, logon_info_size = 0;
 	NTSTATUS ret, subStatus;
-	void * logon_info = NULL;
-	size_t logon_info_size;
-	LSA_STRING logon_process_name, auth_package_name, originName;
+	wchar_t *logon_info = NULL;
+	LSA_STRING logon_process_name, lsa_auth_package_name, originName;
 	TOKEN_SOURCE sourceContext;
 	PKERB_INTERACTIVE_PROFILE pProfile = NULL;
 	LUID logonId;
 	QUOTA_LIMITS quotas;
 	DWORD cbProfile;
-	int exitCode = -1;
+	int retVal = -1;
+
 	if (sshbuf_get_string_direct(request, &user, &user_len) != 0 ||
 		sshbuf_get_cstring(request, &pwd, &pwd_len) != 0 ||
-		sshbuf_get_string_direct(request, &dom, &dom_len) != 0 ||
+		sshbuf_get_string_direct(request, &domain, &domain_len) != 0 ||
 		user_len > MAX_USER_LEN || pwd_len == 0 ||
-		sshbuf_get_string_direct(request, &provider, &provider_len) != 0) {
-		debug("invalid custompwdauth auth request");
+		sshbuf_get_string_direct(request, &lsa_pkg, &lsa_pkg_len) != 0) {
+		debug("invalid LSA auth request");
 		goto done;
 	}
+
+	debug("LSA auth request, user:%s domain:%s lsa_pkg:%s ", user, domain, lsa_pkg);
 
 	/* convert everything to utf16 only if its not NULL */
 	if ((userw = utf8_to_utf16(user)) == NULL ||
 		(pwdw = utf8_to_utf16(pwd)) == NULL ||
-		(dom && (domw = utf8_to_utf16(dom)) == NULL))
-	{
-		debug("out of memory");
+		(domain && (domw = utf8_to_utf16(domain)) == NULL))	{
+		debug("%s: out of memory", __func__);
 		goto done;
 	}
 
 	/* call into LSA provider , get and duplicate token */
 	InitLsaString(&logon_process_name, "ssh-agent");
-	InitLsaString(&auth_package_name, provider);
+	InitLsaString(&lsa_auth_package_name, lsa_pkg);
 	InitLsaString(&originName, "sshd");
 
-	if ((ret = LsaRegisterLogonProcess(&logon_process_name, &lsa_handle, &mode)) != STATUS_SUCCESS)
-		goto done;
-
-	if ((ret = LsaLookupAuthenticationPackage(lsa_handle, &auth_package_name, &auth_package_id)) != STATUS_SUCCESS)
-		goto done;
-
-	logon_info_size = ((wcslen(userw) + wcslen(pwdw) + wcslen(domw) + 3) * sizeof(wchar_t));
-	logon_info = (wchar_t *)malloc(logon_info_size);
-	if (NULL == logon_info)
-	{
-		debug("out of memory");
+	if ((ret = LsaRegisterLogonProcess(&logon_process_name, &lsa_handle, &mode)) != STATUS_SUCCESS) {
+		error("LsaRegisterLogonProcess failed, error:%ld", LsaNtStatusToWinError(ret));
 		goto done;
 	}
-	wcscpy(logon_info, userw);
-	wcscat(logon_info, L";");
-	wcscat(logon_info, pwdw);
-	wcscat(logon_info, L";");
-	wcscat(logon_info, domw);
+
+	if ((ret = LsaLookupAuthenticationPackage(lsa_handle, &lsa_auth_package_name, &auth_package_id)) != STATUS_SUCCESS) {
+		error("LsaLookupAuthenticationPackage failed, lsa auth pkg:%ls error:%ld", lsa_pkg, LsaNtStatusToWinError(ret));
+		goto done;
+	}
+
+	logon_info_size = (ULONG)((wcslen(userw) + wcslen(pwdw) + wcslen(domw) + 3) * sizeof(wchar_t));
+	logon_info = (wchar_t *)malloc(logon_info_size);
+	if (NULL == logon_info)
+		fatal("%s:out of memory", __func__);
+
+	wcscpy_s(logon_info, logon_info_size, userw);
+	wcscat_s(logon_info, logon_info_size, L";");
+	wcscat_s(logon_info, logon_info_size, pwdw);
+	wcscat_s(logon_info, logon_info_size, L";");
+	wcscat_s(logon_info, logon_info_size, domw);
 
 	memcpy(sourceContext.SourceName, "sshd", sizeof(sourceContext.SourceName));
 
-	if (AllocateLocallyUniqueId(&sourceContext.SourceIdentifier) != TRUE)
+	if (!AllocateLocallyUniqueId(&sourceContext.SourceIdentifier)) {
+		error("AllocateLocallyUniqueId failed, error:%d", GetLastError());
 		goto done;
+	}		
 
 	if ((ret = LsaLogonUser(lsa_handle,
 		&originName,
@@ -331,8 +336,12 @@ int process_custompwdauth_request(struct sshbuf* request, struct sshbuf* respons
 		&logonId,
 		&token,
 		&quotas,
-		&subStatus)) != STATUS_SUCCESS) {
-		debug("LsaLogonUser failed %d", ret);
+		&subStatus)) != STATUS_SUCCESS) {		
+		if(ret == STATUS_ACCOUNT_RESTRICTION)
+			error("LsaLogonUser failed, error:%ld subStatus:%ld", LsaNtStatusToWinError(ret), subStatus);
+		else
+			error("LsaLogonUser failed error:%ld", LsaNtStatusToWinError(ret));
+
 		goto done;
 	}
 
@@ -342,11 +351,11 @@ int process_custompwdauth_request(struct sshbuf* request, struct sshbuf* respons
 	if (sshbuf_put_u32(response, (int)(intptr_t)dup_token) != 0)
 		goto done;
 
-	exitCode = 0;
+	retVal = 0;
 done:
 	/* delete allocated memory*/
-	if ((exitCode == -1) && (sshbuf_put_u8(response, SSH_AGENT_FAILURE) == 0))
-		exitCode = 0;
+	if ((retVal == -1) && (sshbuf_put_u8(response, SSH_AGENT_FAILURE) == 0))
+		retVal = 0;
 	if (lsa_handle)
 		LsaDeregisterLogonProcess(lsa_handle);
 	if (logon_info)
@@ -361,7 +370,7 @@ done:
 		free(domw);
 	if (token)
 		CloseHandle(token);
-	return exitCode;
+	return retVal;
 }
 
 int process_pubkeyauth_request(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con) {
@@ -508,8 +517,8 @@ int process_privagent_request(struct sshbuf* request, struct sshbuf* response, s
 		return process_pubkeyauth_request(request, response, con);
 	else if (memcmp(opn, LOAD_USER_PROFILE_REQUEST, opn_len) == 0)
 		return process_loadprofile_request(request, response, con);
-	else if (memcmp(opn, CUSTOMPWDAUTH_REQUEST, opn_len) == 0)
-		return process_custompwdauth_request(request, response, con);
+	else if (memcmp(opn, CUSTOM_LSA_AUTH_REQUEST, opn_len) == 0)
+		return process_custom_lsa_auth_req(request, response, con);
 	else {
 		debug("unknown auth request: %s", opn);
 		return -1;

@@ -1203,8 +1203,8 @@ get_default_shell_path()
 	REGSAM mask = STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY;
 	wchar_t *tmp = malloc(PATH_MAX + 1);
 
-	if (!tmp) {
-		printf_s("get_default_shell_path(),  Unable to allocate memory");
+	if (!tmp) {		
+		printf_s("%s: out of memory", __func__);
 		exit(255);
 	}
 

@@ -60,7 +60,6 @@
 #include <logonuser.h>
 #include "authconfig.h"
 #include "monitor_wrap.h"
-extern AuthConfig authconfig;
 #endif
 
 extern Buffer loginmsg;
@@ -232,10 +231,54 @@ sys_auth_passwd(Authctxt *authctxt, const char *password)
 }
 
 #elif defined(WINDOWS)
+void 
+sys_auth_passwd_lsa(Authctxt *authctxt, const char *password)
+{
+	char *tmp = NULL, *domain = NULL;
+	wchar_t *lsa_auth_pkg_w = NULL;
+	int domain_len = 0, lsa_auth_pkg_len = 0;	
+	HKEY reg_key = 0;
+	REGSAM mask = STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY;
+		
+	if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\OpenSSH", 0, mask, &reg_key) == ERROR_SUCCESS) &&
+		(RegQueryValueExW(reg_key, L"LSAAuthenticationPackage", 0, NULL, NULL, &lsa_auth_pkg_len) == ERROR_SUCCESS)) {
+		lsa_auth_pkg_w = (wchar_t *) malloc(lsa_auth_pkg_len); // lsa_auth_pkg_len includes the null terminating character.
+		if (!lsa_auth_pkg_w)
+			fatal("%s: out of memory", __func__);
+
+		memset(lsa_auth_pkg_w, 0, lsa_auth_pkg_len);
+		if (RegQueryValueExW(reg_key, L"LSAAuthenticationPackage", 0, NULL, (LPBYTE)lsa_auth_pkg_w, &lsa_auth_pkg_len) == ERROR_SUCCESS) {
+			
+			char *lsa_auth_pkg = utf16_to_utf8(lsa_auth_pkg_w);
+			if (!lsa_auth_pkg)
+				error("utf16_to_utf8 failed to convert lsa_auth_pkg_w:%ls", lsa_auth_pkg_w);
+
+			if ((tmp = strstr(authctxt->pw->pw_name, "@")) != NULL) {
+				domain_len = strlen(tmp) + 1;
+				domain = (char*) malloc(domain_len * sizeof(char));
+				memcpy(domain, tmp, domain_len);
+				domain[domain_len] = '\0';
+			}
+			debug("Authenticating using LSA Auth Package:%ls", lsa_auth_pkg_w);
+			authctxt->auth_token = mm_auth_custom_lsa(authctxt->pw->pw_name, password, domain, lsa_auth_pkg);
+		}
+	}
+
+done:
+	if (domain)
+		free(domain);
+
+	if (lsa_auth_pkg_w)
+		free(lsa_auth_pkg_w);
+}
+
 /*
-* Authenticate on Windows - Call LogonUser and retrieve user token
+* Authenticate on Windows 
+* - Call LogonUser and retrieve user token
+* - If LogonUser fails, then try the LSA (Local Security Authority) authentication.
 */
-int sys_auth_passwd_default(Authctxt *authctxt, const char *password)
+int 
+sys_auth_passwd(Authctxt *authctxt, const char *password)
 {
 	wchar_t *user_utf16 = NULL, *udom_utf16 = NULL, *pwd_utf16 = NULL, *tmp;
 	HANDLE token = NULL;
@@ -260,51 +303,27 @@ int sys_auth_passwd_default(Authctxt *authctxt, const char *password)
 			 * by sending back SSH_MSG_USERAUTH_PASSWD_CHANGEREQ
 			 */
 			error("password for user %s has expired", authctxt->pw->pw_name);
-		else
-			debug("failed to logon user: %ls domain: %ls error:%d", user_utf16, udom_utf16, GetLastError());
+		else {
+			debug("Windows authentication failed for user: %ls domain: %ls error:%d", user_utf16, udom_utf16, GetLastError());
+
+			/* If LSA authentication package is configured then it will return the auth_token */
+			sys_auth_passwd_lsa(authctxt, password);
+		}
+			
 		goto done;
 	}
 
-	authctxt->auth_token = (void*)(INT_PTR)token;
-	r = 1;
+	authctxt->auth_token = (void*)(INT_PTR)token;	
 done:
+	if (authctxt->auth_token)
+		r = 1;
+
 	if (user_utf16)
 		free(user_utf16);
+
 	if (pwd_utf16)
 		SecureZeroMemory(pwd_utf16, sizeof(wchar_t) * wcslen(pwd_utf16));
+
 	return r;
-}
-
-int sys_auth_passwd_custom_lsa(Authctxt *authctxt, const char *password)
-{
-	char *tmp, *dom = NULL;
-	int dom_len = 0, exitCode = 0;
-	if ((tmp = strchr(authctxt->pw->pw_name, '@') != NULL))
-	{
-		dom_len = strlen(tmp) + 1;
-		dom = (char*)malloc(dom_len * sizeof(char));
-		memcpy(dom, tmp, dom_len);
-		dom[dom_len] = '\0';
-	}
-	if ((authctxt->auth_token = mm_auth_custompwd(authctxt->pw->pw_name, password, dom, authconfig.authProvider)) != NULL)
-	{
-		exitCode = 1;
-	}
-done:
-	if (dom)
-		free(dom);
-	return exitCode;
-}
-
-int sys_auth_passwd(Authctxt *authctxt, const char *password)
-{
-	if (0 == strcmp(DEFAULT_AUTH_PROVIDER, authconfig.authProvider))
-	{
-		return sys_auth_passwd_default(authctxt, password);
-	}
-	else
-	{
-		return sys_auth_passwd_custom_lsa(authctxt, password);
-	}
 }
 #endif   /* WINDOWS */

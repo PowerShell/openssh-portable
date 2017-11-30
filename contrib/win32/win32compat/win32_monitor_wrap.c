@@ -214,12 +214,10 @@ int mm_load_profile(const char* user_name, u_int token)
 }
 
 void*
-mm_auth_custompwd(const char* user, const char* password, const char* dom, const char* lsaProviderName)
+mm_auth_custom_lsa(const char* user, const char* password, const char* domain, const char* lsa_auth_pkg)
 {
-	/* Pass key challenge material to privileged agent to retrieve token upon successful authentication */
+	/* Pass credentials to privileged agent to retrieve token upon successful authentication */
 	struct sshbuf *msg = NULL;
-	u_char *blob = NULL;
-	size_t blen = 0;
 	HANDLE token = 0;
 	int agent_fd;
 
@@ -230,26 +228,26 @@ mm_auth_custompwd(const char* user, const char* password, const char* dom, const
 		msg = sshbuf_new();
 		if (!msg)
 			fatal("%s: out of memory", __func__);
+
 		if (sshbuf_put_u8(msg, SSH_PRIV_AGENT_MSG_ID) != 0 ||
-			sshbuf_put_cstring(msg, CUSTOMPWDAUTH_REQUEST) != 0 ||
+			sshbuf_put_cstring(msg, CUSTOM_LSA_AUTH_REQUEST) != 0 ||
 			sshbuf_put_cstring(msg, user) != 0 ||
 			sshbuf_put_cstring(msg, password) != 0 ||
-			sshbuf_put_cstring(msg, dom) != 0 ||
-			sshbuf_put_cstring(msg, lsaProviderName) != 0 ||
+			sshbuf_put_cstring(msg, domain) != 0 ||
+			sshbuf_put_cstring(msg, lsa_auth_pkg) != 0 ||
 			ssh_request_reply(agent_fd, msg, msg) != 0) {
-			debug("unable to send custompwdauth request");
+			debug("unable to send LSA Auth request");
 			break;
 		}
 
-		if (sshbuf_get_u32(msg, &token) != 0)
+		if (sshbuf_get_u32(msg, (u_int32_t *) &token) != 0)
 			break;
 
-		debug3("%s authenticated via custompwd auth", user);
+		debug3("user:%s authenticated using LSA auth pkg:%s", user, lsa_auth_pkg);
 		break;
 
 	}
-	if (blob)
-		free(blob);
+
 	if (msg)
 		sshbuf_free(msg);
 
