@@ -370,6 +370,9 @@ done:
 		free(domw);
 	if (token)
 		CloseHandle(token);
+	if (dup_token)
+		CloseHandle(dup_token);
+
 	return retVal;
 }
 

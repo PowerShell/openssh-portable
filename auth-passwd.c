@@ -233,7 +233,7 @@ sys_auth_passwd(Authctxt *authctxt, const char *password)
 void 
 sys_auth_passwd_lsa(Authctxt *authctxt, const char *password)
 {
-	char *tmp = NULL, *domain = NULL;
+	char *tmp = NULL, *domain = NULL, *lsa_auth_pkg = NULL;
 	wchar_t *lsa_auth_pkg_w = NULL;
 	int domain_len = 0, lsa_auth_pkg_len = 0;	
 	HKEY reg_key = 0;
@@ -247,7 +247,7 @@ sys_auth_passwd_lsa(Authctxt *authctxt, const char *password)
 
 		memset(lsa_auth_pkg_w, 0, lsa_auth_pkg_len);
 		if (RegQueryValueExW(reg_key, L"LSAAuthenticationPackage", 0, NULL, (LPBYTE)lsa_auth_pkg_w, &lsa_auth_pkg_len) == ERROR_SUCCESS) {
-			char *lsa_auth_pkg = utf16_to_utf8(lsa_auth_pkg_w);
+			lsa_auth_pkg = utf16_to_utf8(lsa_auth_pkg_w);
 			if (!lsa_auth_pkg)
 				error("utf16_to_utf8 failed to convert lsa_auth_pkg_w:%ls", lsa_auth_pkg_w);
 
@@ -268,6 +268,9 @@ done:
 
 	if (lsa_auth_pkg_w)
 		free(lsa_auth_pkg_w);
+
+	if (lsa_auth_pkg)
+		free(lsa_auth_pkg);
 }
 
 /*
