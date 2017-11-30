@@ -245,7 +245,6 @@ mm_auth_custom_lsa(const char* user, const char* password, const char* domain, c
 
 		debug3("user:%s authenticated using LSA auth pkg:%s", user, lsa_auth_pkg);
 		break;
-
 	}
 
 	if (msg)

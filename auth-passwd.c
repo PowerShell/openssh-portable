@@ -58,7 +58,6 @@
 
 #ifdef WINDOWS
 #include <logonuser.h>
-#include "authconfig.h"
 #include "monitor_wrap.h"
 #endif
 
@@ -248,7 +247,6 @@ sys_auth_passwd_lsa(Authctxt *authctxt, const char *password)
 
 		memset(lsa_auth_pkg_w, 0, lsa_auth_pkg_len);
 		if (RegQueryValueExW(reg_key, L"LSAAuthenticationPackage", 0, NULL, (LPBYTE)lsa_auth_pkg_w, &lsa_auth_pkg_len) == ERROR_SUCCESS) {
-			
 			char *lsa_auth_pkg = utf16_to_utf8(lsa_auth_pkg_w);
 			if (!lsa_auth_pkg)
 				error("utf16_to_utf8 failed to convert lsa_auth_pkg_w:%ls", lsa_auth_pkg_w);

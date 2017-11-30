@@ -122,7 +122,6 @@
 #include "version.h"
 #include "ssherr.h"
 
-
 /* Re-exec fds */
 #define REEXEC_DEVCRYPTO_RESERVED_FD	(STDERR_FILENO + 1)
 #define REEXEC_STARTUP_PIPE_FD		(STDERR_FILENO + 2)

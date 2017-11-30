@@ -265,7 +265,7 @@ process_custom_lsa_auth_req(struct sshbuf* request, struct sshbuf* response, str
 	wchar_t *logon_info = NULL;
 	LSA_STRING logon_process_name, lsa_auth_package_name, originName;
 	TOKEN_SOURCE sourceContext;
-	PKERB_INTERACTIVE_PROFILE pProfile = NULL;
+	PVOID pProfile = NULL;
 	LUID logonId;
 	QUOTA_LIMITS quotas;
 	DWORD cbProfile;
@@ -331,7 +331,7 @@ process_custom_lsa_auth_req(struct sshbuf* request, struct sshbuf* response, str
 		logon_info_size,
 		NULL,
 		&sourceContext,
-		(PVOID*)&pProfile,
+		&pProfile,
 		&cbProfile,
 		&logonId,
 		&token,
