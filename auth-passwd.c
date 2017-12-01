@@ -297,12 +297,14 @@ sys_auth_passwd(Authctxt *authctxt, const char *password)
 	}
 
 	if (LogonUserExExWHelper(user_utf16, udom_utf16, pwd_utf16, LOGON32_LOGON_NETWORK_CLEARTEXT,
-	    LOGON32_PROVIDER_DEFAULT, NULL, &token, NULL, NULL, NULL, NULL) == FALSE) {
-		if (GetLastError() == ERROR_PASSWORD_MUST_CHANGE) 
-			/* 
-			 * TODO - need to add support to force password change
-			 * by sending back SSH_MSG_USERAUTH_PASSWD_CHANGEREQ
-			 */
+	    LOGON32_PROVIDER_DEFAULT, NULL, &token, NULL, NULL, NULL, NULL) == TRUE)
+		authctxt->auth_token = (void*)(INT_PTR)token;
+	else {
+		if (GetLastError() == ERROR_PASSWORD_MUST_CHANGE)
+			/*
+			* TODO - need to add support to force password change
+			* by sending back SSH_MSG_USERAUTH_PASSWD_CHANGEREQ
+			*/
 			error("password for user %s has expired", authctxt->pw->pw_name);
 		else {
 			debug("Windows authentication failed for user: %ls domain: %ls error:%d", user_utf16, udom_utf16, GetLastError());
@@ -310,11 +312,8 @@ sys_auth_passwd(Authctxt *authctxt, const char *password)
 			/* If LSA authentication package is configured then it will return the auth_token */
 			sys_auth_passwd_lsa(authctxt, password);
 		}
-			
-		goto done;
 	}
-
-	authctxt->auth_token = (void*)(INT_PTR)token;	
+			
 done:
 	if (authctxt->auth_token)
 		r = 1;
