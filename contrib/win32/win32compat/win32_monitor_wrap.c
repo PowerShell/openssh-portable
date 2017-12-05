@@ -152,15 +152,20 @@ void* mm_auth_pubkey(const char* user_name, const struct sshkey *key,
 		msg = sshbuf_new();
 		if (!msg)
 			fatal("%s: out of memory", __func__);
+
 		if (sshbuf_put_u8(msg, SSH_PRIV_AGENT_MSG_ID) != 0 ||
 		    sshbuf_put_cstring(msg, PUBKEY_AUTH_REQUEST) != 0 ||
 		    sshkey_to_blob(key, &blob, &blen) != 0 ||
 		    sshbuf_put_string(msg, blob, blen) != 0 ||
 		    sshbuf_put_cstring(msg, user_name) != 0 ||
 		    sshbuf_put_string(msg, sig, slen) != 0 ||
-		    sshbuf_put_string(msg, sshbuf_ptr(b), sshbuf_len(b)) != 0 ||
-		    ssh_request_reply(agent_fd, msg, msg) != 0) {
-			debug("unable to send pubkeyauth request");
+		    sshbuf_put_string(msg, sshbuf_ptr(b), sshbuf_len(b)) != 0) {
+			debug("unable to add data to ssh buffer");
+			break;
+		}
+
+		if(ssh_request_reply(agent_fd, msg, msg) != 0) {
+			error("unable to send pubkeyauth request to agent");
 			break;
 		}
 

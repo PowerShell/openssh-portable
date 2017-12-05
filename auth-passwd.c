@@ -57,7 +57,7 @@
 #include "authfd.h"
 
 #ifdef WINDOWS
-#include <logonuser.h>
+#include "logonuser.h"
 #include "monitor_wrap.h"
 #endif
 
@@ -271,6 +271,9 @@ done:
 
 	if (lsa_auth_pkg)
 		free(lsa_auth_pkg);
+
+	if (reg_key)
+		RegCloseKey(reg_key);
 }
 
 /*
