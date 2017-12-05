@@ -245,8 +245,10 @@ mm_auth_custom_lsa(const char* user, const char* password, const char* domain, c
 			break;
 		}
 
-		if (sshbuf_get_u32(msg, (u_int32_t *) &token) != 0)
+		if (sshbuf_get_u32(msg, (u_int32_t *)&token) != 0) {
+			debug("failed to get the token from the agent");
 			break;
+		}	
 
 		debug3("user:%s authenticated using LSA auth pkg:%s", user, lsa_auth_pkg);
 		break;
