@@ -1,5 +1,7 @@
 ﻿If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
+Import-Module OpenSSHUtils -Force
+$UtilModule = Get-Module OpenSSHUtils | Select-Object -First 1
 Describe "SFTP Test Cases" -Tags "CI" {
     BeforeAll {
         $serverDirectory = $null
@@ -270,8 +272,8 @@ Describe "SFTP Test Cases" -Tags "CI" {
     }
 
     It "$script:testId-ls lists items the user has no read permission" {
-       $adminsSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid)                        
-       $currentUserSid = Get-UserSID -User "$($env:USERDOMAIN)\$($env:USERNAME)"
+       $adminsSid = & ($UtilModule) Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid)                        
+       $currentUserSid = & ($UtilModule) Get-UserSID -User "$($env:USERDOMAIN)\$($env:USERNAME)"
             
        $permTestHasAccessFile = "permTestHasAccessFile.txt"
        $permTestHasAccessFilePath = Join-Path $serverDirectory $permTestHasAccessFile
@@ -282,7 +284,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
        $permTestNoAccessFilePath = Join-Path $serverDirectory $permTestNoAccessFile
        Remove-Item $permTestNoAccessFilePath -Force -ErrorAction SilentlyContinue
        New-Item $permTestNoAccessFilePath -ItemType file -Force -value "perm test no access file data" | Out-Null
-       Repair-FilePermission -Filepath $permTestNoAccessFilePath -Owners $currentUserSid -FullAccessNeeded $adminsSid,$currentUserSid -confirm:$false
+        & ($UtilModule) Repair-FilePermission -Filepath $permTestNoAccessFilePath -Owners $currentUserSid -FullAccessNeeded $adminsSid,$currentUserSid -confirm:$false
 
        $Commands = "ls $serverDirectory"
        Set-Content $batchFilePath -Encoding UTF8 -value $Commands

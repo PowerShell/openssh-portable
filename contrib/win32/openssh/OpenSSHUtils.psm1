@@ -228,7 +228,7 @@ function Repair-UserSshConfigPermission
 
 <#
     .Synopsis
-    Repair-FilePermissionInternal
+    Repair-FilePermission
     Only validate owner and ACEs of the file
 #>
 function Repair-FilePermission
@@ -692,4 +692,4 @@ function Enable-Privilege {
     $type[0]::EnablePrivilege($Privilege, $Disable)
 }
 
-Export-ModuleMember -Function Repair-FilePermission, Repair-SshdConfigPermission, Repair-SshdHostKeyPermission, Repair-AuthorizedKeyPermission, Repair-UserKeyPermission, Repair-UserSshConfigPermission, Enable-Privilege, Get-UserAccount, Get-UserSID
+Export-ModuleMember -Function Repair-SshdConfigPermission, Repair-SshdHostKeyPermission, Repair-AuthorizedKeyPermission, Repair-UserKeyPermission, Repair-UserSshConfigPermission

@@ -1,5 +1,7 @@
 ﻿If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
+Import-Module OpenSSHUtils -Force
+$UtilModule = Get-Module OpenSSHUtils | Select-Object -First 1
 $tC = 1
 $tI = 0
 $suite = "log_fileperm"
@@ -19,9 +21,9 @@ Describe "Tests for log file permission" -Tags "CI" {
         $port = 47003
         $logName = "log.txt"        
         
-        $systemSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::LocalSystemSid)
-        $adminsSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid)                        
-        $currentUserSid = Get-UserSID -User "$($env:USERDOMAIN)\$($env:USERNAME)"        
+        $systemSid =  & ($UtilModule) Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::LocalSystemSid)
+        $adminsSid =  & ($UtilModule) Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid)                        
+        $currentUserSid = & ($UtilModule) Get-UserSID -User "$($env:USERDOMAIN)\$($env:USERNAME)"        
 
         Remove-Item (Join-Path $testDir "*$logName") -Force -ErrorAction SilentlyContinue
         
@@ -37,7 +39,7 @@ Describe "Tests for log file permission" -Tags "CI" {
             param([string]$FilePath)
             
             $myACL = Get-ACL $FilePath
-            $currentOwnerSid = Get-UserSid -User $myACL.Owner
+            $currentOwnerSid =  & ($UtilModule) Get-UserSID  -User $myACL.Owner
             $currentOwnerSid.Equals($currentUserSid) | Should Be $true
             $myACL.Access | Should Not Be $null            
 
@@ -53,7 +55,7 @@ Describe "Tests for log file permission" -Tags "CI" {
             $identities = @($systemSid, $adminsSid, $currentUserSid)            
 
             foreach ($a in $myACL.Access) {
-                $id = Get-UserSid -User $a.IdentityReference
+                $id =  & ($UtilModule) Get-UserSID -User $a.IdentityReference
                 $identities -contains $id | Should Be $true           
 
                 switch ($id)

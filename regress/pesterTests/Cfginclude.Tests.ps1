@@ -1,5 +1,7 @@
 ﻿If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
+Import-Module OpenSSHUtils -Force
+$UtilModule = Get-Module OpenSSHUtils | Select-Object -First 1
 $tC = 1
 $tI = 0
 $suite = "authorized_keys_fileperm"
@@ -51,16 +53,16 @@ Describe "Tests for ssh config" -Tags "CI" {
 
     Context "$tC-User SSHConfig--ReadConfig" {
         BeforeAll {
-            $systemSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::LocalSystemSid)
-            $adminsSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid)                        
-            $currentUserSid = Get-UserSID -User "$($env:USERDOMAIN)\$($env:USERNAME)"
-            $objUserSid = Get-UserSID -User $ssouser
+            $systemSid = & ($UtilModule) Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::LocalSystemSid)
+            $adminsSid = & ($UtilModule) Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid)                        
+            $currentUserSid = & ($UtilModule) Get-UserSID -User "$($env:USERDOMAIN)\$($env:USERNAME)"
+            $objUserSid = & ($UtilModule) Get-UserSID -User $ssouser
 
             $userConfigFile = Join-Path $home ".ssh\config"
             if( -not (Test-path $userConfigFile) ) {
                 Copy-item "$PSScriptRoot\testdata\ssh_config" $userConfigFile -force
             }
-            Enable-Privilege SeRestorePrivilege | out-null
+            & ($UtilModule) Enable-Privilege SeRestorePrivilege | out-null
             $oldACL = Get-ACL $userConfigFile
             $tI=1
         }
@@ -79,7 +81,7 @@ Describe "Tests for ssh config" -Tags "CI" {
 
         It "$tC.$tI-User SSHConfig-ReadConfig positive (current logon user is the owner)" {
             #setup
-            Repair-FilePermission -Filepath $userConfigFile -Owners $currentUserSid -FullAccessNeeded $adminsSid,$systemSid,$currentUserSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -Filepath $userConfigFile -Owners $currentUserSid -FullAccessNeeded $adminsSid,$systemSid,$currentUserSid -confirm:$false
 
             #Run
             $o = ssh test_target echo 1234
@@ -88,7 +90,7 @@ Describe "Tests for ssh config" -Tags "CI" {
 
         It "$tC.$tI-User SSHConfig-ReadConfig positive (local system is the owner)" {
             #setup
-            Repair-FilePermission -Filepath $userConfigFile -Owners $systemSid -FullAccessNeeded $adminsSid,$systemSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -Filepath $userConfigFile -Owners $systemSid -FullAccessNeeded $adminsSid,$systemSid -confirm:$false
 
             #Run
             $o = ssh test_target echo 1234
@@ -97,7 +99,7 @@ Describe "Tests for ssh config" -Tags "CI" {
 
         It "$tC.$tI-User SSHConfig-ReadConfig positive (admin is the owner and current user has no explict ACE)" {
             #setup
-            Repair-FilePermission -Filepath $userConfigFile -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -Filepath $userConfigFile -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid -confirm:$false
             Set-FilePermission -Filepath $userConfigFile -UserSid $currentUserSid -Action Delete
 
             #Run
@@ -107,7 +109,7 @@ Describe "Tests for ssh config" -Tags "CI" {
 
         It "$tC.$tI-User SSHConfig-ReadConfig positive (admin is the owner and current user has explict ACE)" {
             #setup
-            Repair-FilePermission -Filepath $userConfigFile -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid,$currentUserSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -Filepath $userConfigFile -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid,$currentUserSid -confirm:$false
             
             #Run
             $o = ssh test_target echo 1234
@@ -116,7 +118,7 @@ Describe "Tests for ssh config" -Tags "CI" {
 
         It "$tC.$tI-User SSHConfig-ReadConfig negative (wrong owner)" {
             #setup
-            Repair-FilePermission -Filepath $userConfigFile -Owners $objUserSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -Filepath $userConfigFile -Owners $objUserSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
 
             #Run
             cmd /c "ssh test_target echo 1234 2> $logPath"
@@ -126,7 +128,7 @@ Describe "Tests for ssh config" -Tags "CI" {
 
         It "$tC.$tI-User SSHConfig-ReadConfig negative (others has permission)" {
             #setup
-            Repair-FilePermission -Filepath $userConfigFile -Owners $currentUserSid -FullAccessNeeded $adminsSid,$systemSid,$currentUserSid -ReadAccessNeeded $objUserSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -Filepath $userConfigFile -Owners $currentUserSid -FullAccessNeeded $adminsSid,$systemSid,$currentUserSid -ReadAccessNeeded $objUserSid -confirm:$false
 
             #Run
             cmd /c "ssh test_target echo 1234 2> $logPath"

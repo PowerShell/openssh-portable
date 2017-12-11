@@ -1,5 +1,5 @@
 ﻿Import-Module OpenSSHUtils -Force
-
+$UtilModule = Get-Module OpenSSHUtils | Select-Object -First 1
 Add-Type -TypeDefinition @"
    public enum PlatformType
    {
@@ -50,11 +50,11 @@ function Set-FilePermission
     )    
 
     $myACL = Get-ACL $FilePath
-    $account = Get-UserAccount -UserSid $UserSid
+    $account = & ($UtilModule) Get-UserAccount -UserSid $UserSid
     if($Action -ieq "Delete")
     {
         $myACL.SetAccessRuleProtection($True, $True)
-        Enable-Privilege SeRestorePrivilege | out-null
+        & ($UtilModule) Enable-Privilege SeRestorePrivilege | out-null
         Set-Acl -Path $FilePath -AclObject $myACL
         $myACL = Get-ACL $FilePath
         
@@ -87,7 +87,7 @@ function Set-FilePermission
             $myACL.AddAccessRule($userACE)
         }
     }
-    Enable-Privilege SeRestorePrivilege | out-null
+    & ($UtilModule) Enable-Privilege SeRestorePrivilege | out-null
     Set-Acl -Path $FilePath -AclObject $myACL -confirm:$false
 }
 

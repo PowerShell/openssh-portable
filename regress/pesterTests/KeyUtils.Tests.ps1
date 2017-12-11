@@ -1,5 +1,7 @@
 ﻿If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
+Import-Module OpenSSHUtils -Force
+$UtilModule = Get-Module OpenSSHUtils | Select-Object -First 1
 $tC = 1
 $tI = 0
 $suite = "keyutils"
@@ -30,11 +32,11 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
         
         $ssouser = $OpenSSHTestInfo["SSOUser"]
         
-        $systemSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::LocalSystemSid)
-        $adminsSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid)                        
-        $currentUserSid = Get-UserSID -User "$($env:USERDOMAIN)\$($env:USERNAME)"
-        $objUserSid = Get-UserSID -User $ssouser
-        $everyoneSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::WorldSid)
+        $systemSid = & ($UtilModule) Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::LocalSystemSid)
+        $adminsSid = & ($UtilModule) Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid)                        
+        $currentUserSid = & ($UtilModule) Get-UserSID -User "$($env:USERDOMAIN)\$($env:USERNAME)"
+        $objUserSid = & ($UtilModule) Get-UserSID -User $ssouser
+        $everyoneSid = & ($UtilModule) Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::WorldSid)
 
         #only validate owner and ACEs of the file
         function ValidateKeyFile {
@@ -44,7 +46,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             )
 
             $myACL = Get-ACL $FilePath
-            $currentOwnerSid = Get-UserSid -User $myACL.Owner
+            $currentOwnerSid = & ($UtilModule) Get-UserSID -User $myACL.Owner
             $currentOwnerSid.Equals($currentUserSid) | Should Be $true
             $myACL.Access | Should Not Be $null
             
@@ -75,7 +77,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             }
 
             foreach ($a in $myACL.Access) {
-                $id = Get-UserSid -User $a.IdentityReference
+                $id = & ($UtilModule) Get-UserSID -User $a.IdentityReference
                 $identities -contains $id | Should Be $true           
 
                 switch ($id)
@@ -271,7 +273,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
         }
         AfterEach {
             if(Test-Path $keyFilePath) {
-                Repair-FilePermission -FilePath $keyFilePath -Owner $currentUserSid -FullAccessNeeded $currentUserSid,$systemSid,$adminsSid -confirm:$false
+                 & ($UtilModule) Repair-FilePermission -FilePath $keyFilePath -Owner $currentUserSid -FullAccessNeeded $currentUserSid,$systemSid,$adminsSid -confirm:$false
             }            
         }
 
@@ -283,7 +285,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
 
         It "$tC.$tI-  ssh-add - positive (Secured private key owned by current user)" {
             #setup to have current user as owner and grant it full control                    
-            Repair-FilePermission -FilePath $keyFilePath -Owner $currentUserSid -FullAccessNeeded $currentUserSid,$systemSid,$adminsSid -confirm:$false
+             & ($UtilModule) Repair-FilePermission -FilePath $keyFilePath -Owner $currentUserSid -FullAccessNeeded $currentUserSid,$systemSid,$adminsSid -confirm:$false
 
             # for ssh-add to consume SSh_ASKPASS, stdin should not be TTY
             cmd /c "ssh-add $keyFilePath < $nullFile 2> nul"
@@ -298,7 +300,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
 
         It "$tC.$tI - ssh-add - positive (Secured private key owned by Administrators group and the current user has no explicit ACE)" {
             #setup to have local admin group as owner and grant it full control            
-            Repair-FilePermission -FilePath $keyFilePath -Owner $adminsSid -FullAccessNeeded $adminsSid,$systemSid -confirm:$false
+             & ($UtilModule) Repair-FilePermission -FilePath $keyFilePath -Owner $adminsSid -FullAccessNeeded $adminsSid,$systemSid -confirm:$false
 
             # for ssh-add to consume SSh_ASKPASS, stdin should not be TTY
             cmd /c "ssh-add $keyFilePath < $nullFile 2> nul "
@@ -313,7 +315,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
 
         It "$tC.$tI - ssh-add - positive (Secured private key owned by Administrators group and the current user has explicit ACE)" {
             #setup to have local admin group as owner and grant it full control
-            Repair-FilePermission -FilePath $keyFilePath -Owners $adminsSid -FullAccessNeeded $currentUserSid,$adminsSid,$systemSid -confirm:$false
+             & ($UtilModule) Repair-FilePermission -FilePath $keyFilePath -Owners $adminsSid -FullAccessNeeded $currentUserSid,$adminsSid,$systemSid -confirm:$false
 
             # for ssh-add to consume SSh_ASKPASS, stdin should not be TTY
             cmd /c "ssh-add $keyFilePath < $nullFile 2> nul "
@@ -328,7 +330,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
 
         It "$tC.$tI - ssh-add - positive (Secured private key owned by local system group)" {
             #setup to have local admin group as owner and grant it full control            
-            Repair-FilePermission -FilePath $keyFilePath -Owners $systemSid -FullAccessNeeded $systemSid,$adminsSid -confirm:$false
+             & ($UtilModule) Repair-FilePermission -FilePath $keyFilePath -Owners $systemSid -FullAccessNeeded $systemSid,$adminsSid -confirm:$false
 
             # for ssh-add to consume SSh_ASKPASS, stdin should not be TTY
             cmd /c "ssh-add $keyFilePath < $nullFile 2> nul "
@@ -343,7 +345,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
         
         It "$tC.$tI-  ssh-add - negative (other account can access private key file)" {
             #setup to have current user as owner and grant it full control
-            Repair-FilePermission -FilePath $keyFilePath -Owners $currentUserSid -FullAccessNeeded $currentUserSid,$adminsSid, $systemSid -ReadAccessNeeded $objUserSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -FilePath $keyFilePath -Owners $currentUserSid -FullAccessNeeded $currentUserSid,$adminsSid, $systemSid -ReadAccessNeeded $objUserSid -confirm:$false
 
             cmd /c "ssh-add $keyFilePath < $nullFile 2> nul "
             $LASTEXITCODE | Should Not Be 0
@@ -355,7 +357,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
 
         It "$tC.$tI - ssh-add - negative (the private key has wrong owner)" {
             #setup to have ssouser as owner and grant it full control
-            Repair-FilePermission -FilePath $keyFilePath -Owners $objUserSid -FullAccessNeeded $objUserSid,$adminsSid, $systemSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -FilePath $keyFilePath -Owners $objUserSid -FullAccessNeeded $objUserSid,$adminsSid, $systemSid -confirm:$false
 
             cmd /c "ssh-add $keyFilePath < $nullFile 2> nul "
             $LASTEXITCODE | Should Not Be 0

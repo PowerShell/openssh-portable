@@ -23,6 +23,7 @@ $Script:WindowsInBox = $false
 $Script:NoLibreSSL = $false
 $Script:EnableAppVerifier = $true
 $Script:PostmortemDebugging = $false
+$UtilModule = Get-Module OpenSSHUtils | Select-Object -First 1
 
 <#
     .Synopsis
@@ -287,7 +288,7 @@ WARNING: Following changes will be made to OpenSSH configuration
 function Get-LocalUserProfile
 {
     param([string]$User)
-    $sid = Get-UserSID -User $User
+    $sid = & ($UtilModule) Get-UserSID -User $User
     $userProfileRegistry = Join-Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" $sid
     if (-not (Test-Path $userProfileRegistry) ) {        
         #create profile
@@ -419,29 +420,6 @@ function Uninstall-OpenSSHUtilsModule
     {
         Remove-item $TargetDir -Recurse -Force -ErrorAction SilentlyContinue | out-null
     }    
-}
-
-<#
-    .Synopsis
-    Get-UserSID
-#>
-function Get-UserSID
-{
-    param
-        (             
-            [string]$Domain,            
-            [string]$User
-        )
-    if([string]::IsNullOrEmpty($Domain))
-    {
-        $objUser = New-Object System.Security.Principal.NTAccount($User)        
-    }
-    else
-    {
-        $objUser = New-Object System.Security.Principal.NTAccount($Domain, $User)
-    }
-    $strSID = $objUser.Translate([System.Security.Principal.SecurityIdentifier])
-    $strSID.Value
 }
 
 <#

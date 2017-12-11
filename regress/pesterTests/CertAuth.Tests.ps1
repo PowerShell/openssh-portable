@@ -1,5 +1,7 @@
 ﻿If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
+Import-Module OpenSSHUtils -Force
+$UtilModule = Get-Module OpenSSHUtils | Select-Object -First 1
 $tC = 1
 $tI = 0
 $suite = "certauth"

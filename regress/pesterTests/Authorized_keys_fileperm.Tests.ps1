@@ -1,6 +1,7 @@
 ﻿If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
 Import-Module OpenSSHUtils -Force
+$UtilModule = Get-Module OpenSSHUtils | Select-Object -First 1
 $tC = 1
 $tI = 0
 $suite = "authorized_keys_fileperm"
@@ -45,10 +46,10 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
 
     Context "Authorized key file permission" {
         BeforeAll {
-            $systemSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::LocalSystemSid)
-            $adminsSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid)                        
-            $currentUserSid = Get-UserSID -User "$($env:USERDOMAIN)\$($env:USERNAME)"
-            $objUserSid = Get-UserSID -User $ssouser
+            $systemSid = &($UtilModule) Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::LocalSystemSid)
+            $adminsSid = & ($UtilModule) Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid)                        
+            $currentUserSid = & ($UtilModule) Get-UserSID -User "$($env:USERDOMAIN)\$($env:USERNAME)"
+            $objUserSid = & ($UtilModule) Get-UserSID -User $ssouser
 
             $ssouserSSHProfilePath = Join-Path $ssouserProfile .testssh
             if(-not (Test-Path $ssouserSSHProfilePath -PathType Container)) {
@@ -88,7 +89,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
 
         It "$tC.$tI-authorized_keys-positive(pwd user is the owner and running process can access to the file)" {
             #setup to have ssouser as owner and grant ssouser read and write, admins group, and local system full control            
-            Repair-FilePermission -Filepath $authorizedkeyPath -Owners $objUserSid -FullAccessNeeded  $adminsSid,$systemSid,$objUserSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -Filepath $authorizedkeyPath -Owners $objUserSid -FullAccessNeeded  $adminsSid,$systemSid,$objUserSid -confirm:$false
 
             #Run
             Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $logPath") -NoNewWindow
@@ -101,7 +102,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
 
         It "$tC.$tI-authorized_keys-positive(authorized_keys is owned by local system)" {
             #setup to have system as owner and grant it full control            
-            Repair-FilePermission -Filepath $authorizedkeyPath -Owner $systemSid -FullAccessNeeded  $adminsSid,$systemSid,$objUserSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -Filepath $authorizedkeyPath -Owner $systemSid -FullAccessNeeded  $adminsSid,$systemSid,$objUserSid -confirm:$false
 
             #Run
             Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $logPath") -NoNewWindow
@@ -114,7 +115,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
 
         It "$tC.$tI-authorized_keys-positive(authorized_keys is owned by admins group and pwd does not have explict ACE)" {
             #setup to have admin group as owner and grant it full control            
-            Repair-FilePermission -Filepath $authorizedkeyPath -Owner $adminsSid -FullAccessNeeded $adminsSid,$systemSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -Filepath $authorizedkeyPath -Owner $adminsSid -FullAccessNeeded $adminsSid,$systemSid -confirm:$false
 
             #Run
             Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $logPath") -NoNewWindow
@@ -127,7 +128,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
 
         It "$tC.$tI-authorized_keys-positive(authorized_keys is owned by admins group and pwd have explict ACE)" {
             #setup to have admin group as owner and grant it full control
-            Repair-FilePermission -Filepath $authorizedkeyPath -Owner $adminsSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -Filepath $authorizedkeyPath -Owner $adminsSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
 
             #Run
             Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $logPath") -NoNewWindow
@@ -140,7 +141,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
 
         It "$tC.$tI-authorized_keys-negative(authorized_keys is owned by other admin user)" {
             #setup to have current user (admin user) as owner and grant it full control
-            Repair-FilePermission -Filepath $authorizedkeyPath -Owner $currentUserSid -FullAccessNeeded $adminsSid,$systemSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -Filepath $authorizedkeyPath -Owner $currentUserSid -FullAccessNeeded $adminsSid,$systemSid -confirm:$false
 
             #Run
             Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $logPath") -NoNewWindow
@@ -155,10 +156,10 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
 
         It "$tC.$tI-authorized_keys-negative(other account can access private key file)" {
             #setup to have current user as owner and grant it full control            
-            Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objUserSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objUserSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
 
             #add $PwdUser to access the file authorized_keys
-            $objPwdUserSid = Get-UserSid -User $PwdUser
+            $objPwdUserSid = & ($UtilModule) Get-UserSid -User $PwdUser
             Set-FilePermission -FilePath $authorizedkeyPath -User $objPwdUserSid -Perm "Read"
 
             #Run
@@ -174,8 +175,8 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
 
         It "$tC.$tI-authorized_keys-negative(authorized_keys is owned by other non-admin user)" {
             #setup to have PwdUser as owner and grant it full control            
-            $objPwdUserSid = Get-UserSid -User $PwdUser
-            Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objPwdUserSid -FullAccessNeeded $adminsSid,$systemSid,$objPwdUser -confirm:$false
+            $objPwdUserSid = & ($UtilModule) Get-UserSid -User $PwdUser
+            & ($UtilModule) Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objPwdUserSid -FullAccessNeeded $adminsSid,$systemSid,$objPwdUser -confirm:$false
 
             #Run
             Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-o `"AuthorizedKeysFile .testssh/authorized_keys`"", "-E $logPath") -NoNewWindow
@@ -189,7 +190,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
         }
         It "$tC.$tI-authorized_keys-negative(the running process does not have read access to the authorized_keys)" -skip:$skip {
             #setup to have ssouser as owner and grant it full control            
-            Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objUserSid -FullAccessNeeded $systemSid,$objUserSid -confirm:$false
+            & ($UtilModule) Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objUserSid -FullAccessNeeded $systemSid,$objUserSid -confirm:$false
             Set-FilePermission -Filepath $authorizedkeyPath -UserSid $adminsSid -Action Delete
 
             #Run
