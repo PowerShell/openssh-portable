@@ -294,6 +294,10 @@ do_cmd(char *host, char *remuser, int port, char *cmd, int *fdin, int *fdout)
 #ifdef WINDOWS
 	/* generate command line and spawn_child */
 	replacearg(&args, 0, "%s", ssh_program);
+	if (port != -1) {
+		addargs(&args, "-p");
+		addargs(&args, "%d", port);
+	}
 	if (remuser != NULL) {
 		addargs(&args, "-l");
 		addargs(&args, "%s", remuser);
