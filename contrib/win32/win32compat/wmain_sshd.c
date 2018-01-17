@@ -97,8 +97,9 @@ static VOID WINAPI service_handler(DWORD dwControl)
 	ReportSvcStatus(service_status.dwCurrentState, NO_ERROR, 0);
 }
 
-#define SSHKEYGEN_CMDLINE L"ssh-keygen -A"
-static void prereq_setup()
+#define SSH_HOSTKEY_GEN_CMDLINE L"ssh-keygen -A"
+static void 
+prereq_setup()
 {
 	TOKEN_USER* info = NULL;
 	DWORD info_len = 0, dwError = 0;
@@ -136,7 +137,7 @@ static void prereq_setup()
 		ZeroMemory(&si, sizeof(si));
 		si.cb = sizeof(si);
 		ZeroMemory(&pi, sizeof(pi));
-		memcpy(cmdline, SSHKEYGEN_CMDLINE, wcslen(SSHKEYGEN_CMDLINE) * 2 + 2);
+		memcpy(cmdline, SSH_HOSTKEY_GEN_CMDLINE, wcslen(SSH_HOSTKEY_GEN_CMDLINE) * 2 + 2);
 		if (CreateProcessW(NULL, cmdline, NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, NULL, &si, &pi)) {
 			WaitForSingleObject(pi.hProcess, INFINITE);
 			CloseHandle(pi.hThread);
