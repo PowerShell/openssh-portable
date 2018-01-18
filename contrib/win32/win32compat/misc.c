@@ -53,6 +53,7 @@
 #include "w32fd.h"
 #include "inc\string.h"
 #include "inc\grp.h"
+#include "..\..\..\config.h"
 
 static char* s_programdir = NULL;
 
@@ -241,24 +242,34 @@ dlsym(HMODULE handle, const char *symbol)
 * only r, w, a are supported for now
 */
 FILE *
-w32_fopen_utf8(const char *path, const char *mode)
+w32_fopen_utf8(const char *input_path, const char *mode)
 {
 	wchar_t wpath[PATH_MAX], wmode[5];
 	FILE* f;
 	char utf8_bom[] = { 0xEF,0xBB,0xBF };
 	char first3_bytes[3];
 	int status = 1;
-	errno_t r = 0;
+	errno_t r = 0;	
+	char path[PATH_MAX] = {0,};
 
 	if (mode[1] != '\0') {
 		errno = ENOTSUP;
 		return NULL;
 	}
 
-	if(NULL == path) { 
+	if(NULL == input_path) { 
 		errno = EINVAL;
 		debug3("fopen - ERROR:%d", errno);
 		return NULL; 
+	}
+
+	if (NULL != strstr(input_path, SSHDIR)) {
+		strcat_s(path, _countof(path), get_ssh_dir_path());
+
+		// append filename. path - "c:\\ProgramData\\openssh\\<filename>"
+		strcat_s(path, _countof(path), &input_path[strlen(SSHDIR)]);		
+	} else {
+		strcpy_s(path, _countof(path), input_path);
 	}
 
 	/* if opening null device, point to Windows equivalent */
@@ -816,8 +827,19 @@ w32_mkdir(const char *path_utf8, unsigned short mode)
 }
 
 int
-w32_stat(const char *path, struct w32_stat *buf)
+w32_stat(const char *input_path, struct w32_stat *buf)
 {
+	char path[PATH_MAX] = {0,};
+
+	if (NULL != strstr(input_path, SSHDIR)) {
+		strcat_s(path, _countof(path), get_ssh_dir_path());
+
+		// append filename. path - "c:\\ProgramData\\openssh\\<filename>"
+		strcat_s(path, _countof(path), &input_path[strlen(SSHDIR)]);
+	} else {
+		strcpy_s(path, _countof(path), input_path);
+	}
+
 	return fileio_stat(sanitized_path(path), (struct _stat64*)buf);
 }
 
@@ -1412,4 +1434,26 @@ cleanup:
 	if (pSD)
 		LocalFree(pSD);
 	return ret;
+}
+
+char*
+get_ssh_dir_path()
+{
+	if (ssh_dir_path[0]) return ssh_dir_path;
+
+	char system32_path[PATH_MAX] = { 0, };
+	if (!GetSystemDirectoryA(system32_path, _countof(system32_path)))
+		fatal("%s, GetSystemDirectoryA failed", __func__);
+
+	system32_path[3] = '\0';
+
+	// Get system drive, copy first 3 characters. path - "c:\"
+	strcat_s(ssh_dir_path, _countof(ssh_dir_path), system32_path);
+
+	// ssh_root_path - "c:\\ProgramData\\openssh\\"
+	char *p = "ProgramData\\openssh";
+	strcat_s(ssh_dir_path, _countof(ssh_dir_path), p);
+	debug("__PROGRAMDATA__:%s", ssh_dir_path);
+
+	return ssh_dir_path;
 }

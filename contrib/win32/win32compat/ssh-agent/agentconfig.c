@@ -97,9 +97,8 @@ kexgex_server(struct ssh * sh) {
 
 int
 load_config() {
-	char *config_file_name = "sshd_config";
-	errno_t r = 0;
-	
+	char *config_file_name = SSHDIR "\\sshd_config";
+
 	buffer_init(&cfg);
 	initialize_server_options(&options);
 	load_server_config(config_file_name, &cfg);

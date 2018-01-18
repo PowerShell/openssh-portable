@@ -1691,7 +1691,7 @@
 
 #define HAVE_MBLEN 1
 
-#define SSHDIR "."
+#define SSHDIR "__PROGRAMDATA__\\openssh"
 #define _PATH_SFTP_SERVER "sftp-server.exe"
 #define _PATH_SSH_PROGRAM "ssh.exe"
 #define _PATH_LS			"dir"

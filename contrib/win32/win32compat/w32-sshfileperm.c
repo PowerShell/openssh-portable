@@ -34,6 +34,8 @@
 #include "inc\pwd.h"
 #include "sshfileperm.h"
 #include "debug.h"
+#include "misc_internal.h"
+#include "config.h"
 
 #define SSHD_ACCOUNT L"NT Service\\sshd"
 
@@ -46,10 +48,10 @@
 * Returns 0 on success and -1 on failure
 */
 int
-check_secure_file_permission(const char *name, struct passwd * pw)
+check_secure_file_permission(const char *input_path, struct passwd * pw)
 {	
 	PSECURITY_DESCRIPTOR pSD = NULL;
-	wchar_t * name_utf16 = NULL;
+	wchar_t * path_utf16 = NULL;
 	PSID owner_sid = NULL, user_sid = NULL;
 	PACL dacl = NULL;
 	DWORD error_code = ERROR_SUCCESS; 
@@ -57,6 +59,7 @@ check_secure_file_permission(const char *name, struct passwd * pw)
 	struct passwd * pwd = pw;
 	char *bad_user = NULL;
 	int ret = 0;
+	char path[PATH_MAX] = {0, };
 
 	if (pwd == NULL)
 		if ((pwd = getpwuid(0)) == NULL) 
@@ -68,17 +71,27 @@ check_secure_file_permission(const char *name, struct passwd * pw)
 		ret = -1;
 		goto cleanup;
 	}
-	if ((name_utf16 = utf8_to_utf16(name)) == NULL) {
+
+	if (NULL != strstr(input_path, SSHDIR)) {
+		strcat_s(path, _countof(path), get_ssh_dir_path());
+
+		// append filename. path - "c:\\ProgramData\\openssh\\<filename>"
+		strcat_s(path, _countof(path), &input_path[strlen(SSHDIR)]);
+	} else {
+		strcpy_s(path, _countof(path), input_path);
+	}
+
+	if ((path_utf16 = utf8_to_utf16(path)) == NULL) {
 		ret = -1;
 		errno = ENOMEM;
 		goto cleanup;
 	}
 
 	/*Get the owner sid of the file.*/
-	if ((error_code = GetNamedSecurityInfoW(name_utf16, SE_FILE_OBJECT,
+	if ((error_code = GetNamedSecurityInfoW(path_utf16, SE_FILE_OBJECT,
 		OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
 		&owner_sid, NULL, &dacl, NULL, &pSD)) != ERROR_SUCCESS) {
-		debug3("failed to retrieve the owner sid and dacl of file %s with error code: %d", name, error_code);
+		debug3("failed to retrieve the owner sid and dacl of file %s with error code: %d", path, error_code);
 		errno = EOTHER;
 		ret = -1;
 		goto cleanup;
@@ -91,7 +104,7 @@ check_secure_file_permission(const char *name, struct passwd * pw)
 	if (!IsWellKnownSid(owner_sid, WinBuiltinAdministratorsSid) &&
 		!IsWellKnownSid(owner_sid, WinLocalSystemSid) &&
 		!EqualSid(owner_sid, user_sid)) {
-		debug3("Bad owner on %s", name);
+		debug3("Bad owner on %s", path);
 		ret = -1;
 		goto cleanup;
 	}
@@ -130,7 +143,7 @@ check_secure_file_permission(const char *name, struct passwd * pw)
 		}
 		else if(is_sshd_account(current_trustee_sid)){
 			if ((current_access_mask & ~FILE_GENERIC_READ) != 0){
-				debug3("Bad permission. %s can only read access to %s", SSHD_ACCOUNT, name);	
+				debug3("Bad permission. %s can only read access to %s", SSHD_ACCOUNT, path);	
 				ret = -1;			
 				break;			
 			}			
@@ -141,7 +154,7 @@ check_secure_file_permission(const char *name, struct passwd * pw)
 				debug3("ConvertSidToSidString failed with %d. ", GetLastError());
 				break;
 			}
-			debug3("Bad permissions. Try removing permissions for user: %s on file %s.", bad_user, name);
+			debug3("Bad permissions. Try removing permissions for user: %s on file %s.", bad_user, path);
 			break;
 		}
 	}	
@@ -152,8 +165,8 @@ cleanup:
 		LocalFree(pSD);
 	if (user_sid)
 		LocalFree(user_sid);
-	if(name_utf16)
-		free(name_utf16);
+	if(path_utf16)
+		free(path_utf16);
 	return ret;
 }
 
