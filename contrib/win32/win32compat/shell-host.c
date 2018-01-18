@@ -690,7 +690,7 @@ SendCharacter(HANDLE hInput, WORD attributes, wchar_t character)
 
 	StringCbPrintfExA(Next, SizeLeft, &Next, &SizeLeft, 0, ";%u", Color);
 	
-	StringCbPrintfExA(Next, SizeLeft, &Next, &SizeLeft, 0, ";%c", 'm');
+	StringCbPrintfExA(Next, SizeLeft, &Next, &SizeLeft, 0, "%c", 'm');
 
 	if (bUseAnsiEmulation && attributes != pattributes)
 		WriteFile(hInput, formatted_output, (DWORD)(Next - formatted_output), &wr, NULL);
@@ -1589,7 +1589,7 @@ start_withno_pty(wchar_t *command)
 			}
 
 			/* for backspace, we need to send space and another backspace for visual erase */
-			if (buf[i] == '\b') {
+			if (buf[i] == '\b' || buf[i] == '\x7f') {
 				if (in_cmd_len > 0) {
 					GOTO_CLEANUP_ON_FALSE(WriteFile(pipe_out, "\b \b", 3, &wr, NULL));
 					in_cmd_len--;
