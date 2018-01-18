@@ -42,7 +42,7 @@
 static int logfd = -1;
 
 /*
- * log file location is written to "%programData%\\openssh\\logs\\<module_name>.log"
+ * log file location will be - "%programData%\\openssh\\logs\\<module_name>.log"
  */
 void
 openlog(char *ident, unsigned int option, int facility)
