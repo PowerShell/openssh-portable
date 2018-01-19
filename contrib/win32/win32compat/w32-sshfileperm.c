@@ -71,7 +71,7 @@ check_secure_file_permission(const char *input_path, struct passwd * pw)
 	}
 
 	if (NULL != strstr(input_path, SSHDIR)) {
-		strcat_s(path, _countof(path), get_ssh_dir_path());
+		strcat_s(path, _countof(path), get_ssh_cfg_dir_path());
 
 		// append filename. path - "c:\\ProgramData\\openssh\\<filename>"
 		strcat_s(path, _countof(path), &input_path[strlen(SSHDIR)]);

@@ -50,7 +50,6 @@
 #include <sys\utime.h>
 #include "misc_internal.h"
 #include "debug.h"
-#include "..\..\..\config.h"
 
 /* internal table that stores the fd to w32_io mapping*/
 struct w32fd_table {
@@ -427,13 +426,12 @@ w32_pipe(int *pfds)
 }
 
 int
-w32_open(const char *input_path, int flags, ... /* arg */)
+w32_open(const char *pathname, int flags, ... /* arg */)
 {
 	int min_index = fd_table_get_min_index();
 	struct w32_io* pio;
 	va_list valist;
 	mode_t mode = 0;
-	char path[PATH_MAX] = { 0, };
 
 	errno = 0;
 	if (min_index == -1)
@@ -444,16 +442,7 @@ w32_open(const char *input_path, int flags, ... /* arg */)
 		va_end(valist);
 	}
 
-	if (NULL != strstr(input_path, SSHDIR)) {
-		strcat_s(path, _countof(path), get_ssh_dir_path());
-
-		// append filename. path - "c:\\ProgramData\\openssh\\<filename>"
-		strcat_s(path, _countof(path), &input_path[strlen(SSHDIR)]);
-	} else {
-		strcpy_s(path, _countof(path), input_path);
-	}
-
-	pio = fileio_open(sanitized_path(path), flags, mode);
+	pio = fileio_open(resolved_path(pathname), flags, mode);
 	
 	if (pio == NULL)
 		return -1;
@@ -461,7 +450,7 @@ w32_open(const char *input_path, int flags, ... /* arg */)
 	pio->type = NONSOCK_FD;
 	fd_table_set(pio, min_index);
 	debug4("open - handle:%p, io:%p, fd:%d", pio->handle, pio, min_index);
-	debug5("open - path:%s", path);
+	debug5("open - path:%s", pathname);
 	return min_index;
 }
 

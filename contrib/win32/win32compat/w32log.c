@@ -35,7 +35,6 @@
 
 #include "inc\syslog.h"
 #include "misc_internal.h"
-#include "..\..\..\config.h"
 #include "inc\utf.h"
 
 #define MSGBUFSIZ 1024
@@ -65,7 +64,7 @@ openlog(char *ident, unsigned int option, int facility)
 		while (tail > module_path && *tail != L'\\' && *tail != L'/')
 			tail--;
 			
-		wchar_t* ssh_root_path_w = utf8_to_utf16(get_ssh_dir_path()); // "%programData%\\openssh"
+		wchar_t* ssh_root_path_w = utf8_to_utf16(get_ssh_cfg_dir_path()); /* "%programData%\\ssh" */
 
 		if ((wcsncat_s(log_file, PATH_MAX + 12, ssh_root_path_w, wcslen(ssh_root_path_w)) != 0) ||
 		    (wcsncat_s(log_file, PATH_MAX + 12, logs_dir, 6) != 0) ||

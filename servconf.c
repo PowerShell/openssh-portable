@@ -660,10 +660,8 @@ derelativise_path(const char *path)
 	if (strcasecmp(path, "none") == 0)
 		return xstrdup("none");
 	expanded = tilde_expand_filename(path, getuid());
-#ifdef WINDOWS
-        /* Windows absolute paths - \abc, /abc, c:\abc, c:/abc, __PROGRAMDATA__\openssh\sshd_config */
-	if (*expanded == '/' || *expanded == '\\' || strstr(expanded, SSHDIR) ||
-	    (*expanded != '\0' && expanded[1] == ':'))
+#ifdef WINDOWS        
+	if (is_absolute_path(expanded))
 #else  /* !WINDOWS */
 	if (*expanded == '/')
 #endif  /* !WINDOWS */

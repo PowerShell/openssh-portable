@@ -111,7 +111,7 @@ prereq_setup()
 	STARTUPINFOW si;
 	PROCESS_INFORMATION pi;
 	wchar_t cmdline[MAX_PATH];
-	
+
 	if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &proc_token) == FALSE ||
 	    GetTokenInformation(proc_token, TokenUser, NULL, 0, &info_len) == TRUE ||
 	    (info = (TOKEN_USER*)malloc(info_len)) == NULL ||
@@ -177,7 +177,7 @@ int wmain(int argc, wchar_t **wargv) {
 	wchar_t* path_utf16;
 	argc_original = argc;
 	wargv_original = wargv;
-	
+
 	/* change current directory to sshd.exe root */
 	if ( (path_utf16 = utf8_to_utf16(w32_programdir())) == NULL) 
 		return -1;

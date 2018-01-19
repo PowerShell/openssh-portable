@@ -8,7 +8,7 @@ $scriptdir = Split-Path $scriptpath
 
 $sshdpath = Join-Path $scriptdir "sshd.exe"
 $sshagentpath = Join-Path $scriptdir "ssh-agent.exe"
-$sshdir = Join-Path $env:ProgramData "\openssh"
+$sshdir = Join-Path $env:ProgramData "\ssh"
 $logsdir = Join-Path $sshdir "logs"
 
 if (-not (Test-Path $sshdpath)) {

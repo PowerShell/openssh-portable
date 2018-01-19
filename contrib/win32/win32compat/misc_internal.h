@@ -15,14 +15,15 @@
 
 #define IS_INVALID_HANDLE(h) ( ((NULL == h) || (INVALID_HANDLE_VALUE == h)) ? 1 : 0 )
 #define IS_VALID_HANDLE(h) (!IS_INVALID_HANDLE(h))
+#define SSHDIR "__PROGRAMDATA__\\ssh" /* This value should always be in sync with config.h.vs */
 
 #define errno_from_Win32LastError() errno_from_Win32Error(GetLastError())
 
 static char *machine_domain_name;
-static char ssh_dir_path[PATH_MAX] = {0,};
+static char ssh_cfg_dir_path[PATH_MAX] = {0,};
 
 /* removes first '/' for Windows paths that are unix styled. Ex: /c:/ab.cd */
-char * sanitized_path(const char *);
+char * resolved_path(const char *);
 void w32posix_initialize();
 void w32posix_done();
 char* w32_programdir();
@@ -36,6 +37,6 @@ int file_attr_to_st_mode(wchar_t * path, DWORD attributes);
 void invalid_parameter_handler(const wchar_t *, const wchar_t *, const wchar_t *, unsigned int, uintptr_t);
 void to_lower_case(char *s);
 int get_machine_domain_name(wchar_t *domain, int size);
-char* get_ssh_dir_path();
+char* get_ssh_cfg_dir_path();
 HANDLE get_user_token(char* user);
 int load_user_profile(HANDLE user_token, char* user);

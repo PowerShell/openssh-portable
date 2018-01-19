@@ -53,7 +53,6 @@
 #include "w32fd.h"
 #include "inc\string.h"
 #include "inc\grp.h"
-#include "..\..\..\config.h"
 
 static char* s_programdir = NULL;
 
@@ -250,7 +249,7 @@ w32_fopen_utf8(const char *input_path, const char *mode)
 	char first3_bytes[3];
 	int status = 1;
 	errno_t r = 0;	
-	char path[PATH_MAX] = {0,};
+	char *path = NULL;
 
 	if (mode[1] != '\0') {
 		errno = ENOTSUP;
@@ -263,14 +262,7 @@ w32_fopen_utf8(const char *input_path, const char *mode)
 		return NULL; 
 	}
 
-	if (NULL != strstr(input_path, SSHDIR)) {
-		strcat_s(path, _countof(path), get_ssh_dir_path());
-
-		// append filename. path - "c:\\ProgramData\\openssh\\<filename>"
-		strcat_s(path, _countof(path), &input_path[strlen(SSHDIR)]);		
-	} else {
-		strcpy_s(path, _countof(path), input_path);
-	}
+	path = resolved_path(input_path);
 
 	/* if opening null device, point to Windows equivalent */
 	if (0 == strncmp(path, NULL_DEVICE, strlen(NULL_DEVICE)+1)) {
@@ -529,7 +521,7 @@ int
 w32_chmod(const char *pathname, mode_t mode)
 {
 	int ret;
-	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(sanitized_path(pathname));
+	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(resolved_path(pathname));
 	if (resolvedPathName_utf16 == NULL) {
 		errno = ENOMEM;
 		return -1;
@@ -657,7 +649,7 @@ w32_utimes(const char *filename, struct timeval *tvp)
 {
 	int ret;
 	FILETIME acttime, modtime;
-	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(sanitized_path(filename));
+	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(resolved_path(filename));
 	if (resolvedPathName_utf16 == NULL) {
 		errno = ENOMEM;
 		return -1;
@@ -691,30 +683,14 @@ link(const char *oldpath, const char *newpath)
 int
 w32_rename(const char *old_name, const char *new_name)
 {
-	char old_name_expanded[PATH_MAX] = {0, };
-	char new_name_expanded[PATH_MAX] = {0, };
+	char *old_name_resolved = NULL;
+	char *new_name_resolved = NULL;
 
-	// When sshd service runs "ssh-keygen -A" command, the filenames will have SSHDIR.
-	if (NULL != strstr(old_name, SSHDIR)) {
-		strcat_s(old_name_expanded, _countof(old_name_expanded), get_ssh_dir_path());
+	old_name_resolved = resolved_path(old_name);
+	new_name_resolved = resolved_path(new_name);
 
-		// append filename. path - "c:\\ProgramData\\openssh\\<filename>"
-		strcat_s(old_name_expanded, _countof(old_name_expanded), &old_name[strlen(SSHDIR)]);
-	} else {
-		strcpy_s(old_name_expanded, _countof(old_name_expanded), old_name);
-	}
-
-	if (NULL != strstr(new_name, SSHDIR)) {
-		strcat_s(new_name_expanded, _countof(new_name_expanded), get_ssh_dir_path());
-
-		// append filename. path - "c:\\ProgramData\\openssh\\<filename>"
-		strcat_s(new_name_expanded, _countof(new_name_expanded), &new_name[strlen(SSHDIR)]);
-	} else {
-		strcpy_s(new_name_expanded, _countof(new_name_expanded), new_name);
-	}
-
-	wchar_t *resolvedOldPathName_utf16 = utf8_to_utf16(sanitized_path(old_name_expanded));
-	wchar_t *resolvedNewPathName_utf16 = utf8_to_utf16(sanitized_path(new_name_expanded));
+	wchar_t *resolvedOldPathName_utf16 = utf8_to_utf16(resolved_path(old_name_resolved));
+	wchar_t *resolvedNewPathName_utf16 = utf8_to_utf16(resolved_path(new_name_resolved));
 
 	if (NULL == resolvedOldPathName_utf16 || NULL == resolvedNewPathName_utf16) {
 		errno = ENOMEM;
@@ -727,17 +703,17 @@ w32_rename(const char *old_name, const char *new_name)
 	 * 2) if the new_name is directory and it is empty then delete it so that _wrename will succeed.
 	 */
 	struct _stat64 st;
-	if (fileio_stat(sanitized_path(new_name_expanded), &st) != -1) {
+	if (fileio_stat(resolved_path(new_name_resolved), &st) != -1) {
 		if (((st.st_mode & _S_IFMT) == _S_IFREG))
-			w32_unlink(new_name_expanded);
+			w32_unlink(new_name_resolved);
 		else {
-			DIR *dirp = opendir(new_name_expanded);
+			DIR *dirp = opendir(new_name_resolved);
 			if (NULL != dirp) {
 				struct dirent *dp = readdir(dirp);
 				closedir(dirp);
 
 				if (dp == NULL)
-					w32_rmdir(new_name_expanded);
+					w32_rmdir(new_name_resolved);
 			}
 		}
 	}
@@ -752,7 +728,7 @@ w32_rename(const char *old_name, const char *new_name)
 int
 w32_unlink(const char *path)
 {
-	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(sanitized_path(path));
+	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(resolved_path(path));
 	if (NULL == resolvedPathName_utf16) {
 		errno = ENOMEM;
 		return -1;
@@ -767,7 +743,7 @@ w32_unlink(const char *path)
 int
 w32_rmdir(const char *path)
 {
-	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(sanitized_path(path));
+	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(resolved_path(path));
 	if (NULL == resolvedPathName_utf16) {
 		errno = ENOMEM;
 		return -1;
@@ -827,7 +803,7 @@ int
 w32_mkdir(const char *path_utf8, unsigned short mode)
 {
 	int curmask;
-	wchar_t *path_utf16 = utf8_to_utf16(sanitized_path(path_utf8));
+	wchar_t *path_utf16 = utf8_to_utf16(resolved_path(path_utf8));
 	if (path_utf16 == NULL) {
 		errno = ENOMEM;
 		return -1;
@@ -851,25 +827,14 @@ w32_mkdir(const char *path_utf8, unsigned short mode)
 int
 w32_stat(const char *input_path, struct w32_stat *buf)
 {
-	char path[PATH_MAX] = {0,};
-
-	if (NULL != strstr(input_path, SSHDIR)) {
-		strcat_s(path, _countof(path), get_ssh_dir_path());
-
-		// append filename. path - "c:\\ProgramData\\openssh\\<filename>"
-		strcat_s(path, _countof(path), &input_path[strlen(SSHDIR)]);
-	} else {
-		strcpy_s(path, _countof(path), input_path);
-	}
-
-	return fileio_stat(sanitized_path(path), (struct _stat64*)buf);
+	return fileio_stat(resolved_path(input_path), (struct _stat64*)buf);
 }
 
 /* if file is symbolic link, copy its link into "link" */
 int
 readlink(const char *path, char *link, int linklen)
 {
-	if(strcpy_s(link, linklen, sanitized_path(path)))
+	if(strcpy_s(link, linklen, resolved_path(path)))
 		return -1;
 	return 0;
 }
@@ -953,18 +918,31 @@ realpath(const char *path, char resolved[PATH_MAX])
 	return resolved;
 }
 
+/* This function is not thread safe. */
 char*
-sanitized_path(const char *path)
+resolved_path(const char *input_path)
 {
-	if(!path) return NULL;
-
+	static char resolved_path[PATH_MAX] = {0,};
 	static char newPath[PATH_MAX] = { '\0', };
 	errno_t r = 0;
 
-	if (path[0] == '/' && path[1]) {
-		if (path[2] == ':') {
-			if (path[3] == '\0') { /* make "/x:" as "x:\\" */
-				if((r = strncpy_s(newPath, sizeof(newPath), path + 1, strlen(path) - 1)) != 0 ) {
+	if (!input_path) return NULL;
+
+	/* If filename contains SSHDIR then expand it to c:\\ProgramData\ssh and return the resolved path */
+	if (NULL != strstr(input_path, SSHDIR)) {
+		strcat_s(resolved_path, _countof(resolved_path), get_ssh_cfg_dir_path());
+
+		// append filename. path - "c:\\ProgramData\\ssh\\<filename>" 
+		strcat_s(resolved_path, _countof(resolved_path), &input_path[strlen(SSHDIR)]);
+
+		return resolved_path; /* return here as its doesn't start with "/" */
+	}
+
+	strcpy_s(resolved_path, _countof(resolved_path), input_path);
+	if (resolved_path[0] == '/' && resolved_path[1]) {
+		if (resolved_path[2] == ':') {
+			if (resolved_path[3] == '\0') { /* make "/x:" as "x:\\" */
+				if((r = strncpy_s(newPath, sizeof(newPath), resolved_path + 1, strlen(resolved_path) - 1)) != 0 ) {
 					debug3("memcpy_s failed with error: %d.", r);
 					return NULL;
 				}
@@ -973,11 +951,11 @@ sanitized_path(const char *path)
 
 				return newPath;
 			} else
-				return (char *)(path + 1); /* skip the first "/" */
+				return (char *)(resolved_path + 1); /* skip the first "/" */
 		}
 	}
 
-	return (char *)path;
+	return (char *)resolved_path;
 }
 
 int
@@ -988,7 +966,7 @@ statvfs(const char *path, struct statvfs *buf)
 	DWORD freeClusters;
 	DWORD totalClusters;
 
-	wchar_t* path_utf16 = utf8_to_utf16(sanitized_path(path));
+	wchar_t* path_utf16 = utf8_to_utf16(resolved_path(path));
 	if (path_utf16 && (GetDiskFreeSpaceW(path_utf16, &sectorsPerCluster, &bytesPerSector,
 	    &freeClusters, &totalClusters) == TRUE)) {
 		debug5("path              : [%s]", path);
@@ -1459,20 +1437,30 @@ cleanup:
 }
 
 char*
-get_ssh_dir_path()
+get_ssh_cfg_dir_path()
 {
-	if (ssh_dir_path[0]) return ssh_dir_path;
+	if (ssh_cfg_dir_path[0]) return ssh_cfg_dir_path;
 
-	int return_val = ExpandEnvironmentStringsA("%programData%", ssh_dir_path, PATH_MAX);
+	int return_val = ExpandEnvironmentStringsA("%programData%", ssh_cfg_dir_path, PATH_MAX);
 	if (return_val > PATH_MAX)
 		fatal("%s, buffer too small to expand:%s", __func__, "%programData%");
 	else if (!return_val)
 		fatal("%s, failed to expand:%s error:%s", __func__, "%programData%", GetLastError());
 
-	// ssh_root_path - "c:\\ProgramData\\openssh\\"
-	char *p = "\\openssh";
-	strcat_s(ssh_dir_path, _countof(ssh_dir_path), p);
-	debug("__PROGRAMDATA__:%s", ssh_dir_path);
+	// ssh_cfg_dir_path - "c:\\ProgramData\\openssh\\"
+	strcat_s(ssh_cfg_dir_path, _countof(ssh_cfg_dir_path), "\\openssh");
+	debug("__PROGRAMDATA__:%s", ssh_cfg_dir_path);
 
-	return ssh_dir_path;
+	return ssh_cfg_dir_path;
+}
+
+/* Windows absolute paths - \abc, /abc, c:\abc, c:/abc, __PROGRAMDATA__\openssh\sshd_config */
+int
+is_absolute_path(char *path)
+{
+	int retVal = 0;
+	if (*path == '/' || *path == '\\' || strstr(path, SSHDIR) || (*path != '\0' && path[1] == ':'))
+		retVal = 1;
+	
+	return retVal;
 }

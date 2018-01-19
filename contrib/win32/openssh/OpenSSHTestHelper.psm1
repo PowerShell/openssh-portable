@@ -23,6 +23,17 @@ $Script:WindowsInBox = $false
 $Script:NoLibreSSL = $false
 $Script:EnableAppVerifier = $true
 $Script:PostmortemDebugging = $false
+$Script:sshdir = Join-Path $env:ProgramData "\openssh"
+
+<#
+    1) Create the %programData%\openssh
+    2) Create the %programData%\openssh\logs
+    3) Copy sshd_config_default to %programData%\openssh\sshd_config
+#>
+function Create-SSHDirFolder
+{
+    
+}
 
 <#
     .Synopsis
@@ -179,8 +190,8 @@ WARNING: Following changes will be made to OpenSSH configuration
     Start-Service ssh-agent
 
     #copy sshtest keys
-    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force  
-    Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*"| % {
+    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $Script:sshdir -Force  
+    Get-ChildItem "$($Script:sshdir)\sshtest*hostkey*"| % {
         #workaround for the cariggage new line added by git before copy them
         $filePath = "$($_.FullName)"
         $con = (Get-Content $filePath | Out-String).Replace("`r`n","`n")
@@ -469,7 +480,7 @@ function Clear-OpenSSHTestEnvironment
         Remove-ItemProperty "HKLM:Software\Microsoft\Windows NT\CurrentVersion\AeDebug" -Name Auto -ErrorAction SilentlyContinue -Force | Out-Null
     }
     
-    Remove-Item "$sshBinPath\sshtest*hostkey*" -Force -ErrorAction SilentlyContinue   
+    Remove-Item "$Script:sshdir\sshtest*hostkey*" -Force -ErrorAction SilentlyContinue   
     Remove-Item "$sshBinPath\sshtest*ca_userkeys*" -Force -ErrorAction SilentlyContinue   
      
     #Restore sshd_config
