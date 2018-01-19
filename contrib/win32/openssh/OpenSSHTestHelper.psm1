@@ -169,12 +169,6 @@ WARNING: Following changes will be made to OpenSSH configuration
     }
     $targetsshdConfig = Join-Path $OpenSSHConfigPath sshd_config
     # copy new sshd_config
-    if($Script:WindowsInBox -and (Test-Path $targetsshdConfig))
-    {
-        $currentUser = New-Object System.Security.Principal.NTAccount($($env:USERDOMAIN), $($env:USERNAME))
-        Add-PermissionToFileACL -FilePath $targetsshdConfig -User $currentUser -Perm "Read,Write"
-    }
-    
     Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) $targetsshdConfig -Force
     
     Start-Service ssh-agent
@@ -250,7 +244,6 @@ WARNING: Following changes will be made to OpenSSH configuration
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
     $testPubKeyPath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519.pub
     Copy-Item $testPubKeyPath $authorizedKeyPath -Force -ErrorAction SilentlyContinue
-    Repair-AuthorizedKeyPermission -FilePath $authorizedKeyPath -confirm:$false
     
     copy-item (Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519) $Global:OpenSSHTestInfo["TestDataPath"]
     $testPriKeypath = Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_userssokey_ed25519
