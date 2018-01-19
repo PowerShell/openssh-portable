@@ -57,7 +57,7 @@ check_secure_file_permission(const char *input_path, struct passwd * pw)
 	struct passwd * pwd = pw;
 	char *bad_user = NULL;
 	int ret = 0;
-	char path[PATH_MAX] = {0, };
+	char *path = NULL;
 
 	if (pwd == NULL)
 		if ((pwd = getpwuid(0)) == NULL) 
@@ -70,15 +70,7 @@ check_secure_file_permission(const char *input_path, struct passwd * pw)
 		goto cleanup;
 	}
 
-	if (NULL != strstr(input_path, SSHDIR)) {
-		strcat_s(path, _countof(path), get_ssh_cfg_dir_path());
-
-		// append filename. path - "c:\\ProgramData\\openssh\\<filename>"
-		strcat_s(path, _countof(path), &input_path[strlen(SSHDIR)]);
-	} else {
-		strcpy_s(path, _countof(path), input_path);
-	}
-
+	path = resolved_path(input_path);
 	if ((path_utf16 = utf8_to_utf16(path)) == NULL) {
 		ret = -1;
 		errno = ENOMEM;

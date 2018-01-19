@@ -63,8 +63,12 @@ openlog(char *ident, unsigned int option, int facility)
 		wchar_t* tail = module_path + wcsnlen(module_path, MAX_PATH);
 		while (tail > module_path && *tail != L'\\' && *tail != L'/')
 			tail--;
-			
-		wchar_t* ssh_root_path_w = utf8_to_utf16(get_ssh_cfg_dir_path()); /* "%programData%\\ssh" */
+		
+		char ssh_cfg_path[PATH_MAX] = {0 ,};
+		strcat_s(ssh_cfg_path, _countof(ssh_cfg_path), get_program_data_path()); /* "%programData%" */
+		strcat_s(ssh_cfg_path, _countof(ssh_cfg_path), "\\ssh"); /* "%programData%\\ssh" */
+
+		wchar_t* ssh_root_path_w = utf8_to_utf16(ssh_cfg_path); /* "%programData%\\ssh" */
 
 		if ((wcsncat_s(log_file, PATH_MAX + 12, ssh_root_path_w, wcslen(ssh_root_path_w)) != 0) ||
 		    (wcsncat_s(log_file, PATH_MAX + 12, logs_dir, 6) != 0) ||

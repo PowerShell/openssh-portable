@@ -683,14 +683,14 @@ link(const char *oldpath, const char *newpath)
 int
 w32_rename(const char *old_name, const char *new_name)
 {
-	char *old_name_resolved = NULL;
-	char *new_name_resolved = NULL;
+	char old_name_resolved[PATH_MAX] = {0, };
+	char new_name_resolved[PATH_MAX] = {0, };
 
-	old_name_resolved = resolved_path(old_name);
-	new_name_resolved = resolved_path(new_name);
+	strcpy_s(old_name_resolved, _countof(old_name_resolved), resolved_path(old_name));
+	strcpy_s(new_name_resolved, _countof(new_name_resolved), resolved_path(new_name));
 
-	wchar_t *resolvedOldPathName_utf16 = utf8_to_utf16(resolved_path(old_name_resolved));
-	wchar_t *resolvedNewPathName_utf16 = utf8_to_utf16(resolved_path(new_name_resolved));
+	wchar_t *resolvedOldPathName_utf16 = utf8_to_utf16(old_name_resolved);
+	wchar_t *resolvedNewPathName_utf16 = utf8_to_utf16(new_name_resolved);
 
 	if (NULL == resolvedOldPathName_utf16 || NULL == resolvedNewPathName_utf16) {
 		errno = ENOMEM;
@@ -918,7 +918,9 @@ realpath(const char *path, char resolved[PATH_MAX])
 	return resolved;
 }
 
-/* This function is not thread safe. */
+/* This function is not thread safe. 
+* TODO - It uses static memory. Is this a good design?
+*/
 char*
 resolved_path(const char *input_path)
 {
@@ -928,12 +930,12 @@ resolved_path(const char *input_path)
 
 	if (!input_path) return NULL;
 
-	/* If filename contains SSHDIR then expand it to c:\\ProgramData\ssh and return the resolved path */
-	if (NULL != strstr(input_path, SSHDIR)) {
-		strcat_s(resolved_path, _countof(resolved_path), get_ssh_cfg_dir_path());
-
-		// append filename. path - "c:\\ProgramData\\ssh\\<filename>" 
-		strcat_s(resolved_path, _countof(resolved_path), &input_path[strlen(SSHDIR)]);
+	/* If filename contains PROGRAM_DATA then expand it to %programData% and return the resolved path */
+	if (NULL != strstr(input_path, PROGRAM_DATA)) {
+		resolved_path[0] = '\0';
+		strcat_s(resolved_path, _countof(resolved_path), get_program_data_path());
+		// append filename.
+		strcat_s(resolved_path, _countof(resolved_path), &input_path[strlen(PROGRAM_DATA)]);
 
 		return resolved_path; /* return here as its doesn't start with "/" */
 	}
@@ -941,15 +943,14 @@ resolved_path(const char *input_path)
 	strcpy_s(resolved_path, _countof(resolved_path), input_path);
 	if (resolved_path[0] == '/' && resolved_path[1]) {
 		if (resolved_path[2] == ':') {
-			if (resolved_path[3] == '\0') { /* make "/x:" as "x:\\" */
-				if((r = strncpy_s(newPath, sizeof(newPath), resolved_path + 1, strlen(resolved_path) - 1)) != 0 ) {
-					debug3("memcpy_s failed with error: %d.", r);
-					return NULL;
-				}
-				newPath[2] = '\\';
-				newPath[3] = '\0';
+			if (resolved_path[3] == '\0') { 
+				/* make "/x:" as "x:\\" */
+				resolved_path[0] = resolved_path[1];
+				resolved_path[1] = resolved_path[2];
+				resolved_path[2] = '\\';
+				resolved_path[3] = '\0';
 
-				return newPath;
+				return resolved_path;
 			} else
 				return (char *)(resolved_path + 1); /* skip the first "/" */
 		}
@@ -1437,7 +1438,7 @@ cleanup:
 }
 
 char*
-get_ssh_cfg_dir_path()
+get_program_data_path()
 {
 	if (ssh_cfg_dir_path[0]) return ssh_cfg_dir_path;
 
@@ -1446,9 +1447,7 @@ get_ssh_cfg_dir_path()
 		fatal("%s, buffer too small to expand:%s", __func__, "%programData%");
 	else if (!return_val)
 		fatal("%s, failed to expand:%s error:%s", __func__, "%programData%", GetLastError());
-
-	// ssh_cfg_dir_path - "c:\\ProgramData\\openssh\\"
-	strcat_s(ssh_cfg_dir_path, _countof(ssh_cfg_dir_path), "\\openssh");
+			
 	debug("__PROGRAMDATA__:%s", ssh_cfg_dir_path);
 
 	return ssh_cfg_dir_path;
@@ -1459,7 +1458,7 @@ int
 is_absolute_path(char *path)
 {
 	int retVal = 0;
-	if (*path == '/' || *path == '\\' || strstr(path, SSHDIR) || (*path != '\0' && path[1] == ':'))
+	if (*path == '/' || *path == '\\' || strstr(path, PROGRAM_DATA) || (*path != '\0' && path[1] == ':'))
 		retVal = 1;
 	
 	return retVal;
