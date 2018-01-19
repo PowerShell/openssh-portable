@@ -13,6 +13,7 @@ $PubKeyUser = "sshtest_pubkeyuser"
 $PasswdUser = "sshtest_passwduser"
 $OpenSSHTestAccountsPassword = "P@ssw0rd_1"
 $OpenSSHTestAccounts = $Script:SSOUser, $Script:PubKeyUser, $Script:PasswdUser
+$OpenSSHConfigPath = Join-Path $env:ProgramData "ssh"
 
 $Script:TestDataPath = "$env:SystemDrive\OpenSSHTests"
 $Script:E2ETestResultsFile = Join-Path $TestDataPath $E2ETestResultsFileName
@@ -162,11 +163,11 @@ WARNING: Following changes will be made to OpenSSH configuration
     }
 
     #Backup existing OpenSSH configuration
-    $backupConfigPath = Join-Path $script:OpenSSHBinPath sshd_config.ori
+    $backupConfigPath = Join-Path $OpenSSHConfigPath sshd_config.ori
     if (-not (Test-Path $backupConfigPath -PathType Leaf)) {
-        Copy-Item (Join-Path $script:OpenSSHBinPath sshd_config) $backupConfigPath -Force
+        Copy-Item (Join-Path $OpenSSHConfigPath sshd_config) $backupConfigPath -Force
     }
-    $targetsshdConfig = Join-Path $script:OpenSSHBinPath sshd_config
+    $targetsshdConfig = Join-Path $OpenSSHConfigPath sshd_config
     # copy new sshd_config
     if($Script:WindowsInBox -and (Test-Path $targetsshdConfig))
     {
@@ -179,8 +180,8 @@ WARNING: Following changes will be made to OpenSSH configuration
     Start-Service ssh-agent
 
     #copy sshtest keys
-    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $script:OpenSSHBinPath -Force  
-    Get-ChildItem "$($script:OpenSSHBinPath)\sshtest*hostkey*"| % {
+    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $OpenSSHConfigPath -Force  
+    Get-ChildItem "$($OpenSSHConfigPath)\sshtest*hostkey*"| % {
         #workaround for the cariggage new line added by git before copy them
         $filePath = "$($_.FullName)"
         $con = (Get-Content $filePath | Out-String).Replace("`r`n","`n")
@@ -191,8 +192,8 @@ WARNING: Following changes will be made to OpenSSH configuration
         }        
     }
 
-    #copy ca pubkey to SSHD bin path
-    Copy-Item "$($Script:E2ETestDirectory)\sshtest_ca_userkeys.pub"  $script:OpenSSHBinPath -Force 
+    #copy ca pubkey to ssh config path
+    Copy-Item "$($Script:E2ETestDirectory)\sshtest_ca_userkeys.pub"  $OpenSSHConfigPath -Force 
 
     #copy ca private key to test dir
     $ca_priv_key = (Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_ca_userkeys)
