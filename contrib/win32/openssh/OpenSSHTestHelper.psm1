@@ -7,7 +7,7 @@ Import-Module $PSScriptRoot\OpenSSHUtils -Force
 # test environment parameters initialized with defaults
 $E2ETestResultsFileName = "E2ETestResults.xml"
 $UnitTestResultsFileName = "UnitTestResults.txt"
-$TestSetupLogFileName = "TestSetupLog.txt"i
+$TestSetupLogFileName = "TestSetupLog.txt"
 $SSOUser = "sshtest_ssouser"
 $PubKeyUser = "sshtest_pubkeyuser"
 $PasswdUser = "sshtest_passwduser"
