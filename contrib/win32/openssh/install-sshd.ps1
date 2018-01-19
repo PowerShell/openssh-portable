@@ -32,7 +32,7 @@ cmd.exe /c 'sc.exe sdset ssh-agent D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPW
 
 New-Service -Name sshd -BinaryPathName `"$sshdpath`" -Description "SSH Daemon" -StartupType Manual | Out-Null
 
-#create the sshd folder and set its permissions
+#create the ssh config folder and set its permissions
 if(-not (test-path $sshdir -PathType Container))
 {
     $null = New-Item $sshdir -ItemType Directory -Force -ErrorAction Stop
@@ -43,7 +43,7 @@ $acl = Get-Acl -Path $sshdir
 # - disabled inheritance
 # - Full access to System
 # - Full access to built in Administrators
-$acl.SetSecurityDescriptorSddlForm("O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
+$acl.SetSecurityDescriptorSddlForm("O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;AU)")
 Set-Acl -Path $sshdir -AclObject $acl
 
 # create logs folder and set its permissions
@@ -63,17 +63,9 @@ Set-Acl -Path $logsdir -AclObject $acl
 #copy sshd_config_default to $sshdir\sshd_config
 $sshdconfigpath = Join-Path $sshdir "sshd_config"
 $sshddefaultconfigpath = Join-Path $scriptdir "sshd_config_default"
-if(-not (test-path $sshdconfigpath -PathType Container))
+if(-not (test-path $sshdconfigpath -PathType Leaf))
 {
     $null = Copy-Item $sshddefaultconfigpath -Destination $sshdconfigpath  -ErrorAction Stop
 }
-$acl = Get-Acl -Path $sshdconfigpath
-# following SDDL implies 
-# - owner - built in Administrators
-# - disabled inheritance
-# - Full access to System
-# - Full access to built in Administrators
-$acl.SetSecurityDescriptorSddlForm("O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
-Set-Acl -Path $sshdconfigpath -AclObject $acl
 
 Write-Host -ForegroundColor Green "sshd and ssh-agent services successfully installed"

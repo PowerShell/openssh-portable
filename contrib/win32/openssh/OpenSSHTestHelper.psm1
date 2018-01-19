@@ -7,12 +7,13 @@ Import-Module $PSScriptRoot\OpenSSHUtils -Force
 # test environment parameters initialized with defaults
 $E2ETestResultsFileName = "E2ETestResults.xml"
 $UnitTestResultsFileName = "UnitTestResults.txt"
-$TestSetupLogFileName = "TestSetupLog.txt"
+$TestSetupLogFileName = "TestSetupLog.txt"i
 $SSOUser = "sshtest_ssouser"
 $PubKeyUser = "sshtest_pubkeyuser"
 $PasswdUser = "sshtest_passwduser"
 $OpenSSHTestAccountsPassword = "P@ssw0rd_1"
 $OpenSSHTestAccounts = $Script:SSOUser, $Script:PubKeyUser, $Script:PasswdUser
+$OpenSSHConfigPath = Join-Path $env:ProgramData "ssh"
 
 $Script:TestDataPath = "$env:SystemDrive\OpenSSHTests"
 $Script:E2ETestResultsFile = Join-Path $TestDataPath $E2ETestResultsFileName
@@ -23,17 +24,6 @@ $Script:WindowsInBox = $false
 $Script:NoLibreSSL = $false
 $Script:EnableAppVerifier = $true
 $Script:PostmortemDebugging = $false
-$Script:sshdir = Join-Path $env:ProgramData "\openssh"
-
-<#
-    1) Create the %programData%\openssh
-    2) Create the %programData%\openssh\logs
-    3) Copy sshd_config_default to %programData%\openssh\sshd_config
-#>
-function Create-SSHDirFolder
-{
-    
-}
 
 <#
     .Synopsis
@@ -86,7 +76,7 @@ function Set-OpenSSHTestEnvironment
         "TestSetupLogFile" = $Script:TestSetupLogFile;         # openssh test setup log file
         "E2ETestResultsFile" = $Script:E2ETestResultsFile;     # openssh E2E test results file
         "UnitTestResultsFile" = $Script:UnitTestResultsFile;   # openssh unittest test results file
-        "E2ETestDirectory" = $Script:E2ETestDirectory          # the directory of E2E tests
+        "E2ETestDirectory" = $Script:E2ETestDirectory          # the directory of E2E testsi
         "UnitTestDirectory" = $Script:UnitTestDirectory        # the directory of unit tests
         "DebugMode" = $DebugMode                               # run openssh E2E in debug mode
         "EnableAppVerifier" = $Script:EnableAppVerifier
@@ -117,7 +107,7 @@ function Set-OpenSSHTestEnvironment
         }        
     }
     else
-    {        
+    {        i
         if (-not (Test-Path (Join-Path $OpenSSHBinPath ssh.exe) -PathType Leaf))
         {
             Throw "Cannot find OpenSSH binaries under $OpenSSHBinPath. Please specify -OpenSSHBinPath to the OpenSSH installed location"
@@ -148,7 +138,7 @@ WARNING: Following changes will be made to OpenSSH configuration
    - will be replaced with a test sshd_config
    - $HOME\.ssh\known_hosts will be backed up as known_hosts.ori
    - will be replaced with a test known_hosts
-   - $HOME\.ssh\config will be backed up as config.ori
+   - $HOME\.ssh\config will be backed up as config.orii
    - will be replaced with a test config
    - sshd test listener will be on port 47002
    - $HOME\.ssh\known_hosts will be modified with test host key entry
@@ -173,11 +163,11 @@ WARNING: Following changes will be made to OpenSSH configuration
     }
 
     #Backup existing OpenSSH configuration
-    $backupConfigPath = Join-Path $script:OpenSSHBinPath sshd_config.ori
+    $backupConfigPath = Join-Path $OpenSSHConfigPath sshd_config.ori
     if (-not (Test-Path $backupConfigPath -PathType Leaf)) {
-        Copy-Item (Join-Path $script:OpenSSHBinPath sshd_config) $backupConfigPath -Force
+        Copy-Item (Join-Path $OpenSSHConfigPath sshd_config) $backupConfigPath -Force
     }
-    $targetsshdConfig = Join-Path $script:OpenSSHBinPath sshd_config
+    $targetsshdConfig = Join-Path $OpenSSHConfigPath sshd_config
     # copy new sshd_config
     if($Script:WindowsInBox -and (Test-Path $targetsshdConfig))
     {
@@ -190,8 +180,8 @@ WARNING: Following changes will be made to OpenSSH configuration
     Start-Service ssh-agent
 
     #copy sshtest keys
-    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $Script:sshdir -Force  
-    Get-ChildItem "$($Script:sshdir)\sshtest*hostkey*"| % {
+    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $OpenSSHConfigPath -Force  
+    Get-ChildItem "$($OpenSSHConfigPath)\sshtest*hostkey*"| % {
         #workaround for the cariggage new line added by git before copy them
         $filePath = "$($_.FullName)"
         $con = (Get-Content $filePath | Out-String).Replace("`r`n","`n")
@@ -202,8 +192,8 @@ WARNING: Following changes will be made to OpenSSH configuration
         }        
     }
 
-    #copy ca pubkey to SSHD bin path
-    Copy-Item "$($Script:E2ETestDirectory)\sshtest_ca_userkeys.pub"  $script:OpenSSHBinPath -Force 
+    #copy ca pubkey to ssh config path
+    Copy-Item "$($Script:E2ETestDirectory)\sshtest_ca_userkeys.pub"  $OpenSSHConfigPath -Force 
 
     #copy ca private key to test dir
     $ca_priv_key = (Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_ca_userkeys)
@@ -480,7 +470,7 @@ function Clear-OpenSSHTestEnvironment
         Remove-ItemProperty "HKLM:Software\Microsoft\Windows NT\CurrentVersion\AeDebug" -Name Auto -ErrorAction SilentlyContinue -Force | Out-Null
     }
     
-    Remove-Item "$Script:sshdir\sshtest*hostkey*" -Force -ErrorAction SilentlyContinue   
+    Remove-Item "$OpenSSHConfigPath\sshtest*hostkey*" -Force -ErrorAction SilentlyContinue   
     Remove-Item "$sshBinPath\sshtest*ca_userkeys*" -Force -ErrorAction SilentlyContinue   
      
     #Restore sshd_config
