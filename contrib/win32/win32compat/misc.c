@@ -931,7 +931,7 @@ resolved_path(const char *input_path)
 	if (!input_path) return NULL;
 
 	/* If filename contains __PROGRAMDATA__ then expand it to %programData% and return the resolved path */
-	if (NULL != strstr(input_path, PROGRAM_DATA)) {
+	if ((strlen(input_path) >= strlen(PROGRAM_DATA)) && (memcmp(input_path, PROGRAM_DATA, strlen(PROGRAM_DATA)) == 0)) {
 		resolved_path[0] = '\0';
 		strcat_s(resolved_path, _countof(resolved_path), get_program_data_path());
 		strcat_s(resolved_path, _countof(resolved_path), &input_path[strlen(PROGRAM_DATA)]);
@@ -1439,14 +1439,19 @@ cleanup:
 char*
 get_program_data_path()
 {
-	if (ssh_cfg_dir_path[0]) return ssh_cfg_dir_path;
+	if (ssh_cfg_dir_path) return ssh_cfg_dir_path;
 
-	int return_val = ExpandEnvironmentStringsA("%programData%", ssh_cfg_dir_path, PATH_MAX);
+	wchar_t ssh_cfg_dir_path_w[PATH_MAX] = {0, };
+	int return_val = ExpandEnvironmentStringsW(L"%programData%", ssh_cfg_dir_path_w, PATH_MAX);
 	if (return_val > PATH_MAX)
 		fatal("%s, buffer too small to expand:%s", __func__, "%programData%");
 	else if (!return_val)
 		fatal("%s, failed to expand:%s error:%s", __func__, "%programData%", GetLastError());
-			
+	
+	ssh_cfg_dir_path = utf16_to_utf8(ssh_cfg_dir_path_w);
+	if(!ssh_cfg_dir_path)
+		fatal("%s utf16_to_utf8 failed", __func__);
+
 	return ssh_cfg_dir_path;
 }
 
@@ -1455,7 +1460,8 @@ int
 is_absolute_path(char *path)
 {
 	int retVal = 0;
-	if (*path == '/' || *path == '\\' || strstr(path, PROGRAM_DATA) || (*path != '\0' && path[1] == ':'))
+	if (*path == '/' || *path == '\\' || (*path != '\0' && path[1] == ':') ||
+	    ((strlen(path) >= strlen(PROGRAM_DATA)) && (memcmp(path, PROGRAM_DATA, strlen(PROGRAM_DATA)) == 0)))
 		retVal = 1;
 	
 	return retVal;

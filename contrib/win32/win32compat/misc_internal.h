@@ -20,7 +20,7 @@
 #define errno_from_Win32LastError() errno_from_Win32Error(GetLastError())
 
 static char *machine_domain_name;
-static char ssh_cfg_dir_path[PATH_MAX] = {0,};
+static char *ssh_cfg_dir_path = NULL;
 
 /* removes first '/' for Windows paths that are unix styled. Ex: /c:/ab.cd */
 char * resolved_path(const char *);
