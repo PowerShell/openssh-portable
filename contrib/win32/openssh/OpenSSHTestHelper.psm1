@@ -76,7 +76,7 @@ function Set-OpenSSHTestEnvironment
         "TestSetupLogFile" = $Script:TestSetupLogFile;         # openssh test setup log file
         "E2ETestResultsFile" = $Script:E2ETestResultsFile;     # openssh E2E test results file
         "UnitTestResultsFile" = $Script:UnitTestResultsFile;   # openssh unittest test results file
-        "E2ETestDirectory" = $Script:E2ETestDirectory          # the directory of E2E testsi
+        "E2ETestDirectory" = $Script:E2ETestDirectory          # the directory of E2E tests
         "UnitTestDirectory" = $Script:UnitTestDirectory        # the directory of unit tests
         "DebugMode" = $DebugMode                               # run openssh E2E in debug mode
         "EnableAppVerifier" = $Script:EnableAppVerifier
@@ -107,7 +107,7 @@ function Set-OpenSSHTestEnvironment
         }        
     }
     else
-    {        i
+    {
         if (-not (Test-Path (Join-Path $OpenSSHBinPath ssh.exe) -PathType Leaf))
         {
             Throw "Cannot find OpenSSH binaries under $OpenSSHBinPath. Please specify -OpenSSHBinPath to the OpenSSH installed location"
@@ -138,7 +138,7 @@ WARNING: Following changes will be made to OpenSSH configuration
    - will be replaced with a test sshd_config
    - $HOME\.ssh\known_hosts will be backed up as known_hosts.ori
    - will be replaced with a test known_hosts
-   - $HOME\.ssh\config will be backed up as config.orii
+   - $HOME\.ssh\config will be backed up as config.ori
    - will be replaced with a test config
    - sshd test listener will be on port 47002
    - $HOME\.ssh\known_hosts will be modified with test host key entry
