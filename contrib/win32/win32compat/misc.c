@@ -930,11 +930,10 @@ resolved_path(const char *input_path)
 
 	if (!input_path) return NULL;
 
-	/* If filename contains PROGRAM_DATA then expand it to %programData% and return the resolved path */
+	/* If filename contains __PROGRAMDATA__ then expand it to %programData% and return the resolved path */
 	if (NULL != strstr(input_path, PROGRAM_DATA)) {
 		resolved_path[0] = '\0';
 		strcat_s(resolved_path, _countof(resolved_path), get_program_data_path());
-		// append filename.
 		strcat_s(resolved_path, _countof(resolved_path), &input_path[strlen(PROGRAM_DATA)]);
 
 		return resolved_path; /* return here as its doesn't start with "/" */
@@ -1448,8 +1447,6 @@ get_program_data_path()
 	else if (!return_val)
 		fatal("%s, failed to expand:%s error:%s", __func__, "%programData%", GetLastError());
 			
-	debug("__PROGRAMDATA__:%s", ssh_cfg_dir_path);
-
 	return ssh_cfg_dir_path;
 }
 

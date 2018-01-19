@@ -15,7 +15,7 @@
 
 #define IS_INVALID_HANDLE(h) ( ((NULL == h) || (INVALID_HANDLE_VALUE == h)) ? 1 : 0 )
 #define IS_VALID_HANDLE(h) (!IS_INVALID_HANDLE(h))
-#define PROGRAM_DATA "__PROGRAMDATA__" /* This value should always be in sync with config.h.vs */
+#define PROGRAM_DATA "__PROGRAMDATA__"
 
 #define errno_from_Win32LastError() errno_from_Win32Error(GetLastError())
 

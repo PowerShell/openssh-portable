@@ -470,14 +470,14 @@ function Clear-OpenSSHTestEnvironment
         Remove-ItemProperty "HKLM:Software\Microsoft\Windows NT\CurrentVersion\AeDebug" -Name Auto -ErrorAction SilentlyContinue -Force | Out-Null
     }
     
-    Remove-Item "$OpenSSHConfigPath\sshtest*hostkey*" -Force -ErrorAction SilentlyContinue   
-    Remove-Item "$sshBinPath\sshtest*ca_userkeys*" -Force -ErrorAction SilentlyContinue   
+    Remove-Item "$OpenSSHConfigPath\sshtest*hostkey*" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$OpenSSHConfigPath\sshtest*ca_userkeys*" -Force -ErrorAction SilentlyContinue
      
     #Restore sshd_config
-    $backupConfigPath = Join-Path $sshBinPath sshd_config.ori
+    $backupConfigPath = Join-Path $OpenSSHConfigPath sshd_config.ori
     if (Test-Path $backupConfigPath -PathType Leaf) {        
-        Copy-Item $backupConfigPath (Join-Path $sshBinPath sshd_config) -Force -ErrorAction SilentlyContinue
-        Remove-Item (Join-Path $sshBinPath sshd_config.ori) -Force -ErrorAction SilentlyContinue
+        Copy-Item $backupConfigPath (Join-Path $OpenSSHConfigPath sshd_config) -Force -ErrorAction SilentlyContinue
+        Remove-Item (Join-Path $OpenSSHConfigPath sshd_config.ori) -Force -ErrorAction SilentlyContinue
         Restart-Service sshd
     }
     
