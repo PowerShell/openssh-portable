@@ -1518,7 +1518,7 @@ copy_file(char *source, char *destination)
 	if (!source || !destination) return 0;
 
 	struct stat st;
-	if ((stat(destination, &st) < 0) || (stat(source, &st) < 0)) {
+	if ((stat(source, &st) >= 0) && (stat(destination, &st) < 0)) {
 		wchar_t *source_w = utf8_to_utf16(source);
 		if (!source_w) {
 			error("%s utf8_to_utf16() has failed to convert string:%s", __func__, source_w);
