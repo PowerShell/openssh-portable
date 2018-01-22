@@ -1468,7 +1468,7 @@ is_absolute_path(char *path)
 }
 
 /* return 0 - in case of failure */
-int
+BOOL
 create_directory_withsddl(char *path, char *sddl)
 {
 	struct stat st;
@@ -1481,13 +1481,13 @@ create_directory_withsddl(char *path, char *sddl)
 
 		wchar_t *path_w = utf8_to_utf16(path);
 		if (!path_w) {
-			fatal("%s utf8_to_utf16() has failed to convert string:%s", __func__, path);
+			error("%s utf8_to_utf16() has failed to convert string:%s", __func__, path);
 			return 0; /* to avoid the compiler warning */
 		}
 
 		wchar_t *sddl_w = utf8_to_utf16(sddl);
 		if (!sddl_w) {
-			fatal("%s utf8_to_utf16() has failed to convert string:%s", __func__, sddl);
+			error("%s utf8_to_utf16() has failed to convert string:%s", __func__, sddl);
 			return 0; /* to avoid the compiler warning */
 		}
 
@@ -1515,19 +1515,19 @@ create_directory_withsddl(char *path, char *sddl)
 int
 copy_file(char *source, char *destination)
 {
-	if (!source || !destination) return 1;
+	if (!source || !destination) return 0;
 
 	struct stat st;
 	if ((stat(destination, &st) < 0) || (stat(source, &st) < 0)) {
 		wchar_t *source_w = utf8_to_utf16(source);
 		if (!source_w) {
-			fatal("%s utf8_to_utf16() has failed to convert string:%s", __func__, source_w);
+			error("%s utf8_to_utf16() has failed to convert string:%s", __func__, source_w);
 			return 0; /* to avoid the compiler warning */
 		}
 
 		wchar_t *destination_w = utf8_to_utf16(destination);
 		if (!destination_w) {
-			fatal("%s utf8_to_utf16() has failed to convert string:%s", __func__, destination_w);
+			error("%s utf8_to_utf16() has failed to convert string:%s", __func__, destination_w);
 			return 0; /* to avoid the compiler warning */
 		}
 
