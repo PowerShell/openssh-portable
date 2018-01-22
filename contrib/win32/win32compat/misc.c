@@ -1482,13 +1482,13 @@ create_directory_withsddl(char *path, char *sddl)
 		wchar_t *path_w = utf8_to_utf16(path);
 		if (!path_w) {
 			error("%s utf8_to_utf16() has failed to convert string:%s", __func__, path);
-			return -1; /* to avoid the compiler warning */
+			return -1;
 		}
 
 		wchar_t *sddl_w = utf8_to_utf16(sddl);
 		if (!sddl_w) {
 			error("%s utf8_to_utf16() has failed to convert string:%s", __func__, sddl);
-			return -1; /* to avoid the compiler warning */
+			return -1;
 		}
 
 		if (ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl_w, SDDL_REVISION, &pSD, NULL) == FALSE) {
@@ -1522,13 +1522,13 @@ copy_file(char *source, char *destination)
 		wchar_t *source_w = utf8_to_utf16(source);
 		if (!source_w) {
 			error("%s utf8_to_utf16() has failed to convert string:%s", __func__, source_w);
-			return -1; /* to avoid the compiler warning */
+			return -1;
 		}
 
 		wchar_t *destination_w = utf8_to_utf16(destination);
 		if (!destination_w) {
 			error("%s utf8_to_utf16() has failed to convert string:%s", __func__, destination_w);
-			return -1; /* to avoid the compiler warning */
+			return -1;
 		}
 
 		if (!CopyFileW(source_w, destination_w, FALSE)) {
