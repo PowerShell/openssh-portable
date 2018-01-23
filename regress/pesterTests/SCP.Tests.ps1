@@ -58,8 +58,8 @@ Describe "Tests for scp command" -Tags "CI" {
             @{
                 Title = 'simple copy local file to remote dir'         
                 Source = $SourceFilePath
-                Destination = "test_target:$DestinationDir"
-                Options = "-C -q"
+                Destination = "$ssouser`@$server`:$DestinationDir"
+                Options = "-P $port -C -q" # To test -P so not using test_target intentionally.
             },
             @{
                 Title = 'simple copy remote file to local dir'
@@ -148,7 +148,7 @@ Describe "Tests for scp command" -Tags "CI" {
 
     It 'File copy: <Title> ' -TestCases:$testData {
         param([string]$Title, $Source, $Destination, [string]$Options)
-            
+        
         iex  "scp $Options $Source $Destination"
         $LASTEXITCODE | Should Be 0
         #validate file content. DestPath is the path to the file.
