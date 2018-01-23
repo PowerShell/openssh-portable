@@ -523,13 +523,14 @@ function Start-OpenSSHBuild
         $xml.Project.PropertyGroup.WindowsSDKVersion = $win10SDKVer.ToString()
         $xml.Project.PropertyGroup.AdditionalDependentLibs = 'onecore.lib'
         $xml.Project.PropertyGroup.MinimalCoreWin = 'true'
-        $xml.Save($PathTargets)
         
         #Use onecore libcrypto binaries
-        (Get-Content $PathTargets).Replace('LibreSSLSDK\x86','LibreSSLSDK\onecore\x86') | Set-Content $PathTargets
-        (Get-Content $PathTargets).Replace('LibreSSLSDK\x64','LibreSSLSDK\onecore\x64') | Set-Content $PathTargets
-        (Get-Content $PathTargets).Replace('LibreSSLSDK\arm','LibreSSLSDK\onecore\arm') | Set-Content $PathTargets
-        (Get-Content $PathTargets).Replace('LibreSSLSDK\arm64','LibreSSLSDK\onecore\arm64') | Set-Content $PathTargets
+        $xml.Project.PropertyGroup."LibreSSL-x86-Path" = '$(SolutionDir)\LibreSSLSDK\onecore\x86\'
+        $xml.Project.PropertyGroup."LibreSSL-x64-Path" = '$(SolutionDir)\LibreSSLSDK\onecore\x64\'
+        $xml.Project.PropertyGroup."LibreSSL-arm-Path" = '$(SolutionDir)\LibreSSLSDK\onecore\arm\'
+        $xml.Project.PropertyGroup."LibreSSL-arm64-Path" = '$(SolutionDir)\LibreSSLSDK\onecore\arm64\'
+        
+        $xml.Save($PathTargets)
     }
     
     $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
