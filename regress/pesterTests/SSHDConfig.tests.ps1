@@ -14,7 +14,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
         if( -not (Test-path $testDir -PathType Container))
         {
             $null = New-Item $testDir -ItemType directory -Force -ErrorAction SilentlyContinue
-        }
+        }        
 
         $fileName = "test.txt"
         $logName = "sshdlog.txt"
@@ -113,7 +113,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
             }
         }
         $platform = Get-Platform
-        $skip = ($platform -eq [PlatformType]::Windows) -and ($PSVersionTable.PSVersion.Major -le 2)
+        $skip = ($platform -eq [PlatformType]::Windows) -and ($PSVersionTable.PSVersion.Major -le 2)        
         if(($platform -eq [PlatformType]::Windows) -and ($psversiontable.BuildVersion.Major -le 6))
         {
             #suppress the firewall blocking dialogue on win7
@@ -123,7 +123,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
     AfterEach { $tI++ }
     
-    AfterAll {
+    AfterAll {        
         $PrincipalContext.Dispose()
         if(($platform -eq [PlatformType]::Windows) -and ($psversiontable.BuildVersion.Major -le 6))
         {            
@@ -180,7 +180,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
             $tC++
         }
 
-        It "$tC.$tI-User with full name in the list of AllowUsers" {
+        It "$tC.$tI-User with full name in the list of AllowUsers"  -skip:$skip {
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
 
@@ -193,7 +193,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         }
 
-        It "$tC.$tI-User with * wildcard" {
+        It "$tC.$tI-User with * wildcard"  -skip:$skip {
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
 
@@ -206,7 +206,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         }
 
-        It "$tC.$tI-User with ? wildcard" {
+        It "$tC.$tI-User with ? wildcard"  -skip:$skip {
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
            Add-UserToLocalGroup -UserName $allowUser3 -Password $password -GroupName $allowGroup1
@@ -218,7 +218,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         }
 
-        It "$tC.$tI-User with full name in the list of AllowUsers but not in any AllowGroups" {
+        It "$tC.$tI-User with full name in the list of AllowUsers but not in any AllowGroups"  -skip:$skip {
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
 
@@ -231,7 +231,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
            
         }
 
-        It "$tC.$tI-User with full name in the list of DenyUsers" {
+        It "$tC.$tI-User with full name in the list of DenyUsers"  -skip:$skip {
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
 
@@ -246,7 +246,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         }
 
-        It "$tC.$tI-User with * wildcard in the list of DenyUsers" {
+        It "$tC.$tI-User with * wildcard in the list of DenyUsers"  -skip:$skip {
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
 
@@ -261,7 +261,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         }
 
-        It "$tC.$tI-User with ? wildcard in the list of DenyUsers" {
+        It "$tC.$tI-User with ? wildcard in the list of DenyUsers"  -skip:$skip {
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
 
@@ -276,7 +276,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         }
 
-        It "$tC.$tI-User is listed in the list of AllowUsers but also in a full name DenyGroups and AllowGroups" {
+        It "$tC.$tI-User is listed in the list of AllowUsers but also in a full name DenyGroups and AllowGroups"  -skip:$skip {
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
 
@@ -293,7 +293,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         }
 
-        It "$tC.$tI-User is listed in the list of AllowUsers but also in a wildcard * DenyGroups" {
+        It "$tC.$tI-User is listed in the list of AllowUsers but also in a wildcard * DenyGroups"  -skip:$skip {
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
 
@@ -308,7 +308,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         }
 
-        It "$tC.$tI-User is listed in the list of AllowUsers but also in a wildcard ? DenyGroups" {
+        It "$tC.$tI-User is listed in the list of AllowUsers but also in a wildcard ? DenyGroups"  -skip:$skip {
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
 

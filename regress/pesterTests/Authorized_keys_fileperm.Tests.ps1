@@ -25,7 +25,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
         $PwdUser = $OpenSSHTestInfo["PasswdUser"]
         $ssouserProfile = $OpenSSHTestInfo["SSOUserProfile"]
         $opensshbinpath = $OpenSSHTestInfo['OpenSSHBinPath']
-        Remove-Item -Path (Join-Path $testDir "*$fileName") -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path (Join-Path $testDir "*$fileName") -Force -ErrorAction SilentlyContinue        
         $platform = Get-Platform
         $skip = ($platform -eq [PlatformType]::Windows) -and ($PSVersionTable.PSVersion.Major -le 2)
         if(($platform -eq [PlatformType]::Windows) -and ($psversiontable.BuildVersion.Major -le 6))
@@ -87,7 +87,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Get-Process -Name sshd -ErrorAction SilentlyContinue | Where-Object {$_.SessionID -ne 0} | Stop-process -force -ErrorAction SilentlyContinue
         }       
 
-        It "$tC.$tI-authorized_keys-positive(pwd user is the owner and running process can access to the file)" {
+        It "$tC.$tI-authorized_keys-positive(pwd user is the owner and running process can access to the file)" -skip:$skip {
             #setup to have ssouser as owner and grant ssouser read and write, admins group, and local system full control            
             Repair-FilePermission -Filepath $authorizedkeyPath -Owners $objUserSid -FullAccessNeeded  $adminsSid,$systemSid,$objUserSid -confirm:$false
 
@@ -99,7 +99,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             
         }
 
-        It "$tC.$tI-authorized_keys-positive(authorized_keys is owned by local system)" {
+        It "$tC.$tI-authorized_keys-positive(authorized_keys is owned by local system)"  -skip:$skip {
             #setup to have system as owner and grant it full control            
             Repair-FilePermission -Filepath $authorizedkeyPath -Owner $systemSid -FullAccessNeeded  $adminsSid,$systemSid,$objUserSid -confirm:$false
 
@@ -112,7 +112,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             
         }
 
-        It "$tC.$tI-authorized_keys-positive(authorized_keys is owned by admins group and pwd does not have explict ACE)" {
+        It "$tC.$tI-authorized_keys-positive(authorized_keys is owned by admins group and pwd does not have explict ACE)"  -skip:$skip {
             #setup to have admin group as owner and grant it full control            
             Repair-FilePermission -Filepath $authorizedkeyPath -Owner $adminsSid -FullAccessNeeded $adminsSid,$systemSid -confirm:$false
 
@@ -124,7 +124,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             
         }
 
-        It "$tC.$tI-authorized_keys-positive(authorized_keys is owned by admins group and pwd have explict ACE)" {
+        It "$tC.$tI-authorized_keys-positive(authorized_keys is owned by admins group and pwd have explict ACE)"  -skip:$skip {
             #setup to have admin group as owner and grant it full control
             Repair-FilePermission -Filepath $authorizedkeyPath -Owner $adminsSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
 
@@ -136,7 +136,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             
         }
 
-        It "$tC.$tI-authorized_keys-negative(authorized_keys is owned by other admin user)" {
+        It "$tC.$tI-authorized_keys-negative(authorized_keys is owned by other admin user)"  -skip:$skip {
             #setup to have current user (admin user) as owner and grant it full control
             Repair-FilePermission -Filepath $authorizedkeyPath -Owner $currentUserSid -FullAccessNeeded $adminsSid,$systemSid -confirm:$false
 
@@ -148,7 +148,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             $logPath | Should Contain "Authentication refused."
         }
 
-        It "$tC.$tI-authorized_keys-negative(other account can access private key file)" {
+        It "$tC.$tI-authorized_keys-negative(other account can access private key file)"  -skip:$skip {
             #setup to have current user as owner and grant it full control            
             Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objUserSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
 
@@ -164,7 +164,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             $logPath | Should Contain "Authentication refused."
         }
 
-        It "$tC.$tI-authorized_keys-negative(authorized_keys is owned by other non-admin user)" {
+        It "$tC.$tI-authorized_keys-negative(authorized_keys is owned by other non-admin user)"  -skip:$skip {
             #setup to have PwdUser as owner and grant it full control            
             $objPwdUserSid = Get-UserSid -User $PwdUser
             Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objPwdUserSid -FullAccessNeeded $adminsSid,$systemSid,$objPwdUser -confirm:$false
