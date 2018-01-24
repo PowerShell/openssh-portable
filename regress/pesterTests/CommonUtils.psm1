@@ -106,3 +106,36 @@ function Remove-PasswordSetting
     if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
     Remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
 }
+
+$Taskfolder = "\OpenSSHTestTasks\"
+$Taskname = "StartTestDaemon"
+        
+function Start-SSHDTestDaemon
+{
+    param(
+    [string] $Arguments,
+    [string] $Workdir)
+
+    $ac = New-ScheduledTaskAction -Execute (join-path $workdir "sshd") -WorkingDirectory $workdir -Argument $Arguments
+    $task = Register-ScheduledTask -TaskName $Taskname -User system -Action $ac -TaskPath $Taskfolder -Force
+    Start-ScheduledTask -TaskPath $Taskfolder -TaskName $Taskname
+}
+
+function Stop-SSHDTestDaemon
+{
+    Stop-ScheduledTask -TaskPath $Taskfolder -TaskName $Taskname
+    #if still running, wait a little while for task to complete
+    Unregister-ScheduledTask -TaskPath $Taskfolder -TaskName $Taskname -Confirm:$false
+
+    #stop-scheduledTask does not wait for worker process to end. Kill it if still running. Logic below assume sshd service is running
+    $svcpid = ((tasklist /svc | select-string -Pattern ".+sshd").ToString() -split "\s+")[1]
+    (gps sshd).id | foreach { if ((-not($_ -eq $svcpid))) 
+        {
+            Stop-Process $_ -Force -ErrorAction SilentlyContinue
+            if((get-Process -Id $_ -ErrorAction SilentlyContinue) -ne $null )
+            {
+                start-sleep 2
+            }
+        }
+    }
+}
