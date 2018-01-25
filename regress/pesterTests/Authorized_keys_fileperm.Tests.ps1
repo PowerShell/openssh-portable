@@ -61,8 +61,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Copy-Item $Source $ssouserSSHProfilePath -Force -ErrorAction Stop
 
             Repair-AuthorizedKeyPermission -Filepath $authorizedkeyPath -confirm:$false
-
-            Get-Process -Name sshd  -ErrorAction SilentlyContinue | Where-Object {$_.SessionID -ne 0} | Stop-process -force -ErrorAction SilentlyContinue
+            
             #add wrong password so ssh does not prompt password if failed with authorized keys
             Add-PasswordSetting -Pass "WrongPass"
             $tI=1
@@ -83,8 +82,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
 
         BeforeEach {
             $filePath = Join-Path $testDir "$tC.$tI.$fileName"            
-            $logPath = Join-Path $testDir "$tC.$tI.$logName"
-            Get-Process -Name sshd -ErrorAction SilentlyContinue | Where-Object {$_.SessionID -ne 0} | Stop-process -force -ErrorAction SilentlyContinue
+            $logPath = Join-Path $testDir "$tC.$tI.$logName"            
         }       
 
         It "$tC.$tI-authorized_keys-positive(pwd user is the owner and running process can access to the file)" -skip:$skip {
@@ -96,7 +94,6 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             $o = ssh -p $port $ssouser@$server -o "UserKnownHostsFile $testknownhosts" echo 1234
             Stop-SSHDTestDaemon
             $o | Should Be "1234"
-            
         }
 
         It "$tC.$tI-authorized_keys-positive(authorized_keys is owned by local system)"  -skip:$skip {
@@ -109,7 +106,6 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             $o = ssh -p $port $ssouser@$server -o "UserKnownHostsFile $testknownhosts"  echo 1234
             Stop-SSHDTestDaemon
             $o | Should Be "1234"
-            
         }
 
         It "$tC.$tI-authorized_keys-positive(authorized_keys is owned by admins group and pwd does not have explict ACE)"  -skip:$skip {
@@ -121,7 +117,6 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             $o = ssh -p $port $ssouser@$server -o "UserKnownHostsFile $testknownhosts"  echo 1234
             Stop-SSHDTestDaemon
             $o | Should Be "1234"
-            
         }
 
         It "$tC.$tI-authorized_keys-positive(authorized_keys is owned by admins group and pwd have explict ACE)"  -skip:$skip {
@@ -132,8 +127,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -p $port -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $logPath"
             $o = ssh -p $port $ssouser@$server -o "UserKnownHostsFile $testknownhosts"  echo 1234
             Stop-SSHDTestDaemon
-            $o | Should Be "1234"
-            
+            $o | Should Be "1234"          
         }
 
         It "$tC.$tI-authorized_keys-negative(authorized_keys is owned by other admin user)"  -skip:$skip {
@@ -144,8 +138,9 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -p $port -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $logPath"
             ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
-            Stop-SSHDTestDaemon
-            $logPath | Should Contain "Authentication refused."
+            Stop-SSHDTestDaemon                  
+            $filePath | Should Contain "Permission denied"
+            $logPath | Should Contain "Authentication refused."            
         }
 
         It "$tC.$tI-authorized_keys-negative(other account can access private key file)"  -skip:$skip {
@@ -159,8 +154,9 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             #Run
             Start-SSHDTestDaemon -workDir $opensshbinpath -Arguments "-d -p $port -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $logPath"
             ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $ssouser@$server echo 1234
-            $LASTEXITCODE | Should Not Be 0
+            $LASTEXITCODE | Should Not Be 0            
             Stop-SSHDTestDaemon
+            $filePath | Should Contain "Permission denied"
             $logPath | Should Contain "Authentication refused."
         }
 
@@ -174,6 +170,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             ssh -p $port -E $FilePath -o "UserKnownHostsFile $testknownhosts" $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
             Stop-SSHDTestDaemon
+            $filePath | Should Contain "Permission denied"
             $logPath | Should Contain "Authentication refused."            
         }
     }

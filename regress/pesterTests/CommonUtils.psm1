@@ -114,11 +114,13 @@ function Start-SSHDTestDaemon
 {
     param(
     [string] $Arguments,
-    [string] $Workdir)
+    [string] $Workdir)    
 
     $ac = New-ScheduledTaskAction -Execute (join-path $workdir "sshd") -WorkingDirectory $workdir -Argument $Arguments
-    $task = Register-ScheduledTask -TaskName $Taskname -User system -Action $ac -TaskPath $Taskfolder -Force
+    $task = Register-ScheduledTask -TaskName $Taskname -User system -Action $ac -TaskPath $Taskfolder -Force    
     Start-ScheduledTask -TaskPath $Taskfolder -TaskName $Taskname
+    #sleep for 1 seconds for process to ready to listener
+    start-sleep 1    
 }
 
 function Stop-SSHDTestDaemon
@@ -129,13 +131,13 @@ function Stop-SSHDTestDaemon
 
     #stop-scheduledTask does not wait for worker process to end. Kill it if still running. Logic below assume sshd service is running
     $svcpid = ((tasklist /svc | select-string -Pattern ".+sshd").ToString() -split "\s+")[1]
-    (gps sshd).id | foreach { if ((-not($_ -eq $svcpid))) 
-        {
-            Stop-Process $_ -Force -ErrorAction SilentlyContinue
-            if((get-Process -Id $_ -ErrorAction SilentlyContinue) -ne $null )
-            {
-                start-sleep 2
-            }
-        }
+    Get-Process sshd -ErrorAction SilentlyContinue | Where-Object {$_.Id -ne $svcpid} | Stop-Process -Force -ErrorAction SilentlyContinue
+    $num = 0
+    while((Get-Process sshd | Where-Object {$_.Id -ne $svcpid}))
+    {
+        # sshd process is still running; wait 1 more seconds"
+        start-sleep 1
+        $num++
+        if($num -gt 20) { break }
     }
 }
