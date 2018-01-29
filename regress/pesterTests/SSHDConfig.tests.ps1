@@ -16,12 +16,12 @@ Describe "Tests of sshd_config" -Tags "CI" {
             $null = New-Item $testDir -ItemType directory -Force -ErrorAction SilentlyContinue
         }        
 
-        $fileName = "test.txt"
-        $logName = "sshdlog.txt"
+        $sshLogName = "test.txt"
+        $sshdLogName = "sshdlog.txt"
         $server = $OpenSSHTestInfo["Target"]
         $opensshbinpath = $OpenSSHTestInfo['OpenSSHBinPath']
         $port = 47003        
-        Remove-Item -Path (Join-Path $testDir "*$fileName") -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path (Join-Path $testDir "*$sshLogName") -Force -ErrorAction SilentlyContinue
 
         Add-Type -AssemblyName System.DirectoryServices.AccountManagement
         $ContextName = $env:COMPUTERNAME
@@ -175,8 +175,8 @@ Describe "Tests of sshd_config" -Tags "CI" {
         }
         
         BeforeEach {
-            $filePath = Join-Path $testDir "$tC.$tI.$fileName"            
-            $logPath = Join-Path $testDir "$tC.$tI.$logName"
+            $sshlog = Join-Path $testDir "$tC.$tI.$sshLogName"            
+            $sshdlog = Join-Path $testDir "$tC.$tI.$sshdLogName"
             if(-not $skip)
             {
                 Stop-SSHDTestDaemon
@@ -190,7 +190,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         It "$tC.$tI-User with full name in the list of AllowUsers"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" 
 
            Add-UserToLocalGroup -UserName $allowUser1 -Password $password -GroupName $allowGroup1
 
@@ -203,7 +203,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         It "$tC.$tI-User with * wildcard"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" 
 
            Add-UserToLocalGroup -UserName $allowUser2 -Password $password -GroupName $allowGroup1
            
@@ -216,7 +216,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         It "$tC.$tI-User with ? wildcard"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" 
            Add-UserToLocalGroup -UserName $allowUser3 -Password $password -GroupName $allowGroup1
            
            $o = ssh  -p $port $allowUser3@$server -o "UserKnownHostsFile $testknownhosts" echo 1234
@@ -228,27 +228,27 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         It "$tC.$tI-User with full name in the list of AllowUsers but not in any AllowGroups"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" 
 
            Add-LocalUser -UserName $allowUser4 -Password $password
 
-           ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $allowUser4@$server echo 1234
+           ssh -p $port -E $sshlog -o "UserKnownHostsFile $testknownhosts" $allowUser4@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
            Stop-SSHDTestDaemon
-           $logPath | Should Contain "not allowed because not in any group"
+           $sshdlog | Should Contain "not allowed because not in any group"
            
         }
 
         It "$tC.$tI-User with full name in the list of DenyUsers"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" 
 
            Add-UserToLocalGroup -UserName $denyUser1 -Password $password -GroupName $allowGroup1
 
-           ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $denyUser1@$server echo 1234
+           ssh -p $port -E $sshlog -o "UserKnownHostsFile $testknownhosts" $denyUser1@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
            Stop-SSHDTestDaemon
-           $logPath | Should Contain "not allowed because listed in DenyUsers"
+           $sshdlog | Should Contain "not allowed because listed in DenyUsers"
 
            Remove-UserFromLocalGroup -UserName $denyUser1 -GroupName $allowGroup1
 
@@ -256,14 +256,14 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         It "$tC.$tI-User with * wildcard in the list of DenyUsers"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" 
 
            Add-UserToLocalGroup -UserName $denyUser2 -Password $password -GroupName $allowGroup1
 
-           ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $denyUser2@$server echo 1234
+           ssh -p $port -E $sshlog -o "UserKnownHostsFile $testknownhosts" $denyUser2@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
            Stop-SSHDTestDaemon
-           $logPath | Should Contain "not allowed because listed in DenyUsers"
+           $sshdlog | Should Contain "not allowed because listed in DenyUsers"
 
            Remove-UserFromLocalGroup -UserName $denyUser2 -GroupName $allowGroup1
 
@@ -271,14 +271,14 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         It "$tC.$tI-User with ? wildcard in the list of DenyUsers"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" 
 
            Add-UserToLocalGroup -UserName $denyUser3 -Password $password -GroupName $allowGroup1
 
-           ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $denyUser3@$server echo 1234
+           ssh -p $port -E $sshlog -o "UserKnownHostsFile $testknownhosts" $denyUser3@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
            Stop-SSHDTestDaemon
-           $logPath | Should Contain "not allowed because not listed in AllowUsers"
+           $sshdlog | Should Contain "not allowed because not listed in AllowUsers"
            
            Remove-UserFromLocalGroup -UserName $denyUser3 -GroupName $allowGroup1
 
@@ -286,15 +286,15 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         It "$tC.$tI-User is listed in the list of AllowUsers but also in a full name DenyGroups and AllowGroups"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" 
 
            Add-UserToLocalGroup -UserName $localuser1 -Password $password -GroupName $allowGroup1
            Add-UserToLocalGroup -UserName $localuser1 -Password $password -GroupName $denyGroup1
            
-           ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $localuser1@$server echo 1234
+           ssh -p $port -E $sshlog -o "UserKnownHostsFile $testknownhosts" $localuser1@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
            Stop-SSHDTestDaemon
-           $logPath | Should Contain "not allowed because a group is listed in DenyGroups"
+           $sshdlog | Should Contain "not allowed because a group is listed in DenyGroups"
 
            Remove-UserFromLocalGroup -UserName $localuser1 -GroupName $allowGroup1
            Remove-UserFromLocalGroup -UserName $localuser1 -GroupName $denyGroup1
@@ -303,14 +303,14 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         It "$tC.$tI-User is listed in the list of AllowUsers but also in a wildcard * DenyGroups"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" 
 
            Add-UserToLocalGroup -UserName $localuser2 -Password $password -GroupName $denyGroup2
            
-           ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $localuser2@$server echo 1234
+           ssh -p $port -E $sshlog -o "UserKnownHostsFile $testknownhosts" $localuser2@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
            Stop-SSHDTestDaemon
-           $logPath | Should Contain "not allowed because a group is listed in DenyGroups"
+           $sshdlog | Should Contain "not allowed because a group is listed in DenyGroups"
            
            Remove-UserFromLocalGroup -UserName $localuser2 -GroupName $denyGroup2
 
@@ -318,14 +318,14 @@ Describe "Tests of sshd_config" -Tags "CI" {
 
         It "$tC.$tI-User is listed in the list of AllowUsers but also in a wildcard ? DenyGroups"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $logPath" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" 
 
            Add-UserToLocalGroup -UserName $localuser3 -Password $password -GroupName $denyGroup3
            
-           ssh -p $port -E $filePath -o "UserKnownHostsFile $testknownhosts" $localuser3@$server echo 1234
+           ssh -p $port -E $sshlog -o "UserKnownHostsFile $testknownhosts" $localuser3@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
            Stop-SSHDTestDaemon
-           $logPath | Should Contain "not allowed because a group is listed in DenyGroups"
+           $sshdlog | Should Contain "not allowed because a group is listed in DenyGroups"
            
            Remove-UserFromLocalGroup -UserName $localuser3 -GroupName $denyGroup3
 

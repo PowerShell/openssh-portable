@@ -126,7 +126,7 @@ function Start-SSHDTestDaemon
     {
         start-sleep 1
         $num++
-        if($num -gt 20) { break }
+        if($num -gt 30) { break }
     }
 }
 
@@ -151,6 +151,6 @@ function Stop-SSHDTestDaemon
         # sshd process is still running; wait 1 more seconds"
         start-sleep 1
         $num++
-        if($num -gt 20) { break }
+        if($num -gt 30) { break }
     }
 }
