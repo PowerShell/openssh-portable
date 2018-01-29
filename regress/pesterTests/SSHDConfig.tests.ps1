@@ -113,7 +113,11 @@ Describe "Tests of sshd_config" -Tags "CI" {
             }
         }
         $platform = Get-Platform
-        $skip = ($platform -eq [PlatformType]::Windows) -and ($PSVersionTable.PSVersion.Major -le 2)        
+        $skip = ($platform -eq [PlatformType]::Windows) -and ($PSVersionTable.PSVersion.Major -le 2)
+        if(-not $skip)
+        {
+            Stop-SSHDTestDaemon
+        }
         if(($platform -eq [PlatformType]::Windows) -and ($psversiontable.BuildVersion.Major -le 6))
         {
             #suppress the firewall blocking dialogue on win7
@@ -173,6 +177,10 @@ Describe "Tests of sshd_config" -Tags "CI" {
         BeforeEach {
             $filePath = Join-Path $testDir "$tC.$tI.$fileName"            
             $logPath = Join-Path $testDir "$tC.$tI.$logName"
+            if(-not $skip)
+            {
+                Stop-SSHDTestDaemon
+            }
         }
 
         AfterAll {            

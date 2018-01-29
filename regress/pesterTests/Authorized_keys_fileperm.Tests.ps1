@@ -58,10 +58,13 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             $authorizedkeyPath = Join-Path $ssouserProfile .testssh\authorized_keys
             $Source = Join-Path $ssouserProfile .ssh\authorized_keys
             $testknownhosts = Join-path $PSScriptRoot testdata\test_known_hosts
-            Copy-Item $Source $ssouserSSHProfilePath -Force -ErrorAction Stop
-
+            Copy-Item $Source $ssouserSSHProfilePath -Force -ErrorAction Stop            
             Repair-AuthorizedKeyPermission -Filepath $authorizedkeyPath -confirm:$false
-            
+            if(-not $skip)
+            {
+                Stop-SSHDTestDaemon
+            }
+                        
             #add wrong password so ssh does not prompt password if failed with authorized keys
             Add-PasswordSetting -Pass "WrongPass"
             $tI=1
@@ -81,8 +84,12 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
         }
 
         BeforeEach {
-            $filePath = Join-Path $testDir "$tC.$tI.$fileName"            
-            $logPath = Join-Path $testDir "$tC.$tI.$logName"            
+            $filePath = Join-Path $testDir "$tC.$tI.$fileName"
+            $logPath = Join-Path $testDir "$tC.$tI.$logName"
+            if(-not $skip)
+            {
+                Stop-SSHDTestDaemon
+            }
         }       
 
         It "$tC.$tI-authorized_keys-positive(pwd user is the owner and running process can access to the file)" -skip:$skip {
