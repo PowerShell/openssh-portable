@@ -253,6 +253,9 @@ process_custom_lsa_auth(const char* user, const char* pwd, const char* lsa_pkg)
 	}
 
 	logon_info = malloc(logon_info_size);
+	if(!logon_info)
+		fatal("%s out of memory", __func__);
+
 	strcpy_s(logon_info, logon_info_size, user_name);
 	strcat_s(logon_info, logon_info_size, ";");
 	strcat_s(logon_info, logon_info_size, pwd);

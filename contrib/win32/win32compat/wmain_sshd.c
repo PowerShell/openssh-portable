@@ -221,7 +221,7 @@ create_openssh_registry_key()
 	if ((r = RegCreateKeyExW(HKEY_LOCAL_MACHINE, SSH_REGISTRY_ROOT, 0, 0, 0, KEY_WRITE, &sa, &ssh_registry_root, 0)) == ERROR_SUCCESS)
 		RegCloseKey(ssh_registry_root);
 	else
-		printf("cannot create agent root reg key, ERROR:%d", r);
+		printf("cannot create ssh root reg key, ERROR:%d", r);
 }
 
 static void
