@@ -601,7 +601,7 @@ function Get-Windows10SDKVersion
    ## Search for latest windows sdk available on the machine
    $windowsSDKPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Lib"
    $minSDKVersion = [version]"10.0.14393.0"
-   Get-ChildItem $windowsSDKPath
+   Write-host (Get-ChildItem $windowsSDKPath)
    $versionsAvailable = @()
    $versionsAvailable += Get-ChildItem $windowsSDKPath | ? {$_.Name.StartsWith("10.")} | % {$version = [version]$_.Name; if($version.CompareTo($minSDKVersion) -ge 0) {$version}}
    if(0 -eq $versionsAvailable.count)
