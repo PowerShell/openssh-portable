@@ -420,16 +420,9 @@ function Start-OpenSSHPackage
     }
     Remove-Item $packageDir -Recurse -Force -ErrorAction SilentlyContinue    
     
-    if ($DestinationPath -ne "") {
-        $SymbolDestination = "$($DestinationPath)_Symbols"
-        if (Test-Path $SymbolDestination) {            
-            Remove-Item $SymbolDestination\* -Force -Recurse -ErrorAction SilentlyContinue
-        }
-        else {
-            New-Item -ItemType Directory $SymbolDestination -Force | Out-Null
-        }
-        Copy-Item -Path $symbolsDir\* -Destination $SymbolDestination -Force -Recurse
-        Write-BuildMsg -AsInfo -Message "Copied symbols to $SymbolDestination"
+    if ($DestinationPath -ne "") {        
+        Copy-Item -Path $symbolsDir\* -Destination $DestinationPath -Force -Recurse
+        Write-BuildMsg -AsInfo -Message "Copied symbols to $DestinationPath"
     }
     else {
         Remove-Item ($symbolsDir + '.zip') -Force -ErrorAction SilentlyContinue
