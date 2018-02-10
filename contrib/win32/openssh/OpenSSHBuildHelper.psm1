@@ -476,7 +476,7 @@ function Start-OpenSSHBuild
     
     Write-BuildMsg -AsInfo -Message "Starting Open SSH build; Build Log: $($script:BuildLogFile)"
 
-    Start-OpenSSHBootstrap -OneCore:$OneCore
+    #Start-OpenSSHBootstrap -OneCore:$OneCore
 
     $script:win32OpenSSHPath = join-path $script:gitRoot "Win32-OpenSSH"
     if (-not (Test-Path (Join-Path $PSScriptRoot LibreSSLSDK)))
@@ -544,14 +544,14 @@ function Start-OpenSSHBuild
         $cmdMsg += "/noconlog"
     }    
 
-    if($NativeHostArch.ToLower().Startswith('arm'))
-    {
+    #if($NativeHostArch.ToLower().Startswith('arm'))
+    #{
         $msbuildCmd = Get-VS2017BuildToolPath
-    }
-    else
-    {
-        $msbuildCmd = Get-VS2015BuildToolPath
-    }
+    #}
+    #else
+    #{
+    #    $msbuildCmd = Get-VS2015BuildToolPath
+    #}
 
     & "$msbuildCmd" $cmdMsg
     $errorCode = $LASTEXITCODE
@@ -597,8 +597,7 @@ function Get-VS2015BuildToolPath
 }
 
 function Get-Windows10SDKVersion
-{
-   return "10.1.10586.15"
+{   
    ## Search for latest windows sdk available on the machine
    $windowsSDKPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Lib"
    $minSDKVersion = [version]"10.0.14393.0"
