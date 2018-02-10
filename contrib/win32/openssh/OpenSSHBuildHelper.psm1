@@ -597,7 +597,8 @@ function Get-VS2015BuildToolPath
 }
 
 function Get-Windows10SDKVersion
-{   
+{
+   return "10.1.10586.15"
    ## Search for latest windows sdk available on the machine
    $windowsSDKPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Lib"
    $minSDKVersion = [version]"10.0.14393.0"
