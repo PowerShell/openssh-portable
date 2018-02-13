@@ -142,7 +142,7 @@ get_passwd(const char *user_utf8, LPWSTR user_sid)
 		GetComputerNameW(wmachine_name, &wmachine_name_len);
 		/* If this is a local account (domain part and computer name are the same), strip out domain */
 		if (_wcsicmp(udom_utf16, wmachine_name) == 0)
-			udom_utf16 = L'\0';
+			udom_utf16 = NULL;
 	}
 
 	if (user_sid == NULL) {
