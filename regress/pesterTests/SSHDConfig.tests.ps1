@@ -330,6 +330,20 @@ Describe "Tests of sshd_config" -Tags "CI" {
            Remove-UserFromLocalGroup -UserName $localuser3 -GroupName $denyGroup3
 
         }
+
+        It "$tC.$tI - Match User block with ForceCommand" -skip:$skip  {
+            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" 
+            $matchuser = "matchuser"
+            Add-LocalUser -UserName $matchuser -Password $password
+            Add-UserToLocalGroup -UserName $matchuser  -Password $password -GroupName $ $allowGroup1
+
+            $o = ssh  -p $port -T $matchuser@$server randomcommand
+            # Match block's ForceCommand returns output of "whoami & set SSH_ORIGINAL_COMMAND"
+            $o[0].Contains($matchuser) | Should Be $true
+            $o[1].Contains("randomcommand") | Should Be $true
+            Stop-SSHDTestDaemon
+            Remove-LocalUser -Name $matchuser
+        }
 #>
     }
 }
