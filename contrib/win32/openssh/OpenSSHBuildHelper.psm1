@@ -234,7 +234,7 @@ function Start-OpenSSHBootstrap
                 Write-BuildMsg -AsError -ErrorAction Stop -Message "User choose not to restart the machine to apply the changes."
             }
         }
-        else
+        elseif($errorCode -ne 0)
         {
             Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $errorCode"
         }
