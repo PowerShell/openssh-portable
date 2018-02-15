@@ -544,14 +544,14 @@ function Start-OpenSSHBuild
         $cmdMsg += "/noconlog"
     }    
 
-    if($NativeHostArch.ToLower().Startswith('arm'))
-    {
+    #if($NativeHostArch.ToLower().Startswith('arm'))
+    #{
         $msbuildCmd = Get-VS2017BuildToolPath
-    }
-    else
-    {
-        $msbuildCmd = Get-VS2015BuildToolPath
-    }
+    #}
+    #else
+    #{
+    #    $msbuildCmd = Get-VS2015BuildToolPath
+    #}
 
     & "$msbuildCmd" $cmdMsg
     $errorCode = $LASTEXITCODE
