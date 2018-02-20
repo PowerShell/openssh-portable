@@ -512,7 +512,7 @@ AddSidMappingToLsa(
 }
 
 
-int RemoveVirtualAccountLSAMapping(PWSTR virtalAccountName)
+int RemoveVirtualAccountLSAMapping(PWSTR virtualAccountName)
 {
 	int ret = 0;
 
@@ -521,8 +521,8 @@ int RemoveVirtualAccountLSAMapping(PWSTR virtalAccountName)
 	PLSA_SID_NAME_MAPPING_OPERATION_REMOVE_INPUT pRemoveSidMapping = &OpInput.RemoveInput;
 
 	RtlInitUnicodeString(&pRemoveSidMapping->DomainName, VIRTUALUSER_DOMAIN);
-	if (virtalAccountName)
-		RtlInitUnicodeString(&pRemoveSidMapping->AccountName, virtalAccountName);
+	if (virtualAccountName)
+		RtlInitUnicodeString(&pRemoveSidMapping->AccountName, virtualAccountName);
 
 	NTSTATUS status = LsaManageSidNameMapping(LsaSidNameMappingOperation_Remove,
 		&OpInput,
