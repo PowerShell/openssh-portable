@@ -109,11 +109,6 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             $stderrFile | Should Contain "OpenSSH_for_Windows"
         }
 
-        It "$tC.$tI - test version" {
-            iex "cmd /c `"ssh -V 2> $stderrFile`""
-            $stderrFile | Should Contain "OpenSSH_for_Windows"
-        }
-
         It "$tC.$tI - test help" {
             iex "cmd /c `"ssh -? 2> $stderrFile`""
             $stderrFile | Should Contain "usage: ssh"
