@@ -44,6 +44,7 @@
 #include <sddl.h>
 #include <ntstatus.h>
 #include "misc_internal.h"
+#include "lsa_missingdefs.h"
 #include "Debug.h"
 
 #pragma warning(push, 3)
@@ -395,27 +396,6 @@ done:
 
 /* *** virtual account token generation logic ***/
 
-/* 
- * these definitions are supposed to be part of Ntsecapi.h 
- * but are missing due to a bug acknowledged by Windows team 
- * These can be deleted once the SDK is fixed in future
- */
-typedef enum _LSA_SID_NAME_MAPPING_OPERATION_TYPE {
-	LsaSidNameMappingOperation_Add,
-	LsaSidNameMappingOperation_Remove,
-	LsaSidNameMappingOperation_AddMultiple,
-} LSA_SID_NAME_MAPPING_OPERATION_TYPE, *PLSA_SID_NAME_MAPPING_OPERATION_TYPE;
-
-typedef enum _LSA_SID_NAME_MAPPING_OPERATION_ERROR {
-	LsaSidNameMappingOperation_Success,
-	LsaSidNameMappingOperation_NonMappingError,
-	LsaSidNameMappingOperation_NameCollision,
-	LsaSidNameMappingOperation_SidCollision,
-	LsaSidNameMappingOperation_DomainNotFound,
-	LsaSidNameMappingOperation_DomainSidPrefixMismatch,
-	LsaSidNameMappingOperation_MappingNotFound,
-} LSA_SID_NAME_MAPPING_OPERATION_ERROR, *PLSA_SID_NAME_MAPPING_OPERATION_ERROR;
-
 char* LSAMappingErrorDetails[] = {
 	"LsaSidNameMappingOperation_Success",
 	"LsaSidNameMappingOperation_NonMappingError",
@@ -425,46 +405,6 @@ char* LSAMappingErrorDetails[] = {
 	"LsaSidNameMappingOperation_DomainSidPrefixMismatch",
 	"LsaSidNameMappingOperation_MappingNotFound"
 };
-
-typedef struct _LSA_SID_NAME_MAPPING_OPERATION_ADD_INPUT {
-	UNICODE_STRING      DomainName;
-	UNICODE_STRING      AccountName;
-	PSID		    Sid;
-	ULONG               Flags;
-} LSA_SID_NAME_MAPPING_OPERATION_ADD_INPUT, *PLSA_SID_NAME_MAPPING_OPERATION_ADD_INPUT;
-
-typedef struct _LSA_SID_NAME_MAPPING_OPERATION_REMOVE_INPUT {
-	UNICODE_STRING  DomainName;
-	UNICODE_STRING  AccountName;
-} LSA_SID_NAME_MAPPING_OPERATION_REMOVE_INPUT, *PLSA_SID_NAME_MAPPING_OPERATION_REMOVE_INPUT;
-
-typedef union _LSA_SID_NAME_MAPPING_OPERATION_INPUT {
-	LSA_SID_NAME_MAPPING_OPERATION_ADD_INPUT            AddInput;
-	LSA_SID_NAME_MAPPING_OPERATION_REMOVE_INPUT         RemoveInput;
-} LSA_SID_NAME_MAPPING_OPERATION_INPUT, *PLSA_SID_NAME_MAPPING_OPERATION_INPUT;
-
-typedef struct _LSA_SID_NAME_MAPPING_OPERATION_GENERIC_OUTPUT {
-	LSA_SID_NAME_MAPPING_OPERATION_ERROR    ErrorCode;
-} LSA_SID_NAME_MAPPING_OPERATION_GENERIC_OUTPUT, *PLSA_SID_NAME_MAPPING_OPERATION_GENERIC_OUTPUT;
-
-typedef LSA_SID_NAME_MAPPING_OPERATION_GENERIC_OUTPUT LSA_SID_NAME_MAPPING_OPERATION_ADD_OUTPUT, *PLSA_SID_NAME_MAPPING_OPERATION_ADD_OUTPUT;
-typedef LSA_SID_NAME_MAPPING_OPERATION_GENERIC_OUTPUT LSA_SID_NAME_MAPPING_OPERATION_REMOVE_OUTPUT, *PLSA_SID_NAME_MAPPING_OPERATION_REMOVE_OUTPUT;
-
-typedef union _LSA_SID_NAME_MAPPING_OPERATION_OUTPUT {
-	LSA_SID_NAME_MAPPING_OPERATION_ADD_OUTPUT           AddOutput;
-	LSA_SID_NAME_MAPPING_OPERATION_REMOVE_OUTPUT        RemoveOutput;
-} LSA_SID_NAME_MAPPING_OPERATION_OUTPUT, *PLSA_SID_NAME_MAPPING_OPERATION_OUTPUT;
-
-NTSTATUS WINAPI LsaManageSidNameMapping(
-	 LSA_SID_NAME_MAPPING_OPERATION_TYPE    OpType,
-	 PLSA_SID_NAME_MAPPING_OPERATION_INPUT  OpInput,
-	 PLSA_SID_NAME_MAPPING_OPERATION_OUTPUT *OpOutput
-);
-
-VOID WINAPI RtlInitUnicodeString(
-	 PUNICODE_STRING DestinationString,
-	 PCWSTR          SourceString
-);
 
 #define VIRTUALACCOUNT_NAME_LENGTH_MAX 255
 
@@ -538,7 +478,6 @@ int RemoveVirtualAccountLSAMapping(PWSTR virtualAccountName)
 
 HANDLE generate_sshd_virtual_token()
 {
-	NTSTATUS status = STATUS_SUCCESS;
 	SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
 	LSA_SID_NAME_MAPPING_OPERATION_ERROR result;
 	UNICODE_STRING Domain;
@@ -570,18 +509,17 @@ HANDLE generate_sshd_virtual_token()
 	 * Windows team recommends using S-1-5-111 named "Virtual Users"
 	 * for all virtual accounts 
 	 */
-	status = AllocateAndInitializeSid(&NtAuthority,
-		1,
-		111,
-		0,
-		0,
-		0,
-		0,
-		0,
-		0,
-		0,
-		&pSidDomain);
-	if (status != TRUE)
+	if (!(AllocateAndInitializeSid(&NtAuthority,
+	    1,
+	    111,
+	    0,
+	    0,
+	    0,
+	    0,
+	    0,
+	    0,
+	    0,
+	    &pSidDomain)))
 		goto Cleanup;
 
 	/* 
@@ -590,18 +528,17 @@ HANDLE generate_sshd_virtual_token()
 	 * S-1-5-80-3847866527-469524349-687026318-516638107-1125189541 (Well Known Group: NT SERVICE\sshd)
 	 * Ex account SID - S-1-5-111-3847866527-469524349-687026318-516638107-1125189541-123
 	 */
-	status = AllocateAndInitializeSid(&NtAuthority,
-		7,
-		111,
-		3847866527,
-		469524349,
-		687026318,
-		516638107,
-		1125189541,
-		GetCurrentProcessId(),
-		0,
-		&pSidUser);
-	if (status != TRUE)
+	if (!(AllocateAndInitializeSid(&NtAuthority,
+	    7,
+	    111,
+	    3847866527,
+	    469524349,
+	    687026318,
+	    516638107,
+	    1125189541,
+	    GetCurrentProcessId(),
+	    0,
+	    &pSidUser)))
 		goto Cleanup;
 
 	/* Map the Domain SID */
