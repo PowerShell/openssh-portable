@@ -406,43 +406,41 @@ char* LSAMappingErrorDetails[] = {
 	"LsaSidNameMappingOperation_MappingNotFound"
 };
 
-#define VIRTUALACCOUNT_NAME_LENGTH_MAX 255
-
-#define VIRTUALUSER_DOMAIN L"Virtual Users"
+#define VIRTUALUSER_DOMAIN L"VIRTUAL USERS"
+#define VIRTUALUSER_GROUP_NAME L"ALL VIRTUAL USERS"
 
 /* returns 0 on success -1 on failure */
 int
 AddSidMappingToLsa(
-	 PUNICODE_STRING pDomainName,
-	 PUNICODE_STRING pAccountName,
-	 PSID pSid,
-	 PLSA_SID_NAME_MAPPING_OPERATION_ERROR pResult)
+	 PUNICODE_STRING domain_name,
+	 PUNICODE_STRING account_name,
+	 PSID sid)
 {
-	LSA_SID_NAME_MAPPING_OPERATION_INPUT   OpInput = { 0 };
-	PLSA_SID_NAME_MAPPING_OPERATION_OUTPUT pOpOutput = NULL;
-	LSA_SID_NAME_MAPPING_OPERATION_ERROR Result =
+	LSA_SID_NAME_MAPPING_OPERATION_INPUT   input = { 0 };
+	PLSA_SID_NAME_MAPPING_OPERATION_OUTPUT p_output = NULL;
+	LSA_SID_NAME_MAPPING_OPERATION_ERROR op_result =
 		LsaSidNameMappingOperation_NonMappingError;
 	NTSTATUS status = STATUS_SUCCESS;
 	int ret = 0;
 
-	OpInput.AddInput.DomainName = *pDomainName;
-	if (pAccountName)
-		OpInput.AddInput.AccountName = *pAccountName;
-	OpInput.AddInput.Sid = pSid;
+	input.AddInput.DomainName = *domain_name;
+	if (account_name)
+		input.AddInput.AccountName = *account_name;
+	input.AddInput.Sid = sid;
 
 	status = LsaManageSidNameMapping(LsaSidNameMappingOperation_Add,
-		&OpInput,
-		&pOpOutput);
+		&input,
+		&p_output);
 	if (status != STATUS_SUCCESS) {
 		ret = -1;
-		if (pOpOutput) {
-			Result = pOpOutput->AddOutput.ErrorCode;
-			if (Result == LsaSidNameMappingOperation_NameCollision || Result == LsaSidNameMappingOperation_SidCollision)
+		if (p_output) {
+			op_result = p_output->AddOutput.ErrorCode;
+			if (op_result == LsaSidNameMappingOperation_NameCollision || op_result == LsaSidNameMappingOperation_SidCollision)
 				ret = 0; /* OK as it failed due to collision */
 			else
-				error("LsaManageSidNameMapping failed with : %s \n", LSAMappingErrorDetails[Result]);
+				error("LsaManageSidNameMapping failed with : %s \n", LSAMappingErrorDetails[op_result]);
 
-			LsaFreeMemory(pOpOutput);
+			LsaFreeMemory(p_output);
 		}
 		else
 			error("LsaManageSidNameMapping failed with ntstatus: %d \n", status);
@@ -452,64 +450,49 @@ AddSidMappingToLsa(
 }
 
 
-int RemoveVirtualAccountLSAMapping(PWSTR virtualAccountName)
+int RemoveVirtualAccountLSAMapping(PUNICODE_STRING domain_name,
+	PUNICODE_STRING account_name)
 {
 	int ret = 0;
 
-	LSA_SID_NAME_MAPPING_OPERATION_INPUT         OpInput = { 0 };
-	PLSA_SID_NAME_MAPPING_OPERATION_OUTPUT       pOpOutput = NULL;
-	PLSA_SID_NAME_MAPPING_OPERATION_REMOVE_INPUT pRemoveSidMapping = &OpInput.RemoveInput;
+	LSA_SID_NAME_MAPPING_OPERATION_INPUT         input = { 0 };
+	PLSA_SID_NAME_MAPPING_OPERATION_OUTPUT       p_output = NULL;
+	PLSA_SID_NAME_MAPPING_OPERATION_REMOVE_INPUT remove_input = &input.RemoveInput;
 
-	RtlInitUnicodeString(&pRemoveSidMapping->DomainName, VIRTUALUSER_DOMAIN);
-	if (virtualAccountName)
-		RtlInitUnicodeString(&pRemoveSidMapping->AccountName, virtualAccountName);
-
+	remove_input->DomainName = *domain_name;
+	if (account_name)
+		remove_input->AccountName = *account_name;
+	
 	NTSTATUS status = LsaManageSidNameMapping(LsaSidNameMappingOperation_Remove,
-		&OpInput,
-		&pOpOutput);
+		&input,
+		&p_output);
 	if (status != STATUS_SUCCESS)
 		ret = -1;
 
-	if (pOpOutput)
-		LsaFreeMemory(pOpOutput);
+	if (p_output)
+		LsaFreeMemory(p_output);
 
 	return ret;
 }
 
 HANDLE generate_sshd_virtual_token()
 {
-	SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
-	LSA_SID_NAME_MAPPING_OPERATION_ERROR result;
-	UNICODE_STRING Domain;
-	UNICODE_STRING Account;
+	SID_IDENTIFIER_AUTHORITY nt_authority = SECURITY_NT_AUTHORITY;
+	UNICODE_STRING domain, group, account;
+	WCHAR va_name[32]; /* enough to accomodate sshd_123457890 */
 
-	PWSTR pVirtualAccountUserName = NULL;
-	PSID pSidDomain = NULL;
-	PSID pSidUser = NULL;
-	HANDLE hToken = 0, hRestrictedToken = 0;;
+	PSID sid_domain = NULL, sid_group = NULL, sid_user = NULL;
+	HANDLE va_token = 0, va_token_restricted = 0;
 
-	pVirtualAccountUserName = (PWSTR)malloc(sizeof(WCHAR)*(VIRTUALACCOUNT_NAME_LENGTH_MAX + 1));
-	if (NULL == pVirtualAccountUserName)
-		goto Cleanup;
+	StringCchPrintfW(va_name, 32, L"%s_%d", L"sshd", GetCurrentProcessId());
 
-	ZeroMemory(pVirtualAccountUserName, sizeof(WCHAR)*(VIRTUALACCOUNT_NAME_LENGTH_MAX + 1));
+	RtlInitUnicodeString(&domain, VIRTUALUSER_DOMAIN);
+	RtlInitUnicodeString(&group, VIRTUALUSER_GROUP_NAME);
+	RtlInitUnicodeString(&account, va_name);
 
-	StringCchPrintfW(
-		pVirtualAccountUserName,
-		(VIRTUALACCOUNT_NAME_LENGTH_MAX + 1),
-		L"%s_%d",
-		L"sshd",
-		GetCurrentProcessId());
-
-	RtlInitUnicodeString(&Domain, VIRTUALUSER_DOMAIN);
-	RtlInitUnicodeString(&Account, pVirtualAccountUserName);
-
-	/* 
-	 * setup domain SID - 
-	 * Windows team recommends using S-1-5-111 named "Virtual Users"
-	 * for all virtual accounts 
-	 */
-	if (!(AllocateAndInitializeSid(&NtAuthority,
+	/* Initialize SIDs */
+	/* domain SID - S-1-5-111 */
+	if (!(AllocateAndInitializeSid(&nt_authority,
 	    1,
 	    111,
 	    0,
@@ -519,16 +502,30 @@ HANDLE generate_sshd_virtual_token()
 	    0,
 	    0,
 	    0,
-	    &pSidDomain)))
-		goto Cleanup;
+	    &sid_domain)))
+		goto cleanup;
+
+	/* group SID - S-1-5-111-0 */
+	if (!(AllocateAndInitializeSid(&nt_authority,
+		2,
+		111,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		&sid_group)))
+		goto cleanup;
 
 	/* 
-	 * setup account SID 
+	 * account SID 
 	 * this is derived from higher RIDs in sshd service account SID to ensure there are no conflicts
-	 * S-1-5-80-3847866527-469524349-687026318-516638107-1125189541 (Well Known Group: NT SERVICE\sshd)
+	 * S-1-5-80-3847866527-469524349-687026318-516638107-1125189541 (Well Known group: NT SERVICE\sshd)
 	 * Ex account SID - S-1-5-111-3847866527-469524349-687026318-516638107-1125189541-123
 	 */
-	if (!(AllocateAndInitializeSid(&NtAuthority,
+	if (!(AllocateAndInitializeSid(&nt_authority,
 	    7,
 	    111,
 	    3847866527,
@@ -538,51 +535,55 @@ HANDLE generate_sshd_virtual_token()
 	    1125189541,
 	    GetCurrentProcessId(),
 	    0,
-	    &pSidUser)))
-		goto Cleanup;
+	    &sid_user)))
+		goto cleanup;
 
-	/* Map the Domain SID */
-	if (AddSidMappingToLsa(&Domain, NULL, pSidDomain, &result) != 0)
-		goto Cleanup;
+	/* Map the domain SID */
+	if (AddSidMappingToLsa(&domain, NULL, sid_domain) != 0)
+		goto cleanup;
 
-	/* Map the USER account. */
-	if (AddSidMappingToLsa(&Domain, &Account, pSidUser, &result) != 0)
-		goto Cleanup;
+	/* Map the group SID */
+	if (AddSidMappingToLsa(&domain, &group, sid_group) != 0)
+		goto cleanup;
+
+	/* Map the user SID */
+	if (AddSidMappingToLsa(&domain, &account, sid_user) != 0)
+		goto cleanup;
 
 	/* Logon virtual and create token */
 	if (!LogonUserExExWHelper(
-	    pVirtualAccountUserName,
+	    va_name,
 	    VIRTUALUSER_DOMAIN,
 	    L"",
 	    LOGON32_LOGON_INTERACTIVE,
 	    LOGON32_PROVIDER_VIRTUAL,
 	    NULL,
-	    &hToken,
+	    &va_token,
 	    NULL,
 	    NULL,
 	    NULL,
 	    NULL)) {
 		debug3("LogonUserExExW failed with %d \n", GetLastError());
-		goto Cleanup;
+		goto cleanup;
 	}
 
 	/* remove all privileges */
-	if (!CreateRestrictedToken(hToken, DISABLE_MAX_PRIVILEGE, 0, NULL, 0, NULL, 0, NULL, &hRestrictedToken ))
+	if (!CreateRestrictedToken(va_token, DISABLE_MAX_PRIVILEGE, 0, NULL, 0, NULL, 0, NULL, &va_token_restricted ))
 		debug3("CreateRestrictedToken failed with %d \n", GetLastError());
 
-	CloseHandle(hToken);
+	CloseHandle(va_token);
 
-Cleanup:
-	if (pVirtualAccountUserName) {
-		RemoveVirtualAccountLSAMapping(pVirtualAccountUserName);
-		free(pVirtualAccountUserName);
-	}
-	if (pSidDomain)
-		FreeSid(pSidDomain);
-	if (pSidUser)
-		FreeSid(pSidUser);
+cleanup:
+	RemoveVirtualAccountLSAMapping(&domain, &account);
 
-	return hRestrictedToken;
+	if (sid_domain)
+		FreeSid(sid_domain);
+	if (sid_user)
+		FreeSid(sid_user);
+	if (sid_group)
+		FreeSid(sid_group);
+
+	return va_token_restricted;
 }
 
 
