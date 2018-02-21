@@ -411,8 +411,7 @@ char* LSAMappingErrorDetails[] = {
 
 /* returns 0 on success -1 on failure */
 int
-AddSidMappingToLsa(
-	 PUNICODE_STRING domain_name,
+AddSidMappingToLsa(PUNICODE_STRING domain_name,
 	 PUNICODE_STRING account_name,
 	 PSID sid)
 {
@@ -439,12 +438,13 @@ AddSidMappingToLsa(
 				ret = 0; /* OK as it failed due to collision */
 			else
 				error("LsaManageSidNameMapping failed with : %s \n", LSAMappingErrorDetails[op_result]);
-
-			LsaFreeMemory(p_output);
 		}
 		else
 			error("LsaManageSidNameMapping failed with ntstatus: %d \n", status);
 	}
+
+	if (p_output)
+		LsaFreeMemory(p_output);
 
 	return ret;
 }
@@ -507,16 +507,16 @@ HANDLE generate_sshd_virtual_token()
 
 	/* group SID - S-1-5-111-0 */
 	if (!(AllocateAndInitializeSid(&nt_authority,
-		2,
-		111,
-		0,
-		0,
-		0,
-		0,
-		0,
-		0,
-		0,
-		&sid_group)))
+	    2,
+	    111,
+	    0,
+	    0,
+	    0,
+	    0,
+	    0,
+	    0,
+	    0,
+	    &sid_group)))
 		goto cleanup;
 
 	/* 
