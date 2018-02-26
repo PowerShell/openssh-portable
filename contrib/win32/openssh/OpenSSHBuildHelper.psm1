@@ -197,7 +197,8 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsVerbose -Message "$gitCmdPath already present in Path environment variable" -Silent:$silent
     }
 
-    $nativeMSBuildPath = Get-VS2015BuildToolPath
+    $VS2015Path = Get-VS2015BuildToolPath
+    $VS2017Path = Get-VS2017BuildToolPath
 
     # Update machine environment path
     if ($newMachineEnvironmentPath -ne $machinePath)
@@ -206,9 +207,24 @@ function Start-OpenSSHBootstrap
     }    
 
     $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
-    $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"
-    $packageName = "vcbuildtools"
-    If (($nativeMSBuildPath -eq $null) -or (-not (Test-Path $VcVars)) -or (-not (Test-Path $sdkPath))) {
+    $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"    
+    #use vs2017 build tool if exists
+    if($VS2017Path -ne $null)
+    {
+        If (-not (Test-Path $sdkPath))
+        {
+            $packageName = "windows-sdk-8.1"
+            Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
+            choco install $packageName -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
+        }
+
+        if(-not (Test-Path $VcVars))
+        {
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "VC++ 2015.3 v140 toolset are not installed."   
+        }
+    }
+    elseIf (($VS2015Path -eq $null) -or (-not (Test-Path $VcVars)) -or (-not (Test-Path $sdkPath))) {
+        $packageName = "vcbuildtools"
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
         choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK;Win81SDK_CppBuildSKUV1" -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
         $errorCode = $LASTEXITCODE
@@ -244,14 +260,11 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsVerbose -Message 'VC++ 2015 Build Tools already present.'
     }
 
-    if($NativeHostArch.ToLower().Startswith('arm'))
-    {		
-        $nativeMSBuildPath = Get-VS2017BuildToolPath
-        If ($nativeMSBuildPath -eq $null)
-        {
-            #todo, install vs 2017 build tools
-            Write-BuildMsg -AsError -ErrorAction Stop -Message "The required msbuild 15.0 is not installed on the machine."
-        }
+    if($NativeHostArch.ToLower().Startswith('arm') -or ($VS2017Path -eq $null))
+    {
+        
+        #todo, install vs 2017 build tools
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "The required msbuild 15.0 is not installed on the machine."
     }
 
     if($OneCore -or ($NativeHostArch.ToLower().Startswith('arm')))
@@ -538,20 +551,17 @@ function Start-OpenSSHBuild
     }
     
     $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
-    $cmdMsg = @("${solutionFile}", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/m", "/nologo", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")    
+    $cmdMsg = @("${solutionFile}", "/t:Rebuild", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/m", "/nologo", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")    
     if($silent)
     {
         $cmdMsg += "/noconlog"
-    }    
-
-    #if($NativeHostArch.ToLower().Startswith('arm'))
-    #{
-        $msbuildCmd = Get-VS2017BuildToolPath
-    #}
-    #else
-    #{
-    #    $msbuildCmd = Get-VS2015BuildToolPath
-    #}
+    }
+    
+    $msbuildCmd = Get-VS2017BuildToolPath
+    if($msbuildCmd -eq $null)
+    {
+        $msbuildCmd = Get-VS2015BuildToolPath
+    }
 
     & "$msbuildCmd" $cmdMsg
     $errorCode = $LASTEXITCODE
@@ -601,7 +611,6 @@ function Get-Windows10SDKVersion
    ## Search for latest windows sdk available on the machine
    $windowsSDKPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Lib"
    $minSDKVersion = [version]"10.0.14393.0"
-   Write-host (Get-ChildItem $windowsSDKPath)
    $versionsAvailable = @()
    $versionsAvailable += Get-ChildItem $windowsSDKPath | ? {$_.Name.StartsWith("10.")} | % {$version = [version]$_.Name; if($version.CompareTo($minSDKVersion) -ge 0) {$version}}
    if(0 -eq $versionsAvailable.count)
