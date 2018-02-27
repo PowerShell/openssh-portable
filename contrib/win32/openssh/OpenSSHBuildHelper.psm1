@@ -252,7 +252,7 @@ function Start-OpenSSHBootstrap
         }
         elseif($errorCode -ne 0)
         {
-            Write-BuildMsg -AsInfo -Message "$packageName installation failed with error code $errorCode"            
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $errorCode"
         }
     }
     else
