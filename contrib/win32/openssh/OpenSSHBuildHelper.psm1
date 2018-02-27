@@ -431,9 +431,9 @@ function Start-OpenSSHPackage
             Write-BuildMsg -AsInfo -Message "Packaged Payload not compressed."
         }
     }
-    Remove-Item $packageDir -Recurse -Force -ErrorAction SilentlyContinue    
+    Remove-Item $packageDir -Recurse -Force -ErrorAction SilentlyContinue
     
-    if ($DestinationPath -ne "") {        
+    if ($DestinationPath -ne "") {
         Copy-Item -Path $symbolsDir\* -Destination $DestinationPath -Force -Recurse
         Write-BuildMsg -AsInfo -Message "Copied symbols to $DestinationPath"
     }
