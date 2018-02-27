@@ -252,7 +252,7 @@ function Start-OpenSSHBootstrap
         }
         elseif($errorCode -ne 0)
         {
-            Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $errorCode"
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $errorCode."
         }
     }
     else
@@ -281,7 +281,7 @@ function Start-OpenSSHBootstrap
     # Ensure the VS C toolset is installed
     if ($null -eq $env:VS140COMNTOOLS)
     {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "Cannot find Visual Studio 2015 Environment variable VS140COMNTOOlS"
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "Cannot find Visual Studio 2015 Environment variable VS140COMNTOOlS."
     }
 
     $item = Get-Item(Join-Path -Path $env:VS140COMNTOOLS -ChildPath '../../vc')
@@ -327,7 +327,7 @@ function Copy-LibreSSLSDK
     Copy-Item -Container -Path $sourcePath -Destination $PSScriptRoot -Recurse -Force -ErrorAction SilentlyContinue -ErrorVariable e
     if($e -ne $null)
     {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "Copy LibreSSLSDK from $sourcePath to $PSScriptRoot failed"
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "Copy LibreSSLSDK from $sourcePath to $PSScriptRoot failed."
     }
 }
 
@@ -417,7 +417,7 @@ function Start-OpenSSHPackage
             New-Item -ItemType Directory $DestinationPath -Force | Out-Null
         }
         Copy-Item -Path $packageDir\* -Destination $DestinationPath -Force -Recurse
-        Write-BuildMsg -AsInfo -Message "Copied payload to $DestinationPath"
+        Write-BuildMsg -AsInfo -Message "Copied payload to $DestinationPath."
     }
     else {
         Remove-Item ($packageDir + '.zip') -Force -ErrorAction SilentlyContinue
@@ -487,7 +487,7 @@ function Start-OpenSSHBuild
         Remove-Item -Path $script:BuildLogFile -force
     }
     
-    Write-BuildMsg -AsInfo -Message "Starting Open SSH build; Build Log: $($script:BuildLogFile)"
+    Write-BuildMsg -AsInfo -Message "Starting Open SSH build; Build Log: $($script:BuildLogFile)."
 
     Start-OpenSSHBootstrap -OneCore:$OneCore
 
