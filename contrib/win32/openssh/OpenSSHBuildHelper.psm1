@@ -146,7 +146,6 @@ function Start-OpenSSHBootstrap
     param(
         [ValidateSet('x86', 'x64', 'arm64', 'arm')]
         [string]$NativeHostArch = "x64",
-
         [switch]$OneCore)
 
     [bool] $silent = -not $script:Verbose
@@ -344,7 +343,8 @@ function Start-OpenSSHPackage
 
         # Copy payload to DestinationPath instead of packaging
         [string]$DestinationPath = "",
-        [switch]$NoOpenSSL
+        [switch]$NoOpenSSL,
+        [switch]$OneCore
     )
 
     [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
@@ -406,7 +406,14 @@ function Start-OpenSSHPackage
     $libreSSLSDKPath = Join-Path $PSScriptRoot $script:libreSSLSDKStr
     if (-not $NoOpenSSL.IsPresent) 
     {        
-        Copy-Item -Path $(Join-Path $libreSSLSDKPath "$NativeHostArch\libcrypto.dll") -Destination $packageDir -Force -ErrorAction Stop
+        if($OneCore)
+        {
+            Copy-Item -Path $(Join-Path $libreSSLSDKPath "Onecore\$NativeHostArch\libcrypto.dll") -Destination $packageDir -Force -ErrorAction Stop
+        }
+        else
+        {
+            Copy-Item -Path $(Join-Path $libreSSLSDKPath "$NativeHostArch\libcrypto.dll") -Destination $packageDir -Force -ErrorAction Stop
+        }
     }    
 
     if ($DestinationPath -ne "") {
@@ -431,9 +438,9 @@ function Start-OpenSSHPackage
             Write-BuildMsg -AsInfo -Message "Packaged Payload not compressed."
         }
     }
-    Remove-Item $packageDir -Recurse -Force -ErrorAction SilentlyContinue    
+    Remove-Item $packageDir -Recurse -Force -ErrorAction SilentlyContinue
     
-    if ($DestinationPath -ne "") {        
+    if ($DestinationPath -ne "") {
         Copy-Item -Path $symbolsDir\* -Destination $DestinationPath -Force -Recurse
         Write-BuildMsg -AsInfo -Message "Copied symbols to $DestinationPath"
     }
