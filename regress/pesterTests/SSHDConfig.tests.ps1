@@ -113,12 +113,13 @@ Describe "Tests of sshd_config" -Tags "CI" {
             }
         }
         $platform = Get-Platform
-        $skip = ($platform -eq [PlatformType]::Windows) -and ($PSVersionTable.PSVersion.Major -le 2)
+        #skip on win7 because Set-Acl failed due to the task schedular (*-ScheduledTask) cmdlets does not exist on win7 and win8        
+        $skip = ($platform -eq [PlatformType]::Windows) -and ([Environment]::OSVersion.Version.Major -le 6) -and ([Environment]::OSVersion.Version.Minor -le 2)
         if(-not $skip)
         {
             Stop-SSHDTestDaemon
         }
-        if(($platform -eq [PlatformType]::Windows) -and ($psversiontable.BuildVersion.Major -le 6))
+        if(($platform -eq [PlatformType]::Windows) -and ([Environment]::OSVersion.Version.Major -le 6))
         {
             #suppress the firewall blocking dialogue on win7
             netsh advfirewall firewall add rule name="sshd" program="$($OpenSSHTestInfo['OpenSSHBinPath'])\sshd.exe" protocol=any action=allow dir=in
