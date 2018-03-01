@@ -26,9 +26,10 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
         $ssouserProfile = $OpenSSHTestInfo["SSOUserProfile"]
         $opensshbinpath = $OpenSSHTestInfo['OpenSSHBinPath']
         Remove-Item -Path (Join-Path $testDir "*$sshLogName") -Force -ErrorAction SilentlyContinue        
-        $platform = Get-Platform
-        #skip on win7 because Set-Acl failed due to the task schedular (*-ScheduledTask) cmdlets does not exist on win7 and win8        
-        $skip = ($platform -eq [PlatformType]::Windows) -and ([Environment]::OSVersion.Version.Major -le 6) -and ([Environment]::OSVersion.Version.Minor -le 2)
+        
+        #skip when the task schedular (*-ScheduledTask) cmdlets does not exist
+        $ts = (get-command get-ScheduledTask -ErrorAction SilentlyContinue)
+        $skip = $ts -eq $null
         if(($platform -eq [PlatformType]::Windows) -and ([Environment]::OSVersion.Version.Major -le 6))
         {
             #suppress the firewall blocking dialogue on win7
