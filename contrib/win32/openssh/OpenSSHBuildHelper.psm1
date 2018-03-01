@@ -410,10 +410,12 @@ function Start-OpenSSHPackage
         if($OneCore)
         {
             Copy-Item -Path $(Join-Path $libreSSLSDKPath "Onecore\$NativeHostArch\libcrypto.dll") -Destination $packageDir -Force -ErrorAction Stop
+            Copy-Item -Path $(Join-Path $libreSSLSDKPath "Onecore\$NativeHostArch\libcrypto.pdb") -Destination $symbolsDir -Force -ErrorAction Stop
         }
         else
         {
             Copy-Item -Path $(Join-Path $libreSSLSDKPath "$NativeHostArch\libcrypto.dll") -Destination $packageDir -Force -ErrorAction Stop
+            Copy-Item -Path $(Join-Path $libreSSLSDKPath "$NativeHostArch\libcrypto.dll") -Destination $symbolsDir -Force -ErrorAction Stop
         }
     }    
 
@@ -454,7 +456,7 @@ function Start-OpenSSHPackage
         }
         else
         {
-               Write-BuildMsg -AsInfo -Message "Packaged Symbols not compressed."
+            Write-BuildMsg -AsInfo -Message "Packaged Symbols not compressed."
         }
     }
     Remove-Item $symbolsDir -Recurse -Force -ErrorAction SilentlyContinue
