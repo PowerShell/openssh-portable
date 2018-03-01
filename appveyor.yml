@@ -6,7 +6,8 @@ branches:
     - latestw_all
 
 init:
-  - ps: [Environment]::OSVersion | fl *
+  - ps: |
+      [Environment]::OSVersion | fl *
 
 build_script:
   - ps: |
