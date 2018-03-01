@@ -415,7 +415,7 @@ function Start-OpenSSHPackage
         else
         {
             Copy-Item -Path $(Join-Path $libreSSLSDKPath "$NativeHostArch\libcrypto.dll") -Destination $packageDir -Force -ErrorAction Stop
-            Copy-Item -Path $(Join-Path $libreSSLSDKPath "$NativeHostArch\libcrypto.dll") -Destination $symbolsDir -Force -ErrorAction Stop
+            Copy-Item -Path $(Join-Path $libreSSLSDKPath "$NativeHostArch\libcrypto.pdb") -Destination $symbolsDir -Force -ErrorAction Stop
         }
     }    
 
