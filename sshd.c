@@ -777,6 +777,8 @@ privsep_preauth(Authctxt *authctxt)
 			char** argv = privsep_child_cmdline(0);
 			if (__posix_spawn_asuser(&pid, argv[0], &actions, NULL, argv, NULL, SSH_PRIVSEP_USER) != 0)
 				error("%s, posix_spawn failed", __func__);
+			else
+				debug2("Network child is on pid %ld", (long)pid);
 			posix_spawn_file_actions_destroy(&actions);
 		}
 		close(pmonitor->m_recvfd);
@@ -883,6 +885,8 @@ privsep_postauth(Authctxt *authctxt)
 			char** argv = privsep_child_cmdline(1);
 			if (__posix_spawn_asuser(&pmonitor->m_pid, argv[0], &actions, NULL, argv, NULL, authctxt->pw->pw_name) != 0)
 				error("%s, posix_spawn failed", __func__);
+			else
+				verbose("User child is on pid %ld", (long)pmonitor->m_pid);
 			posix_spawn_file_actions_destroy(&actions);
 		}
 		
@@ -2214,6 +2218,8 @@ done_loading_hostkeys:
 	   unmounted if desired. */
 	if (chdir("/") == -1)
 		error("chdir(\"/\"): %s", strerror(errno));
+
+	error("sample error from sshd");
 
 	/* ignore SIGPIPE */
 	signal(SIGPIPE, SIG_IGN);

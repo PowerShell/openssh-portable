@@ -1,3 +1,3 @@
-mc -um -h . -r . openssh-events.man
+mc -um -h ..\win32compat -r . openssh-events.man
 
-wevtutil im ..\..\sample\man\openssh-events.man
+wevtutil im openssh-events.man

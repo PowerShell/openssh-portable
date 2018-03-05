@@ -215,7 +215,7 @@ Remarks:
 #endif
 #endif // MCGEN_DISABLE_PROVIDER_CODE_GENERATION
 //+
-// Provider OpenSSH Event Count 6
+// Provider OpenSSH Event Count 5
 //+
 EXTERN_C __declspec(selectany) const GUID OpenSSH = {0xc4b57d35, 0x0636, 0x4bc3, {0xa2, 0x62, 0x37, 0x0f, 0x24, 0x9f, 0x98, 0x02}};
 
@@ -224,8 +224,7 @@ EXTERN_C __declspec(selectany) const GUID OpenSSH = {0xc4b57d35, 0x0636, 0x4bc3,
 //
 #define OpenSSH_Admin 0x10
 #define OpenSSH_Operational 0x11
-#define OpenSSH_Analytic 0x12
-#define OpenSSH_Debug 0x13
+#define OpenSSH_Debug 0x12
 
 //
 // Levels
@@ -243,9 +242,7 @@ EXTERN_C __declspec(selectany) const EVENT_DESCRIPTOR WARNING_Event = {0x3, 0x0,
 #define WARNING_Event_value 0x3
 EXTERN_C __declspec(selectany) const EVENT_DESCRIPTOR INFO_Event = {0x4, 0x0, 0x11, 0x4, 0x0, 0x0, 0x4000000000000000};
 #define INFO_Event_value 0x4
-EXTERN_C __declspec(selectany) const EVENT_DESCRIPTOR VERBOSE_Event = {0x5, 0x0, 0x12, 0x5, 0x0, 0x0, 0x2000000000000000};
-#define VERBOSE_Event_value 0x5
-EXTERN_C __declspec(selectany) const EVENT_DESCRIPTOR DEBUG_Event = {0x6, 0x0, 0x13, 0x10, 0x0, 0x0, 0x1000000000000000};
+EXTERN_C __declspec(selectany) const EVENT_DESCRIPTOR DEBUG_Event = {0x6, 0x0, 0x12, 0x10, 0x0, 0x0, 0x2000000000000000};
 #define DEBUG_Event_value 0x6
 
 //
@@ -276,9 +273,9 @@ EXTERN_C __declspec(selectany) const EVENT_DESCRIPTOR DEBUG_Event = {0x6, 0x0, 0
 //
 
 EXTERN_C __declspec(selectany) DECLSPEC_CACHEALIGN ULONG OpenSSHEnableBits[1];
-EXTERN_C __declspec(selectany) const ULONGLONG OpenSSHKeywords[6] = {0x8000000000000000, 0x8000000000000000, 0x4000000000000000, 0x4000000000000000, 0x2000000000000000, 0x1000000000000000};
-EXTERN_C __declspec(selectany) const UCHAR OpenSSHLevels[6] = {1, 2, 3, 4, 5, 16};
-EXTERN_C __declspec(selectany) MCGEN_TRACE_CONTEXT OpenSSH_Context = {0, 0, 0, 0, 0, 0, 0, 0, 6, OpenSSHEnableBits, OpenSSHKeywords, OpenSSHLevels};
+EXTERN_C __declspec(selectany) const ULONGLONG OpenSSHKeywords[5] = {0x8000000000000000, 0x8000000000000000, 0x4000000000000000, 0x4000000000000000, 0x2000000000000000};
+EXTERN_C __declspec(selectany) const UCHAR OpenSSHLevels[5] = {1, 2, 3, 4, 16};
+EXTERN_C __declspec(selectany) MCGEN_TRACE_CONTEXT OpenSSH_Context = {0, 0, 0, 0, 0, 0, 0, 0, 5, OpenSSHEnableBits, OpenSSHKeywords, OpenSSHLevels};
 
 EXTERN_C __declspec(selectany) REGHANDLE OpenSSHHandle = (REGHANDLE)0;
 
@@ -432,24 +429,10 @@ Remarks:
         : ERROR_SUCCESS\
 
 //
-// Enablement check macro for VERBOSE_Event
-//
-
-#define EventEnabledVERBOSE_Event() ((OpenSSHEnableBits[0] & 0x00000010) != 0)
-
-//
-// Event Macro for VERBOSE_Event
-//
-#define EventWriteVERBOSE_Event(process, payload)\
-        EventEnabledVERBOSE_Event() ?\
-        Template_zz(OpenSSHHandle, &VERBOSE_Event, process, payload)\
-        : ERROR_SUCCESS\
-
-//
 // Enablement check macro for DEBUG_Event
 //
 
-#define EventEnabledDEBUG_Event() ((OpenSSHEnableBits[0] & 0x00000020) != 0)
+#define EventEnabledDEBUG_Event() ((OpenSSHEnableBits[0] & 0x00000010) != 0)
 
 //
 // Event Macro for DEBUG_Event
@@ -510,6 +493,5 @@ Template_zz(
 #define MSG_level_Error                      0x50000002L
 #define MSG_level_Warning                    0x50000003L
 #define MSG_level_Informational              0x50000004L
-#define MSG_level_Verbose                    0x50000005L
 #define MSG_OpenSSH_level_Debug_message      0x50000010L
 #define MSG_OpenSSH_event_message            0xB0000001L
