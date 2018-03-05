@@ -43,16 +43,13 @@ static int logfd = -1;
 char* identity = NULL;
 int log_facility = 0;
 
-void
-openlog(char *ident, unsigned int option, int facility)
+void openlog_etw()
 {
-	identity = ident;
-	log_facility = facility;
 	EventRegisterOpenSSH();
 }
 
 void
-syslog(int priority, const char *format, const char *formatBuffer)
+syslog_etw(int priority, const char *format, const char *formatBuffer)
 {
 	wchar_t *w_identity, *w_payload;
 	w_identity = utf8_to_utf16(identity);
@@ -87,9 +84,9 @@ syslog(int priority, const char *format, const char *formatBuffer)
  * log file location will be - "%programData%\\openssh\\logs\\<module_name>.log"
  */
 void
-openlog__(char *ident, unsigned int option, int facility)
+openlog_file()
 {	
-	if (logfd != -1 || ident == NULL)
+	if (logfd != -1)
 		return;
 
 	wchar_t *logs_dir = L"\\logs\\";
@@ -127,13 +124,7 @@ openlog__(char *ident, unsigned int option, int facility)
 }
 
 void
-closelog(void)
-{
-	/*NOOP*/
-}
-
-void
-syslog__(int priority, const char *format, const char *formatBuffer)
+syslog_file(int priority, const char *format, const char *formatBuffer)
 {
 	char msgbufTimestamp[MSGBUFSIZ];
 	SYSTEMTIME st;
@@ -152,4 +143,30 @@ syslog__(int priority, const char *format, const char *formatBuffer)
 	}
 	msgbufTimestamp[strnlen(msgbufTimestamp, MSGBUFSIZ)] = '\0';
 	_write(logfd, msgbufTimestamp, (unsigned int)strnlen(msgbufTimestamp, MSGBUFSIZ));
+}
+
+void
+openlog(char *ident, unsigned int option, int facility)
+{
+	identity = ident;
+	log_facility = facility;
+	if (log_facility == LOG_LOCAL0)
+		openlog_file();
+	else
+		openlog_etw();
+}
+
+void
+syslog(int priority, const char *format, const char *formatBuffer)
+{
+	if (log_facility == LOG_LOCAL0)
+		syslog_file(priority, format, formatBuffer);
+	else
+		syslog_etw(priority, format, formatBuffer);
+}
+
+void
+closelog(void)
+{
+	/*NOOP*/
 }
