@@ -36,15 +36,58 @@
 #include "inc\syslog.h"
 #include "misc_internal.h"
 #include "inc\utf.h"
+#include "openssh-events.h"
 
 #define MSGBUFSIZ 1024
 static int logfd = -1;
+char* identity = NULL;
+int log_facility = 0;
+
+void
+openlog(char *ident, unsigned int option, int facility)
+{
+	identity = ident;
+	log_facility = facility;
+	EventRegisterOpenSSH();
+}
+
+void
+syslog(int priority, const char *format, const char *formatBuffer)
+{
+	wchar_t *w_identity, *w_payload;
+	w_identity = utf8_to_utf16(identity);
+	w_payload = utf8_to_utf16(formatBuffer);
+
+	switch (priority) {
+	case LOG_CRIT:
+		EventWriteCRITICAL_Event(w_identity, w_payload);
+		break;
+	case LOG_ERR:
+		EventWriteERROR_Event(w_identity, w_payload);
+		break;
+	case LOG_WARNING:
+		EventWriteWARNING_Event(w_identity, w_payload);
+		break;
+	case LOG_INFO:
+		EventWriteINFO_Event(w_identity, w_payload);
+		break;
+	case LOG_DEBUG:
+		EventWriteDEBUG_Event(w_identity, w_payload);
+		break;
+	default:
+		break;
+	}
+
+	free(w_identity);
+	free(w_payload);
+}
+
 
 /*
  * log file location will be - "%programData%\\openssh\\logs\\<module_name>.log"
  */
 void
-openlog(char *ident, unsigned int option, int facility)
+openlog__(char *ident, unsigned int option, int facility)
 {	
 	if (logfd != -1 || ident == NULL)
 		return;
@@ -90,7 +133,7 @@ closelog(void)
 }
 
 void
-syslog(int priority, const char *format, const char *formatBuffer)
+syslog__(int priority, const char *format, const char *formatBuffer)
 {
 	char msgbufTimestamp[MSGBUFSIZ];
 	SYSTEMTIME st;
