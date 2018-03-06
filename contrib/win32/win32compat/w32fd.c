@@ -71,6 +71,7 @@ void fd_decode_state(char*);
 
 /* __progname */
 char* __progname = NULL;
+static char* s_programdir = NULL;
 
 /* initializes mapping table*/
 static int
@@ -160,37 +161,35 @@ fd_table_clear(int index)
 	FD_CLR(index, &(fd_table.occupied));
 }
 
-static char*
-get_progname() 
+char *
+w32_programdir()
 {
-	wchar_t *wpgmptr, *pgmname;
-	char *ret = NULL, *tmp ;
-	size_t len;
-
-	if (_get_wpgmptr(&wpgmptr) != 0)
-		return NULL;
-
-	pgmname = wcsrchr(wpgmptr, L'\\');
-	if (!pgmname)
-		pgmname = wcsrchr(wpgmptr, L'/');
-	if (!pgmname)
-		pgmname = wpgmptr;
-
-	/* skip preceding / or \ */
-	if (*pgmname == L'\\' || *pgmname == L'/')
-		pgmname++;
-
-	if ((ret = utf16_to_utf8(pgmname)) == NULL)
-		return NULL;
-
-	len = strlen(ret);
-	/* strip off exe */
-	if (len > 4 && strcmp(ret + len - 4, ".exe") == 0)
-		*(ret + len - 4) = '\0';
-
-	return ret;
+	return s_programdir;
 }
 
+static int 
+init_prog_paths()
+{
+	wchar_t* wpgmptr;
+
+	if (_get_wpgmptr(&wpgmptr) != 0) {
+		errno = EOTHER;
+		return -1;
+	}
+
+	if ((s_programdir = utf16_to_utf8(wpgmptr)) == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+
+	__progname = strrchr(s_programdir, '\\') + 1;
+	*(__progname - 1) = '\0';
+
+	/* strip exe off __progname */
+	*(__progname + strlen(__progname) - 4) = '\0';
+
+	return 0;
+}
 
 void
 w32posix_initialize()
@@ -198,10 +197,9 @@ w32posix_initialize()
 	if ((fd_table_initialize() != 0) || (socketio_initialize() != 0))
 		DebugBreak();
 	main_thread = OpenThread(THREAD_SET_CONTEXT | SYNCHRONIZE, FALSE, GetCurrentThreadId());
-	if ((main_thread == NULL) || 
-	    (sw_initialize() != 0) || 
-	    w32_programdir() == NULL ||
-	    (__progname = get_progname()) == NULL) {
+	if (main_thread == NULL || 
+	    sw_initialize() != 0 || 
+	    init_prog_paths() != 0 ) {
 		DebugBreak();
 		fatal("failed to initialize w32posix wrapper");
 	}

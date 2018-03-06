@@ -51,9 +51,12 @@ void openlog_etw()
 void
 syslog_etw(int priority, const char *format, const char *formatBuffer)
 {
-	wchar_t *w_identity, *w_payload;
+	wchar_t *w_identity = NULL, *w_payload = NULL;
 	w_identity = utf8_to_utf16(identity);
 	w_payload = utf8_to_utf16(formatBuffer);
+
+	if (!w_identity || !w_payload)
+		goto done;
 
 	switch (priority) {
 	case LOG_CRIT:
@@ -75,8 +78,11 @@ syslog_etw(int priority, const char *format, const char *formatBuffer)
 		break;
 	}
 
-	free(w_identity);
-	free(w_payload);
+done:
+	if (w_identity)
+		free(w_identity);
+	if (w_payload)
+		free(w_payload);
 }
 
 
