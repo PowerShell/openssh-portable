@@ -742,9 +742,13 @@ privsep_preauth(Authctxt *authctxt)
 
 #ifdef FORK_NOT_SUPPORTED
 	if (privsep_auth_child) {
-		struct passwd* me = getpwuid(geteuid());
-		/* this re-does the user specific config */
-		authctxt->pw = getpwnamallow(xstrdup(me->pw_name));
+		struct connection_info *ci = get_connection_info(1, options.use_dns);
+
+		authctxt->pw = getpwuid(geteuid());
+		ci->user = authctxt->pw->pw_name;
+		parse_server_match_config(&options, ci);
+		log_change_level(options.log_level);
+		process_permitopen(active_state, &options);
 		authctxt->valid = 1;
 		return 1;
 	}
@@ -2218,8 +2222,6 @@ done_loading_hostkeys:
 	   unmounted if desired. */
 	if (chdir("/") == -1)
 		error("chdir(\"/\"): %s", strerror(errno));
-
-	error("sample error from sshd");
 
 	/* ignore SIGPIPE */
 	signal(SIGPIPE, SIG_IGN);
