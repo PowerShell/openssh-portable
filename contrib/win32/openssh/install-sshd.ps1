@@ -31,7 +31,7 @@ if (Get-Service ssh-agent -ErrorAction SilentlyContinue)
 # unregister etw provider
 wevtutil um `"$etwman`"
 
-# adjust provider resouce path in instrumentation manifest
+# adjust provider resource path in instrumentation manifest
 [XML]$xml = Get-Content $etwman
 $xml.instrumentationManifest.instrumentation.events.provider.resourceFileName = $sshagentpath.ToString()
 $xml.instrumentationManifest.instrumentation.events.provider.messageFileName = $sshagentpath.ToString()
