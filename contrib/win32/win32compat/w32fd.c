@@ -70,8 +70,8 @@ void fd_decode_state(char*);
 #define POSIX_STATE_ENV "c28fc6f98a2c44abbbd89d6a3037d0d9_POSIX_STATE"
 
 /* __progname */
-char* __progname = NULL;
-static char* s_programdir = NULL;
+char* __progname = "";
+static char* s_programdir = "";
 
 /* initializes mapping table*/
 static int
@@ -185,7 +185,7 @@ init_prog_paths()
 	__progname = strrchr(s_programdir, '\\') + 1;
 	*(__progname - 1) = '\0';
 
-	/* strip exe off __progname */
+	/* strip .exe off __progname */
 	*(__progname + strlen(__progname) - 4) = '\0';
 
 	return 0;
