@@ -1061,28 +1061,6 @@ invalid_parameter_handler(const wchar_t* expression, const wchar_t* function, co
 	debug3("Expression: %s", expression);
 }
 
-int
-get_machine_domain_name(wchar_t *domain, int size)
-{
-	LPWKSTA_INFO_100 pBuf = NULL;
-	NET_API_STATUS nStatus;
-	LPWSTR pszServerName = NULL;
-
-	nStatus = NetWkstaGetInfo(pszServerName, 100, (LPBYTE *)&pBuf);
-	if (nStatus != NERR_Success) {
-		error("Unable to fetch the machine domain, error:%d\n", nStatus);
-		return 0;
-	}
-
-	debug3("Machine domain:%ls", pBuf->wki100_langroup);
-	wcscpy_s(domain, size, pBuf->wki100_langroup);
-
-	if (pBuf != NULL)
-		NetApiBufferFree(pBuf);
-	
-	return 1;
-}
-
 /*
  * This method will fetch all the groups (listed below) even if the user is indirectly a member.
  * - Local machine groups
@@ -1092,216 +1070,201 @@ get_machine_domain_name(wchar_t *domain, int size)
 */
 char **
 getusergroups(const char *user, int *ngroups)
-{	
-	LPGROUP_USERS_INFO_0 local_groups = NULL;
-	LPGROUP_USERS_INFO_0 domain_groups = NULL;
-	LPGROUP_USERS_INFO_0 global_universal_groups = NULL;	
-	DWORD num_local_groups_read = 0;
-	DWORD total_local_groups = 0;
-	DWORD num_domain_groups_read = 0;
-	DWORD total_domain_groups = 0;
-	DWORD num_global_universal_groups_read = 0;
-	DWORD total_global_universal_groups = 0;
+{
+	/* early declarations and initializations to support cleanup */
+	HANDLE lsa_handle = 0;
+	HANDLE logon_token = 0;
+	PKERB_S4U_LOGON s4u_logon = NULL;
+	PTOKEN_GROUPS group_buf = NULL;
+	PLSA_REFERENCED_DOMAIN_LIST domain_list = NULL;
+	PLSA_TRANSLATED_NAME name_list = NULL;
+	PSID * group_sids = NULL;
+	LSA_HANDLE lsa_policy = NULL;
+	PLOCALGROUP_USERS_INFO_0 local_groups = NULL;
+	WCHAR * wuser = NULL;
 
-	DWORD flags = LG_INCLUDE_INDIRECT;
-	NET_API_STATUS nStatus;
-	wchar_t *user_name_utf16 = NULL;
-	char *user_domain = NULL;
-	LPWSTR dc_name_utf16 = NULL;
-	char **user_groups = NULL;
-	int num_user_groups = 0;
-	wchar_t machine_domain_name_utf16[DNLEN + 1] = { 0 };
-	wchar_t local_user_fmt_utf16[UNLEN + DNLEN + 2] = { 0 };
-	size_t local_user_fmt_len = UNLEN + DNLEN + 2;
-	char *user_name = NULL;
-	
-	user_name = malloc(strlen(user)+1);
-	if(!user_name) {
-		error("failed to allocate memory!");
+	/* initialize return values */
+	*ngroups = 0;
+	char ** user_groups = NULL;
+
+	/* fetch the computer name so we can determine if the specified user is local or not */
+	WCHAR computer_name[CNLEN + 1];
+	DWORD computer_name_size = ARRAYSIZE(computer_name);
+	if (GetComputerNameW(computer_name, &computer_name_size) == 0)
+	{
 		goto cleanup;
 	}
 
-	memcpy(user_name, user, strlen(user)+1);
-
-	if (user_domain = strchr(user_name, '@')) {
-		char *t = user_domain;
-		user_domain++;
-		*t='\0';
-	}
-
-	user_name_utf16 = utf8_to_utf16(user_name);
-	if (!user_name_utf16) {
-		error("utf8_to_utf16 failed! for %s", user_name);
+	/* convert username to utf16 */
+	if ((wuser = utf8_to_utf16(user)) == NULL)
+	{
 		goto cleanup;
 	}
 
-	/* Fetch groups on the Local machine */	
-	if(get_machine_domain_name(machine_domain_name_utf16, DNLEN+1)) {
-		if (machine_domain_name_utf16) {
-			if(!machine_domain_name)
-				machine_domain_name = utf16_to_utf8(machine_domain_name_utf16);
-		
-			if (user_domain) {
-				wcscpy_s(local_user_fmt_utf16, local_user_fmt_len, machine_domain_name_utf16);
-				wcscat_s(local_user_fmt_utf16, local_user_fmt_len, L"\\");
+	/* convert username@netbios or netbios\username to username@principalname */
+	WCHAR * div_at = NULL, *div_bs = NULL;
+	if ((div_at = wcschr(wuser, '@')) || (div_bs = wcschr(wuser, '\\')))
+	{
+		// copy domain portion out of the user string
+		WCHAR domain_name[UNLEN + 1] = { 0 };
+		if (div_at) wcscpy_s(domain_name, ARRAYSIZE(domain_name), div_at + 1);
+		else wcsncpy_s(domain_name, ARRAYSIZE(domain_name), wuser, div_bs - wuser);
+
+		// translate the netbios name to the dns domain name
+		PDOMAIN_CONTROLLER_INFOW domain_info;
+		if (DsGetDcNameW(NULL, domain_name, NULL, NULL, DS_IS_FLAT_NAME | DS_RETURN_DNS_NAME, &domain_info) == ERROR_SUCCESS)
+		{
+			/* append the fqdn to the originally passed username */
+			WCHAR new_wuser[UNLEN + 1];
+			if (div_at) swprintf(new_wuser, ARRAYSIZE(new_wuser), L"%.*s@%s", (int) (div_at - wuser), wuser, domain_info->DomainName);
+			else swprintf(new_wuser, ARRAYSIZE(new_wuser), L"%s@%s", div_bs + 1, domain_info->DomainName);
+			free(wuser);
+			wuser = _wcsdup(new_wuser);
+			NetApiBufferFree(domain_info);
+		}
+	}
+
+	/* normalize the user input which should be specificied as username@fqdn */
+	char user_name_input[UNLEN + 1 + DNLEN + 1];
+	strcpy_s(user_name_input, sizeof(user_name_input), user);
+
+	/* resolve the specified user to a name */
+	WCHAR account_name[UNLEN + 1];
+	DWORD account_name_size = ARRAYSIZE(account_name);
+	WCHAR domain_name[DNLEN + 1];
+	DWORD domain_name_size = ARRAYSIZE(domain_name);
+	SID_NAME_USE account_use;
+	if (LookupAccountNameW(NULL, wuser, account_name, &account_name_size, domain_name, &domain_name_size, &account_use) != 0 &&
+		_wcsicmp(computer_name, domain_name) == 0)
+	{
+		/* user is a local user and therefore only has local groups */
+		DWORD local_groups_size;
+		DWORD total_groups_size;
+		if (NetUserGetLocalGroups(NULL, wuser, 0, LG_INCLUDE_INDIRECT, (LPBYTE*)&local_groups,
+			MAX_PREFERRED_LENGTH, &local_groups_size, &total_groups_size) == 0)
+		{
+			user_groups = (char**)malloc(sizeof(char*) * local_groups_size);
+			for (DWORD group_index = 0; group_index < local_groups_size; group_index++, (*ngroups)++)
+			{
+				user_groups[*ngroups] = utf16_to_utf8(local_groups[group_index].lgrui0_name);
+				_strlwr_s(user_groups[group_index], strlen(user_groups[group_index]) + 1);
 			}
 
-			wcscat_s(local_user_fmt_utf16, local_user_fmt_len, user_name_utf16);
-			nStatus = NetUserGetLocalGroups(NULL,
-				    local_user_fmt_utf16,
-				    0,
-				    flags,
-				    (LPBYTE *)&local_groups,
-				    MAX_PREFERRED_LENGTH,
-				    &num_local_groups_read,
-				    &total_local_groups);
-
-			if (NERR_Success != nStatus)
-				error("Failed to get local groups on this machine, error: %d\n", nStatus);
+			/* skip to cleanup and return since we do not need s4u processing */
+			goto cleanup;
 		}
 	}
 
-	if (user_domain) {
-		/* Fetch Domain groups */
-		nStatus = NetGetDCName(NULL, machine_domain_name_utf16, (LPBYTE *)&dc_name_utf16);
-		if (NERR_Success == nStatus) {
-			debug3("domain controller name: %ls", dc_name_utf16);
-
-			nStatus = NetUserGetLocalGroups(dc_name_utf16,
-				    user_name_utf16,
-				    0,
-				    flags,
-				    (LPBYTE *)&domain_groups,
-				    MAX_PREFERRED_LENGTH,
-				    &num_domain_groups_read,
-				    &total_domain_groups);
-
-			if (NERR_Success != nStatus)
-				error("Failed to get domain groups from DC:%s error: %d\n", dc_name_utf16, nStatus);
-		}
-		else
-			error("Failed to get the domain controller name, error: %d\n", nStatus);
-
-		/* Fetch global, universal groups */
-		nStatus = NetUserGetGroups(dc_name_utf16,
-			user_name_utf16,
-			0,
-			(LPBYTE *)&global_universal_groups,
-			MAX_PREFERRED_LENGTH,
-			&num_global_universal_groups_read,
-			&total_global_universal_groups);
-
-		if (NERR_Success != nStatus)
-			error("Failed to get global,universal groups from DC:%ls error: %d\n", dc_name_utf16, nStatus);
+	/* initialize connection to local security provider */
+	if (LsaConnectUntrusted(&lsa_handle) != 0)
+	{
+		goto cleanup;
 	}
 
-	int total_user_groups = num_local_groups_read + num_domain_groups_read + num_global_universal_groups_read;
-
-	/* populate the output */
-	user_groups = malloc(total_user_groups * sizeof(*user_groups));	
-
-	populate_user_groups(user_groups, &num_user_groups, num_local_groups_read, total_local_groups, (LPBYTE) local_groups, LOCAL_GROUP);
-	if (user_domain) {
-		populate_user_groups(user_groups, &num_user_groups, num_domain_groups_read, total_domain_groups, (LPBYTE)domain_groups, DOMAIN_GROUP);
-		populate_user_groups(user_groups, &num_user_groups, num_global_universal_groups_read, total_global_universal_groups, (LPBYTE)global_universal_groups, GLOBAL_UNIVERSAL_GROUP);
-	}
-	
-	for (int i = 0; i < num_user_groups; i++)
-		to_lower_case(user_groups[i]);
-
-	print_user_groups(user, user_groups, num_user_groups);
-
-	cleanup:
-		if(local_groups)
-			NetApiBufferFree(local_groups);
-
-		if(domain_groups)
-			NetApiBufferFree(domain_groups);
-
-		if(global_universal_groups)
-			NetApiBufferFree(global_universal_groups);
-
-		if(dc_name_utf16)
-			NetApiBufferFree(dc_name_utf16);
-	
-		if(user_name_utf16)
-			free(user_name_utf16);
-				
-		if(user_name)
-			free(user_name);
-
-		*ngroups = num_user_groups;
-		return user_groups;
-}
-
-/* This method will return in "group@domain" format */
-char *
-append_domain_to_groupname(char *groupname)
-{
-	if(!groupname) return NULL;
-
-	int len = (int) strlen(machine_domain_name) + (int) strlen(groupname) + 2;
-	char *groupname_with_domain = malloc(len);
-	if(!groupname_with_domain) {
-		error("failed to allocate memory!");
-		return NULL;
+	/* initialize kerberos authentication package */
+	ULONG lsa_authpackage = 0;
+	LSA_STRING lsa_packagename = { (USHORT)strlen(MICROSOFT_KERBEROS_NAME_A), (USHORT)strlen(MICROSOFT_KERBEROS_NAME_A) + 1, (PCHAR)MICROSOFT_KERBEROS_NAME_A };
+	if (LsaLookupAuthenticationPackage(lsa_handle, &lsa_packagename, &lsa_authpackage) != 0)
+	{
+		goto cleanup;
 	}
 
-	strcpy_s(groupname_with_domain, len, groupname);
-	strcat_s(groupname_with_domain, len, "@");
-	strcat_s(groupname_with_domain, len, machine_domain_name);	
+	/* create custom identifier for local token source as openssh */
+	TOKEN_SOURCE token_source;
+	PCHAR token_string_const = (PCHAR) "OpenSSH";
+	LSA_STRING token_string = { (USHORT)strlen(token_string_const), (USHORT)strlen(token_string_const) + 1, token_string_const };
+	strcpy_s(token_source.SourceName, sizeof(token_source.SourceName), token_string_const);
+	if (AllocateLocallyUniqueId(&token_source.SourceIdentifier) == 0)
+	{
+		goto cleanup;
+	}
 
-	groupname_with_domain[len-1]= '\0';
+	/* initialize kerberos s4u structure with domain account */
+	USHORT s4u_size = (USHORT)(sizeof(KERB_S4U_LOGON) + wcslen(wuser) * sizeof(WCHAR));
+	s4u_logon = (PKERB_S4U_LOGON)calloc(1, s4u_size);
+	s4u_logon->MessageType = KerbS4ULogon;
+	s4u_logon->Flags = 0x8;
+	s4u_logon->ClientUpn.Length = (USHORT)(wcslen(wuser) * sizeof(WCHAR));
+	s4u_logon->ClientUpn.MaximumLength = s4u_logon->ClientUpn.Length;
+	s4u_logon->ClientUpn.Buffer = memcpy(((PBYTE)s4u_logon) +
+		sizeof(KERB_S4U_LOGON), wuser, s4u_logon->ClientUpn.Length);
 
-	return groupname_with_domain;
-}
+	/* attempt to create logon token */
+	PVOID ProfileBuffer;
+	ULONG ProfileBufferLength;
+	LUID LogonId;
+	QUOTA_LIMITS Quotas;
+	NTSTATUS SubStatus;
+	if ((LsaLogonUser(lsa_handle, &token_string, Network, lsa_authpackage, s4u_logon, s4u_size, NULL,
+		&token_source, &ProfileBuffer, &ProfileBufferLength, &LogonId, &logon_token, &Quotas, &SubStatus)) != 0)
+	{
+		goto cleanup;
+	}
 
-void
-populate_user_groups(char **group_name, int *group_index, DWORD groupsread, DWORD totalgroups, LPBYTE buf, group_type groupType)
-{
-	if(0 == groupsread) return;
-	char *user_group_name = NULL;
-		
-	if (groupType == GLOBAL_UNIVERSAL_GROUP) {
-		LPGROUP_USERS_INFO_0 pTmpBuf = (LPGROUP_USERS_INFO_0)buf;
-		for (DWORD i = 0; (i < groupsread) && pTmpBuf; i++, pTmpBuf++) {
-			if (!(user_group_name = utf16_to_utf8(pTmpBuf->grui0_name))) {
-				error("utf16_to_utf8 failed to convert:%ls", pTmpBuf->grui0_name);
-				return;
-			}
+	/* read group sids from logon token */
+	DWORD group_size = 0;
+	if (GetTokenInformation(logon_token, TokenGroups, NULL, 0, &group_size) == 0 && GetLastError() != ERROR_INSUFFICIENT_BUFFER ||
+		GetTokenInformation(logon_token, TokenGroups, (PTOKEN_GROUPS)(group_buf =
+		(PTOKEN_GROUPS)malloc(group_size)), group_size, &group_size) == 0)
+	{
+		goto cleanup;
+	}
 
-			group_name[*group_index] = append_domain_to_groupname(user_group_name);
-			if(group_name[*group_index])
-				(*group_index)++;
-		}
-	} else {
-		LPLOCALGROUP_USERS_INFO_0 pTmpBuf = (LPLOCALGROUP_USERS_INFO_0)buf;
-		for (DWORD i = 0; (i < groupsread) && pTmpBuf; i++, pTmpBuf++) {
-			if (!(user_group_name = utf16_to_utf8(pTmpBuf->lgrui0_name))) {
-				error("utf16_to_utf8 failed to convert:%ls", pTmpBuf->lgrui0_name);
-				return;
-			}				
+	/* open a new connection to the lsa policy provider for group lookup */
+	LSA_OBJECT_ATTRIBUTES ObjectAttributes;
+	ZeroMemory(&ObjectAttributes, sizeof(ObjectAttributes));
+	if (LsaOpenPolicy(NULL, &ObjectAttributes, POLICY_LOOKUP_NAMES, &lsa_policy) != 0)
+	{
+		goto cleanup;
+	}
 
-			if(groupType == DOMAIN_GROUP)
-				group_name[*group_index] = append_domain_to_groupname(user_group_name);
-			else
-				group_name[*group_index] = user_group_name;
+	/* translate all the sids to real group names*/
+	group_sids = (PSID *)malloc(sizeof(PSID) * group_buf->GroupCount);
+	for (DWORD i = 0; i < group_buf->GroupCount; i++) group_sids[i] = group_buf->Groups[i].Sid;
+	if (LsaLookupSids(lsa_policy, group_buf->GroupCount, group_sids, &domain_list, &name_list) != 0)
+	{
+		goto cleanup;
+	}
 
-			if (group_name[*group_index])
-				(*group_index)++;
+	/* enumerate all groups and add to group list */
+	user_groups = (char**)malloc(sizeof(char*) * group_buf->GroupCount);
+	for (DWORD group_index = 0; group_index < group_buf->GroupCount; group_index++)
+	{
+		/* ignore groups that are not local or domain groups */
+		if ((group_buf->Groups[group_index].Attributes & SE_GROUP_ENABLED) == 0) continue;
+		if (name_list[group_index].Use != SidTypeGroup && name_list[group_index].Use != SidTypeAlias) continue;
+
+		/* create the group list as groupname@netbios except for local group */
+		int current_group = (*ngroups)++;
+		PLSA_UNICODE_STRING domain = &(domain_list->Domains[name_list[group_index].DomainIndex].Name);
+		int name_size = snprintf(NULL, 0, "%wZ@%wZ", &(name_list[group_index].Name), domain) + 1;
+		sprintf_s((user_groups[current_group] = (char*)malloc(name_size)), name_size,
+			"%wZ@%wZ", &(name_list[group_index].Name), domain);
+		_strlwr_s(user_groups[current_group], name_size);
+
+		/* truncate the machine name if local group */
+		if (wcslen(computer_name) == domain->Length / sizeof(WCHAR) &&
+			_wcsnicmp(computer_name, domain->Buffer, domain->Length / sizeof(WCHAR)) == 0)
+		{
+			*strchr(user_groups[current_group], '@') = '\0';
 		}
 	}
 
-	if (groupsread < totalgroups)
-		error("groupsread:%d totalgroups:%d groupType:%d", groupsread, totalgroups, groupType);
-}
+cleanup:
 
-void 
-print_user_groups(const char *user, char **user_groups, int num_user_groups)
-{
-	debug3("Group list for user:%s", user);
-	for(int i=0; i < num_user_groups; i++)
-		debug3("group name:%s", user_groups[i]);
+	if (domain_list) LsaFreeMemory(domain_list);
+	if (name_list) LsaFreeMemory(name_list);
+	if (group_buf) free(group_buf);
+	if (logon_token) CloseHandle(logon_token);
+	if (group_sids) free(group_sids);
+	if (local_groups) NetApiBufferFree(local_groups);
+	if (lsa_policy) LsaClose(lsa_policy);
+	if (s4u_logon) free(s4u_logon);
+	if (lsa_handle) LsaDeregisterLogonProcess(lsa_handle);
+	if (wuser) free(wuser);
+
+	/* downsize the array to the actual size and return */
+	return (char**)realloc(user_groups, sizeof(char*) * (*ngroups));
 }
 
 void
