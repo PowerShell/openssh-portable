@@ -107,6 +107,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include "openbsd-compat/glob.h"
 #if defined(HAVE_STRNVIS) && defined(HAVE_VIS_H) && !defined(BROKEN_STRNVIS)
 #include <vis.h>
 #endif
@@ -480,17 +481,54 @@ main(int argc, char **argv)
 	char **newargv;
 	const char *errstr;
 	extern char *optarg;
-	extern int optind;
+	extern int optind;	
 
 	/* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */
-	sanitise_stdfd();
+	sanitise_stdfd();	
 
 	msetlocale();
 
 	/* Copy argv, because we modify it */
-	newargv = xcalloc(MAXIMUM(argc + 1, 1), sizeof(*newargv));
+	newargv = xcalloc(MAXIMUM(argc + 1, 1), sizeof(*newargv));	
+#ifdef WINDOWS	
+	{
+		/*
+		* To support both Windows and Unix style paths
+		* convert '\\' to '/' in path portion
+		*/
+		char *p, *argdup;
+		int i;		
+		/* Expand wildcards	*/
+		glob_t g;
+		int expandargc = 0;
+		memset(&g, 0, sizeof(g));
+		for (n = 0; n < argc; n++) {			
+			argdup = xstrdup(argv[n]);
+			if (p = colon(argdup))
+				convertToForwardslash(p);
+			else
+				convertToForwardslash(argdup);
+			if (glob(argdup, GLOB_NOCHECK | GLOB_MARK, NULL, &g)) {
+				if (expandargc > argc)
+					newargv = xreallocarray(newargv, expandargc + 1, sizeof(*newargv));
+				newargv[expandargc++] = xstrdup(argdup);
+			}
+			else {
+				int count = g.gl_matchc > 1 ? g.gl_matchc : 1;
+				if (expandargc + count > argc - 1)
+					newargv = xreallocarray(newargv, expandargc + count, sizeof(*newargv));
+				for (i = 0; i < count; i++)
+					newargv[expandargc++] = xstrdup(g.gl_pathv[i]);
+			}
+			free(argdup);
+			globfree(&g);
+		}
+		argc = expandargc;		
+	}
+#else
 	for (n = 0; n < argc; n++)
 		newargv[n] = xstrdup(argv[n]);
+#endif /* !WINDOWS */
 	argv = newargv;
 
 	__progname = ssh_get_progname(argv[0]);
@@ -588,7 +626,7 @@ main(int argc, char **argv)
 			usage();
 		}
 	argc -= optind;
-	argv += optind;
+	argv += optind;	
 
 	if ((pwd = getpwuid(userid = getuid())) == NULL)
 		fatal("unknown user %u", (u_int) userid);
@@ -607,24 +645,7 @@ main(int argc, char **argv)
 	}
 
 	remin = STDIN_FILENO;
-	remout = STDOUT_FILENO;
-
-#ifdef WINDOWS
-	/* 
-	 * To support both Windows and Unix style paths
-	 * convert '\\' to '/' in path portion of rest arguments 
-	 */	
-	{		
-		int i;
-		char *p;
-		for (i = 0; i < argc; i++) {
-			if(p = colon(argv[i]))			
-				convertToForwardslash(p);
-			else
-				convertToForwardslash(argv[i]);			
-		}			
-	}
-#endif /* WINDOWS */
+	remout = STDOUT_FILENO;	
 
 	if (fflag) {
 		/* Follow "protocol", send data. */
