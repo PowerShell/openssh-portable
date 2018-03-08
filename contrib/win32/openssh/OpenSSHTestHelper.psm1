@@ -83,6 +83,9 @@ function Set-OpenSSHTestEnvironment
         "PostmortemDebugging" = $Script:PostmortemDebugging
         "NoLibreSSL" = $Script:NoLibreSSL
         }
+
+    #start service
+    Start-Service -Name sshd
         
     #if user does not set path, pick it up
     if([string]::IsNullOrEmpty($OpenSSHBinPath))
