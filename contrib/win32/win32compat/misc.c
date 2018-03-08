@@ -36,6 +36,8 @@
 #include <LM.h>
 #include <Sddl.h>
 #include <Aclapi.h>
+#include <Ntsecapi.h>
+#include <DsGetDC.h>
 
 #include "inc\unistd.h"
 #include "inc\sys\stat.h"
