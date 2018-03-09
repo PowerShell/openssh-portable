@@ -39,7 +39,7 @@ Describe "Tests for scp command" -Tags "CI" {
         $port = $OpenSSHTestInfo["Port"]
         $ssouser = $OpenSSHTestInfo["SSOUser"]
 
-        $testData = @(            
+        $testData = @(
             @{
                 Title = 'Simple copy local file to local file'
                 Source = $SourceFilePath                   

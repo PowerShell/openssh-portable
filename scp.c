@@ -481,26 +481,24 @@ main(int argc, char **argv)
 	char **newargv;
 	const char *errstr;
 	extern char *optarg;
-	extern int optind;	
+	extern int optind;
 
 	/* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */
-	sanitise_stdfd();	
+	sanitise_stdfd();
 
 	msetlocale();
 
 	/* Copy argv, because we modify it */
 	newargv = xcalloc(MAXIMUM(argc + 1, 1), sizeof(*newargv));	
 #ifdef WINDOWS	
-	{
-		/*
-		* To support both Windows and Unix style paths
-		* convert '\\' to '/' in path portion
-		*/
+	{		
 		char *p, *argdup;
 		int i;		
-		/* Expand wildcards	*/
 		glob_t g;
 		int expandargc = 0;
+
+
+		/* Expand wild cards	*/
 		memset(&g, 0, sizeof(g));
 		for (n = 0; n < argc; n++) {			
 			argdup = xstrdup(argv[n]);
@@ -626,7 +624,7 @@ main(int argc, char **argv)
 			usage();
 		}
 	argc -= optind;
-	argv += optind;	
+	argv += optind;
 
 	if ((pwd = getpwuid(userid = getuid())) == NULL)
 		fatal("unknown user %u", (u_int) userid);
