@@ -523,7 +523,7 @@ main(int argc, char **argv)
 		}
 		argc = expandargc;		
 	}
-#else
+#else  /* !WINDOWS */
 	for (n = 0; n < argc; n++)
 		newargv[n] = xstrdup(argv[n]);
 #endif /* !WINDOWS */
