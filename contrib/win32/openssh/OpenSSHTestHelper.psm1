@@ -84,7 +84,7 @@ function Set-OpenSSHTestEnvironment
         "NoLibreSSL" = $Script:NoLibreSSL
         }
 
-    #start service
+    #start service if not already started
     Start-Service -Name sshd
         
     #if user does not set path, pick it up
@@ -165,12 +165,6 @@ WARNING: Following changes will be made to OpenSSH configuration
        New-Item -ItemType Directory -Path $TestDataPath -Force -ErrorAction SilentlyContinue | out-null
     }
 
-    
-    if(-not (Test-Path $OpenSSHConfigPath -pathType Container))
-    {
-        #starting the service will create ssh config folder
-        start-service sshd
-    }    
     $backupConfigPath = Join-Path $OpenSSHConfigPath sshd_config.ori
     #Backup existing OpenSSH configuration
     if (-not (Test-Path $backupConfigPath -PathType Leaf)) {
