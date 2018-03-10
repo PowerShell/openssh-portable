@@ -489,19 +489,18 @@ main(int argc, char **argv)
 	msetlocale();
 
 	/* Copy argv, because we modify it */
-	newargv = xcalloc(MAXIMUM(argc + 1, 1), sizeof(*newargv));	
+	newargv = xcalloc(MAXIMUM(argc + 1, 1), sizeof(*newargv));
 #ifdef WINDOWS	
-	{		
+	{
+		/* Wildcards are not expanded by shell on Windows; expand them */		
 		char *p, *argdup;
-		int i;		
+		int i = 0;		
 		glob_t g;
 		int expandargc = 0;
-
-
-		/* Expand wild cards	*/
 		memset(&g, 0, sizeof(g));
 		for (n = 0; n < argc; n++) {			
 			argdup = xstrdup(argv[n]);
+			/* Convert '\\' to '/' in path portion to support both Windows and Unix style paths */
 			if (p = colon(argdup))
 				convertToForwardslash(p);
 			else
@@ -510,8 +509,7 @@ main(int argc, char **argv)
 				if (expandargc > argc)
 					newargv = xreallocarray(newargv, expandargc + 1, sizeof(*newargv));
 				newargv[expandargc++] = xstrdup(argdup);
-			}
-			else {
+			} else {
 				int count = g.gl_matchc > 1 ? g.gl_matchc : 1;
 				if (expandargc + count > argc - 1)
 					newargv = xreallocarray(newargv, expandargc + count, sizeof(*newargv));
