@@ -492,7 +492,10 @@ main(int argc, char **argv)
 	newargv = xcalloc(MAXIMUM(argc + 1, 1), sizeof(*newargv));
 #ifdef WINDOWS	
 	{
-		/* Wildcards are not expanded by shell on Windows; expand them */		
+		/* 
+		 * Wildcards are not expanded by shell on Windows; expand them
+		 * Convert '\\' to '/' in path portion to support both Windows and Unix style paths
+		 */
 		char *p, *argdup;
 		int i = 0;		
 		glob_t g;
@@ -500,7 +503,6 @@ main(int argc, char **argv)
 		memset(&g, 0, sizeof(g));
 		for (n = 0; n < argc; n++) {			
 			argdup = xstrdup(argv[n]);
-			/* Convert '\\' to '/' in path portion to support both Windows and Unix style paths */
 			if (p = colon(argdup))
 				convertToForwardslash(p);
 			else

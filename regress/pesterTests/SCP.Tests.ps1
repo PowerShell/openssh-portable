@@ -3,6 +3,7 @@ Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
 #covered -i -p -q -r -v -c -S -C
 #todo: -F, -l and -P should be tested over the network
 $tI = 0
+$suite = "SCP"
 Describe "Tests for scp command" -Tags "CI" {
     BeforeAll {
         if($OpenSSHTestInfo -eq $null)
@@ -10,13 +11,14 @@ Describe "Tests for scp command" -Tags "CI" {
             Throw "`$OpenSSHTestInfo is null. Please run Set-OpenSSHTestEnvironment to set test environments."
         }
 
+        $testDir = "$($OpenSSHTestInfo["TestDataPath"])\$suite"
         $fileName1 = "test.txt"
         $fileName2 = "test2.txt"
         $fileName3 = "test3.txt"
         $wildcardFileName1 = "te?t.txt"
         $wildcardFileName2 = "test*"
         $SourceDirName = "SourceDir"
-        $SourceDir = Join-Path "$($OpenSSHTestInfo["TestDataPath"])\SCP" $SourceDirName
+        $SourceDir = Join-Path $testDir $SourceDirName
         $SourceFilePath = Join-Path $SourceDir $fileName1
         $SourceFilePath3 = Join-Path $SourceDir $fileName3
         $SourceFileWildCardFile1 = Join-Path $SourceDir $wildcardFileName1
@@ -115,8 +117,8 @@ Describe "Tests for scp command" -Tags "CI" {
         # for the first time, delete the existing log files.
         if ($OpenSSHTestInfo['DebugMode'])
         {
-            Clear-Content "$env:ProgramData\.ssh\logs\ssh-agent.log" -Force -ErrorAction SilentlyContinue
-            Clear-Content "$env:ProgramData\.ssh\logs\sshd.log" -Force -ErrorAction SilentlyContinue
+            Clear-Content "$env:ProgramData\ssh\logs\ssh-agent.log" -Force -ErrorAction SilentlyContinue
+            Clear-Content "$env:ProgramData\ssh\logs\sshd.log" -Force -ErrorAction SilentlyContinue
         }
 
         function CheckTarget {
@@ -125,12 +127,12 @@ Describe "Tests for scp command" -Tags "CI" {
             {
                 if( $OpenSSHTestInfo["DebugMode"])
                 {
-                    Copy-Item "$env:ProgramData\.ssh\logs\ssh-agent.log" "$($OpenSSHTestInfo['OpenSSHBinPath'])\logs\failedagent$tI.log" -Force
-                    Copy-Item "$env:ProgramData\.ssh\logs\sshd.log" "$($OpenSSHTestInfo['OpenSSHBinPath'])\logs\failedsshd$tI.log" -Force
+                    Copy-Item "$env:ProgramData\ssh\logs\ssh-agent.log" "$testDir\failedagent$tI.log" -Force -ErrorAction SilentlyContinue
+                    Copy-Item "$env:ProgramData\ssh\logs\sshd.log" "$testDir\failedsshd$tI.log" -Force -ErrorAction SilentlyContinue
                     
                     # clear the ssh-agent, sshd logs so that next testcase will get fresh logs.
-                    Clear-Content "$env:ProgramData\.ssh\logs\ssh-agent.log" -Force -ErrorAction SilentlyContinue
-                    Clear-Content "$env:ProgramData\.ssh\logs\sshd.log" -Force -ErrorAction SilentlyContinue
+                    Clear-Content "$env:ProgramData\ssh\logs\ssh-agent.log" -Force -ErrorAction SilentlyContinue
+                    Clear-Content "$env:ProgramData\ssh\logs\sshd.log" -Force -ErrorAction SilentlyContinue
                 }
              
                 return $false
