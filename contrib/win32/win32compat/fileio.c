@@ -35,6 +35,7 @@
 #include <errno.h>
 #include <stddef.h>
 #include <direct.h>
+#include <shlwapi.h>
 
 #include "w32fd.h"
 #include "inc\utf.h"
@@ -749,13 +750,91 @@ fileio_fstat(struct w32_io* pio, struct _stat64 *buf)
 	return _fstat64(fd, buf);
 }
 
+wchar_t * fileio_readlink_internal(wchar_t * wpath)
+{
+	/* abbreviated reparse data structure for symlinks */
+	typedef struct _REPARSE_DATA_BUFFER_SYMLINK {
+		ULONG ReparseTag;
+		USHORT ReparseDataLength;
+		USHORT Reserved;
+		USHORT SubstituteNameOffset;
+		USHORT SubstituteNameLength;
+		USHORT PrintNameOffset;
+		USHORT PrintNameLength;
+		ULONG Flags;
+	} REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER_SYMLINK;
+
+	/* early declarations for cleanup */
+	wchar_t* linkpath = NULL;
+	HANDLE handle = INVALID_HANDLE_VALUE;
+	PREPARSE_DATA_BUFFER_SYMLINK reparse_buffer = NULL;
+
+	/* obtain a handle to send to deviceioctl  */
+	handle = CreateFileW(wpath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+		0, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, 0);
+	if (handle == INVALID_HANDLE_VALUE)
+	{
+		errno = errno_from_Win32LastError();
+		goto cleanup;
+	}
+
+	/* send a request to the file system to get the real path */
+	reparse_buffer = (PREPARSE_DATA_BUFFER_SYMLINK) malloc(MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
+	DWORD dwBytesReturned = 0;
+	if (DeviceIoControl(handle, FSCTL_GET_REPARSE_POINT, NULL, 0,
+		(LPVOID)reparse_buffer, MAXIMUM_REPARSE_DATA_BUFFER_SIZE, &dwBytesReturned, 0) == 0)
+	{
+		errno = errno_from_Win32LastError();
+		goto cleanup;
+	}
+
+	/* ensure file is actually symlink */
+	if (reparse_buffer->ReparseTag != IO_REPARSE_TAG_SYMLINK)
+	{
+		errno = ENOLINK;
+		goto cleanup;
+	}
+
+	/* ensure link path is sized to fit in standard buffer  */
+	if (reparse_buffer->SubstituteNameLength / sizeof(wchar_t) > MAX_PATH)
+	{
+		errno = ENAMETOOLONG;
+		goto cleanup;
+	}
+
+	/* copy the reparse path to a null terminated string */
+	linkpath = malloc(MAX_PATH * sizeof(wchar_t));
+	wcsncpy_s(linkpath, MAX_PATH, (LPWSTR)((LPBYTE) reparse_buffer +
+		sizeof(REPARSE_DATA_BUFFER) + reparse_buffer->SubstituteNameOffset),
+		reparse_buffer->SubstituteNameLength / sizeof(wchar_t));
+	linkpath[reparse_buffer->SubstituteNameLength / sizeof(wchar_t)] = '\0';
+
+	/* if link is relative, construct the absolute version */
+	if (PathIsRelativeW(linkpath))
+	{
+		wchar_t linkpathtmp[MAX_PATH];
+		wchar_t parent[MAX_PATH];
+		wcscpy_s(parent, MAX_PATH, wpath);
+		PathRemoveFileSpecW(parent);
+		PathCombineW(linkpathtmp, parent, linkpath);
+		wcscpy_s(linkpath, MAX_PATH, linkpathtmp);
+	}
+
+cleanup:
+
+	if (reparse_buffer) free(reparse_buffer);
+	if (handle != INVALID_HANDLE_VALUE) CloseHandle(handle);
+	return linkpath;
+}
+
 int
-fileio_stat(const char *path, struct _stat64 *buf)
+fileio_stat_or_lstat_internal(const char *path, struct _stat64 *buf, int do_lstat)
 {
 	wchar_t* wpath = NULL;
+	wchar_t* resolved_link = NULL;
 	WIN32_FILE_ATTRIBUTE_DATA attributes = { 0 };
-	int ret = -1, len = 0;	
-
+	int ret = -1;	
+	
 	memset(buf, 0, sizeof(struct _stat64));
 
 	/* Detect root dir */
@@ -771,13 +850,38 @@ fileio_stat(const char *path, struct _stat64 *buf)
 		return -1;
 	}
 
+	/* fix path format for some path functions */
+	convertToBackslashW(wpath);
+
+	/* get the file attributes (or symlink attributes if symlink) */
 	if (GetFileAttributesExW(wpath, GetFileExInfoStandard, &attributes) == FALSE) {
 		errno = errno_from_Win32LastError();
-		debug3("GetFileAttributesExW with last error %d", GetLastError());
 		goto cleanup;
 	}
-	
-	len = (int)wcslen(wpath);
+
+	/* try to see if it is a symlink */
+	if (attributes.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
+	{
+		/* see if symlink and get destination path */
+		resolved_link = fileio_readlink_internal(wpath);
+
+		if (do_lstat) {
+			/* the initial attribute call get the file attributes for the link*/
+			if (resolved_link == NULL)
+			{
+				/* error if requesting link info using lstat() and not actually a link */
+				goto cleanup;
+			}
+		}
+		else {
+			/* get the attributes form the target if in order to get the stat() attributes */
+			if (resolved_link != NULL && GetFileAttributesExW(resolved_link, GetFileExInfoStandard, &attributes) == FALSE)
+			{
+				errno = errno_from_Win32LastError();
+				goto cleanup;
+			}
+		}
+	}
 
 	buf->st_ino = 0; /* Has no meaning in the FAT, HPFS, or NTFS file systems*/
 	buf->st_gid = 0; /* UNIX - specific; has no meaning on windows */
@@ -785,30 +889,40 @@ fileio_stat(const char *path, struct _stat64 *buf)
 	buf->st_nlink = 1; /* number of hard links. Always 1 on non - NTFS file systems.*/
 	buf->st_mode |= file_attr_to_st_mode(wpath, attributes.dwFileAttributes);
 	buf->st_size = attributes.nFileSizeLow | (((off_t)attributes.nFileSizeHigh) << 32);
-	if (len > 1 && __ascii_iswalpha(*wpath) && (*(wpath + 1) == ':'))
+	if (wcslen(wpath) > 1 && __ascii_iswalpha(*wpath) && (*(wpath + 1) == ':'))
 		buf->st_dev = buf->st_rdev = towupper(*wpath) - L'A'; /* drive num */
 	else
 		buf->st_dev = buf->st_rdev = _getdrive() - 1;
 	file_time_to_unix_time(&(attributes.ftLastAccessTime), &(buf->st_atime));
 	file_time_to_unix_time(&(attributes.ftLastWriteTime), &(buf->st_mtime));
 	file_time_to_unix_time(&(attributes.ftCreationTime), &(buf->st_ctime));
+	
+	/* link type supercedes other file type bits */
+	if (resolved_link != NULL) {
+		buf->st_mode &= ~S_IFMT;
+		buf->st_mode |= S_IFLNK;
+	}
 
-	if (attributes.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
-		WIN32_FIND_DATAW findbuf = { 0 };
-		HANDLE handle = FindFirstFileW(wpath, &findbuf);
-		if (handle != INVALID_HANDLE_VALUE) {
-			if ((findbuf.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) &&
-				(findbuf.dwReserved0 == IO_REPARSE_TAG_SYMLINK)) {
-				buf->st_mode |= S_IFLNK;
-			}
-			FindClose(handle);
-		}
-	}	
 	ret = 0;
+
 cleanup:
+	if (resolved_link)
+		free(resolved_link);
 	if (wpath)
 		free(wpath);	
 	return ret;
+}
+
+int
+fileio_stat(const char *path, struct _stat64 *buf)
+{
+	return fileio_stat_or_lstat_internal(path, buf, 0);
+}
+
+int
+fileio_lstat(const char *path, struct _stat64 *buf)
+{
+	return fileio_stat_or_lstat_internal(path, buf, 1);
 }
 
 long
@@ -944,4 +1058,57 @@ fileio_is_io_available(struct w32_io* pio, BOOL rd)
 	} else { /* write */
 		return (pio->write_details.pending == FALSE) ? TRUE : FALSE;
 	}
+}
+
+ssize_t fileio_readlink(const char *path, char *buf, size_t bufsiz)
+{
+	debug4("readlink - io:%p", pio);
+
+	wchar_t* wpath = NULL;
+	wchar_t* resolved_link = NULL;
+	char* output = NULL;
+	ssize_t ret = -1;
+
+	if ((wpath = utf8_to_utf16(path)) == NULL) {
+		errno = ENOMEM;
+		goto cleanup;
+	}
+
+	/* establish a file handle to the destination file */
+	resolved_link = fileio_readlink_internal(wpath);
+	if (resolved_link == NULL) {
+		/* errorno will have been set by called function */
+		goto cleanup;
+	}
+
+	/* convert local extended path back to normal path and convert to utf8 */
+	wchar_t prefix[] = L"\\??\\";
+	if ((output = utf16_to_utf8((wcsstr(resolved_link, prefix) == resolved_link)
+		? resolved_link + wcslen(prefix) : resolved_link)) == NULL) {
+		errno = ENOMEM;
+		goto cleanup;
+	}
+
+	/* ensure output buffer is large enough */
+	if (strlen(output) + 1 > bufsiz) {
+		errno = ENAMETOOLONG;
+		goto cleanup;
+	}
+
+	/* copy to output buffer */
+	if (buf && bufsiz < strlen(buf) < bufsiz) {
+		convertToForwardslash(output);
+		strcpy_s(buf, bufsiz, output);
+	}
+
+cleanup:
+
+	if (wpath)
+		free(wpath);
+	if (output) 
+		free(output);
+	if (resolved_link) 
+		free(resolved_link);
+
+	return (ssize_t) strlen(buf);
 }
