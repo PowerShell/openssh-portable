@@ -172,8 +172,9 @@ WARNING: Following changes will be made to OpenSSH configuration
     }
     $targetsshdConfig = Join-Path $OpenSSHConfigPath sshd_config
     # copy new sshd_config
+    Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) $targetsshdConfig -Force
     if($DebugMode) {
-        $con = (Get-Content (Join-Path $Script:E2ETestDirectory sshd_config) | Out-String).Replace("#SyslogFacility AUTH","SyslogFacility LOCAL0")
+        $con = (Get-Content $targetsshdConfig | Out-String).Replace("#SyslogFacility AUTH","SyslogFacility LOCAL0")
         Set-Content -Path $targetsshdConfig -Value "$con" -Force    
     }
     
