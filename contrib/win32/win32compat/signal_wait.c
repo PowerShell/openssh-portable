@@ -1,10 +1,10 @@
 /*
 * Author: Bryan Berns <berns@uwalumni.com>
 *
-* Partial replacement for WaitForMultipleObjectsEx that handles more than 64 
+* Partial replacement for WaitForMultipleObjectsEx that handles more than 64
 * objects.  This is tuned for OpenSSH use in (no need for 'wait-all' scenarios).
-* This is only safe to use for objects whose transitional state is not 
-* automatically lost just by calling a WaitForMultipleObjects* or 
+* This is only safe to use for objects whose transitional state is not
+* automatically lost just by calling a WaitForMultipleObjects* or
 * WaitForSingleObjects*.
 *
 * Redistribution and use in source and binary forms, with or without
@@ -31,22 +31,23 @@
 
 #include "signal_internal.h"
 
-typedef struct wait_for_multiple_objects_struct
-{
+typedef struct _wait_for_multiple_objects_struct {
 	/* synchronization management */
 	HANDLE thread_handle;
 	HANDLE wait_event;
 
 	/* native function parameters input and output */
 	DWORD num_handles;
-	const HANDLE * handles;	
+	const HANDLE * handles;
 	DWORD return_value;
 }
 wait_for_multiple_objects_struct;
 
-DWORD WINAPI wait_for_multiple_objects_thread(LPVOID lpParam)
+DWORD WINAPI
+wait_for_multiple_objects_thread(LPVOID lpParam)
 {
-	wait_for_multiple_objects_struct * waitstruct = (wait_for_multiple_objects_struct *) lpParam;
+	wait_for_multiple_objects_struct *waitstruct = 
+		(wait_for_multiple_objects_struct *) lpParam;
 
 	/* wait for bin to complete -- this is alertable for our interrupt cleanup routine */
 	waitstruct->return_value = WaitForMultipleObjectsEx(waitstruct->num_handles,
@@ -58,16 +59,18 @@ DWORD WINAPI wait_for_multiple_objects_thread(LPVOID lpParam)
 	return TRUE;
 }
 
-VOID CALLBACK wait_for_multiple_objects_interrupter(_In_ ULONG_PTR dwParam)
+VOID CALLBACK
+wait_for_multiple_objects_interrupter(_In_ ULONG_PTR dwParam)
 {
-	/* we must explicitly exit the thread since the thread could have been received 
-	 * the alert prior to the thread running in which case its acknowledged when  
-	 * the threads starts running instead of when its waiting at 
+	/* we must explicitly exit the thread since the thread could have been received
+	 * the alert prior to the thread running in which case it is acknowledged when
+	 * the threads starts running instead of when it is waiting at
 	 * WaitForMultipleObjectsEx */
 	ExitThread(0);
 }
 
-DWORD wait_for_multiple_objects_enhanced(_In_ DWORD  nCount, _In_ const HANDLE *lpHandles,
+DWORD
+wait_for_multiple_objects_enhanced(_In_ DWORD  nCount, _In_ const HANDLE *lpHandles,
 	_In_ DWORD dwMilliseconds, _In_ BOOL bAlertable)
 {
 	/* if less than the normal maximum then just use the built-in function
@@ -81,30 +84,40 @@ DWORD wait_for_multiple_objects_enhanced(_In_ DWORD  nCount, _In_ const HANDLE *
 		if (wait_ret == WAIT_TIMEOUT) return WAIT_TIMEOUT_ENHANCED;
 
 		/* translate normal offset to enhanced offset for abandoned threads */
-		if (wait_ret >= WAIT_ABANDONED_0 && wait_ret < WAIT_ABANDONED_0 + MAXIMUM_WAIT_OBJECTS) {
+		if (wait_ret >= WAIT_ABANDONED_0 &&
+			wait_ret < WAIT_ABANDONED_0 + MAXIMUM_WAIT_OBJECTS) {
 			return WAIT_ABANDONED_0_ENHANCED + (wait_ret - WAIT_ABANDONED_0);
 		}
 
 		/* translate normal offset to enhanced offset for signaled threads */
-		if (wait_ret >= WAIT_OBJECT_0 && wait_ret < WAIT_OBJECT_0 + MAXIMUM_WAIT_OBJECTS) {
+		if (wait_ret >= WAIT_OBJECT_0 &&
+			wait_ret < WAIT_OBJECT_0 + MAXIMUM_WAIT_OBJECTS) {
 			return WAIT_OBJECT_0_ENHANCED + (wait_ret - WAIT_OBJECT_0);
 		}
 
 		return WAIT_FAILED_ENHANCED;
 	}
 
-	/* number of separate bins / threads required to create */
-	const DWORD bin_size = MAXIMUM_WAIT_OBJECTS; 
+	/* number of separate bins / threads required to monitor execution */
+	const DWORD bin_size = MAXIMUM_WAIT_OBJECTS;
 	const DWORD bins_total = (nCount - 1) / bin_size + 1;
 
-	/* setup synchronization variables */
+	DWORD return_value = WAIT_FAILED_ENHANCED;
+
+	/* setup synchronization event to flag when the main thread should wake up */
 	HANDLE wait_event = CreateEvent(NULL, TRUE, FALSE, NULL);
+	if (wait_event == NULL) {
+		goto cleanup;
+	}
 
 	/* allocate an area to communicate with our threads */
-	wait_for_multiple_objects_struct * wait_bins = (wait_for_multiple_objects_struct *)
+	wait_for_multiple_objects_struct *wait_bins = (wait_for_multiple_objects_struct *)
 		calloc(bins_total, sizeof(wait_for_multiple_objects_struct));
+	if (wait_bins == NULL) {
+		goto cleanup;
+	}
 
-	/* initialize each thread handling bin */
+	/* initialize each thread that handles up to MAXIMUM_WAIT_OBJECTS each */
 	for (DWORD bin = 0; bin < bins_total; bin++) {
 
 		const int handles_processed = bin * bin_size;
@@ -116,13 +129,14 @@ DWORD wait_for_multiple_objects_enhanced(_In_ DWORD  nCount, _In_ const HANDLE *
 
 		/* create a thread for this bin */
 		if ((wait_bins[bin].thread_handle = CreateThread(NULL, 2048,
-			wait_for_multiple_objects_thread, (LPVOID) &(wait_bins[bin]), 0, NULL)) == NULL) {
+			wait_for_multiple_objects_thread,
+			(LPVOID) &(wait_bins[bin]), 0, NULL)) == NULL) {
 			goto cleanup;
 		}
 	}
 
-	/* wait for at least one thread to return */
-	DWORD return_value = WAIT_FAILED_ENHANCED;
+	/* wait for at least one thread to return; this will indicate that return
+	 * value will have been set in our bin array */
 	DWORD wait_ret = WaitForSingleObjectEx(wait_event, dwMilliseconds, bAlertable);
 
 	/* if io alert just skip to end */
@@ -146,13 +160,17 @@ DWORD wait_for_multiple_objects_enhanced(_In_ DWORD  nCount, _In_ const HANDLE *
 	/* only looking for one object events */
 	for (DWORD bin = 0; bin < bins_total; bin++) {
 
-		/* return failure if a queue returned an invalid or unexpected status */
-		if (wait_bins[bin].return_value != (WAIT_FAILED - 1)
-			&& (wait_bins[bin].return_value == WAIT_FAILED ||
-				wait_bins[bin].return_value == WAIT_IO_COMPLETION ||
-				wait_bins[bin].return_value == WAIT_TIMEOUT))
+		/* skip bins that have have the default, unprocessed status */
+		if (wait_bins[bin].return_value == WAIT_FAILED - 1)
+			continue;
+
+		/* return failure if a bin has been processed but returned an
+		 * invalid or unexpected status */
+		if (wait_bins[bin].return_value == WAIT_FAILED ||
+			wait_bins[bin].return_value == WAIT_IO_COMPLETION ||
+			wait_bins[bin].return_value == WAIT_TIMEOUT)
 		{
-			return_value = WAIT_FAILED;
+			return_value = WAIT_FAILED_ENHANCED;
 			break;
 		}
 
@@ -177,18 +195,26 @@ cleanup:
 
 	/* interrupt any outstanding threads */
 	for (DWORD bin = 0; bin < bins_total; bin++) {
-		if (wait_bins[bin].return_value == (WAIT_FAILED - 1)) {
-			QueueUserAPC(wait_for_multiple_objects_interrupter,
-				wait_bins[bin].thread_handle, (ULONG_PTR)NULL);
-		}
+		if (wait_bins[bin].thread_handle != NULL) {
 
-		/* we must wait for these threads to complete so we can 
-		 * safely cleanup the shared resources */
-		WaitForSingleObject(wait_bins[bin].thread_handle, INFINITE);
-		CloseHandle(wait_bins[bin].thread_handle);
+			/* send each thread that is still waiting a signal to wake up;
+			 * if the thread in not waiting and still has not fully
+			 * finished executing then it will just ignore the signal */
+			if (wait_bins[bin].return_value == (WAIT_FAILED - 1)) {
+				QueueUserAPC(wait_for_multiple_objects_interrupter,
+					wait_bins[bin].thread_handle, (ULONG_PTR)NULL);
+			}
+
+			/* we must wait for these threads to complete so we can
+			 * safely cleanup the shared resources */
+			WaitForSingleObject(wait_bins[bin].thread_handle, INFINITE);
+			CloseHandle(wait_bins[bin].thread_handle);
+		}
 	}
 
-	if (wait_event) CloseHandle(wait_event);
-	if (wait_bins) free(wait_bins);
+	if (wait_event)
+		CloseHandle(wait_event);
+	if (wait_bins)
+		free(wait_bins);
 	return return_value;
 }
