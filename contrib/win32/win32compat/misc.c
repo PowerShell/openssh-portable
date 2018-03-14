@@ -70,33 +70,6 @@ static char* s_programdir = NULL;
 #define EPOCH_DELTA_US  116444736000000000ULL
 #define RATE_DIFF 10000000ULL /* 1000 nsecs */
 
-typedef struct _REPARSE_DATA_BUFFER {
-	ULONG  ReparseTag;
-	USHORT ReparseDataLength;
-	USHORT Reserved;
-	union {
-		struct {
-			USHORT SubstituteNameOffset;
-			USHORT SubstituteNameLength;
-			USHORT PrintNameOffset;
-			USHORT PrintNameLength;
-			WCHAR PathBuffer[1];
-		} SymbolicLinkReparseBuffer;
-
-		struct {
-			USHORT SubstituteNameOffset;
-			USHORT SubstituteNameLength;
-			USHORT PrintNameOffset;
-			USHORT PrintNameLength;
-			WCHAR PathBuffer[1];
-		} MountPointReparseBuffer;
-
-		struct {
-			UCHAR  DataBuffer[1];
-		} GenericReparseBuffer;
-	};
-} REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;
-
 /* Windows CRT defines error string messages only till 43 in errno.h
  * This is an extended list that defines messages for EADDRINUSE through EWOULDBLOCK
  */

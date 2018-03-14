@@ -752,9 +752,26 @@ fileio_fstat(struct w32_io* pio, struct _stat64 *buf)
 	return _fstat64(fd, buf);
 }
 
-wchar_t * fileio_readlink_internal(wchar_t * wpath)
+wchar_t * 
+fileio_readlink_internal(wchar_t * wpath)
 {
-	/* abbreviated reparse data structure for symlinks */
+	/* note: there are two approaches for reading a link in Windows:
+	 *
+	 * 1) Use CreateFile() to obtain a file handle to the reparse point and
+	 *    send using the DeviceIoControl() call to retrieve the link data from the
+	 *    reparse point.
+	 * 2) Use CreateFile() to obtain a file handle to the target file followed
+	 *    by a call to GetFinalPathNameByHandle() to get the real path on the
+	 *    file system.
+	 *
+	 * This approach uses the first method because the second method does not
+	 * work on broken link since the target file cannot be opened.  It also
+	 * requires additional I/O to read both the symlink and its target. */
+
+	 /* abbreviated REPARSE_DATA_BUFFER data structure for decoding symlinks;
+	  * the full definition can be found in ntifs.h within the Windows DDK.
+	  * we include it here so the DDK does not become prereq to the build.
+	  * See: https://msdn.microsoft.com/en-us/library/cc232006.aspx */
 	typedef struct _REPARSE_DATA_BUFFER_SYMLINK {
 		ULONG ReparseTag;
 		USHORT ReparseDataLength;
@@ -764,10 +781,11 @@ wchar_t * fileio_readlink_internal(wchar_t * wpath)
 		USHORT PrintNameOffset;
 		USHORT PrintNameLength;
 		ULONG Flags;
-	} REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER_SYMLINK;
+		WCHAR PathBuffer[1];
+	} REPARSE_DATA_BUFFER_SYMLINK, *PREPARSE_DATA_BUFFER_SYMLINK;
 
 	/* early declarations for cleanup */
-	wchar_t* linkpath = NULL;
+	wchar_t *linkpath = NULL;
 	HANDLE handle = INVALID_HANDLE_VALUE;
 	PREPARSE_DATA_BUFFER_SYMLINK reparse_buffer = NULL;
 
@@ -794,11 +812,12 @@ wchar_t * fileio_readlink_internal(wchar_t * wpath)
 		goto cleanup;
 	}
 
-	/* trim off the extended drive prefix if present */
+	/* if an absolute path, this path will look like \??\C:\Path\Target;
+	 * this path is the 'real path' that is maintained by the nt object manager.
+	 * we will normalize it by trimming off this first part of the string */
 	const wchar_t prefix[] = L"\\??\\";
 	int symlink_nonnull_size = reparse_buffer->SubstituteNameLength;
-	wchar_t * symlink_nonnull = (wchar_t *)((LPBYTE)reparse_buffer +
-		sizeof(REPARSE_DATA_BUFFER) + reparse_buffer->SubstituteNameOffset);
+	wchar_t * symlink_nonnull = &reparse_buffer->PathBuffer[reparse_buffer->SubstituteNameOffset / sizeof(WCHAR)];
 	if (symlink_nonnull_size > sizeof(prefix)) {
 		if (memcmp(symlink_nonnull, prefix, sizeof(prefix) - sizeof(wchar_t)) == 0) {
 			symlink_nonnull += (sizeof(prefix) - sizeof(wchar_t)) / sizeof(wchar_t);
@@ -806,32 +825,41 @@ wchar_t * fileio_readlink_internal(wchar_t * wpath)
 		}
 	}
 
-	/* allocate an area for a null-terminated version of the string that can 
-	 * accommodate an absolute or relative path */
-	int linkpath_len = wcslen(wpath) + 1 + symlink_nonnull_size / sizeof(wchar_t) + 1;
-	linkpath = malloc(linkpath_len * sizeof(wchar_t));
+	/* allocate an area for a null-terminated version of the string; this can be
+	 * up to the length of the input path plus the relative path in the symlink */
+	const int wpath_len = wcslen(wpath);
+	int linkpath_len = wpath_len + 1 + symlink_nonnull_size / sizeof(wchar_t) + 1;
+	linkpath = calloc(linkpath_len, sizeof(wchar_t));
 	if (linkpath == NULL) {
 		errno = ENOMEM;
 		goto cleanup;
 	}
 
-	/* if string looks to be relative, copy the truncated parent */
-	if (symlink_nonnull[0] != L'\\' && !(symlink_nonnull_size / sizeof(wchar_t) >= 2 
-		&& isalpha(symlink_nonnull[0]) && symlink_nonnull[1] == ':')) {
-		wcscpy_s(linkpath, linkpath_len, wpath);
-		for (wchar_t * t = linkpath; *t != L'\0'; t++) if (*t == '/') *t = '\\';
-		wchar_t* path_end = linkpath + wcslen(linkpath);
-		while (*path_end != L'\\' && path_end > linkpath) (*path_end--) = L'\0';
-	}
-	else linkpath[0] = '\0';
+	/* if symlink is relative, copy the truncated parent as the base path*/
+	if (reparse_buffer->Flags != 0) {
 
-	/* copy the symbolic link to the output string*/
+		/* copy the parent path, convert forward slashes to backslashes, and 
+		 * trim off the last entry in the path */
+		wcscpy_s(linkpath, linkpath_len, wpath);
+		for (int i = 0; i < wpath_len; i++)
+			if (linkpath[i] == '/') linkpath[i] = '\\';
+		for (int i = wpath_len; i >= 0; i--) {
+			if (linkpath[i] == L'\\') {
+				linkpath[i+1] = L'\0';
+				break;
+			}
+		}
+	} 
+
+	/* append the symbolic link data to the output string*/
 	wcsncat(linkpath, symlink_nonnull, symlink_nonnull_size / sizeof(wchar_t));
 
 cleanup:
 
-	if (reparse_buffer) free(reparse_buffer);
-	if (handle != INVALID_HANDLE_VALUE) CloseHandle(handle);
+	if (reparse_buffer) 
+		free(reparse_buffer);
+	if (handle != INVALID_HANDLE_VALUE) 
+		CloseHandle(handle);
 	return linkpath;
 }
 
@@ -841,9 +869,9 @@ fileio_stat_or_lstat_internal(const char *path, struct _stat64 *buf, int do_lsta
 	wchar_t* wpath = NULL;
 	wchar_t* resolved_link = NULL;
 	WIN32_FILE_ATTRIBUTE_DATA attributes = { 0 };
-	int ret = -1;	
+	int ret = -1;
 	int is_link = 0;
-	
+
 	memset(buf, 0, sizeof(struct _stat64));
 
 	/* Detect root dir */
@@ -891,7 +919,7 @@ fileio_stat_or_lstat_internal(const char *path, struct _stat64 *buf, int do_lsta
 	file_time_to_unix_time(&(attributes.ftLastAccessTime), &(buf->st_atime));
 	file_time_to_unix_time(&(attributes.ftLastWriteTime), &(buf->st_mtime));
 	file_time_to_unix_time(&(attributes.ftCreationTime), &(buf->st_ctime));
-	
+
 	/* link type supercedes other file type bits */
 	if (is_link) {
 		buf->st_mode &= ~S_IFMT;
@@ -904,7 +932,7 @@ cleanup:
 	if (resolved_link)
 		free(resolved_link);
 	if (wpath)
-		free(wpath);	
+		free(wpath);
 	return ret;
 }
 
@@ -1055,15 +1083,17 @@ fileio_is_io_available(struct w32_io* pio, BOOL rd)
 	}
 }
 
-ssize_t fileio_readlink(const char *path, char *buf, size_t bufsiz)
+ssize_t 
+fileio_readlink(const char *path, char *buf, size_t bufsiz)
 {
 	debug4("readlink - io:%p", pio);
 
-	wchar_t* wpath = NULL;
-	wchar_t* resolved_link = NULL;
+	wchar_t *wpath = NULL;
+	wchar_t *resolved_link = NULL;
 	char* output = NULL;
 	ssize_t ret = -1;
 
+	/* sanity check */
 	if (buf == NULL) {
 		errno = EFAULT;
 		goto cleanup;
@@ -1074,7 +1104,7 @@ ssize_t fileio_readlink(const char *path, char *buf, size_t bufsiz)
 		goto cleanup;
 	}
 
-	/* establish a file handle to the destination file */
+	/* read the link data from the passed symlink */
 	resolved_link = fileio_readlink_internal(wpath);
 	if (resolved_link == NULL) {
 		/* errorno will have been set by called function */
@@ -1093,7 +1123,7 @@ ssize_t fileio_readlink(const char *path, char *buf, size_t bufsiz)
 		goto cleanup;
 	}
 
-	/* copy to output buffer - prepend forward slash */
+	/* copy to output buffer in the forward-slash format: /C:/Path/Target */
 	convertToForwardslash(output);
 	buf[0] = '/';
 	memcpy(buf + 1, output, out_size);
@@ -1103,10 +1133,10 @@ cleanup:
 
 	if (wpath)
 		free(wpath);
-	if (output) 
+	if (output)
 		free(output);
-	if (resolved_link) 
+	if (resolved_link)
 		free(resolved_link);
 
-	return (ssize_t) ret;
+	return (ssize_t)ret;
 }
