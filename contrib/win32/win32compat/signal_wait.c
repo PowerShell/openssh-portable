@@ -73,6 +73,16 @@ DWORD
 wait_for_multiple_objects_enhanced(_In_ DWORD  nCount, _In_ const HANDLE *lpHandles,
 	_In_ DWORD dwMilliseconds, _In_ BOOL bAlertable)
 {
+	
+	/* number of separate bins / threads required to monitor execution */
+	const DWORD bin_size = MAXIMUM_WAIT_OBJECTS;
+	const DWORD bins_total = (nCount - 1) / bin_size + 1;
+	
+	DWORD return_value = WAIT_FAILED_ENHANCED;
+	HANDLE wait_event = NULL;
+	wait_for_multiple_objects_struct *wait_bins = NULL;
+	DWORD wait_ret;
+	
 	/* if less than the normal maximum then just use the built-in function
 	 * to avoid the overhead of another thread */
 	if (nCount <= MAXIMUM_WAIT_OBJECTS) {
@@ -98,25 +108,21 @@ wait_for_multiple_objects_enhanced(_In_ DWORD  nCount, _In_ const HANDLE *lpHand
 		return WAIT_FAILED_ENHANCED;
 	}
 
-	/* number of separate bins / threads required to monitor execution */
-	const DWORD bin_size = MAXIMUM_WAIT_OBJECTS;
-	const DWORD bins_total = (nCount - 1) / bin_size + 1;
-
-	DWORD return_value = WAIT_FAILED_ENHANCED;
 
 	/* setup synchronization event to flag when the main thread should wake up */
-	HANDLE wait_event = CreateEvent(NULL, TRUE, FALSE, NULL);
+	wait_event = CreateEvent(NULL, TRUE, FALSE, NULL);
 	if (wait_event == NULL) {
 		goto cleanup;
 	}
 
 	/* allocate an area to communicate with our threads */
-	wait_for_multiple_objects_struct *wait_bins = (wait_for_multiple_objects_struct *)
+	wait_bins = (wait_for_multiple_objects_struct *)
 		calloc(bins_total, sizeof(wait_for_multiple_objects_struct));
 	if (wait_bins == NULL) {
 		goto cleanup;
 	}
 
+	ZeroMemory(wait_bins, bins_total * sizeof(wait_for_multiple_objects_struct));
 	/* initialize each thread that handles up to MAXIMUM_WAIT_OBJECTS each */
 	for (DWORD bin = 0; bin < bins_total; bin++) {
 
@@ -137,7 +143,7 @@ wait_for_multiple_objects_enhanced(_In_ DWORD  nCount, _In_ const HANDLE *lpHand
 
 	/* wait for at least one thread to return; this will indicate that return
 	 * value will have been set in our bin array */
-	DWORD wait_ret = WaitForSingleObjectEx(wait_event, dwMilliseconds, bAlertable);
+	wait_ret = WaitForSingleObjectEx(wait_event, dwMilliseconds, bAlertable);
 
 	/* if io alert just skip to end */
 	if (wait_ret == WAIT_IO_COMPLETION) {
