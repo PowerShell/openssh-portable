@@ -755,7 +755,7 @@ fileio_fstat(struct w32_io* pio, struct _stat64 *buf)
 wchar_t * 
 fileio_readlink_internal(wchar_t * wpath)
 {
-	/* note: there are two approaches for reading a link in Windows:
+	/* note: there are two approaches for resolving a symlink in Windows:
 	 *
 	 * 1) Use CreateFile() to obtain a file handle to the reparse point and
 	 *    send using the DeviceIoControl() call to retrieve the link data from the
@@ -768,10 +768,11 @@ fileio_readlink_internal(wchar_t * wpath)
 	 * work on broken link since the target file cannot be opened.  It also
 	 * requires additional I/O to read both the symlink and its target. */
 
+
 	 /* abbreviated REPARSE_DATA_BUFFER data structure for decoding symlinks;
 	  * the full definition can be found in ntifs.h within the Windows DDK.
 	  * we include it here so the DDK does not become prereq to the build.
-	  * See: https://msdn.microsoft.com/en-us/library/cc232006.aspx */
+	  * for more info: https://msdn.microsoft.com/en-us/library/cc232006.aspx */
 	typedef struct _REPARSE_DATA_BUFFER_SYMLINK {
 		ULONG ReparseTag;
 		USHORT ReparseDataLength;
@@ -812,18 +813,13 @@ fileio_readlink_internal(wchar_t * wpath)
 		goto cleanup;
 	}
 
-	/* if an absolute path, this path will look like \??\C:\Path\Target;
-	 * this path is the 'real path' that is maintained by the nt object manager.
-	 * we will normalize it by trimming off this first part of the string */
-	const wchar_t prefix[] = L"\\??\\";
-	int symlink_nonnull_size = reparse_buffer->SubstituteNameLength;
-	wchar_t * symlink_nonnull = &reparse_buffer->PathBuffer[reparse_buffer->SubstituteNameOffset / sizeof(WCHAR)];
-	if (symlink_nonnull_size > sizeof(prefix)) {
-		if (memcmp(symlink_nonnull, prefix, sizeof(prefix) - sizeof(wchar_t)) == 0) {
-			symlink_nonnull += (sizeof(prefix) - sizeof(wchar_t)) / sizeof(wchar_t);
-			symlink_nonnull_size -= sizeof(prefix) - sizeof(wchar_t);
-		}
-	}
+	/* the symlink structure has a 'Print Name' value that is displayed to the 
+	 * user which is different from the actual value it uses for redirection 
+	 * called the 'Substitute Name'; since the Substitute Name has an odd format
+	 * that begins with \??\ and it appears that CreateSymbolicLink() always 
+	 * formats the PrintName value consistently we will just use that */
+	int symlink_nonnull_size = reparse_buffer->PrintNameLength;
+	wchar_t * symlink_nonnull = &reparse_buffer->PathBuffer[reparse_buffer->PrintNameOffset / sizeof(WCHAR)];
 
 	/* allocate an area for a null-terminated version of the string; this can be
 	 * up to the length of the input path plus the relative path in the symlink */
@@ -866,8 +862,8 @@ cleanup:
 int
 fileio_stat_or_lstat_internal(const char *path, struct _stat64 *buf, int do_lstat)
 {
-	wchar_t* wpath = NULL;
-	wchar_t* resolved_link = NULL;
+	wchar_t *wpath = NULL;
+	wchar_t *resolved_link = NULL;
 	WIN32_FILE_ATTRIBUTE_DATA attributes = { 0 };
 	int ret = -1;
 	int is_link = 0;
@@ -1138,5 +1134,5 @@ cleanup:
 	if (resolved_link)
 		free(resolved_link);
 
-	return (ssize_t)ret;
+	return (ssize_t) ret;
 }
