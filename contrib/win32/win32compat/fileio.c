@@ -766,13 +766,15 @@ fileio_readlink_internal(wchar_t * wpath)
 	 *
 	 * This approach uses the first method because the second method does not
 	 * work on broken link since the target file cannot be opened.  It also
-	 * requires additional I/O to read both the symlink and its target. */
+	 * requires additional I/O to read both the symlink and its target. 
+	 */
 
 
 	 /* abbreviated REPARSE_DATA_BUFFER data structure for decoding symlinks;
 	  * the full definition can be found in ntifs.h within the Windows DDK.
 	  * we include it here so the DDK does not become prereq to the build.
-	  * for more info: https://msdn.microsoft.com/en-us/library/cc232006.aspx */
+	  * for more info: https://msdn.microsoft.com/en-us/library/cc232006.aspx 
+	  */
 	typedef struct _REPARSE_DATA_BUFFER_SYMLINK {
 		ULONG ReparseTag;
 		USHORT ReparseDataLength;
@@ -817,14 +819,19 @@ fileio_readlink_internal(wchar_t * wpath)
 	 * user which is different from the actual value it uses for redirection 
 	 * called the 'Substitute Name'; since the Substitute Name has an odd format
 	 * that begins with \??\ and it appears that CreateSymbolicLink() always 
-	 * formats the PrintName value consistently we will just use that */
+	 * formats the PrintName value consistently we will just use that 
+	 */
 	int symlink_nonnull_size = reparse_buffer->PrintNameLength;
 	wchar_t * symlink_nonnull = &reparse_buffer->PathBuffer[reparse_buffer->PrintNameOffset / sizeof(WCHAR)];
 
-	/* allocate an area for a null-terminated version of the string; this can be
-	 * up to the length of the input path plus the relative path in the symlink */
+	/* since readlink allows a return string larger than MAX_PATH by specifying
+	 * the bufsiz parameter and windows can have paths larger than MAX_PATH, 
+	 * dynamically allocate a string to hold the resultant symbolic link path.  
+	 * this string could be as large as parent path plus the reparse buffer 
+	 * data plus a null terminator.
+	 */
 	const int wpath_len = wcslen(wpath);
-	int linkpath_len = wpath_len + 1 + symlink_nonnull_size / sizeof(wchar_t) + 1;
+	int linkpath_len = wpath_len + symlink_nonnull_size / sizeof(wchar_t) + 1;
 	linkpath = calloc(linkpath_len, sizeof(wchar_t));
 	if (linkpath == NULL) {
 		errno = ENOMEM;
@@ -837,8 +844,7 @@ fileio_readlink_internal(wchar_t * wpath)
 		/* copy the parent path, convert forward slashes to backslashes, and 
 		 * trim off the last entry in the path */
 		wcscpy_s(linkpath, linkpath_len, wpath);
-		for (int i = 0; i < wpath_len; i++)
-			if (linkpath[i] == '/') linkpath[i] = '\\';
+		convertToBackslashW(linkpath);
 		for (int i = wpath_len; i >= 0; i--) {
 			if (linkpath[i] == L'\\') {
 				linkpath[i+1] = L'\0';
