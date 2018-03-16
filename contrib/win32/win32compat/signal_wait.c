@@ -73,7 +73,6 @@ DWORD
 wait_for_multiple_objects_enhanced(_In_ DWORD  nCount, _In_ const HANDLE *lpHandles,
 	_In_ DWORD dwMilliseconds, _In_ BOOL bAlertable)
 {
-	
 	/* number of separate bins / threads required to monitor execution */
 	const DWORD bin_size = MAXIMUM_WAIT_OBJECTS;
 	const DWORD bins_total = (nCount - 1) / bin_size + 1;
@@ -82,6 +81,20 @@ wait_for_multiple_objects_enhanced(_In_ DWORD  nCount, _In_ const HANDLE *lpHand
 	HANDLE wait_event = NULL;
 	wait_for_multiple_objects_struct *wait_bins = NULL;
 	DWORD wait_ret;
+
+	/* in the event that no events are passed and alterable, just do a sleep and
+	 * and wait for wakeup call.  This differs from the WaitForMultipleObjectsEx
+	 * call which would return an error if no events are passed to the function. */
+	if (nCount == 0 && bAlertable && dwMilliseconds > 0)
+	{
+		DWORD wait_ret = SleepEx(dwMilliseconds, TRUE);
+		if (wait_ret == 0)
+			return WAIT_TIMEOUT_ENHANCED;
+		else if (wait_ret == WAIT_IO_COMPLETION) 
+			return WAIT_IO_COMPLETION_ENHANCED;
+		else
+			return WAIT_FAILED_ENHANCED;
+	}
 	
 	/* if less than the normal maximum then just use the built-in function
 	 * to avoid the overhead of another thread */
@@ -122,7 +135,6 @@ wait_for_multiple_objects_enhanced(_In_ DWORD  nCount, _In_ const HANDLE *lpHand
 		goto cleanup;
 	}
 
-	ZeroMemory(wait_bins, bins_total * sizeof(wait_for_multiple_objects_struct));
 	/* initialize each thread that handles up to MAXIMUM_WAIT_OBJECTS each */
 	for (DWORD bin = 0; bin < bins_total; bin++) {
 
