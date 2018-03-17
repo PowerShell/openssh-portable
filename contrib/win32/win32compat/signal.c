@@ -260,13 +260,13 @@ sw_process_pending_signals()
 int
 wait_for_any_event(HANDLE* events, int num_events, DWORD milli_seconds)
 {
-	HANDLE all_events[MAX_CHILDREN];
+	HANDLE all_events[MAXIMUM_WAIT_OBJECTS_ENHANCED];
 	DWORD live_children = children.num_children - children.num_zombies;
 	DWORD num_all_events = num_events + live_children;
 	errno_t r = 0;
 
-	if (num_all_events > MAX_CHILDREN) {
-		debug3("wait() - ERROR max events reached");
+	if (num_all_events > MAXIMUM_WAIT_OBJECTS_ENHANCED) {
+		debug3("wait_for_any_event() - ERROR max events reached");
 		errno = ENOTSUP;
 		return -1;
 	}
@@ -278,7 +278,6 @@ wait_for_any_event(HANDLE* events, int num_events, DWORD milli_seconds)
 	}
 
 	debug5("wait() on %d events and %d children", num_events, live_children);
-	/* TODO - implement signal catching and handling */
 	DWORD ret = wait_for_multiple_objects_enhanced(num_all_events, all_events, milli_seconds, TRUE);
 	if ((ret >= WAIT_OBJECT_0_ENHANCED) && (ret <= WAIT_OBJECT_0_ENHANCED + num_all_events - 1)) {
 		/* woken up by event signaled
