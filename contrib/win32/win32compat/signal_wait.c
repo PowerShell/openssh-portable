@@ -91,7 +91,7 @@ wait_for_multiple_objects_enhanced(_In_ DWORD  nCount, _In_ const HANDLE *lpHand
 	/* in the event that no events are passed and alterable, just do a sleep and
 	 * and wait for wakeup call.  This differs from the WaitForMultipleObjectsEx
 	 * call which would return an error if no events are passed to the function. */
-	if (nCount == 0 && bAlertable && dwMilliseconds > 0)
+	if (nCount == 0 && bAlertable)
 	{
 		DWORD wait_ret = SleepEx(dwMilliseconds, TRUE);
 		if (wait_ret == 0)
@@ -126,7 +126,6 @@ wait_for_multiple_objects_enhanced(_In_ DWORD  nCount, _In_ const HANDLE *lpHand
 
 		return WAIT_FAILED_ENHANCED;
 	}
-
 
 	/* setup synchronization event to flag when the main thread should wake up */
 	wait_event = CreateEvent(NULL, TRUE, FALSE, NULL);

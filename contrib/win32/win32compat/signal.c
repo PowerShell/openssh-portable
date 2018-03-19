@@ -271,8 +271,8 @@ wait_for_any_event(HANDLE* events, int num_events, DWORD milli_seconds)
 		return -1;
 	}
 
-	if ((r = memcpy_s(all_events, MAX_CHILDREN * sizeof(HANDLE), children.handles, live_children * sizeof(HANDLE)) != 0) ||
-	( r = memcpy_s(all_events + live_children, (MAX_CHILDREN - live_children) * sizeof(HANDLE), events, num_events * sizeof(HANDLE)) != 0)) {
+	if ((r = memcpy_s(all_events, MAXIMUM_WAIT_OBJECTS_ENHANCED * sizeof(HANDLE), children.handles, live_children * sizeof(HANDLE)) != 0) ||
+	( r = memcpy_s(all_events + live_children, (MAXIMUM_WAIT_OBJECTS_ENHANCED - live_children) * sizeof(HANDLE), events, num_events * sizeof(HANDLE)) != 0)) {
 		debug3("memcpy_s failed with error: %d.", r);
 		return -1;
 	}
