@@ -779,6 +779,7 @@ privsep_preauth(Authctxt *authctxt)
 				error("%s, posix_spawn failed", __func__);
 			posix_spawn_file_actions_destroy(&actions);
 		}
+		pmonitor->m_pid = pid;
 		close(pmonitor->m_recvfd);
 		close(pmonitor->m_log_sendfd);
 		send_config_state(pmonitor->m_sendfd, &cfg);
