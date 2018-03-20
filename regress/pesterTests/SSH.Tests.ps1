@@ -148,6 +148,11 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             $o | Should Be "1234"
         }
 
+        It "$tC.$tI - stdout to PS object using -t" {
+            $o = ssh -t test_target echo 1234
+            $o | Should Be "1234"
+        }
+
         It "$tC.$tI - stdin from PS object" -skip:$skip {
             # execute this script that dumps the length of input data, on the remote end
             $str = "begin {} process { Write-Output `$input.Length} end { }"

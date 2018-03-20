@@ -854,7 +854,7 @@ fileio_readlink_internal(wchar_t * wpath)
 	} 
 
 	/* append the symbolic link data to the output string*/
-	wcsncat_s(linkpath, wcslen(linkpath), symlink_nonnull, symlink_nonnull_size / sizeof(wchar_t));
+	wcsncat_s(linkpath, linkpath_len, symlink_nonnull, symlink_nonnull_size / sizeof(wchar_t));
 
 cleanup:
 
