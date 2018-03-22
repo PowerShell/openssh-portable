@@ -52,8 +52,8 @@
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>keygen</RootNamespace>
     <WindowsTargetPlatformVersion>$(WindowsSDKVersion)</WindowsTargetPlatformVersion>
-    <ProjectName>sftp</ProjectName> 
-</PropertyGroup>
+    <ProjectName>sftp</ProjectName>
+  </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -197,6 +197,7 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <ControlFlowGuard>Guard</ControlFlowGuard>
+      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -218,6 +219,7 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <ControlFlowGuard>Guard</ControlFlowGuard>
+      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -239,6 +241,7 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <ControlFlowGuard>Guard</ControlFlowGuard>
+      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -260,6 +263,7 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <ControlFlowGuard>Guard</ControlFlowGuard>
+      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -282,6 +286,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ControlFlowGuard>Guard</ControlFlowGuard>
+      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -307,6 +312,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ControlFlowGuard>Guard</ControlFlowGuard>
+      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -332,6 +338,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ControlFlowGuard>Guard</ControlFlowGuard>
+      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -357,6 +364,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ControlFlowGuard>Guard</ControlFlowGuard>
+      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

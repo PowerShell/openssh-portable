@@ -166,11 +166,11 @@ WARNING: Following changes will be made to OpenSSH configuration
     }
 
     $backupConfigPath = Join-Path $OpenSSHConfigPath sshd_config.ori
-    #Backup existing OpenSSH configuration
-    if (-not (Test-Path $backupConfigPath -PathType Leaf)) {
-        Copy-Item (Join-Path $OpenSSHConfigPath sshd_config) $backupConfigPath -Force
-    }
     $targetsshdConfig = Join-Path $OpenSSHConfigPath sshd_config
+    #Backup existing OpenSSH configuration
+    if ((Test-Path $targetsshdConfig -PathType Leaf) -and (-not (Test-Path $backupConfigPath -PathType Leaf))) {
+        Copy-Item $targetsshdConfig $backupConfigPath -Force
+    }    
     # copy new sshd_config
     Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) $targetsshdConfig -Force
     if($DebugMode) {
