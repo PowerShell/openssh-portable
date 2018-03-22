@@ -1106,6 +1106,8 @@ fileio_readlink(const char *path, char *buf, size_t bufsiz)
 
 cleanup:
 
+	if (linkpath)
+		free(linkpath);
 	if (reparse_buffer)
 		free(reparse_buffer);
 	if (handle != INVALID_HANDLE_VALUE)
