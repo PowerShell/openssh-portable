@@ -177,7 +177,7 @@
       <CompileAs>CompileAsC</CompileAs>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <ControlFlowGuard>false</ControlFlowGuard>
-      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -197,7 +197,7 @@
       <CompileAs>CompileAsC</CompileAs>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <ControlFlowGuard>false</ControlFlowGuard>
-      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -217,7 +217,7 @@
       <CompileAs>CompileAsC</CompileAs>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <ControlFlowGuard>false</ControlFlowGuard>
-      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -240,7 +240,7 @@
       <CompileAs>CompileAsC</CompileAs>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <ControlFlowGuard>false</ControlFlowGuard>
-      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -262,7 +262,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <ControlFlowGuard>false</ControlFlowGuard>
-      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -284,7 +284,7 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <WholeProgramOptimization>true</WholeProgramOptimization>
       <ControlFlowGuard>false</ControlFlowGuard>
-      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -306,7 +306,7 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <WholeProgramOptimization>true</WholeProgramOptimization>
       <ControlFlowGuard>false</ControlFlowGuard>
-      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -331,7 +331,7 @@
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <WholeProgramOptimization>true</WholeProgramOptimization>
       <ControlFlowGuard>false</ControlFlowGuard>
-      <AdditionalOptions>/Zi /Gf /Gy %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
