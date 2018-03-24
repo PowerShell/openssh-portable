@@ -72,7 +72,7 @@ function Set-OpenSSHTestEnvironment
         "PubKeyUser"= $PubKeyUser;                             # test user to be used with explicit key for key auth
         "PasswdUser"= $PasswdUser;                             # common password for all test accounts
         "TestAccountPW"= $OpenSSHTestAccountsPassword;         # common password for all test accounts
-        "TestDataPath" = $TestDataPath;                    # openssh tests path
+        "TestDataPath" = $TestDataPath;                        # openssh tests path
         "TestSetupLogFile" = $Script:TestSetupLogFile;         # openssh test setup log file
         "E2ETestResultsFile" = $Script:E2ETestResultsFile;     # openssh E2E test results file
         "UnitTestResultsFile" = $Script:UnitTestResultsFile;   # openssh unittest test results file
@@ -133,6 +133,8 @@ function Set-OpenSSHTestEnvironment
     {
         $Script:WindowsInBox = $true
         $Global:OpenSSHTestInfo.Add("WindowsInBox", $true)
+        $Global:OpenSSHTestInfo["EnableAppVerifier"] = $false
+        $Script:EnableAppVerifier = $false
     }
 
     $description = @"
@@ -262,7 +264,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
 
     #Enable AppVerifier
-    if($EnableAppVerifier)
+    if($Script:EnableAppVerifier)
     {        
         # clear all applications in application verifier first
         &  $env:windir\System32\appverif.exe -disable * -for *  | out-null
