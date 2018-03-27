@@ -1082,7 +1082,7 @@ fileio_readlink(const char *path, char *buf, size_t bufsiz)
 	}
 
 	/* copy the data out of the reparse buffer and add null terminator */
-	memcpy(linkpath, symlink_nonnull, symlink_nonnull_size);
+	memcpy_s(linkpath, symlink_nonnull_size + sizeof(wchar_t), symlink_nonnull, symlink_nonnull_size);
 	linkpath[symlink_nonnull_size / sizeof(wchar_t)] = L'\0';
 
 	/* convert link path to utf8 */
