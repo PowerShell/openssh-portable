@@ -303,26 +303,26 @@ function Copy-LibreSSLSDK
     $request.AllowAutoRedirect = $false
     $request.Timeout = 30000; #30 sec
     $response=$request.GetResponse()
-    $latest_release_zip=$([String]$response.GetResponseHeader("Location")).Replace('tag','download') + '/LibreSSL.zip'
-    $local_zip=Join-Path $script:gitRoot "libressl.zip"
+    $libressl_release_url=$([String]$response.GetResponseHeader("Location")).Replace('tag','download') + '/LibreSSL.zip'
+    $libressl_zip_path=Join-Path $script:gitRoot "libressl.zip"
 
     #download libressl latest release binaries
-    Remove-Item $local_zip -Force -ErrorAction SilentlyContinue
-    (New-Object System.Net.WebClient).DownloadFile($latest_release_zip, $local_zip)
-    if(-not (Test-Path $local_zip))
+    Remove-Item $libressl_zip_path -Force -ErrorAction SilentlyContinue
+    (New-Object System.Net.WebClient).DownloadFile($libressl_release_url, $libressl_zip_path)
+    if(-not (Test-Path $libressl_zip_path))
     {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "Unable to download $latest_release_zip to $local_zip."
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "Unable to download $libressl_release_url to $libressl_zip_path."
     }
     
     #copy libressl
-    $local_libressl=Join-Path $script:OpenSSHRoot "contrib\win32\openssh"
-    Expand-Archive -Path $local_zip -DestinationPath $local_libressl -Force -ErrorAction SilentlyContinue -ErrorVariable e
+    $openssh_libressl_path=Join-Path $script:OpenSSHRoot "contrib\win32\openssh"
+    Expand-Archive -Path $libressl_zip_path -DestinationPath $openssh_libressl_path -Force -ErrorAction SilentlyContinue -ErrorVariable e
     if($e -ne $null)
     {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "Unable to extract LibreSSL from $local_zip to $local_libressl failed."
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "Unable to extract LibreSSL from $libressl_zip_path to $openssh_libressl_path failed."
     }
     
-    Remove-Item $local_zip -Force -ErrorAction SilentlyContinue
+    Remove-Item $libressl_zip_path -Force -ErrorAction SilentlyContinue
 }
 
 function Start-OpenSSHPackage
@@ -491,8 +491,6 @@ function Start-OpenSSHBuild
     {
         Remove-Item -Path $script:BuildLogFile -force
     }
-    
-    Write-BuildMsg -AsInfo -Message "Starting Open SSH build; Build Log: $($script:BuildLogFile)."
 
     Start-OpenSSHBootstrap -OneCore:$OneCore
 
@@ -567,6 +565,8 @@ function Start-OpenSSHBuild
     {
         $msbuildCmd = Get-VS2015BuildToolPath
     }
+    
+    Write-BuildMsg -AsInfo -Message "Starting Open SSH build; Build Log: $($script:BuildLogFile)."
 
     & "$msbuildCmd" $cmdMsg
     $errorCode = $LASTEXITCODE
