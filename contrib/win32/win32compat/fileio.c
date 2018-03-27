@@ -1044,7 +1044,7 @@ fileio_readlink(const char *path, char *buf, size_t bufsiz)
 		goto cleanup;
 	}
 
-	/* obtain a handle to send to deviceioctl  */
+	/* obtain a handle to send to deviceioctl */
 	handle = CreateFileW(wpath, 0, 0, NULL, OPEN_EXISTING, 
 		FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, 0);
 	if (handle == INVALID_HANDLE_VALUE) {
