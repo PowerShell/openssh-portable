@@ -67,8 +67,9 @@ static char* s_programdir = NULL;
 #define REPARSE_MOUNTPOINT_HEADER_SIZE 8
 
  /* Difference in us between UNIX Epoch and Win32 Epoch */
-#define EPOCH_DELTA_US  116444736000000000ULL
+#define EPOCH_DELTA  116444736000000000ULL /* in 100 nsecs intervals */
 #define RATE_DIFF 10000000ULL /* 100 nsecs */
+
 #define NSEC_IN_SEC 1000000000ULL // 10**9
 #define USEC_IN_SEC 1000000ULL // 10**6
 
@@ -214,7 +215,7 @@ gettimeofday(struct timeval *tv, void *tz)
 	GetSystemTimeAsFileTime(&timehelper.ft);	
 
 	/* Remove the epoch difference & convert 100ns to us */
-	us = (timehelper.ns - EPOCH_DELTA_US) / 10;
+	us = (timehelper.ns - EPOCH_DELTA) / 10;
 
 	/* Stuff result into the timeval */
 	tv->tv_sec = (long)(us / USEC_IN_SEC);
@@ -556,7 +557,7 @@ void
 unix_time_to_file_time(ULONG t, LPFILETIME pft)
 {
 	ULONGLONG ull;
-	ull = UInt32x32To64(t, RATE_DIFF) + EPOCH_DELTA_US;
+	ull = UInt32x32To64(t, RATE_DIFF) + EPOCH_DELTA;
 
 	pft->dwLowDateTime = (DWORD)ull;
 	pft->dwHighDateTime = (DWORD)(ull >> 32);
@@ -567,7 +568,7 @@ void
 file_time_to_unix_time(const LPFILETIME pft, time_t * winTime)
 {
 	*winTime = ((long long)pft->dwHighDateTime << 32) + pft->dwLowDateTime;
-	*winTime -= EPOCH_DELTA_US;
+	*winTime -= EPOCH_DELTA;
 	*winTime /= RATE_DIFF;		 /* Nano to seconds resolution */
 }
 
