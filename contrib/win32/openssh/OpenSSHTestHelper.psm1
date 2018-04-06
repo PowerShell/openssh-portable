@@ -625,17 +625,32 @@ function Invoke-OpenSSHUnitTest
         $testFolders | % {            
             $unittestFile = "$(Split-Path $_ -Leaf).exe"
             $unittestFilePath = join-path $_ $unittestFile
-            $Error.clear()
-            $LASTEXITCODE=0
             if(Test-Path $unittestFilePath -pathtype leaf)
-            {
-                Push-Location $_
+            {                
+                $pinfo = New-Object System.Diagnostics.ProcessStartInfo
+                $pinfo.FileName = "$unittestFilePath"
+                $pinfo.RedirectStandardError = $true
+                $pinfo.RedirectStandardOutput = $true
+                $pinfo.UseShellExecute = $false
+                $pinfo.WorkingDirectory = "$_"
+                $p = New-Object System.Diagnostics.Process
+                $p.StartInfo = $pinfo
+                $p.Start() | Out-Null
+                $stdout = $p.StandardOutput.ReadToEnd()
+                $stderr = $p.StandardError.ReadToEnd()
+                $p.WaitForExit()
+                $errorCode = $p.ExitCode
                 Write-Log "Running OpenSSH unit $unittestFile ..."
-                & "$unittestFilePath" >> $Script:UnitTestResultsFile
-                Pop-Location
+                if(-not [String]::IsNullOrWhiteSpace($stdout))
+                {
+                    Add-Content $Script:UnitTestResultsFile $stdout
+                }
+                if(-not [String]::IsNullOrWhiteSpace($stderr))
+                {
+                    Add-Content $Script:UnitTestResultsFile $stderr
+                }
             }
-            
-            $errorCode = $LASTEXITCODE
+                        
             if ($errorCode -ne 0)
             {
                 $testfailed = $true
