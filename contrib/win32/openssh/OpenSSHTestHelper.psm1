@@ -620,13 +620,14 @@ function Invoke-OpenSSHUnitTest
                  ForEach-Object{ Split-Path $_.FullName} |
                  Sort-Object -Unique
     $testfailed = $false
+    & "$Script:UnitTestDirectory\unittest-win32compat\unittest-win32compat.exe"
     if ($testFolders -ne $null)
     {
         $testFolders | % {            
             $unittestFile = "$(Split-Path $_ -Leaf).exe"
             $unittestFilePath = join-path $_ $unittestFile
             if(Test-Path $unittestFilePath -pathtype leaf)
-            {                
+            {
                 $pinfo = New-Object System.Diagnostics.ProcessStartInfo
                 $pinfo.FileName = "$unittestFilePath"
                 $pinfo.RedirectStandardError = $true
