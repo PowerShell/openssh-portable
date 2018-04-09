@@ -620,7 +620,6 @@ function Invoke-OpenSSHUnitTest
                  ForEach-Object{ Split-Path $_.FullName} |
                  Sort-Object -Unique
     $testfailed = $false
-    & "$Script:UnitTestDirectory\unittest-win32compat\unittest-win32compat.exe"
     if ($testFolders -ne $null)
     {
         $testFolders | % {            
