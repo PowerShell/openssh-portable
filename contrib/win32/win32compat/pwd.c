@@ -222,6 +222,7 @@ w32_getpwnam(const char *user_utf8)
 struct passwd*
 w32_getpwuid(uid_t uid)
 {
+	struct passwd* ret = NULL;
 	HANDLE token = NULL;
 	TOKEN_USER* info = NULL;
 	DWORD info_len = 0;
@@ -232,7 +233,7 @@ w32_getpwuid(uid_t uid)
 		GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE)
 		goto cleanup;
 
-	struct passwd* ret = get_passwd(NULL, info->User.Sid);
+	ret = get_passwd(NULL, info->User.Sid);
 
 cleanup:
 
