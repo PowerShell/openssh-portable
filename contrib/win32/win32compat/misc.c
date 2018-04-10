@@ -1546,3 +1546,12 @@ localtime_r(const time_t *timep, struct tm *result)
 	memcpy(result, t, sizeof(struct tm));
 	return t;
 }
+
+void
+freezero(void *ptr, size_t sz)
+{
+	if (ptr == NULL)
+		return;
+	explicit_bzero(ptr, sz);
+	free(ptr);
+}

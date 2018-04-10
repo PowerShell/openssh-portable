@@ -616,17 +616,20 @@ function Invoke-OpenSSHUnitTest
     {
         $null = Remove-Item -Path $Script:UnitTestResultsFile -Force -ErrorAction SilentlyContinue
     }
-    $testFolders = Get-ChildItem -filter unittest-*.exe -Recurse -Exclude unittest-sshkey.exe,unittest-kex.exe |
+    $testFolders = Get-ChildItem -filter unittest-*.exe -Recurse |
                  ForEach-Object{ Split-Path $_.FullName} |
                  Sort-Object -Unique
     $testfailed = $false
     if ($testFolders -ne $null)
     {
-        $testFolders | % {            
+        $testFolders | % {
             $unittestFile = "$(Split-Path $_ -Leaf).exe"
             $unittestFilePath = join-path $_ $unittestFile
+            if($_.ToString().ToLower().EndsWith("unittest-sshkey")) {
+                Get-ChildItem $_ -Exclude *.exe, *.dll, *.pdb | % { (get-content -raw -path $_.Fullname).Replace("`r`n","`n") | set-content -path $_.Fullname }
+            }
             if(Test-Path $unittestFilePath -pathtype leaf)
-            {
+            {                
                 $pinfo = New-Object System.Diagnostics.ProcessStartInfo
                 $pinfo.FileName = "$unittestFilePath"
                 $pinfo.RedirectStandardError = $true
