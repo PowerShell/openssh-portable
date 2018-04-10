@@ -184,11 +184,8 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     #copy sshtest keys
     Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $OpenSSHConfigPath -Force  
-    Get-ChildItem "$($OpenSSHConfigPath)\sshtest*hostkey*"| % {
-        #workaround for the cariggage new line added by git before copy them
-        $filePath = "$($_.FullName)"
-        $con = (Get-Content $filePath | Out-String).Replace("`r`n","`n")
-        Set-Content -Path $filePath -Value "$con"
+    Get-ChildItem "$($OpenSSHConfigPath)\sshtest*hostkey*"| % {        
+        $filePath = "$($_.FullName)"        
         if (-not ($_.Name.EndsWith(".pub")))
         {
             Repair-SshdHostKeyPermission -FilePath $_.FullName -confirm:$false
@@ -200,9 +197,7 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     #copy ca private key to test dir
     $ca_priv_key = (Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_ca_userkeys)
-    Copy-Item (Join-Path $Script:E2ETestDirectory sshtest_ca_userkeys) $ca_priv_key -Force
-    $con = (Get-Content $ca_priv_key | Out-String).Replace("`r`n","`n")
-    Set-Content -Path $ca_priv_key -Value "$con"
+    Copy-Item (Join-Path $Script:E2ETestDirectory sshtest_ca_userkeys) $ca_priv_key -Force    
     Repair-UserSshConfigPermission -FilePath $ca_priv_key -confirm:$false    
     $Global:OpenSSHTestInfo["CA_Private_Key"] = $ca_priv_key
 
@@ -256,9 +251,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     Repair-AuthorizedKeyPermission -FilePath $authorizedKeyPath -confirm:$false 
     
     copy-item (Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519) $Global:OpenSSHTestInfo["TestDataPath"]
-    $testPriKeypath = Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_userssokey_ed25519
-    $con = (Get-Content $testPriKeypath | Out-String).Replace("`r`n","`n")
-    Set-Content -Path $testPriKeypath -Value "$con"
+    $testPriKeypath = Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_userssokey_ed25519    
     cmd /c "ssh-add -D 2>&1 >> $Script:TestSetupLogFile"
     Repair-UserKeyPermission -FilePath $testPriKeypath -confirm:$false
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
@@ -625,9 +618,6 @@ function Invoke-OpenSSHUnitTest
         $testFolders | % {
             $unittestFile = "$(Split-Path $_ -Leaf).exe"
             $unittestFilePath = join-path $_ $unittestFile
-            if($_.ToString().ToLower().EndsWith("unittest-sshkey")) {
-                Get-ChildItem $_ -Exclude *.exe, *.dll, *.pdb | % { (get-content -raw -path $_.Fullname).Replace("`r`n","`n") | set-content -path $_.Fullname }
-            }
             if(Test-Path $unittestFilePath -pathtype leaf)
             {                
                 $pinfo = New-Object System.Diagnostics.ProcessStartInfo
@@ -643,7 +633,7 @@ function Invoke-OpenSSHUnitTest
                 $stderr = $p.StandardError.ReadToEnd()
                 $p.WaitForExit()
                 $errorCode = $p.ExitCode
-                Write-Log "Running OpenSSH unit $unittestFile ..."
+                Write-Host "Running unit test: $unittestFile ..."
                 if(-not [String]::IsNullOrWhiteSpace($stdout))
                 {
                     Add-Content $Script:UnitTestResultsFile $stdout
@@ -652,13 +642,16 @@ function Invoke-OpenSSHUnitTest
                 {
                     Add-Content $Script:UnitTestResultsFile $stderr
                 }
-            }
-                        
-            if ($errorCode -ne 0)
-            {
-                $testfailed = $true
-                $errorMessage = "$_ test failed for OpenSSH.`nExitCode: $errorCode. Detail test log is at $($Script:UnitTestResultsFile)."
-                Write-Warning $errorMessage                         
+                if ($errorCode -ne 0)
+                {
+                    $testfailed = $true
+                    $errorMessage = "$unittestFile failed.`nExitCode: $errorCode. Detail test log is at $($Script:UnitTestResultsFile)."
+                    Write-Warning $errorMessage                         
+                }
+                else
+                {
+                    Write-Host "$unittestFile passed!"
+                }
             }            
         }
     }

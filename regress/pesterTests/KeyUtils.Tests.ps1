@@ -194,8 +194,20 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             foreach($type in $keytypes)
             {
                 $keyPath = Join-Path $testDir "id_$type"
+				$keyPathDifferentEnding = Join-Path $testDir "id_$type_windows"
+				if((Get-Content -Path $keyPath -raw).Contains("`r`n"))
+				{
+					$newcontent = (Get-Content -Path $keyPath -raw).Replace("`r`n", "`n")
+				}
+				else
+				{
+					$newcontent = (Get-Content -Path $keyPath -raw).Replace("`n", "`r`n")
+				}
+				Set-content -Path $keyPathDifferentEnding -value "$newcontent"
+				Repair-UserKeyPermission $keyPathDifferentEnding -confirm:$false
                 # for ssh-add to consume SSh_ASKPASS, stdin should not be TTY
                 iex "cmd /c `"ssh-add $keyPath < $nullFile 2> nul `""
+				iex "cmd /c `"ssh-add $keyPathDifferentEnding < $nullFile 2> nul `""
             }
 
             #remove SSH_ASKPASS
@@ -239,7 +251,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             Remove-Item -path "$keyFilePath*" -Force -ErrorAction SilentlyContinue
             if($OpenSSHTestInfo["NoLibreSSL"])
             {
-                ssh-keygen.exe -t ed25519 -f $keyFilePath -P $keypassphrase -Z aes128-ctr
+                ssh-keygen.exe -t ed25519 -f $keyFilePath -P $keypassphrase
             }
             else
             {
