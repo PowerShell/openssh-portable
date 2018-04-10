@@ -249,15 +249,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             $keyFileName = "sshadd_userPermTestkey_ed25519"
             $keyFilePath = Join-Path $testDir $keyFileName
             Remove-Item -path "$keyFilePath*" -Force -ErrorAction SilentlyContinue
-            if($OpenSSHTestInfo["NoLibreSSL"])
-            {
-                ssh-keygen.exe -t ed25519 -f $keyFilePath -P $keypassphrase
-            }
-            else
-            {
-                ssh-keygen.exe -t ed25519 -f $keyFilePath -P $keypassphrase
-            }
-            
+            ssh-keygen.exe -t ed25519 -f $keyFilePath -P $keypassphrase            
             #set up SSH_ASKPASS
             Add-PasswordSetting -Pass $keypassphrase
             $tI=1
