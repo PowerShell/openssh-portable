@@ -3423,10 +3423,10 @@ sshkey_parse_private2(struct sshbuf *blob, int type, const char *passphrase,
 	encoded_len = sshbuf_len(blob);
 	
 #ifdef WINDOWS
-		if ((encoded_len < (MARK_BEGIN_LEN + MARK_END_LEN) ||
-			memcmp(cp, MARK_BEGIN, MARK_BEGIN_LEN) != 0) &&
-			(encoded_len < (MARK_BEGIN_LEN_WINDOWS_Ending + MARK_END_LEN_WINDOWS_Ending) ||
-				memcmp(cp, MARK_BEGIN_WINDOWS_Ending, MARK_BEGIN_LEN_WINDOWS_Ending) != 0)) {
+	if ((encoded_len < (MARK_BEGIN_LEN + MARK_END_LEN) ||
+	    memcmp(cp, MARK_BEGIN, MARK_BEGIN_LEN) != 0) &&
+	    (encoded_len < (MARK_BEGIN_LEN_WINDOWS_Ending + MARK_END_LEN_WINDOWS_Ending) ||
+	    memcmp(cp, MARK_BEGIN_WINDOWS_Ending, MARK_BEGIN_LEN_WINDOWS_Ending) != 0)) {
 #else
 	if (encoded_len < (MARK_BEGIN_LEN + MARK_END_LEN) ||
 		memcmp(cp, MARK_BEGIN, MARK_BEGIN_LEN) != 0) {
@@ -3449,9 +3449,9 @@ sshkey_parse_private2(struct sshbuf *blob, int type, const char *passphrase,
 		if (last == '\n') {
 #ifdef WINDOWS
 			if ((encoded_len >= MARK_END_LEN &&
-				memcmp(cp, MARK_END, MARK_END_LEN) == 0) ||
-				(encoded_len >= MARK_END_LEN_WINDOWS_Ending &&
-				memcmp(cp, MARK_END_WINDOWS_Ending, MARK_END_LEN_WINDOWS_Ending) == 0)) {
+			    memcmp(cp, MARK_END, MARK_END_LEN) == 0) ||
+			    (encoded_len >= MARK_END_LEN_WINDOWS_Ending &&
+			    memcmp(cp, MARK_END_WINDOWS_Ending, MARK_END_LEN_WINDOWS_Ending) == 0)) {
 #else
 			if (encoded_len >= MARK_END_LEN &&
 			    memcmp(cp, MARK_END, MARK_END_LEN) == 0) {
