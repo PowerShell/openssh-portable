@@ -184,12 +184,8 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     #copy sshtest keys
     Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $OpenSSHConfigPath -Force  
-    Get-ChildItem "$($OpenSSHConfigPath)\sshtest*hostkey*"| % {        
-        $filePath = "$($_.FullName)"        
-        if (-not ($_.Name.EndsWith(".pub")))
-        {
+    Get-ChildItem "$($OpenSSHConfigPath)\sshtest*hostkey*" -Exclude *.pub| % {
             Repair-SshdHostKeyPermission -FilePath $_.FullName -confirm:$false
-        }        
     }
 
     #copy ca pubkey to ssh config path
