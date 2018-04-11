@@ -8,6 +8,11 @@
 #include "../test_helper/test_helper.h"
 #include "tests.h"
 
+DWORD WINAPI test_thread(LPVOID lpParam)
+{
+	return TRUE;
+}
+
 VOID CALLBACK
 signal_test_dummy_apc(_In_ ULONG_PTR dwParam)
 {
@@ -70,6 +75,41 @@ signal_test_wait_for_multiple_objects()
 	CloseHandle(mutex_thread);
 
 	{
+		TEST_START("Test");
+		HANDLE CurrentProcess = GetCurrentProcess();
+
+		DWORD initial = 0;
+		GetProcessHandleCount(CurrentProcess, &initial);
+
+		HANDLE thread1 = CreateThread(NULL, 0, test_thread, NULL, 0, NULL);
+		HANDLE thread2 = CreateThread(NULL, 0, test_thread, NULL, 0, NULL);
+
+		if (thread1 == NULL || thread2 == NULL)
+		{
+			wprintf(L"Could not create thread!\r\n");
+			exit(0);
+		}
+
+		if (WaitForSingleObject(thread1, INFINITE) != WAIT_OBJECT_0 ||
+			WaitForSingleObject(thread2, INFINITE) != WAIT_OBJECT_0)
+		{
+			wprintf(L"Thread wait failed!\r\n");
+			exit(0);
+		}
+
+		if (CloseHandle(thread1) == 0 || CloseHandle(thread2) == 0)
+		{
+			wprintf(L"Could not close thread!\r\n");
+			exit(0);
+		}
+
+		DWORD final;
+		GetProcessHandleCount(CurrentProcess, &final);
+		ASSERT_INT_EQ(initial, final);
+		wprintf(L"Handles Before %d; Handles After: %d\r\n", initial, final);
+		TEST_DONE();
+	}
+	/*{
 		TEST_START("Signal: APC wakeup with select event counts (WAIT_IO_COMPLETION_ENHANCED)");
 		TEST_RESOURCES(TRUE);
 
@@ -162,7 +202,7 @@ signal_test_wait_for_multiple_objects()
 
 		TEST_RESOURCES(FALSE);
 		TEST_DONE();
-	}
+	}*/
 
 	for (int i = 0; i < objects_size; i++) CloseHandle(hObjects[i]);
 	CloseHandle(current_thread);
