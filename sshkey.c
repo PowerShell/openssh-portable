@@ -65,12 +65,12 @@
 #define MARK_END		"-----END OPENSSH PRIVATE KEY-----\n"
 #define MARK_BEGIN_LEN		(sizeof(MARK_BEGIN) - 1)
 #define MARK_END_LEN		(sizeof(MARK_END) - 1)
-#ifdef WINDOWS
+#ifdef SUPPORT_CRLF
 #define MARK_BEGIN_CRLF		"-----BEGIN OPENSSH PRIVATE KEY-----\r\n"
 #define MARK_END_CRLF		"-----END OPENSSH PRIVATE KEY-----\r\n"
 #define MARK_BEGIN_LEN_CRLF		(sizeof(MARK_BEGIN_CRLF) - 1)
 #define MARK_END_LEN_CRLF		(sizeof(MARK_END_CRLF) - 1)
-#endif // WINDOWS
+#endif // SUPPORT_CRLF
 #define KDFNAME			"bcrypt"
 #define AUTH_MAGIC		"openssh-key-v1"
 #define SALT_LEN		16
@@ -3422,15 +3422,15 @@ sshkey_parse_private2(struct sshbuf *blob, int type, const char *passphrase,
 	cp = sshbuf_ptr(blob);
 	encoded_len = sshbuf_len(blob);
 	
-#ifdef CRLF
+#ifdef SUPPORT_CRLF
 	if ((encoded_len < (MARK_BEGIN_LEN + MARK_END_LEN) ||
 	    memcmp(cp, MARK_BEGIN, MARK_BEGIN_LEN) != 0) &&
 	    (encoded_len < (MARK_BEGIN_LEN_CRLF + MARK_END_LEN_CRLF) ||
 	    memcmp(cp, MARK_BEGIN_CRLF, MARK_BEGIN_LEN_CRLF) != 0)) {
-#else
+#else  /* !SUPPORT_CRLF */
 	if (encoded_len < (MARK_BEGIN_LEN + MARK_END_LEN) ||
 		memcmp(cp, MARK_BEGIN, MARK_BEGIN_LEN) != 0) {
-#endif // WINDOWS
+#endif /* !SUPPORT_CRLF */
 		r = SSH_ERR_INVALID_FORMAT;
 		goto out;
 	}
@@ -3447,15 +3447,15 @@ sshkey_parse_private2(struct sshbuf *blob, int type, const char *passphrase,
 		encoded_len--;
 		cp++;
 		if (last == '\n') {
-#ifdef CRLF
+#ifdef SUPPORT_CRLF
 			if ((encoded_len >= MARK_END_LEN &&
 			    memcmp(cp, MARK_END, MARK_END_LEN) == 0) ||
 			    (encoded_len >= MARK_END_LEN_CRLF &&
 			    memcmp(cp, MARK_END_CRLF, MARK_END_LEN_CRLF) == 0)) {
-#else
+#else  /* !SUPPORT_CRLF */
 			if (encoded_len >= MARK_END_LEN &&
 			    memcmp(cp, MARK_END, MARK_END_LEN) == 0) {
-#endif
+#endif /* !SUPPORT_CRLF */
 				/* \0 terminate */
 				if ((r = sshbuf_put_u8(encoded, 0)) != 0)
 					goto out;
