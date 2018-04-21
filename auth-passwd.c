@@ -60,6 +60,7 @@
 #define SECURITY_WIN32
 #include <security.h>
 #include "logonuser.h"
+#include "misc_internal.h"
 #include "monitor_wrap.h"
 #endif
 
@@ -273,26 +274,27 @@ done:
 int 
 sys_auth_passwd(struct ssh *ssh, const char *password)
 {
+	wchar_t *user_utf16 = NULL, *pwd_utf16 = NULL, *unam_utf16 = NULL, *udom_utf16 = L".";
 	Authctxt *authctxt = ssh->authctxt;
 	HANDLE token = NULL;
+	WCHAR domain_upn[MAX_UPN_LEN + 1];
+	ULONG domain_upn_len = ARRAYSIZE(domain_upn);
 
-	wchar_t * user_utf16 = utf8_to_utf16(authctxt->pw->pw_name);
-	wchar_t * pwd_utf16 = utf8_to_utf16(password);
+	user_utf16 = utf8_to_utf16(authctxt->pw->pw_name);
+	pwd_utf16 = utf8_to_utf16(password);
 	if (user_utf16 == NULL || pwd_utf16 == NULL) {
 		debug("out of memory");
 		goto done;
 	}
 	
 	/* the format for the user will be constrained to the output of get_passwd()
-	 * so only the only two formats are a NetBiosDomain\SamAccountName which is 
+	 * so only the only two formats are NetBiosDomain\SamAccountName which is 
 	 * a domain account or just SamAccountName in which is a local account */
 	
-	/* default scenario - local user */
-	wchar_t *unam_utf16 = user_utf16, *udom_utf16 = L".";
+	/* default assumption - local user */
+	unam_utf16 = user_utf16;
 
 	/* translate to domain user if format contains a backslash */
-	WCHAR domain_upn[1024 + 1];
-	ULONG domain_upn_len = ARRAYSIZE(domain_upn);
 	wchar_t * backslash = wcschr(user_utf16, L'\\');
 	if (backslash != NULL) {
 

@@ -133,7 +133,7 @@ generate_s4u_user_token(wchar_t* user_cpn, int impersonation) {
 	if (domain_user) {
 
 		/* lookup the upn for the user */
-		WCHAR domain_upn[1024 + 1];
+		WCHAR domain_upn[MAX_UPN_LEN + 1];
 		ULONG domain_upn_len = ARRAYSIZE(domain_upn);
 		if (TranslateNameW(user_cpn, NameSamCompatible,
 			NameUserPrincipal, domain_upn, &domain_upn_len) == 0) {

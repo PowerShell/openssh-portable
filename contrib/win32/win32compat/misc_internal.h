@@ -19,6 +19,9 @@
 
 #define errno_from_Win32LastError() errno_from_Win32Error(GetLastError())
 
+/* maximum size for user principal name as defined in ad schema */
+#define MAX_UPN_LEN 1024
+
 static char *machine_domain_name;
 static char *ssh_cfg_dir_path = NULL;
 

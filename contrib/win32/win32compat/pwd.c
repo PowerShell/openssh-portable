@@ -126,7 +126,7 @@ get_passwd(const wchar_t * user_utf16, PSID sid)
 		CopySid(sizeof(binary_sid), binary_sid, sid);
 
 	/* attempt to lookup the account; this will verify the account is valid and
-	* is will return its sid and the realm that owns it */
+	 * is will return its sid and the realm that owns it */
 	else if(LookupAccountNameW(NULL, user_utf16, binary_sid, &sid_size,
 		domain_name, &domain_name_size, &account_type) == 0) {
 		errno = ENOENT;
@@ -154,7 +154,7 @@ get_passwd(const wchar_t * user_utf16, PSID sid)
 	/* verify passed account is actually a user account */
 	if (account_type != SidTypeUser) {
 		errno = ENOENT;
-		debug3("%s: Invalid account type.", __FUNCTION__);
+		debug3("%s: Invalid account type: %d.", __FUNCTION__, account_type);
 		goto cleanup;
 	}
 
@@ -175,10 +175,10 @@ get_passwd(const wchar_t * user_utf16, PSID sid)
 
 	/* if one of below fails, set profile path to Windows directory */
 	if (swprintf_s(reg_path, PATH_MAX, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\%ls", sid_string) == -1 ||
-		RegOpenKeyExW(HKEY_LOCAL_MACHINE, reg_path, 0, STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &reg_key) != 0 ||
-		RegQueryValueExW(reg_key, L"ProfileImagePath", 0, NULL, (LPBYTE)profile_home, &reg_path_len) != 0 ||
-		ExpandEnvironmentStringsW(profile_home, NULL, 0) > PATH_MAX ||
-		ExpandEnvironmentStringsW(profile_home, profile_home_exp, PATH_MAX) == 0)
+	    RegOpenKeyExW(HKEY_LOCAL_MACHINE, reg_path, 0, STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &reg_key) != 0 ||
+	    RegQueryValueExW(reg_key, L"ProfileImagePath", 0, NULL, (LPBYTE)profile_home, &reg_path_len) != 0 ||
+	    ExpandEnvironmentStringsW(profile_home, NULL, 0) > PATH_MAX ||
+	    ExpandEnvironmentStringsW(profile_home, profile_home_exp, PATH_MAX) == 0)
 		if (GetWindowsDirectoryW(profile_home_exp, PATH_MAX) == 0) {
 			debug3("GetWindowsDirectoryW failed with %d", GetLastError());
 			errno = EOTHER;
