@@ -224,53 +224,45 @@ done:
 HANDLE
 process_custom_lsa_auth(const char* user, const char* pwd, const char* lsa_pkg)
 {
-	wchar_t *providerw = NULL;
 	HANDLE token = NULL, lsa_handle = NULL;
 	LSA_OPERATIONAL_MODE mode;
-	ULONG auth_package_id, logon_info_size = 0;
+	ULONG auth_package_id;
 	NTSTATUS ret, subStatus;
-	wchar_t *logon_info_w = NULL;
-	LSA_STRING logon_process_name, lsa_auth_package_name, originName;
-	TOKEN_SOURCE sourceContext;
-	PVOID pProfile = NULL;
-	LUID logonId;
+	LSA_STRING logon_process_name, lsa_auth_package_name, origin_name;
+	TOKEN_SOURCE source_context;
+	PVOID profile = NULL;
+	LUID logon_id = { 0, 0 };
 	QUOTA_LIMITS quotas;
-	DWORD cbProfile;
+	DWORD profile_size;
 	int retVal = -1;
-	char *domain = NULL, *logon_info = NULL, user_name[UNLEN] = { 0, }, *tmp = NULL;
+	wchar_t *user_utf16 = NULL, *pwd_utf16 = NULL, *seperator = NULL;
+	wchar_t logon_info[UNLEN + 1 + PWLEN + 1 + DNLEN + 1];
+	ULONG logon_info_size = ARRAYSIZE(logon_info);
 
 	debug3("LSA auth request, user:%s lsa_pkg:%s ", user, lsa_pkg);
 
-	logon_info_size = (ULONG)(strlen(user) + strlen(pwd) + 2); // 1 - ";", 1 - "\0"
-	strcpy_s(user_name, _countof(user_name), user);
-	if (tmp = strstr(user_name, "@")) {
-		domain = tmp + 1;
-		*tmp = '\0';
-		logon_info_size++; // 1 - ";"
-	}
-
-	logon_info = malloc(logon_info_size);
-	if(!logon_info)
-		fatal("%s out of memory", __func__);
-
-	strcpy_s(logon_info, logon_info_size, user_name);
-	strcat_s(logon_info, logon_info_size, ";");
-	strcat_s(logon_info, logon_info_size, pwd);
-
-	if (domain) {
-		strcat_s(logon_info, logon_info_size, ";");
-		strcat_s(logon_info, logon_info_size, domain);
-	}
-
-	if (NULL == (logon_info_w = utf8_to_utf16(logon_info))) {
-		error("utf8_to_utf16 failed to convert %s", logon_info);
+	if ((user_utf16 = utf8_to_utf16(user)) == NULL ||
+		(pwd_utf16 = utf8_to_utf16(pwd)) == NULL)
 		goto done;
+	
+	/* the format for the user will be constrained to the output of get_passwd()
+	* so only the only two formats are NetBiosDomain\SamAccountName which is
+	* a domain account or just SamAccountName in which is a local account */
+
+	seperator = wcschr(user_utf16, L'\\');
+	if (seperator != NULL) {
+		/* domain user: generate login info string user;password;domain */
+		swprintf_s(logon_info, ARRAYSIZE(logon_info), L"%s;%s;%.*s",
+			seperator + 1, pwd_utf16, (int) (seperator - user_utf16), user_utf16);
+	} else {
+		/* local user: generate login info string user;password */
+		swprintf_s(logon_info, ARRAYSIZE(logon_info), L"%s;%s",
+			user_utf16, pwd_utf16);
 	}
 
-	/* call into LSA provider , get and duplicate token */
 	InitLsaString(&logon_process_name, "sshd");
 	InitLsaString(&lsa_auth_package_name, lsa_pkg);
-	InitLsaString(&originName, "sshd");
+	InitLsaString(&origin_name, "sshd");
 
 	if ((ret = LsaRegisterLogonProcess(&logon_process_name, &lsa_handle, &mode)) != STATUS_SUCCESS) {
 		error("LsaRegisterLogonProcess failed, error:%x", ret);
@@ -282,32 +274,17 @@ process_custom_lsa_auth(const char* user, const char* pwd, const char* lsa_pkg)
 		goto done;
 	}
 
-	strcpy_s(sourceContext.SourceName, sizeof(sourceContext.SourceName), "sshd");
+	strcpy_s(source_context.SourceName, sizeof(source_context.SourceName), "sshd");
 
-	if (!AllocateLocallyUniqueId(&sourceContext.SourceIdentifier)) {
+	if (!AllocateLocallyUniqueId(&source_context.SourceIdentifier)) {
 		error("AllocateLocallyUniqueId failed, error:%d", GetLastError());
 		goto done;
 	}
 
-	if ((ret = LsaLogonUser(lsa_handle,
-		&originName,
-		Network,
-		auth_package_id,
-		logon_info_w,
-		logon_info_size * sizeof(wchar_t),
-		NULL,
-		&sourceContext,
-		&pProfile,
-		&cbProfile,
-		&logonId,
-		&token,
-		&quotas,
-		&subStatus)) != STATUS_SUCCESS) {
-		if (ret == STATUS_ACCOUNT_RESTRICTION)
-			error("LsaLogonUser failed, error:%x subStatus:%ld", ret, subStatus);
-		else
-			error("LsaLogonUser failed error:%x", ret);
-
+	if ((ret = LsaLogonUser(lsa_handle, &origin_name, Network, auth_package_id,
+		logon_info, (ULONG)logon_info_size, NULL, &source_context,
+		(PVOID*)&profile, &profile_size, &logon_id, &token, &quotas, &subStatus)) != STATUS_SUCCESS) {
+		debug("%s: LsaLogonUser() failed: %d SubStatus %d.", __FUNCTION__, ret, subStatus);
 		goto done;
 	}
 
@@ -316,12 +293,12 @@ process_custom_lsa_auth(const char* user, const char* pwd, const char* lsa_pkg)
 done:
 	if (lsa_handle)
 		LsaDeregisterLogonProcess(lsa_handle);
-	if (pProfile)
-		LsaFreeReturnBuffer(pProfile);
-	if (logon_info)
-		free(logon_info);
-	if (logon_info_w)
-		free(logon_info_w);
+	if (profile)
+		LsaFreeReturnBuffer(profile);
+	if (user_utf16)
+		free(user_utf16);
+	if (pwd_utf16)
+		free(pwd_utf16);
 
 	return token;
 }

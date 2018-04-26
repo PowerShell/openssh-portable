@@ -1203,7 +1203,7 @@ getusergroups(const char *user, int *ngroups)
 
 		/* add group name in netbios\\name format */
 		int current_group = (*ngroups)++;
-		WCHAR formatted_group[256 + 1 + DNLEN + 1];
+		wchar_t formatted_group[DNLEN + 1 + GNLEN + 1];
 		swprintf_s(formatted_group, ARRAYSIZE(formatted_group), L"%wZ\\%wZ", domain, name);
 		_wcslwr_s(formatted_group, ARRAYSIZE(formatted_group));
 		debug3("Added group '%ls' for user '%s'.", formatted_group, user);
@@ -1213,12 +1213,11 @@ getusergroups(const char *user, int *ngroups)
 			goto cleanup;
 		}
 
-		/* for local accounts trim add the groups windows the domain qualifier */
+		/* for local accounts trim the domain qualifier */
 		if (wcslen(computer_name) == domain->Length / sizeof(wchar_t) &&
 			_wcsnicmp(computer_name, domain->Buffer, domain->Length / sizeof(wchar_t)) == 0)
 		{
 			current_group = (*ngroups)++;
-			formatted_group[256 + 1 + DNLEN + 1];
 			swprintf_s(formatted_group, ARRAYSIZE(formatted_group), L"%wZ", name);
 			_wcslwr_s(formatted_group, ARRAYSIZE(formatted_group));
 			debug3("Added group '%ls' for user '%s'.", formatted_group, user);
