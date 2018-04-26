@@ -297,8 +297,11 @@ done:
 		LsaFreeReturnBuffer(profile);
 	if (user_utf16)
 		free(user_utf16);
-	if (pwd_utf16)
+	if (pwd_utf16) {
+		SecureZeroMemory(pwd_utf16, wcslen(pwd_utf16) * sizeof(WCHAR));
 		free(pwd_utf16);
+	}
+	SecureZeroMemory(logon_info, sizeof(logon_info));
 
 	return token;
 }
