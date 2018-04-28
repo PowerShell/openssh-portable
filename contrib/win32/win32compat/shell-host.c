@@ -38,6 +38,7 @@
 #include <io.h>
 #include <Shlobj.h>
 #include <Sddl.h>
+#include <process.h>
 #include "misc_internal.h"
 #include "inc\utf.h"
 
@@ -789,7 +790,7 @@ SizeWindow(HANDLE hInput)
 	bSuccess = GetConsoleScreenBufferInfoEx(hInput, &consoleInfo);
 }
 
-DWORD WINAPI 
+unsigned __stdcall
 MonitorChild(_In_ LPVOID lpParameter)
 {
 	WaitForSingleObject(child, INFINITE);
@@ -1008,7 +1009,7 @@ ProcessEvent(void *p)
 	return ERROR_SUCCESS;
 }
 
-DWORD WINAPI 
+unsigned __stdcall
 ProcessEventQueue(LPVOID p)
 {
 	while (1) {
@@ -1106,7 +1107,7 @@ void FreeQueueEvent()
 	LeaveCriticalSection(&criticalSection);
 }
 
-DWORD WINAPI 
+unsigned __stdcall
 ProcessPipes(LPVOID p)
 {
 	BOOL ret;
@@ -1375,7 +1376,7 @@ start_with_pty(wchar_t *command)
 
 	/* monitor child exist */
 	child = pi.hProcess;
-	monitor_thread = CreateThread(NULL, 0, MonitorChild, NULL, 0, NULL);
+	monitor_thread = (HANDLE) _beginthreadex(NULL, 0, MonitorChild, NULL, 0, NULL);
 	if (IS_INVALID_HANDLE(monitor_thread))
 		goto cleanup;
 
@@ -1384,11 +1385,11 @@ start_with_pty(wchar_t *command)
 	
 	initialize_keylen();
 
-	io_thread = CreateThread(NULL, 0, ProcessPipes, NULL, 0, NULL);
+	io_thread = (HANDLE) _beginthreadex(NULL, 0, ProcessPipes, NULL, 0, NULL);
 	if (IS_INVALID_HANDLE(io_thread))
 		goto cleanup;
 
-	ux_thread = CreateThread(NULL, 0, ProcessEventQueue, NULL, 0, NULL);
+	ux_thread = (HANDLE) _beginthreadex(NULL, 0, ProcessEventQueue, NULL, 0, NULL);
 	if (IS_INVALID_HANDLE(ux_thread))
 		goto cleanup;
 
@@ -1433,7 +1434,7 @@ cleanup:
 HANDLE child_pipe_read;
 HANDLE child_pipe_write;
 
-DWORD WINAPI 
+unsigned __stdcall 
 MonitorChild_nopty( _In_ LPVOID lpParameter)
 {
 	WaitForSingleObject(child, INFINITE);
@@ -1546,7 +1547,7 @@ start_withno_pty(wchar_t *command)
 	child_pipe_read = INVALID_HANDLE_VALUE;
 	child = pi.hProcess;
 	/* monitor child exist */
-	monitor_thread = CreateThread(NULL, 0, MonitorChild_nopty, NULL, 0, NULL);
+	monitor_thread = (HANDLE) _beginthreadex(NULL, 0, MonitorChild_nopty, NULL, 0, NULL);
 	if (IS_INVALID_HANDLE(monitor_thread))
 		goto cleanup;
 
