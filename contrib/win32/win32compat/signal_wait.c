@@ -144,8 +144,8 @@ wait_for_multiple_objects_enhanced(_In_ DWORD  nCount, _In_ const HANDLE *lpHand
 		wait_bins[bin].num_handles = min(nCount - handles_processed, bin_size);
 
 		/* create a thread for this bin */
-		if ((wait_bins[bin].thread_handle = _beginthreadex(NULL, 2048,
-			wait_for_multiple_objects_thread,
+		if ((wait_bins[bin].thread_handle = (HANDLE) _beginthreadex(NULL,
+			2048, wait_for_multiple_objects_thread,
 			(LPVOID) &(wait_bins[bin]), 0, NULL)) == NULL) {
 			goto cleanup;
 		}
