@@ -7,8 +7,7 @@ branches:
     - hotfix
 
 build_script:
-  - ps: |
-      $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+  - ps: |      
       Import-Module $env:APPVEYOR_BUILD_FOLDER\contrib\win32\openssh\AppveyorHelper.psm1
       Invoke-AppVeyorBuild
 
@@ -24,6 +23,7 @@ test_script:
 
 after_test:
   - ps: |
+      $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
       Import-Module $env:APPVEYOR_BUILD_FOLDER\contrib\win32\openssh\AppveyorHelper.psm1
       Publish-OpenSSHTestResults
       
