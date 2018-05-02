@@ -262,7 +262,7 @@ function Start-OpenSSHBootstrap
     {
         
         #Todo: install vs 2017 build tools
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "The required msbuild 15.0 is not installed on the machine."
+        #Write-BuildMsg -AsError -ErrorAction Stop -Message "The required msbuild 15.0 is not installed on the machine."
     }
 
     if($OneCore -or ($NativeHostArch.ToLower().Startswith('arm')))

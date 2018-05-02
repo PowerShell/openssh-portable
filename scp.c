@@ -497,7 +497,7 @@ main(int argc, char **argv)
 		 * Convert '\\' to '/' in path portion to support both Windows and Unix style paths
 		 */
 		char *p, *argdup;
-		int i = 0;		
+		int i = 0;
 		glob_t g;
 		int expandargc = 0;
 		memset(&g, 0, sizeof(g));
@@ -540,7 +540,7 @@ main(int argc, char **argv)
 	addargs(&args, "-oPermitLocalCommand=no");
 	addargs(&args, "-oClearAllForwardings=yes");
 	addargs(&args, "-oRemoteCommand=none");
-	addargs(&args, "-oRequestTTY=no");
+	//addargs(&args, "-oRequestTTY=no");
 
 	fflag = tflag = 0;
 	while ((ch = getopt(argc, argv, "dfl:prtvBCc:i:P:q12346S:o:F:")) != -1)
