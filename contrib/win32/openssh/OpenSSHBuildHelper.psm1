@@ -179,7 +179,7 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsVerbose -Message "$chocolateyPath already present in Path environment variable" -Silent:$silent
     }
 
-    # Add git\cmd to the path
+    # Add git\cmd to the path    
     $gitCmdPath = "$env:ProgramFiles\git\cmd"
     if (-not ($machinePath.ToLower().Contains($gitCmdPath.ToLower())))
     {
@@ -206,7 +206,7 @@ function Start-OpenSSHBootstrap
 
     $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
     $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"    
-    #use vs2017 build tool if exists
+    # use vs2017 build tool if exists
     if($VS2017Path -ne $null)
     {
         If (-not (Test-Path $sdkPath))
@@ -261,7 +261,7 @@ function Start-OpenSSHBootstrap
     if($NativeHostArch.ToLower().Startswith('arm') -and ($VS2017Path -eq $null))
     {
         
-        #todo, install vs 2017 build tools
+        #Todo: install vs 2017 build tools
         Write-BuildMsg -AsError -ErrorAction Stop -Message "The required msbuild 15.0 is not installed on the machine."
     }
 
