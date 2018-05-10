@@ -929,7 +929,7 @@ realpath(const char *path, char resolved[PATH_MAX])
 
 	/* resolve this common case scenario to root */
 	/* "cd .." from within a drive root */
-	if (path_len == 6) {
+	if (path_len == 6 && !chroot_path) {
 		char *tmplate = "/x:/..";
 		strcat(resolved, path);
 		resolved[1] = 'x';
@@ -972,7 +972,7 @@ realpath(const char *path, char resolved[PATH_MAX])
 	}
 
 	if (chroot_path) {
-		if (strlen(tempPath) <= strlen(chroot_path)) {
+		if (strlen(tempPath) < strlen(chroot_path)) {
 			errno = EACCES;
 			return NULL;
 		}
@@ -982,7 +982,13 @@ realpath(const char *path, char resolved[PATH_MAX])
 		}
 
 		resolved[0] = '\0';
-		strcat(resolved, tempPath + strlen(chroot_path));
+
+		
+		if (strlen(tempPath) == strlen(chroot_path))
+			/* realpath is the same as chroot_path */
+			strcat(resolved, "\\");
+		else
+			strcat(resolved, tempPath + strlen(chroot_path));
 
 		if (resolved[0] != '\\') {
 			errno = EACCES;

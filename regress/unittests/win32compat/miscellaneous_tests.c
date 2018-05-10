@@ -246,13 +246,13 @@ test_chroot()
 	ASSERT_STRING_EQ(path, "\\");
 	ASSERT_INT_NE(chdir(test_root), 0);
 	ASSERT_INT_EQ(chdir("d1"), 0);
+	ASSERT_PTR_NE(realpath("..", path), NULL);
+	ASSERT_STRING_EQ(path, "/");
 	ASSERT_PTR_NE(getcwd(path, MAX_PATH), NULL);
 	ASSERT_STRING_EQ(path, "\\d1");
 	ASSERT_PTR_NE(realpath(".", path), NULL);
 	ASSERT_STRING_EQ(path, "/d1");
 	ASSERT_PTR_EQ(realpath("..\\..\\", path), NULL);
-	ASSERT_INT_EQ(errno, EACCES);
-	ASSERT_PTR_EQ(realpath("..", path), NULL);
 	ASSERT_INT_EQ(errno, EACCES);
 	TEST_DONE();
 
@@ -284,6 +284,18 @@ test_chroot()
 	TEST_START("access world after chroot");
 	ASSERT_INT_EQ(chdir("/"), 0);
 	ASSERT_INT_EQ(fd = open(test_root, 0), -1);
+	ASSERT_INT_EQ(errno, ENOENT);
+	ASSERT_INT_EQ(fd = open("..\\", 0), -1);
+	ASSERT_INT_EQ(errno, EACCES);
+	ASSERT_INT_EQ(fd = open("../", 0), -1);
+	ASSERT_INT_EQ(errno, EACCES);
+	ASSERT_INT_EQ(fd = open("../outofjail.txt", O_CREAT), -1);
+	ASSERT_INT_EQ(errno, EACCES);
+	/* ensure outofjail.txt is not created by the above call*/
+	path[0] = '\0';
+	strcat(path, test_root);
+	strcat(path, "\\chroot-testdir\\outofjail.txt");
+	ASSERT_INT_EQ(fd = _open(path, 0), -1);
 	ASSERT_INT_EQ(errno, ENOENT);
 	ASSERT_INT_EQ(fd = open("world-jn\\w.Txt", 0), -1);
 	ASSERT_INT_EQ(errno, EACCES);
