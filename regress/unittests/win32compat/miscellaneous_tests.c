@@ -250,10 +250,10 @@ test_chroot()
 	ASSERT_STRING_EQ(path, "\\d1");
 	ASSERT_PTR_NE(realpath(".", path), NULL);
 	ASSERT_STRING_EQ(path, "/d1");
-	ASSERT_PTR_NE(realpath("..\\..\\", path), NULL);
-	ASSERT_STRING_EQ(path, "/");
-	ASSERT_PTR_NE(realpath("..", path), NULL);
-	ASSERT_STRING_EQ(path, "/");
+	ASSERT_PTR_EQ(realpath("..\\..\\", path), NULL);
+	ASSERT_INT_EQ(errno, EACCES);
+	ASSERT_PTR_EQ(realpath("..", path), NULL);
+	ASSERT_INT_EQ(errno, EACCES);
 	TEST_DONE();
 
 	TEST_START("file io within jail");
@@ -302,7 +302,7 @@ test_chroot()
 void
 miscellaneous_tests()
 {
-	test_ioctl();
+	//test_ioctl();
 	test_path_conversion_utilities();
 	test_sanitizedpath();
 	test_pw();

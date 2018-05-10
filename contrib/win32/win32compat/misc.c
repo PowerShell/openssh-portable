@@ -944,7 +944,7 @@ realpath(const char *path, char resolved[PATH_MAX])
 		resolved[0] = '\0';
 		strcat(resolved, chroot_path);
 		/* if path is relative, add cwd within chroot */
-		if (path[0] != '/' || path[0] != '\\') {
+		if (path[0] != '/' && path[0] != '\\') {
 			w32_getcwd(resolved + chroot_path_len, PATH_MAX - chroot_path_len);
 			strcat(resolved, "/");
 		}
