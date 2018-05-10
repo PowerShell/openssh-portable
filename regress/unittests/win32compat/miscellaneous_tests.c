@@ -68,6 +68,7 @@ test_sanitizedpath()
 	ASSERT_PTR_NE(win32prgdir_utf8, NULL);
 
 	ASSERT_PTR_EQ(resolved_path_utf16(NULL), NULL);
+	ASSERT_INT_EQ(errno, EINVAL);
 
 	wchar_t *win32prgdir = utf8_to_utf16(win32prgdir_utf8);
 	wchar_t *ret = resolved_path_utf16(win32prgdir_utf8);

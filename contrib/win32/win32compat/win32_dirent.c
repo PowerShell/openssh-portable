@@ -104,10 +104,9 @@ opendir(const char *name)
 	wchar_t* wname = NULL;
 	size_t len;
 
-	if ((wname = resolved_path_utf16(name)) == NULL) {
-		errno = ENOMEM;
+	if ((wname = resolved_path_utf16(name)) == NULL) 
 		return NULL;
-	}
+
 	/* Detect root dir */
 	if (wcscmp(wname, L"/") == 0)
 		return openrootdir();

@@ -276,10 +276,7 @@ w32_fopen_utf8(const char *input_path, const char *mode)
 	
 	wmode = utf8_to_utf16(mode);
 	if (wpath == NULL || wmode == NULL)
-	{
-		errno = ENOMEM;
 		goto cleanup;
-	}
 
 	if ((_wfopen_s(&f, wpath, wmode) != 0) || (f == NULL)) {
 		debug3("Failed to open file:%s error:%d", input_path, errno);
@@ -544,10 +541,9 @@ w32_chmod(const char *pathname, mode_t mode)
 {
 	int ret;
 	wchar_t *resolvedPathName_utf16 = resolved_path_utf16(pathname);
-	if (resolvedPathName_utf16 == NULL) {
-		errno = ENOMEM;
+	if (resolvedPathName_utf16 == NULL) 
 		return -1;
-	}
+
 	ret = _wchmod(resolvedPathName_utf16, mode);
 	free(resolvedPathName_utf16);
 	return ret;
@@ -672,10 +668,9 @@ w32_utimes(const char *filename, struct timeval *tvp)
 	int ret;
 	FILETIME acttime, modtime;
 	wchar_t *resolvedPathName_utf16 = resolved_path_utf16(filename);
-	if (resolvedPathName_utf16 == NULL) {
-		errno = ENOMEM;
+	if (resolvedPathName_utf16 == NULL) 
 		return -1;
-	}
+
 	memset(&acttime, 0, sizeof(FILETIME));
 	memset(&modtime, 0, sizeof(FILETIME));
 
@@ -709,11 +704,9 @@ w32_rename(const char *old_name, const char *new_name)
 	wchar_t *resolvedOldPathName_utf16 = resolved_path_utf16(old_name);
 	wchar_t *resolvedNewPathName_utf16 = resolved_path_utf16(new_name);
 
-	if (NULL == resolvedOldPathName_utf16 || NULL == resolvedNewPathName_utf16) {
-		errno = ENOMEM;
+	if (NULL == resolvedOldPathName_utf16 || NULL == resolvedNewPathName_utf16) 
 		return -1;
-	}
-
+	
 	/*
 	 * To be consistent with POSIX rename(),
 	 * 1) if the new_name is file, then delete it so that _wrename will succeed.
@@ -746,10 +739,8 @@ int
 w32_unlink(const char *path)
 {
 	wchar_t *resolvedPathName_utf16 = resolved_path_utf16(path);
-	if (NULL == resolvedPathName_utf16) {
-		errno = ENOMEM;
+	if (NULL == resolvedPathName_utf16) 
 		return -1;
-	}
 
 	int returnStatus = _wunlink(resolvedPathName_utf16);
 	free(resolvedPathName_utf16);
@@ -761,10 +752,8 @@ int
 w32_rmdir(const char *path)
 {
 	wchar_t *resolvedPathName_utf16 = resolved_path_utf16(path);
-	if (NULL == resolvedPathName_utf16) {
-		errno = ENOMEM;
+	if (NULL == resolvedPathName_utf16) 
 		return -1;
-	}
 
 	int returnStatus = _wrmdir(resolvedPathName_utf16);
 	free(resolvedPathName_utf16);
@@ -776,10 +765,8 @@ int
 w32_chdir(const char *dirname_utf8)
 {
 	wchar_t *dirname_utf16 = resolved_path_utf16(dirname_utf8);
-	if (dirname_utf16 == NULL) {
-		errno = ENOMEM;
+	if (dirname_utf16 == NULL) 
 		return -1;
-	}
 
 	int returnStatus = _wchdir(dirname_utf16);
 	free(dirname_utf16);
@@ -845,10 +832,9 @@ w32_mkdir(const char *path_utf8, unsigned short mode)
 {
 	int curmask;
 	wchar_t *path_utf16 = resolved_path_utf16(path_utf8);
-	if (path_utf16 == NULL) {
-		errno = ENOMEM;
+	if (path_utf16 == NULL) 
 		return -1;
-	}
+
 	int returnStatus = _wmkdir(path_utf16);
 	if (returnStatus < 0) {
 		free(path_utf16);
@@ -923,7 +909,6 @@ convertToForwardslash(char *str)
 char *
 realpath(const char *path, char resolved[PATH_MAX])
 {
-	errno_t r = 0;
 	if (!path || !resolved) return NULL;
 
 	char tempPath[PATH_MAX];
@@ -966,13 +951,13 @@ realpath(const char *path, char resolved[PATH_MAX])
 		strcat(resolved, path);
 	}
 	else if ((path_len >= 2) && (path[0] == '/') && path[1] && (path[2] == ':')) {
-		if((r = strncpy_s(resolved, PATH_MAX, path + 1, path_len)) != 0 ) /* skip the first '/' */ {
-			debug3("memcpy_s failed with error: %d.", r);
+		if((errno = strncpy_s(resolved, PATH_MAX, path + 1, path_len)) != 0 ) /* skip the first '/' */ {
+			debug3("memcpy_s failed with error: %d.", errno);
 			return NULL;
 		}
 	}
-	else if(( r = strncpy_s(resolved, PATH_MAX, path, path_len + 1)) != 0) {
-		debug3("memcpy_s failed with error: %d.", r);
+	else if(( errno = strncpy_s(resolved, PATH_MAX, path, path_len + 1)) != 0) {
+		debug3("memcpy_s failed with error: %d.", errno);
 		return NULL;
 	}
 
@@ -981,23 +966,28 @@ realpath(const char *path, char resolved[PATH_MAX])
 		resolved[3] = '\0';
 	}
 
-	if (_fullpath(tempPath, resolved, PATH_MAX) == NULL)
+	if (_fullpath(tempPath, resolved, PATH_MAX) == NULL) {
+		errno = EINVAL;
 		return NULL;
+	}
 
 	if (chroot_path) {
 		if (strlen(tempPath) <= strlen(chroot_path)) {
-			resolved[0] = '/';
-			resolved[1] = '\0';
-			return resolved;
-		}
-		if (memcmp(chroot_path, tempPath, strlen(chroot_path)) != 0)
+			errno = EACCES;
 			return NULL;
+		}
+		if (memcmp(chroot_path, tempPath, strlen(chroot_path)) != 0) {
+			errno = EACCES;
+			return NULL;
+		}
 
 		resolved[0] = '\0';
 		strcat(resolved, tempPath + strlen(chroot_path));
 
-		if (resolved[0] != '\\')
+		if (resolved[0] != '\\') {
+			errno = EACCES;
 			return NULL;
+		}
 
 		convertToForwardslash(resolved);
 		return resolved;		
@@ -1005,39 +995,43 @@ realpath(const char *path, char resolved[PATH_MAX])
 	else {
 		convertToForwardslash(tempPath);
 		resolved[0] = '/'; /* will be our first slash in /x:/users/test1 format */
-		if ((r = strncpy_s(resolved + 1, PATH_MAX - 1, tempPath, sizeof(tempPath) - 1)) != 0) {
-			debug3("memcpy_s failed with error: %d.", r);
+		if ((errno = strncpy_s(resolved + 1, PATH_MAX - 1, tempPath, sizeof(tempPath) - 1)) != 0) {
+			debug3("memcpy_s failed with error: %d.", errno);
 			return NULL;
 		}
 		return resolved;
 	}
 }
 
+/* on error returns NULL and sets errno */
 wchar_t*
 resolved_path_utf16(const char *input_path)
 {
 	wchar_t *resolved_path = NULL;
 
-	if (!input_path) 
+	if (!input_path) {
+		errno = EINVAL;
 		return NULL;
+	}
 
 	if (chroot_path) {
-		char actual_path[MAX_PATH];
+		char actual_path[MAX_PATH], jail_path[MAX_PATH];
+
+		if (realpath(input_path, jail_path) == NULL)
+			return NULL;
+
 		actual_path[0] = '\0';
 		strcat_s(actual_path, MAX_PATH, chroot_path);
-		/* if input_path is not relative wrt chroot, add cwb within chroot */
-		if (*input_path != '\\' && *input_path != '/') {
-			w32_getcwd(actual_path + chroot_path_len, MAX_PATH - chroot_path_len);
-			strcat_s(actual_path, MAX_PATH, "\\");
-		}
-		strcat_s(actual_path, MAX_PATH, input_path);
+		strcat_s(actual_path, MAX_PATH, jail_path);
 		resolved_path = utf8_to_utf16(actual_path);
 	}
 	else
 		resolved_path = utf8_to_utf16(input_path);
 	
-	if (resolved_path == NULL)
+	if (resolved_path == NULL) {
+		errno = ENOMEM;
 		return NULL;
+	}
 
 	int resolved_len = (int) wcslen(resolved_path);
 	const int variable_len = (int) wcslen(PROGRAM_DATAW);
@@ -1055,6 +1049,7 @@ resolved_path_utf16(const char *input_path)
 			if (resolved_path == NULL) {
 				debug3("%s: memory allocation failed.", __FUNCTION__);
 				free(resolved_path);
+				errno = ENOMEM;
 				return NULL;
 			}
 			else resolved_path = resolved_path_new;
@@ -1091,8 +1086,11 @@ statvfs(const char *path, struct statvfs *buf)
 	DWORD totalClusters;
 
 	wchar_t* path_utf16 = resolved_path_utf16(path);
-	if (path_utf16 && (GetDiskFreeSpaceW(path_utf16, &sectorsPerCluster, &bytesPerSector,
-	    &freeClusters, &totalClusters) == TRUE)) {
+	if (path_utf16 == NULL)
+		return -1;
+
+	if (GetDiskFreeSpaceW(path_utf16, &sectorsPerCluster, &bytesPerSector,
+	    &freeClusters, &totalClusters)) {
 		debug5("path              : [%s]", path);
 		debug5("sectorsPerCluster : [%lu]", sectorsPerCluster);
 		debug5("bytesPerSector    : [%lu]", bytesPerSector);
@@ -1116,7 +1114,7 @@ statvfs(const char *path, struct statvfs *buf)
 		return 0;
 	} else {
 		debug5("ERROR: Cannot get free space for [%s]. Error code is : %d.\n", path, GetLastError());
-
+		errno = errno_from_Win32LastError();
 		free(path_utf16);
 		return -1;
 	}

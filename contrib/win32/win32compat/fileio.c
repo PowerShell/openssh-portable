@@ -469,11 +469,8 @@ fileio_open(const char *path_utf8, int flags, mode_t mode)
 	else
 		path_utf16 = resolved_path_utf16(path_utf8);
 
-	if (path_utf16 == NULL) {
-		errno = ENOMEM;
-		debug3("utf8_to_utf16 failed for file:%s error:%d", path_utf8, GetLastError());
+	if (path_utf16 == NULL) 
 		return NULL;
-	}
 
 	if (createFile_flags_setup(flags, mode, &cf_flags) == -1) {
 		debug3("createFile_flags_setup() failed.");
@@ -810,11 +807,8 @@ fileio_stat_or_lstat_internal(const char *path, struct _stat64 *buf, int do_lsta
 		return 0;
 	}
 
-	if ((wpath = resolved_path_utf16(path)) == NULL) {
-		errno = ENOMEM;
-		debug3("utf8_to_utf16 failed for file:%s error:%d", path, GetLastError());
+	if ((wpath = resolved_path_utf16(path)) == NULL)
 		return -1;
-	}
 
 	/* get the file attributes (or symlink attributes if symlink) */
 	if (GetFileAttributesExW(wpath, GetFileExInfoStandard, &attributes) == FALSE) {
@@ -1075,10 +1069,8 @@ fileio_readlink(const char *path, char *buf, size_t bufsiz)
 		goto cleanup;
 	}
 
-	if ((wpath = resolved_path_utf16(path)) == NULL) {
-		errno = ENOMEM;
+	if ((wpath = resolved_path_utf16(path)) == NULL)
 		goto cleanup;
-	}
 
 	/* obtain a handle to send to deviceioctl */
 	handle = CreateFileW(wpath, 0, 0, NULL, OPEN_EXISTING, 
@@ -1159,18 +1151,21 @@ cleanup:
 int
 fileio_symlink(const char *target, const char *linkpath)
 {
+	DWORD ret = -1;
+
 	if (target == NULL || linkpath == NULL) {
 		errno = EFAULT;
 		return -1;
 	}
 
-	DWORD ret = 0;
 	wchar_t *target_utf16 = resolved_path_utf16(target);
 	wchar_t *linkpath_utf16 = resolved_path_utf16(linkpath);
 	wchar_t *resolved_utf16 = _wcsdup(target_utf16);
-	if (target_utf16 == NULL || linkpath_utf16 == NULL || resolved_utf16 == NULL) {
+	if (target_utf16 == NULL || linkpath_utf16 == NULL)
+		goto cleanup;
+
+	if (resolved_utf16 == NULL) {
 		errno = ENOMEM;
-		ret = -1;
 		goto cleanup;
 	}
 
@@ -1187,7 +1182,6 @@ fileio_symlink(const char *target, const char *linkpath)
 		resolved_utf16 = malloc(resolved_len * sizeof(wchar_t));
 		if (resolved_utf16 == NULL) {
 			errno = ENOMEM;
-			ret = -1;
 			goto cleanup;
 		}
 
@@ -1207,7 +1201,6 @@ fileio_symlink(const char *target, const char *linkpath)
 	WIN32_FILE_ATTRIBUTE_DATA attributes = { 0 };
 	if (GetFileAttributesExW(resolved_utf16, GetFileExInfoStandard, &attributes) == FALSE) {
 		errno = errno_from_Win32LastError();
-		ret = -1;
 		goto cleanup;
 	}
 
@@ -1223,11 +1216,11 @@ fileio_symlink(const char *target, const char *linkpath)
 	if (CreateSymbolicLinkW(linkpath_utf16, target_utf16, create_flags) == 0) {
 		if (CreateSymbolicLinkW(linkpath_utf16, target_utf16, create_flags | 0x2) == 0) {
 			errno = errno_from_Win32LastError();
-			ret = -1;
 			goto cleanup;
 		}
 	}
-
+	
+	ret = 0;
 cleanup:
 
 	if (target_utf16)
@@ -1242,28 +1235,25 @@ cleanup:
 int 
 fileio_link(const char *oldpath, const char *newpath)
 {
+	DWORD ret = -1;
+
 	if (oldpath == NULL || newpath == NULL) {
 		errno = EFAULT;
 		return -1;
 	}
 
-	DWORD ret = 0;
-
 	wchar_t *oldpath_utf16 = resolved_path_utf16(oldpath);
 	wchar_t *newpath_utf16 = resolved_path_utf16(newpath);
 
-	if (oldpath_utf16 == NULL || newpath_utf16 == NULL) {
-		errno = ENOMEM;
-		ret = -1;
+	if (oldpath_utf16 == NULL || newpath_utf16 == NULL)
 		goto cleanup;
-	}
 
 	if (CreateHardLinkW(newpath_utf16, oldpath_utf16, NULL) == 0) {
 		errno = errno_from_Win32LastError();
-		ret = -1;
 		goto cleanup;
 	}
 
+	ret = 0;
 cleanup:
 
 	if (oldpath_utf16)
