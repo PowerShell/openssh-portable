@@ -433,7 +433,6 @@ file_in_chroot_jail(HANDLE handle, const char* path_utf8) {
 	}
 	final_path = path_buf + 4;
 	to_wlower_case(final_path);
-	to_wlower_case(path_utf8);
 	if ((wcslen(final_path) < wcslen(chroot_pathw)) ||
 		memcmp(final_path, chroot_pathw, 2 * wcslen(chroot_pathw)) != 0 ||
 		final_path[wcslen(chroot_pathw)] != '\\') {
