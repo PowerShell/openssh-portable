@@ -22,7 +22,14 @@
 
 #define errno_from_Win32LastError() errno_from_Win32Error(GetLastError())
 
+/* maximum size for user principal name as defined in ad schema */
+#define MAX_UPN_LEN 1024
+
 static char *machine_domain_name;
+
+extern char* chroot_path;
+extern int chroot_path_len;
+extern wchar_t* chroot_pathw;
 
 /* removes first '/' for Windows paths that are unix styled. Ex: /c:/ab.cd */
 wchar_t * resolved_path_utf16(const char *);
@@ -38,9 +45,10 @@ void file_time_to_unix_time(const LPFILETIME, time_t *);
 int file_attr_to_st_mode(wchar_t * path, DWORD attributes);
 void invalid_parameter_handler(const wchar_t *, const wchar_t *, const wchar_t *, unsigned int, uintptr_t);
 void to_lower_case(char *s);
-int get_machine_domain_name(wchar_t *domain, int size);
+void to_wlower_case(wchar_t *s);
 wchar_t* get_program_data_path();
-HANDLE get_user_token(char* user);
+HANDLE get_user_token(char* user, int impersonation);
 int load_user_profile(HANDLE user_token, char* user);
 int create_directory_withsddl(wchar_t *path, wchar_t *sddl);
 int is_absolute_path(const char *);
+int file_in_chroot_jail(HANDLE, const char*);
