@@ -475,7 +475,8 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		chdir(s->pw->pw_dir);
 
 	/* prepare exec - path used with CreateProcess() */
-	if (s->is_subsystem || (command && memcmp(command, "scp", 3) == 0)) {
+	if (s->is_subsystem || (command && memcmp(command, "scp", 3) == 0) || !pty) {
+		//sleep(15);
 		/* relative or absolute */
 		if (command == NULL || command[0] == '\0')
 			fatal("expecting command for a subsystem");
@@ -517,6 +518,12 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 			} else
 				memcpy(cmd, command, strlen(command) + 1);
 		}
+		cmd = exec_command;
+		exec_command = malloc(31 + strlen(cmd) + 1);
+		exec_command[0] = '\0';
+		strcat(exec_command, "cmd.exe /c ");
+		strcat(exec_command, cmd);
+
 	} else {
 		/* 
 		 * contruct %programdir%\ssh-shellhost.exe <-nopty> base64encoded(command)  
@@ -566,7 +573,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		UTF8_TO_UTF16_FATAL(exec_command_w, exec_command);
 
 		create_process_ret_val = CreateProcessW(NULL, exec_command_w, NULL, NULL, TRUE,
-			DETACHED_PROCESS, NULL, NULL,
+			0, NULL, NULL,
 			&si, &pi);
 
 		if (!create_process_ret_val)

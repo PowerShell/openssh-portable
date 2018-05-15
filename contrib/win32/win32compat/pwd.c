@@ -95,11 +95,8 @@ reset_pw()
 		free(pw.pw_name);
 	if (pw.pw_dir)
 		free(pw.pw_dir);
-	if (pw.pw_sid)
-		free(pw.pw_sid);
 	pw.pw_name = NULL;
 	pw.pw_dir = NULL;
-	pw.pw_sid = NULL;
 }
 
 static struct passwd*
@@ -124,11 +121,10 @@ get_passwd(const wchar_t * user_utf16, PSID sid)
 	/* skip forward lookup on name if sid was passed in */
 	if (sid != NULL)
 		CopySid(sizeof(binary_sid), binary_sid, sid);
-
-	/* attempt to lookup the account; this will verify the account is valid and
+	/* else attempt to lookup the account; this will verify the account is valid and
 	 * is will return its sid and the realm that owns it */
 	else if(LookupAccountNameW(NULL, user_utf16, binary_sid, &sid_size,
-		domain_name, &domain_name_size, &account_type) == 0) {
+	    domain_name, &domain_name_size, &account_type) == 0) {
 		errno = ENOENT;
 		debug("%s: LookupAccountName() failed: %d.", __FUNCTION__, GetLastError());
 		goto cleanup;
@@ -136,7 +132,7 @@ get_passwd(const wchar_t * user_utf16, PSID sid)
 
 	/* convert the binary string to a string */
 	if (ConvertSidToStringSidW((PSID) binary_sid, &sid_string) == FALSE) {
-		errno = ENOENT;
+		errno = errno_from_Win32LastError();
 		goto cleanup;
 	}
 
@@ -145,8 +141,8 @@ get_passwd(const wchar_t * user_utf16, PSID sid)
 	DWORD user_name_length = ARRAYSIZE(user_name);
 	domain_name_size = DNLEN + 1;
 	if (LookupAccountSidW(NULL, binary_sid, user_name, &user_name_length,
-		domain_name, &domain_name_size, &account_type) == 0) {
-		errno = ENOENT;
+	    domain_name, &domain_name_size, &account_type) == 0) {
+		errno = errno_from_Win32LastError();
 		debug("%s: LookupAccountSid() failed: %d.", __FUNCTION__, GetLastError());
 		goto cleanup;
 	}
@@ -188,8 +184,7 @@ get_passwd(const wchar_t * user_utf16, PSID sid)
 	/* convert to utf8, make name lowercase, and assign to output structure*/
 	_wcslwr_s(user_resolved, wcslen(user_resolved) + 1);
 	if ((pw.pw_name = utf16_to_utf8(user_resolved)) == NULL ||
-		(pw.pw_dir = utf16_to_utf8(profile_home_exp)) == NULL || 
-		(pw.pw_sid = utf16_to_utf8(sid_string)) == NULL) {
+		(pw.pw_dir = utf16_to_utf8(profile_home_exp)) == NULL) {
 		reset_pw();
 		errno = ENOMEM;
 		goto cleanup;
@@ -207,40 +202,88 @@ cleanup:
 	return ret;
 }
 
+static struct passwd*
+getpwnam_placeholder(char* user) {
+	errno = 0;
+	reset_pw();
+	wchar_t tmp_home[PATH_MAX];
+	char *pw_name = NULL, *pw_dir = NULL;
+	struct passwd* ret = NULL;
+
+	GetWindowsDirectoryW(tmp_home, PATH_MAX);
+	if (GetWindowsDirectoryW(tmp_home, PATH_MAX) == 0) {
+		debug3("GetWindowsDirectoryW failed with %d", GetLastError());
+		errno = EOTHER;
+		goto cleanup;
+	}
+	pw_name = strdup(user);
+	pw_dir = utf16_to_utf8(tmp_home);
+
+	if (!pw_name || !pw_dir) {
+		errno = ENOMEM;
+		goto cleanup;
+	}
+
+	pw.pw_name = pw_name;
+	pw_name = NULL;
+	pw.pw_dir = pw_dir;
+	pw_dir = NULL;
+
+	ret = &pw;
+cleanup:
+	if (pw_name)
+		free(pw_name);
+	if (pw_dir)
+		free(pw_dir);
+
+	return ret;
+}
+
 struct passwd*
 w32_getpwnam(const char *user_utf8)
 {
+	struct passwd* ret = NULL;
 	wchar_t * user_utf16 = utf8_to_utf16(user_utf8);
 	if (user_utf16 == NULL) {
 		errno = ENOMEM;
 		return NULL;
 	}
 
-	return get_passwd(user_utf16, NULL);
+	ret = get_passwd(user_utf16, NULL);
+	if (ret != NULL)
+		return ret;
+
+	/* check if custom passwd auth is enabled */
+	{
+		int lsa_auth_pkg_len = 0;
+		HKEY reg_key = 0;
+
+		REGSAM mask = STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY;
+		if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\OpenSSH", 0, mask, &reg_key) == ERROR_SUCCESS) &&
+		    (RegQueryValueExW(reg_key, L"LSAAuthenticationPackage", 0, NULL, NULL, &lsa_auth_pkg_len) == ERROR_SUCCESS)) {
+			ret = getpwnam_placeholder(user_utf8);
+		}
+
+		if (reg_key)
+			RegCloseKey(reg_key);
+	}
+	return ret;
 }
 
 struct passwd*
 w32_getpwuid(uid_t uid)
 {
 	struct passwd* ret = NULL;
-	HANDLE token = NULL;
-	TOKEN_USER* info = NULL;
-	DWORD info_len = 0;
-
-	if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token) == FALSE ||
-		GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE ||
-		(info = (TOKEN_USER*)malloc(info_len)) == NULL ||
-		GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE)
+	PSID cur_user_sid = NULL;
+	
+	if ((cur_user_sid = get_user_sid(NULL)) == NULL)
 		goto cleanup;
 
-	ret = get_passwd(NULL, info->User.Sid);
+	ret = get_passwd(NULL, cur_user_sid);
 
 cleanup:
-
-	if (token)
-		CloseHandle(token);
-	if (info)
-		free(info);
+	if (cur_user_sid)
+		free(cur_user_sid);
 
 	return ret;
 }

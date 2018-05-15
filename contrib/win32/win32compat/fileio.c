@@ -299,7 +299,7 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 	int rwflags = flags & 0x3, c_s_flags = flags & 0xfffffffc, ret = -1;
 	PSECURITY_DESCRIPTOR pSD = NULL;
 	wchar_t sddl[SDDL_LENGTH + 1] = { 0 }, owner_ace[MAX_ACE_LENGTH + 1] = {0}, everyone_ace[MAX_ACE_LENGTH + 1] = {0};
-	wchar_t owner_access[MAX_ATTRIBUTE_LENGTH + 1] = {0}, everyone_access[MAX_ATTRIBUTE_LENGTH + 1] = {0}, *sid_utf16 = NULL;
+	wchar_t owner_access[MAX_ATTRIBUTE_LENGTH + 1] = {0}, everyone_access[MAX_ATTRIBUTE_LENGTH + 1] = {0};
 	PACL dacl = NULL;
 	struct passwd * pwd;
 	PSID owner_sid = NULL;
@@ -366,18 +366,8 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 			return -1;
 		}
 
-		if ((pwd = getpwuid(0)) == NULL)
-			fatal("getpwuid failed.");
-
-		if ((sid_utf16 = utf8_to_utf16(pwd->pw_sid)) == NULL) {
-			debug3("Failed to get utf16 of the sid string");
-			errno = ENOMEM;
-			goto cleanup;
-		}
-
-		if (ConvertStringSidToSid(pwd->pw_sid, &owner_sid) == FALSE ||
-			(IsValidSid(owner_sid) == FALSE)) {
-			debug3("cannot retrieve SID of user %s", pwd->pw_name);
+		if ((owner_sid = get_user_sid(NULL)) == NULL) {
+			debug3("cannot retrieve current user's SID");
 			goto cleanup;
 		}
 
@@ -416,9 +406,8 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 	ret = 0;
 cleanup:
 	if (owner_sid)
-		LocalFree(owner_sid);
-	if (sid_utf16)
-		free(sid_utf16);
+		free(owner_sid);
+
 	return ret;
 }
 
