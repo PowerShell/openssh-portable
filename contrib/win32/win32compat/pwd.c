@@ -49,32 +49,46 @@
 
 static struct passwd pw;
 static char* pw_shellpath = NULL;
-#define SHELL_HOST "\\ssh-shellhost.exe"
+
+/* returns 0 on success, and -1 with errno set on failure */
+static int
+set_defaultshell()
+{
+	HKEY reg_key = 0;
+	int tmp_len = PATH_MAX;
+	errno_t r = 0;
+	REGSAM mask = STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY;
+	wchar_t shellpathw[PATH_MAX];
+
+	/* if already set, return success */
+	if (pw_shellpath != NULL)
+		return 0;
+
+	if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\OpenSSH", 0, mask, &reg_key) == ERROR_SUCCESS) &&
+	    (RegQueryValueExW(reg_key, L"DefaultShell", 0, NULL, (LPBYTE)shellpathw, &tmp_len) == ERROR_SUCCESS) &&
+	    (shellpathw[0] != "\0")) {
+		/* fetched default shell path from registry */
+	} else {
+		if (!GetSystemDirectoryW(shellpathw, _countof(shellpathw))) {
+			errno = GetLastError();
+			return -1;
+		}
+		if (wcscat_s(shellpathw, _countof(shellpathw), L"\\cmd.exe") != 0)
+			return -1;
+	}
+
+	if ((pw_shellpath = utf16_to_utf8(shellpathw)) == NULL)
+		return -1;
+
+	return 0;
+}
 
 
 int
 initialize_pw()
 {
-	errno_t r = 0;
-	char* program_dir = w32_programdir();
-	size_t program_dir_len = strlen(program_dir);
-	size_t shell_host_len = strlen(SHELL_HOST);
-	if (pw_shellpath == NULL) {
-		if ((pw_shellpath = malloc(program_dir_len + shell_host_len + 1)) == NULL)
-			fatal("initialize_pw - out of memory");
-		else {
-			char* head = pw_shellpath;
-			if ((r= memcpy_s(head, program_dir_len + shell_host_len + 1, w32_programdir(), program_dir_len)) != 0) {
-				fatal("memcpy_s failed with error: %d.", r);
-			}
-			head += program_dir_len;
-			if ((r = memcpy_s(head, shell_host_len + 1, SHELL_HOST, shell_host_len)) != 0) {
-				fatal("memcpy_s failed with error: %d.", r);
-			}
-			head += shell_host_len;
-			*head = '\0';
-		}
-	}
+	if (set_defaultshell() != 0)
+		return -1;
 
 	if (pw.pw_shell != pw_shellpath) {
 		memset(&pw, 0, sizeof(pw));
@@ -87,10 +101,12 @@ initialize_pw()
 	return 0;
 }
 
-void
+int
 reset_pw()
 {
-	initialize_pw();
+	if (initialize_pw() != 0)
+		return -1;
+
 	if (pw.pw_name)
 		free(pw.pw_name);
 	if (pw.pw_dir)
@@ -116,7 +132,8 @@ get_passwd(const wchar_t * user_utf16, PSID sid)
 	SID_NAME_USE account_type = 0;
 
 	errno = 0;
-	reset_pw();
+	if (reset_pw() != 0)
+		return NULL;
 
 	/* skip forward lookup on name if sid was passed in */
 	if (sid != NULL)
@@ -204,8 +221,6 @@ cleanup:
 
 static struct passwd*
 getpwnam_placeholder(char* user) {
-	errno = 0;
-	reset_pw();
 	wchar_t tmp_home[PATH_MAX];
 	char *pw_name = NULL, *pw_dir = NULL;
 	struct passwd* ret = NULL;

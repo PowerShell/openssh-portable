@@ -446,6 +446,78 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	BOOL create_process_ret_val;
 	HANDLE hToken = INVALID_HANDLE_VALUE;
 	extern int debug_flag;
+	
+	int cmdline_size = 3 * PATH_MAX + (command ? strlen(command) + 1 : 1) + 1;
+	char *cmdline = malloc(cmdline_size);
+	char* command_enhanced = NULL;
+	cmdline[0] = "\0";
+
+	do
+	{
+		/* special cases */
+
+		if (s->is_subsystem >= SUBSYSTEM_INT_SFTP_ERROR) {
+			command = "echo This service allows sftp connections only.";
+			break;
+		}
+
+		if (s->is_subsystem || (command && memcmp(command, "scp", 3) == 0)) {
+			if (command[1] == ":")
+				break;
+
+			if (IS_INTERNAL_SFTP(command)) {
+				/* TODO */
+			}
+
+			int tmp_len = strlen(progdir) + 1 + strlen(command);
+			command_enhanced = malloc(strlen(progdir) + 1 + strlen(command));
+			command_enhanced[0] = '\0';
+			strcat_s(command_enhanced, tmp_len, progdir);
+			strcat_s(command_enhanced, tmp_len, "\\");
+			strcat_s(command_enhanced, tmp_len, command);
+			command = command_enhanced;
+			break;
+		}
+
+
+
+	} while (0);
+
+	{
+		enum sh_type { SH_CMD, SH_PS, SH_BASH, SH_OTHER } shell_type = SH_OTHER;
+
+		if (strstr(s->pw->pw_shell, "system32\\cmd.exe"))
+			shell_type = SH_CMD;
+		else if (strstr(s->pw->pw_shell, "powershell.exe"))
+			shell_type = SH_PS;
+		else if (strstr(s->pw->pw_shell, "bash.exe"))
+			shell_type = SH_BASH;
+
+		/* build command line */
+		
+		/* 1. Add shell */
+		strcat_s(cmdline, cmdline_size, s->pw->pw_shell);
+
+		/* 2. Add command option and command*/
+		if (command) {
+			if (shell_type == SH_CMD)
+				strcat_s(cmdline, cmdline_size, " \c ");
+			else
+				strcat_s(cmdline, cmdline_size, " -c ");
+
+			if (shell_type == SH_BASH)
+				strcat_s(cmdline, cmdline_size, "\"");
+
+			strcat_s(cmdline, cmdline_size, command);
+
+			if (shell_type == SH_BASH)
+				strcat_s(cmdline, cmdline_size, "\"");
+
+		}
+
+
+	}
+
 
 	if (s->is_subsystem >= SUBSYSTEM_INT_SFTP_ERROR) {
 		error("This service allows sftp connections only.\n");
