@@ -1651,7 +1651,7 @@ get_user_sid(char* name)
 	DWORD sid_size = ARRAYSIZE(binary_sid);
 
 	if (name) {
-		DWORD sid_len = 0, dom_len = 0;
+		DWORD sid_len = 0;
 		SID_NAME_USE n_use;
 		WCHAR dom[DNLEN + 1] = L"";
 		DWORD dom_len = DNLEN + 1;
@@ -1715,5 +1715,5 @@ cleanup:
 	if (name_utf16)
 		free(name_utf16);
 
-	return info;
+	return ret;
 }

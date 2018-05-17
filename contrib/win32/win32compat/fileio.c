@@ -299,7 +299,7 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 	int rwflags = flags & 0x3, c_s_flags = flags & 0xfffffffc, ret = -1;
 	PSECURITY_DESCRIPTOR pSD = NULL;
 	wchar_t sddl[SDDL_LENGTH + 1] = { 0 }, owner_ace[MAX_ACE_LENGTH + 1] = {0}, everyone_ace[MAX_ACE_LENGTH + 1] = {0};
-	wchar_t owner_access[MAX_ATTRIBUTE_LENGTH + 1] = {0}, everyone_access[MAX_ATTRIBUTE_LENGTH + 1] = {0};
+	wchar_t owner_access[MAX_ATTRIBUTE_LENGTH + 1] = {0}, everyone_access[MAX_ATTRIBUTE_LENGTH + 1] = {0}, *sid_utf16 = NULL;
 	PACL dacl = NULL;
 	struct passwd * pwd;
 	PSID owner_sid = NULL;
@@ -366,7 +366,7 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 			return -1;
 		}
 
-		if ((owner_sid = get_user_sid(NULL)) == NULL) {
+		if ((owner_sid = get_user_sid(NULL)) == NULL || (!ConvertSidToStringSidW(owner_sid, &sid_utf16))) {
 			debug3("cannot retrieve current user's SID");
 			goto cleanup;
 		}
@@ -408,6 +408,9 @@ cleanup:
 	if (owner_sid)
 		free(owner_sid);
 
+	if (sid_utf16)
+		LocalFree(sid_utf16);
+		
 	return ret;
 }
 

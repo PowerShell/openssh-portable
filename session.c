@@ -475,8 +475,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		chdir(s->pw->pw_dir);
 
 	/* prepare exec - path used with CreateProcess() */
-	if (s->is_subsystem || (command && memcmp(command, "scp", 3) == 0) || !pty) {
-		//sleep(15);
+	if (s->is_subsystem || (command && memcmp(command, "scp", 3) == 0)) {
 		/* relative or absolute */
 		if (command == NULL || command[0] == '\0')
 			fatal("expecting command for a subsystem");
