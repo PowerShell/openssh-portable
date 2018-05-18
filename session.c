@@ -436,7 +436,7 @@ char* w32_programdir();
 int register_child(void* child, unsigned long pid);
 
 int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
-	int pipein[2], pipeout[2], pipeerr[2], r;
+	int pipein[2], pipeout[2], pipeerr[2], r, ret = -1;
 	char *exec_command = NULL, *progdir = w32_programdir(), *cmd = NULL, *shell_host = NULL, *command_b64 = NULL;
 	wchar_t *exec_command_w = NULL;
 	const char *sftp_exe = "sftp-server.exe", *argp = NULL;
@@ -447,83 +447,8 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	HANDLE hToken = INVALID_HANDLE_VALUE;
 	extern int debug_flag;
 	
-	int cmdline_size = 3 * PATH_MAX + (command ? strlen(command) + 1 : 1) + 1;
-	char *cmdline = malloc(cmdline_size);
+	char *cmdline = NULL;
 	char* command_enhanced = NULL;
-	cmdline[0] = "\0";
-
-	do
-	{
-		/* special cases */
-
-		if (s->is_subsystem >= SUBSYSTEM_INT_SFTP_ERROR) {
-			command = "echo This service allows sftp connections only.";
-			break;
-		}
-
-		if (s->is_subsystem || (command && memcmp(command, "scp", 3) == 0)) {
-			if (command[1] == ":")
-				break;
-
-			if (IS_INTERNAL_SFTP(command)) {
-				/* TODO */
-			}
-
-			int tmp_len = strlen(progdir) + 1 + strlen(command);
-			command_enhanced = malloc(strlen(progdir) + 1 + strlen(command));
-			command_enhanced[0] = '\0';
-			strcat_s(command_enhanced, tmp_len, progdir);
-			strcat_s(command_enhanced, tmp_len, "\\");
-			strcat_s(command_enhanced, tmp_len, command);
-			command = command_enhanced;
-			break;
-		}
-
-
-
-	} while (0);
-
-	{
-		enum sh_type { SH_CMD, SH_PS, SH_BASH, SH_OTHER } shell_type = SH_OTHER;
-
-		if (strstr(s->pw->pw_shell, "system32\\cmd.exe"))
-			shell_type = SH_CMD;
-		else if (strstr(s->pw->pw_shell, "powershell.exe"))
-			shell_type = SH_PS;
-		else if (strstr(s->pw->pw_shell, "bash.exe"))
-			shell_type = SH_BASH;
-
-		/* build command line */
-		
-		/* 1. Add shell */
-		strcat_s(cmdline, cmdline_size, s->pw->pw_shell);
-
-		/* 2. Add command option and command*/
-		if (command) {
-			if (shell_type == SH_CMD)
-				strcat_s(cmdline, cmdline_size, " \c ");
-			else
-				strcat_s(cmdline, cmdline_size, " -c ");
-
-			if (shell_type == SH_BASH)
-				strcat_s(cmdline, cmdline_size, "\"");
-
-			strcat_s(cmdline, cmdline_size, command);
-
-			if (shell_type == SH_BASH)
-				strcat_s(cmdline, cmdline_size, "\"");
-
-		}
-
-
-	}
-
-
-	if (s->is_subsystem >= SUBSYSTEM_INT_SFTP_ERROR) {
-		error("This service allows sftp connections only.\n");
-		fflush(NULL);
-		exit(1);
-	}
 	
 	/* Create three pipes for stdin, stdout and stderr */
 	if (pipe(pipein) == -1 || pipe(pipeout) == -1 || pipe(pipeerr) == -1) 
@@ -546,84 +471,178 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	if (!in_chroot)
 		chdir(s->pw->pw_dir);
 
-	/* prepare exec - path used with CreateProcess() */
-	if (s->is_subsystem || (command && memcmp(command, "scp", 3) == 0)) {
-		/* relative or absolute */
-		if (command == NULL || command[0] == '\0')
-			fatal("expecting command for a subsystem");
+	do
+	{
+		/* special cases where incoming command needs adjustments */
 
-		if (command[1] == ':') /* absolute */
-			exec_command = xstrdup(command);
-		else {/*relative*/
-			const int command_len = strlen(progdir) + 1 + strlen(command) + (strlen(sftp_exe) - strlen(INTERNAL_SFTP_NAME));
-			exec_command = malloc(command_len);
-			if (exec_command == NULL)
-				fatal("%s, out of memory", __func__);
-						
-			cmd = exec_command;
-			memcpy(cmd, progdir, strlen(progdir));
-			cmd += strlen(progdir);
-			*cmd++ = '\\';
-
-			/* In windows, INTERNAL_SFTP is supported via sftp-server.exe.
-			 * This is a deviation from the UNIX implementation that hosts sftp-server within sshd.
-			 * If sftp-server were to be hosted within sshd for Windows, following would be needed
-			 *  - Impersonate client user
-			 *  - call sftp-server-main
-			 *
-			 * SSHD service account would need impersonate privilege to impersonate client user, 
-			 * thereby needing elevation of SSHD account privileges
-			 * Apart from slight performance gain (by hosting sftp in process), there isn't a clear 
-			 * gain with this option over using and spawning sftp-server.exe.
-			 * Hence going with the later option. 
-			 */
-			if(IS_INTERNAL_SFTP(command)) {
-				memcpy(cmd, sftp_exe, strlen(sftp_exe) + 1);
-				cmd += strlen(sftp_exe);
-				
-				// copy the arguments (if any).
-				if(strlen(command) > strlen(INTERNAL_SFTP_NAME)) {
-					argp = (char*)command + strlen(INTERNAL_SFTP_NAME);
-					memcpy(cmd, argp, strlen(argp)+1);
-				}
-			} else
-				memcpy(cmd, command, strlen(command) + 1);
+		if (s->is_subsystem >= SUBSYSTEM_INT_SFTP_ERROR) {
+			command = "echo This service allows sftp connections only.";
+			break;
 		}
-		cmd = exec_command;
-		exec_command = malloc(31 + strlen(cmd) + 1);
-		exec_command[0] = '\0';
-		strcat(exec_command, "cmd.exe /c ");
-		strcat(exec_command, cmd);
 
-	} else {
-		/* 
-		 * contruct %programdir%\ssh-shellhost.exe <-nopty> base64encoded(command)  
-		 * command is base64 encoded to preserve original special charecters like '"'
-		 * else they will get lost in CreateProcess translation
-		 */
-		shell_host = pty ? "ssh-shellhost.exe " : "ssh-shellhost.exe -nopty ";
+		if (s->is_subsystem || (command && memcmp(command, "scp", 3) == 0)) {
+			int en_size;
+
+			if (!command || command[0] == '\0') {
+				errno = EOTHER;
+				return -1;
+			}
+
+			if (command[1] == ':')
+				break;
+
+			en_size = strlen(progdir) + 1 + strlen(command) + PATH_MAX;
+			command_enhanced = malloc(en_size);
+			command_enhanced[0] = '\0';
+			strcat_s(command_enhanced, en_size, progdir);
+			strcat_s(command_enhanced, en_size, "\\");
+			if (IS_INTERNAL_SFTP(command)) {
+				strcat_s(command_enhanced, en_size, "sftp-server.exe");
+				if (strlen(command) > strlen(INTERNAL_SFTP_NAME))
+					strcat_s(command_enhanced, en_size, command + strlen(INTERNAL_SFTP_NAME));
+			} else {
+				strcat_s(command_enhanced, en_size, command);
+			}
+
+			command = command_enhanced;
+			break;
+		}
+	} while (0);
+
+	/* build command line to be executed */
+	{
+		int max_cmdline_size = 3 * PATH_MAX + (command ? strlen(command) + 1 : 1) + 1;
+		char* p;
+		cmdline = malloc(max_cmdline_size);
+		p = cmdline;
+
+		enum sh_type { SH_CMD, SH_PS, SH_BASH, SH_OTHER } shell_type = SH_OTHER;
+
+		if (strstr(s->pw->pw_shell, "system32\\cmd.exe"))
+			shell_type = SH_CMD;
+		else if (strstr(s->pw->pw_shell, "powershell.exe"))
+			shell_type = SH_PS;
+		else if (strstr(s->pw->pw_shell, "bash.exe"))
+			shell_type = SH_BASH;
+
+#define CMDLINE_APPEND(S)		\
+do {					\
+	int _S_len = strlen(S);		\
+	memcpy(p, (S), _S_len);		\
+	p += _S_len;			\
+} while(0)
+		/* build command line */
+		/* For PTY - launch via ssh-shellhost.exe */
+		if (pty) {
+			CMDLINE_APPEND("\"");
+			CMDLINE_APPEND(progdir);
+			CMDLINE_APPEND("\\ssh-shellhost.exe\" ");
+		}
+
+		/* Add shell */
+		CMDLINE_APPEND("\"");
+		CMDLINE_APPEND(s->pw->pw_shell);
+		CMDLINE_APPEND("\"");
+
+
+		/* Add command option and command*/
 		if (command) {
-			/* accomodate bas64 encoding bloat and null terminator */
-			command_b64_len = ((strlen(command) + 2) / 3) * 4 + 1;
-			if ((command_b64 = malloc(command_b64_len)) == NULL ||
-			    b64_ntop(command, strlen(command), command_b64, command_b64_len) == -1)
-				fatal("%s, error encoding session command");
+			if (shell_type == SH_CMD)
+				CMDLINE_APPEND(" /c ");
+			else
+				CMDLINE_APPEND(" -c ");
+
+			if (shell_type == SH_BASH)
+				CMDLINE_APPEND("\"");
+
+			CMDLINE_APPEND(command);
+
+			if (shell_type == SH_BASH)
+				CMDLINE_APPEND("\"");
+
 		}
-		exec_command = malloc(strlen(progdir) + 1 + strlen(shell_host) + (command_b64 ? strlen(command_b64): 0) + 1);
-		if (exec_command == NULL)
-			fatal("%s, out of memory", __func__);
-		cmd = exec_command;
-		memcpy(cmd, progdir, strlen(progdir));
-		cmd += strlen(progdir);
-		*cmd++ = '\\';
-		memcpy(cmd, shell_host, strlen(shell_host));
-		cmd += strlen(shell_host);
-		if (command_b64) {
-			memcpy(cmd, command_b64, strlen(command_b64));
-			cmd += strlen(command_b64);
-		}
-		*cmd = '\0';
 	}
+
+	exec_command = cmdline;
+
+	///* prepare exec - path used with CreateProcess() */
+	//if (s->is_subsystem || (command && memcmp(command, "scp", 3) == 0)) {
+	//	/* relative or absolute */
+	//	if (command == NULL || command[0] == '\0')
+	//		fatal("expecting command for a subsystem");
+
+	//	if (command[1] == ':') /* absolute */
+	//		exec_command = xstrdup(command);
+	//	else {/*relative*/
+	//		const int command_len = strlen(progdir) + 1 + strlen(command) + (strlen(sftp_exe) - strlen(INTERNAL_SFTP_NAME));
+	//		exec_command = malloc(command_len);
+	//		if (exec_command == NULL)
+	//			fatal("%s, out of memory", __func__);
+	//					
+	//		cmd = exec_command;
+	//		memcpy(cmd, progdir, strlen(progdir));
+	//		cmd += strlen(progdir);
+	//		*cmd++ = '\\';
+
+	//		/* In windows, INTERNAL_SFTP is supported via sftp-server.exe.
+	//		 * This is a deviation from the UNIX implementation that hosts sftp-server within sshd.
+	//		 * If sftp-server were to be hosted within sshd for Windows, following would be needed
+	//		 *  - Impersonate client user
+	//		 *  - call sftp-server-main
+	//		 *
+	//		 * SSHD service account would need impersonate privilege to impersonate client user, 
+	//		 * thereby needing elevation of SSHD account privileges
+	//		 * Apart from slight performance gain (by hosting sftp in process), there isn't a clear 
+	//		 * gain with this option over using and spawning sftp-server.exe.
+	//		 * Hence going with the later option. 
+	//		 */
+	//		if(IS_INTERNAL_SFTP(command)) {
+	//			memcpy(cmd, sftp_exe, strlen(sftp_exe) + 1);
+	//			cmd += strlen(sftp_exe);
+	//			
+	//			// copy the arguments (if any).
+	//			if(strlen(command) > strlen(INTERNAL_SFTP_NAME)) {
+	//				argp = (char*)command + strlen(INTERNAL_SFTP_NAME);
+	//				memcpy(cmd, argp, strlen(argp)+1);
+	//			}
+	//		} else
+	//			memcpy(cmd, command, strlen(command) + 1);
+	//	}
+	//	cmd = exec_command;
+	//	exec_command = malloc(31 + strlen(cmd) + 1);
+	//	exec_command[0] = '\0';
+	//	strcat(exec_command, "cmd.exe /c ");
+	//	strcat(exec_command, cmd);
+
+	//} else {
+	//	/* 
+	//	 * contruct %programdir%\ssh-shellhost.exe <-nopty> base64encoded(command)  
+	//	 * command is base64 encoded to preserve original special charecters like '"'
+	//	 * else they will get lost in CreateProcess translation
+	//	 */
+	//	shell_host = pty ? "ssh-shellhost.exe " : "ssh-shellhost.exe -nopty ";
+	//	if (command) {
+	//		/* accomodate bas64 encoding bloat and null terminator */
+	//		command_b64_len = ((strlen(command) + 2) / 3) * 4 + 1;
+	//		if ((command_b64 = malloc(command_b64_len)) == NULL ||
+	//		    b64_ntop(command, strlen(command), command_b64, command_b64_len) == -1)
+	//			fatal("%s, error encoding session command");
+	//	}
+	//	exec_command = malloc(strlen(progdir) + 1 + strlen(shell_host) + (command_b64 ? strlen(command_b64): 0) + 1);
+	//	if (exec_command == NULL)
+	//		fatal("%s, out of memory", __func__);
+	//	cmd = exec_command;
+	//	memcpy(cmd, progdir, strlen(progdir));
+	//	cmd += strlen(progdir);
+	//	*cmd++ = '\\';
+	//	memcpy(cmd, shell_host, strlen(shell_host));
+	//	cmd += strlen(shell_host);
+	//	if (command_b64) {
+	//		memcpy(cmd, command_b64, strlen(command_b64));
+	//		cmd += strlen(command_b64);
+	//	}
+	//	*cmd = '\0';
+	//}
 
 	/* start the process */
 	{
@@ -675,8 +694,11 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	else
 		session_set_fds(ssh, s, pipein[1], pipeout[0], pipeerr[0], s->is_subsystem, 1); /* tty interactive session */
 
+	ret = 0;
+
+cleanup:
 	free(exec_command_w);
-	return 0;
+	return ret;
 }
 
 int

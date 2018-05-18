@@ -66,7 +66,7 @@ set_defaultshell()
 
 	if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\OpenSSH", 0, mask, &reg_key) == ERROR_SUCCESS) &&
 	    (RegQueryValueExW(reg_key, L"DefaultShell", 0, NULL, (LPBYTE)shellpathw, &tmp_len) == ERROR_SUCCESS) &&
-	    (shellpathw[0] != "\0")) {
+	    (shellpathw[0] != '\0')) {
 		/* fetched default shell path from registry */
 	} else {
 		if (!GetSystemDirectoryW(shellpathw, _countof(shellpathw))) {
@@ -113,6 +113,8 @@ reset_pw()
 		free(pw.pw_dir);
 	pw.pw_name = NULL;
 	pw.pw_dir = NULL;
+
+	return 0;
 }
 
 static struct passwd*
@@ -220,7 +222,7 @@ cleanup:
 }
 
 static struct passwd*
-getpwnam_placeholder(char* user) {
+getpwnam_placeholder(const char* user) {
 	wchar_t tmp_home[PATH_MAX];
 	char *pw_name = NULL, *pw_dir = NULL;
 	struct passwd* ret = NULL;

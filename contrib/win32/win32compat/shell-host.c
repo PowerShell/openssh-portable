@@ -1271,7 +1271,7 @@ start_with_pty(wchar_t *command)
 	* Launch via cmd.exe /c, otherwise known issues exist with color rendering in powershell
 	*/
 	GetSystemDirectoryW(cmd, MAX_CMD_LEN);
-	GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L" /c "));
+	GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L"\\cmd.exe /c "));
 	GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, command));
 
 	SetConsoleCtrlHandler(NULL, FALSE);
@@ -1444,7 +1444,7 @@ int
 wmain(int ac, wchar_t **av)
 {
 	wchar_t *exec_command;
-	
+
 	_set_invalid_parameter_handler(my_invalid_parameter_handler);
 
 	if (ac == 1) {
