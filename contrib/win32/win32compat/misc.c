@@ -1645,7 +1645,7 @@ get_user_sid(char* name)
 	HANDLE token = NULL;
 	TOKEN_USER* info = NULL;
 	DWORD info_len = 0;
-	PSID ret = NULL;
+	PSID ret = NULL, psid;
 	wchar_t* name_utf16 = NULL;
 	BYTE binary_sid[SECURITY_MAX_SID_SIZE];
 	DWORD sid_size = ARRAYSIZE(binary_sid);
@@ -1666,15 +1666,13 @@ get_user_sid(char* name)
 			goto cleanup;
 		}
 
-		if ((ret = malloc(sid_len)) == NULL) {
+		if ((psid = malloc(sid_len)) == NULL) {
 			errno = ENOMEM;
 			goto cleanup;
 		}
 
-		if (!LookupAccountNameW(NULL, name_utf16, ret, &sid_len, dom, &dom_len, &n_use)) {
+		if (!LookupAccountNameW(NULL, name_utf16, psid, &sid_len, dom, &dom_len, &n_use)) {
 			errno = errno_from_Win32LastError();
-			free(ret);
-			ret = NULL;
 			goto cleanup;
 		}
 	}
@@ -1691,29 +1689,33 @@ get_user_sid(char* name)
 		}
 
 		if (GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE) {
-			free(info);
-			info = NULL;
-			errno = EOTHER;
+			errno = errno_from_Win32LastError();
 			goto cleanup;
 		}
 
-		if ((ret = malloc(GetLengthSid(info->User.Sid))) == NULL) {
+		if ((psid = malloc(GetLengthSid(info->User.Sid))) == NULL) {
 			errno = ENOMEM;
 			goto cleanup;
 		}
 
-		if (!CopySid(GetLengthSid(info->User.Sid), ret, info->User.Sid)) {
+		if (!CopySid(GetLengthSid(info->User.Sid), psid, info->User.Sid)) {
 			errno = errno_from_Win32LastError();
 			goto cleanup;
 		}
 	}
+
+	ret = psid;
+	psid = NULL;
 cleanup:
 
 	if (token)
 		CloseHandle(token);
-
 	if (name_utf16)
 		free(name_utf16);
+	if (psid)
+		free(psid);
+	if (info)
+		free(info);
 
 	return ret;
 }

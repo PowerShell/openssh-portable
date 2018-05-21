@@ -462,7 +462,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	fcntl(pipein[1], F_SETFD, FD_CLOEXEC);
 	fcntl(pipeout[0], F_SETFD, FD_CLOEXEC);
 	fcntl(pipeerr[0], F_SETFD, FD_CLOEXEC);
-
+	
 	/* setup Environment varibles */
 	if (setup_session_vars(s) != 0)
 		goto cleanup;
@@ -581,6 +581,7 @@ do {					\
 			if (shell_type == SH_BASH)
 				CMDLINE_APPEND(p, "\"");
 		}
+		*p = '\0';
 	}
 
 	/* start the process */
@@ -607,6 +608,7 @@ do {					\
 		if (!CreateProcessW(NULL, exec_command_w, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
 			errno = EOTHER;
 			error("ERROR. Cannot create process (%u).\n", GetLastError());
+			goto cleanup;
 		}
 
 		CloseHandle(pi.hThread);
