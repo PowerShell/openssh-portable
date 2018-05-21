@@ -49,38 +49,65 @@
 
 static struct passwd pw;
 static char* pw_shellpath = NULL;
+char* shell_command_option = NULL;
 
 /* returns 0 on success, and -1 with errno set on failure */
 static int
 set_defaultshell()
 {
 	HKEY reg_key = 0;
-	int tmp_len = PATH_MAX;
-	errno_t r = 0;
+	int tmp_len, ret = -1;
 	REGSAM mask = STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY;
-	wchar_t shellpathw[PATH_MAX];
+	wchar_t path_buf[PATH_MAX], option_buf[32];
+	char *pw_shellpath_local = NULL, *command_option_local = NULL;
+
+	errno = 0;
 
 	/* if already set, return success */
 	if (pw_shellpath != NULL)
 		return 0;
 
+	path_buf[0] = L'\0';
+	option_buf[0] = L'\0';
+
+	tmp_len = _countof(path_buf);
 	if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\OpenSSH", 0, mask, &reg_key) == ERROR_SUCCESS) &&
-	    (RegQueryValueExW(reg_key, L"DefaultShell", 0, NULL, (LPBYTE)shellpathw, &tmp_len) == ERROR_SUCCESS) &&
-	    (shellpathw[0] != '\0')) {
+	    (RegQueryValueExW(reg_key, L"DefaultShell", 0, NULL, (LPBYTE)path_buf, &tmp_len) == ERROR_SUCCESS) &&
+	    (path_buf[0] != L'\0')) {
 		/* fetched default shell path from registry */
+		tmp_len = _countof(option_buf);
+		if (RegQueryValueExW(reg_key, L"DefaultShellCommandOption", 0, NULL, (LPBYTE)option_buf, &tmp_len) != ERROR_SUCCESS)
+			option_buf[0] = L'\0';
 	} else {
-		if (!GetSystemDirectoryW(shellpathw, _countof(shellpathw))) {
+		if (!GetSystemDirectoryW(path_buf, _countof(path_buf))) {
 			errno = GetLastError();
-			return -1;
+			goto cleanup;
 		}
-		if (wcscat_s(shellpathw, _countof(shellpathw), L"\\cmd.exe") != 0)
-			return -1;
+		if (wcscat_s(path_buf, _countof(path_buf), L"\\cmd.exe") != 0)
+			goto cleanup;
 	}
 
-	if ((pw_shellpath = utf16_to_utf8(shellpathw)) == NULL)
-		return -1;
+	if ((pw_shellpath_local = utf16_to_utf8(path_buf)) == NULL)
+		goto cleanup;
 
-	return 0;
+	if (option_buf[0] != L'\0')
+		if ((command_option_local = utf16_to_utf8(option_buf)) == NULL)
+			goto cleanup;
+
+	pw_shellpath = pw_shellpath_local;
+	pw_shellpath_local = NULL;
+	shell_command_option = command_option_local;
+	command_option_local = NULL;
+
+	ret = 0;
+cleanup:
+	if (pw_shellpath_local)
+		free(pw_shellpath_local);
+
+	if (command_option_local)
+		free(command_option_local);
+
+	return ret;
 }
 
 
