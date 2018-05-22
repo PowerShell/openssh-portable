@@ -254,7 +254,6 @@ getpwnam_placeholder(const char* user) {
 	char *pw_name = NULL, *pw_dir = NULL;
 	struct passwd* ret = NULL;
 
-	GetWindowsDirectoryW(tmp_home, PATH_MAX);
 	if (GetWindowsDirectoryW(tmp_home, PATH_MAX) == 0) {
 		debug3("GetWindowsDirectoryW failed with %d", GetLastError());
 		errno = EOTHER;

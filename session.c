@@ -377,6 +377,91 @@ xauth_valid_string(const char *s)
 		goto cleanup;		\
 } while (0)
 
+#define GOTO_CLEANUP_ON_ERR(exp) do {	\
+	if ((exp) != 0)			\
+		goto cleanup;		\
+} while(0)
+
+ /* TODO  - built env var set and pass it along with CreateProcess */
+ /* set user environment variables from user profile */
+static void
+setup_session_user_vars(wchar_t* profile_path)
+{
+	/* retrieve and set env variables. */
+	HKEY reg_key = 0;
+	wchar_t name[256];
+	wchar_t path[PATH_MAX + 1] = { 0, };
+	wchar_t *data = NULL, *data_expanded = NULL, *path_value = NULL, *to_apply;
+	DWORD type, name_chars = 256, data_chars = 0, data_expanded_chars = 0, required, i = 0;
+	LONG ret;
+
+	SetEnvironmentVariableW(L"USERPROFILE", profile_path);
+	swprintf_s(path, _countof(path), L"%s\\AppData\\Local", profile_path);
+	SetEnvironmentVariableW(L"LOCALAPPDATA", path);
+	swprintf_s(path, _countof(path), L"%s\\AppData\\Roaming", profile_path);
+	SetEnvironmentVariableW(L"APPDATA", path);
+	
+	ret = RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE, &reg_key);
+	if (ret != ERROR_SUCCESS)
+		//error("Error retrieving user environment variables. RegOpenKeyExW returned %d", ret);
+		return;
+	else while (1) {
+		to_apply = NULL;
+		required = data_chars * 2;
+		name_chars = 256;
+		ret = RegEnumValueW(reg_key, i++, name, &name_chars, 0, &type, (LPBYTE)data, &required);
+		if (ret == ERROR_NO_MORE_ITEMS)
+			break;
+		else if (ret == ERROR_MORE_DATA || required > data_chars * 2) {
+			if (data != NULL)
+				free(data);
+			data = xmalloc(required);
+			data_chars = required / 2;
+			i--;
+			continue;
+		}
+		else if (ret != ERROR_SUCCESS)
+			break;
+
+		if (type == REG_SZ)
+			to_apply = data;
+		else if (type == REG_EXPAND_SZ) {
+			required = ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+			if (required > data_expanded_chars) {
+				if (data_expanded)
+					free(data_expanded);
+				data_expanded = xmalloc(required * 2);
+				data_expanded_chars = required;
+				ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+			}
+			to_apply = data_expanded;
+		}
+
+		if (_wcsicmp(name, L"PATH") == 0) {
+			if ((required = GetEnvironmentVariableW(L"PATH", NULL, 0)) != 0) {
+				/* "required" includes null term */
+				path_value = xmalloc((wcslen(to_apply) + 1 + required) * 2);
+				GetEnvironmentVariableW(L"PATH", path_value, required);
+				path_value[required - 1] = L';';
+				GOTO_CLEANUP_ON_ERR(memcpy_s(path_value + required, (wcslen(to_apply) + 1) * 2, to_apply, (wcslen(to_apply) + 1) * 2));
+				to_apply = path_value;
+			}
+
+		}
+		if (to_apply)
+			SetEnvironmentVariableW(name, to_apply);
+	}
+cleanup:
+	if (reg_key)
+		RegCloseKey(reg_key);
+	if (data)
+		free(data);
+	if (data_expanded)
+		free(data_expanded);
+	if (path_value)
+		free(path_value);
+}
+
 static int 
 setup_session_vars(Session* s) 
 {
@@ -431,6 +516,9 @@ setup_session_vars(Session* s)
 		SetEnvironmentVariableW(L"PROMPT", wbuf);
 	}
 
+	/* setup any user specific env variables */
+	setup_session_user_vars(pw_dir_w);
+
 	ret = 0;
 cleanup:
 	free(pw_dir_w);
@@ -447,6 +535,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	char *progdir = w32_programdir();
 	wchar_t *exec_command_w = NULL;
 	char  *command_enhanced = NULL, *exec_command = NULL;
+	HANDLE job = NULL;
 	
 	/* Create three pipes for stdin, stdout and stderr */
 	if (pipe(pipein) == -1 || pipe(pipeout) == -1 || pipe(pipeerr) == -1) 
@@ -463,9 +552,18 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	fcntl(pipeout[0], F_SETFD, FD_CLOEXEC);
 	fcntl(pipeerr[0], F_SETFD, FD_CLOEXEC);
 	
-	/* setup Environment varibles */
-	if (setup_session_vars(s) != 0)
-		goto cleanup;
+	/* setup Environment varibles */ 
+	do {
+		static int environment_set = 0;
+
+		if (environment_set)
+			break;
+
+		if (setup_session_vars(s) != 0)
+			goto cleanup;
+
+		environment_set = 1;
+	} while (0);
 
 	if (!in_chroot)
 		chdir(s->pw->pw_dir);
@@ -588,6 +686,9 @@ do {					\
 	{
 		PROCESS_INFORMATION pi;
 		STARTUPINFOW si;
+		JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info;
+		HANDLE job_dup;
+
 		memset(&si, 0, sizeof(STARTUPINFO));
 		si.cb = sizeof(STARTUPINFO);
 		si.dwXSize = 5;
@@ -612,6 +713,26 @@ do {					\
 		}
 
 		CloseHandle(pi.hThread);
+		memset(&job_info, 0, sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+		job_info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+
+		/* 
+		 * assign job object to control processes spawned by shell 
+		 * 1. create job object
+		 * 2. assign child to job object
+		 * 3. duplicate job handle into child so it would be the last to close it
+		 */
+		if ((job = CreateJobObjectW(NULL, NULL)) == NULL ||
+		    !SetInformationJobObject(job, JobObjectExtendedLimitInformation, &job_info, sizeof(job_info)) ||
+		    !AssignProcessToJobObject(job, pi.hProcess) ||
+		    !DuplicateHandle(GetCurrentProcess(), job, pi.hProcess, &job_dup, 0, FALSE, DUPLICATE_SAME_ACCESS)) {
+			error("cannot associate job object: %d", GetLastError());
+			errno = EOTHER;
+			TerminateProcess(pi.hProcess, 255);
+			CloseHandle(pi.hProcess);
+			goto cleanup;
+		}
+
 		s->pid = pi.dwProcessId;
 		register_child(pi.hProcess, pi.dwProcessId);
 	}
@@ -645,6 +766,8 @@ cleanup:
 		free(exec_command);
 	if (!exec_command_w)
 		free(exec_command_w);
+	if (job)
+		CloseHandle(job);
 
 	return ret;
 }

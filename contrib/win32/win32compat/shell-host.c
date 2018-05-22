@@ -1346,99 +1346,6 @@ cleanup:
 	return child_exit_code;
 }
 
-static void* xmalloc(size_t size) {
-	void* ptr;
-	if ((ptr = malloc(size)) == NULL) {
-		printf_s("out of memory");
-		exit(EXIT_FAILURE);
-	}
-	return ptr;
-}
-
-/* TODO move this to session.c, built env var set and pass it along with CreateProcess */
-/* set user environment variables from user profile */
-static void setup_session_user_vars()
-{
-	/* retrieve and set env variables. */
-	HKEY reg_key = 0;
-	wchar_t name[256];
-	wchar_t userprofile_path[PATH_MAX + 1] = { 0, }, path[PATH_MAX + 1] = { 0, };
-	wchar_t *data = NULL, *data_expanded = NULL, *path_value = NULL, *to_apply;
-	DWORD type, name_chars = 256, data_chars = 0, data_expanded_chars = 0, required, i = 0;
-	LONG ret;
-	DWORD len = GetCurrentDirectory(_countof(userprofile_path), userprofile_path);
-	if (len > 0) {
-		SetEnvironmentVariableW(L"USERPROFILE", userprofile_path);
-		swprintf_s(path, _countof(path), L"%s\\AppData\\Local", userprofile_path);
-		SetEnvironmentVariableW(L"LOCALAPPDATA", path);
-		swprintf_s(path, _countof(path), L"%s\\AppData\\Roaming", userprofile_path);
-		SetEnvironmentVariableW(L"APPDATA", path);
-	}
-
-	ret = RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE, &reg_key);
-	if (ret != ERROR_SUCCESS)
-		//error("Error retrieving user environment variables. RegOpenKeyExW returned %d", ret);
-		return;		
-	else while (1) {
-		to_apply = NULL;
-		required = data_chars * 2;
-		name_chars = 256;
-		ret = RegEnumValueW(reg_key, i++, name, &name_chars, 0, &type, (LPBYTE)data, &required);
-		if (ret == ERROR_NO_MORE_ITEMS)
-			break;
-		else if (ret == ERROR_MORE_DATA || required > data_chars * 2) {
-			if (data != NULL)
-				free(data);
-			data = xmalloc(required);
-			data_chars = required / 2;
-			i--;
-			continue;
-		}
-		else if (ret != ERROR_SUCCESS) 
-			break;
-
-		if (type == REG_SZ)
-			to_apply = data;
-		else if (type == REG_EXPAND_SZ) {
-			required = ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
-			if (required > data_expanded_chars) {
-				if (data_expanded)
-					free(data_expanded);
-				data_expanded = xmalloc(required * 2);
-				data_expanded_chars = required;
-				ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
-			}
-			to_apply = data_expanded;
-		}
-
-		if (_wcsicmp(name, L"PATH") == 0) {
-			if ((required = GetEnvironmentVariableW(L"PATH", NULL, 0)) != 0) {
-				/* "required" includes null term */
-				path_value = xmalloc((wcslen(to_apply) + 1 + required) * 2);
-				GetEnvironmentVariableW(L"PATH", path_value, required);
-				path_value[required - 1] = L';';
-				GOTO_CLEANUP_ON_ERR(memcpy_s(path_value + required, (wcslen(to_apply) + 1) * 2, to_apply, (wcslen(to_apply) + 1) * 2));
-				to_apply = path_value;
-			}
-
-		}
-		if (to_apply)
-			SetEnvironmentVariableW(name, to_apply);
-	}
-cleanup:
-	if (reg_key)
-		RegCloseKey(reg_key);
-	if (data)
-		free(data);
-	if (data_expanded)
-		free(data_expanded);
-	if (path_value)
-		free(path_value);
-	RevertToSelf();
-}
-
-int b64_pton(char const *src, u_char *target, size_t targsize);
-
 /* shellhost.exe <cmdline to be executed with PTY support>*/
 int 
 wmain(int ac, wchar_t **av)
@@ -1452,29 +1359,8 @@ wmain(int ac, wchar_t **av)
 		exit(255);
 	}
 
-	setup_session_user_vars();
-
 	/* get past shellhost.exe in commandline */
 	exec_command = wcsstr(GetCommandLineW(), L"shellhost.exe") + wcslen(L"shellhost.exe") + 1;
 
-	/* Todo - move this to session.c */
-	{
-		JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info;
-		/* assign to job object */
-		if ((job = CreateJobObjectW(NULL, NULL)) == NULL) {
-			printf_s("cannot create job object, error: %d", GetLastError());
-			return -1;
-		}
-
-		memset(&job_info, 0, sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
-		job_info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
-
-		if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &job_info, sizeof(job_info)) ||
-			!AssignProcessToJobObject(job, GetCurrentProcess())) {
-			printf_s("cannot associate job object: %d", GetLastError());
-			return -1;
-		}
-	}
-	
 	return start_with_pty(exec_command);
 }
