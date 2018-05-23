@@ -150,7 +150,7 @@ generate_s4u_user_token(wchar_t* user_cpn, int impersonation) {
 		/* lookup the upn for the user */
 		WCHAR domain_upn[MAX_UPN_LEN + 1];
 		ULONG domain_upn_len = ARRAYSIZE(domain_upn);
-		if (library != NULL && (LocalTranslateNameW = (TranslateNameWFunc) GetProcAddress(library, "TranslateNameW")) != NULL && 
+		if (library == NULL || (LocalTranslateNameW = (TranslateNameWFunc) GetProcAddress(library, "TranslateNameW")) == NULL ||
 			LocalTranslateNameW(user_cpn, NameSamCompatible,
 			NameUserPrincipal, domain_upn, &domain_upn_len) == 0) {
 
