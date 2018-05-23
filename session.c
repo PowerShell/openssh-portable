@@ -1713,7 +1713,16 @@ safely_chroot(const char *path, uid_t uid)
 		fatal("chroot path does not begin at root");
 	if (strlen(path) >= sizeof(component))
 		fatal("chroot path too long");
-#ifndef WINDOWS
+
+#ifdef WINDOWS
+	/* ensure chroot path exists and is a directory */
+	if (stat(path, &st) != 0)
+		fatal("%s: stat(\"%s\"): %s", __func__,
+			path, strerror(errno));
+	if (!S_ISDIR(st.st_mode))
+		fatal("chroot path %s is not a directory",
+			path);
+#else
 	/*
 	 * Descend the path, checking that each component is a
 	 * root-owned directory with strict permissions.
