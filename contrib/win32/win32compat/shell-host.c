@@ -1208,7 +1208,10 @@ start_with_pty(wchar_t *command)
 		exit(255);
 	}
 
-	GetSystemDirectoryW(system32_path, PATH_MAX);
+	if (!GetSystemDirectoryW(system32_path, PATH_MAX)) {
+		printf_s("unable to retrieve system32 path\n");
+		exit(255);
+	}
 
 	GOTO_CLEANUP_ON_ERR(wcsncpy_s(kernel32_dll_path, _countof(kernel32_dll_path), system32_path, wcsnlen(system32_path, _countof(system32_path)) + 1));
 	GOTO_CLEANUP_ON_ERR(wcscat_s(kernel32_dll_path, _countof(kernel32_dll_path), L"\\kernel32.dll"));
@@ -1265,12 +1268,11 @@ start_with_pty(wchar_t *command)
 	/* disable inheritance on pipe_in*/
 	GOTO_CLEANUP_ON_FALSE(SetHandleInformation(pipe_in, HANDLE_FLAG_INHERIT, 0));
 	
-	cmd[0] = L'\0';
-
 	/*
 	* Launch via cmd.exe /c, otherwise known issues exist with color rendering in powershell
 	*/
-	GetSystemDirectoryW(cmd, MAX_CMD_LEN);
+	cmd[0] = L'\0';
+	GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, system32_path));
 	GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L"\\cmd.exe /c "));
 	GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, command));
 

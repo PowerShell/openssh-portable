@@ -128,18 +128,24 @@ initialize_pw()
 	return 0;
 }
 
-int
-reset_pw()
+static void 
+clean_pw()
 {
-	if (initialize_pw() != 0)
-		return -1;
-
 	if (pw.pw_name)
 		free(pw.pw_name);
 	if (pw.pw_dir)
 		free(pw.pw_dir);
 	pw.pw_name = NULL;
 	pw.pw_dir = NULL;
+}
+
+static int
+reset_pw()
+{
+	if (initialize_pw() != 0)
+		return -1;
+
+	clanup_pw();
 
 	return 0;
 }
@@ -230,8 +236,8 @@ get_passwd(const wchar_t * user_utf16, PSID sid)
 	/* convert to utf8, make name lowercase, and assign to output structure*/
 	_wcslwr_s(user_resolved, wcslen(user_resolved) + 1);
 	if ((pw.pw_name = utf16_to_utf8(user_resolved)) == NULL ||
-		(pw.pw_dir = utf16_to_utf8(profile_home_exp)) == NULL) {
-		reset_pw();
+	    (pw.pw_dir = utf16_to_utf8(profile_home_exp)) == NULL) {
+		clean_pw();
 		errno = ENOMEM;
 		goto cleanup;
 	}
@@ -303,9 +309,8 @@ w32_getpwnam(const char *user_utf8)
 
 		REGSAM mask = STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY;
 		if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\OpenSSH", 0, mask, &reg_key) == ERROR_SUCCESS) &&
-		    (RegQueryValueExW(reg_key, L"LSAAuthenticationPackage", 0, NULL, NULL, &lsa_auth_pkg_len) == ERROR_SUCCESS)) {
+		    (RegQueryValueExW(reg_key, L"LSAAuthenticationPackage", 0, NULL, NULL, &lsa_auth_pkg_len) == ERROR_SUCCESS))
 			ret = getpwnam_placeholder(user_utf8);
-		}
 
 		if (reg_key)
 			RegCloseKey(reg_key);

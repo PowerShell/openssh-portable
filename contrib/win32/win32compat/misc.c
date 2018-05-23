@@ -1647,8 +1647,6 @@ get_user_sid(char* name)
 	DWORD info_len = 0;
 	PSID ret = NULL, psid;
 	wchar_t* name_utf16 = NULL;
-	BYTE binary_sid[SECURITY_MAX_SID_SIZE];
-	DWORD sid_size = ARRAYSIZE(binary_sid);
 
 	if (name) {
 		DWORD sid_len = 0;

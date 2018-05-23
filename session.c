@@ -407,7 +407,7 @@ setup_session_user_vars(wchar_t* profile_path)
 		return;
 	else while (1) {
 		to_apply = NULL;
-		required = data_chars * 2;
+		required = data_chars * sizeof(wchar_t);
 		name_chars = 256;
 		ret = RegEnumValueW(reg_key, i++, name, &name_chars, 0, &type, (LPBYTE)data, &required);
 		if (ret == ERROR_NO_MORE_ITEMS)
