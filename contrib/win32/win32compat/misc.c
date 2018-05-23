@@ -1055,7 +1055,7 @@ resolved_path_utf16(const char *input_path)
 			if (resolved_path_new == NULL) {
 				debug3("%s: memory allocation failed.", __FUNCTION__);
 				free(resolved_path);
-        errno = ENOMEM;
+				errno = ENOMEM;
 				return NULL;
 			}
 			else resolved_path = resolved_path_new;
