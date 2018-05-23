@@ -145,7 +145,7 @@ reset_pw()
 	if (initialize_pw() != 0)
 		return -1;
 
-	clanup_pw();
+	clean_pw();
 
 	return 0;
 }
