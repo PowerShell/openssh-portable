@@ -531,6 +531,7 @@ HANDLE generate_sshd_virtual_token()
 	SID_IDENTIFIER_AUTHORITY nt_authority = SECURITY_NT_AUTHORITY;
 	UNICODE_STRING domain, group, account;
 	WCHAR va_name[32]; /* enough to accomodate sshd_123457890 */
+	LSA_HANDLE lsa_policy = NULL;
 
 	PSID sid_domain = NULL, sid_group = NULL, sid_user = NULL;
 	HANDLE va_token = 0, va_token_restricted = 0;
@@ -601,12 +602,32 @@ HANDLE generate_sshd_virtual_token()
 	if (AddSidMappingToLsa(&domain, &account, sid_user) != 0)
 		goto cleanup;
 
+	/* assign service logon privilege to virtual account */
+	{
+		LSA_OBJECT_ATTRIBUTES ObjectAttributes;
+		UNICODE_STRING svcLogonRight;
+		NTSTATUS lsa_ret;
+
+		ZeroMemory(&ObjectAttributes, sizeof(ObjectAttributes));
+		if ((lsa_ret = LsaOpenPolicy(NULL, &ObjectAttributes,
+		    POLICY_CREATE_ACCOUNT | POLICY_LOOKUP_NAMES | POLICY_VIEW_LOCAL_INFORMATION, 
+		    &lsa_policy )) != STATUS_SUCCESS) {
+			error("%s: unable to open policy handle, error: %d", __FUNCTION__, lsa_ret);
+			goto cleanup;
+		}
+		InitUnicodeString(&svcLogonRight, SE_SERVICE_LOGON_NAME);
+		if ((lsa_ret = LsaAddAccountRights(lsa_policy, sid_user, &svcLogonRight, 1)) != STATUS_SUCCESS) {
+			error("%s: unable to assign SE_SERVICE_LOGON_NAME privilege, error: %d", __FUNCTION__, lsa_ret);
+			goto cleanup;
+		}
+	}
+
 	/* Logon virtual and create token */
 	if (!LogonUserExExWHelper(
 	    va_name,
 	    VIRTUALUSER_DOMAIN,
 	    L"",
-	    LOGON32_LOGON_INTERACTIVE,
+	    LOGON32_LOGON_SERVICE,
 	    LOGON32_PROVIDER_VIRTUAL,
 	    NULL,
 	    &va_token,
@@ -633,6 +654,8 @@ cleanup:
 		FreeSid(sid_user);
 	if (sid_group)
 		FreeSid(sid_group);
+	if (lsa_policy)
+		LsaClose(lsa_policy);
 
 	return va_token_restricted;
 }
