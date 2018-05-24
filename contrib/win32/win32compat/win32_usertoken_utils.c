@@ -43,7 +43,7 @@
 #include <security.h>
 
 #include "inc\utf.h"
-#include "logonuser.h"
+#include "w32api_proxies.h"
 #include <Ntsecapi.h>
 #include <Strsafe.h>
 #include <sddl.h>
@@ -360,7 +360,7 @@ get_user_token(char* user, int impersonation) {
 	if ((token = generate_s4u_user_token(user_utf16, impersonation)) == 0) {
 		debug3("unable to generate token for user %ls", user_utf16);
 		/* work around for https://github.com/PowerShell/Win32-OpenSSH/issues/727 by doing a fake login */
-		LogonUserExExWHelper(L"FakeUser", L"FakeDomain", L"FakePasswd",
+		pLogonUserExExW(L"FakeUser", L"FakeDomain", L"FakePasswd",
 			LOGON32_LOGON_NETWORK_CLEARTEXT, LOGON32_PROVIDER_DEFAULT, NULL, &token, NULL, NULL, NULL, NULL);
 		if ((token = generate_s4u_user_token(user_utf16, impersonation)) == 0) {
 			error("unable to generate token on 2nd attempt for user %ls", user_utf16);
@@ -626,7 +626,7 @@ HANDLE generate_sshd_virtual_token()
 
 		ZeroMemory(&ObjectAttributes, sizeof(ObjectAttributes));
 		if ((lsa_ret = LsaOpenPolicy(NULL, &ObjectAttributes,
-		    POLICY_CREATE_ACCOUNT | POLICY_LOOKUP_NAMES | POLICY_VIEW_LOCAL_INFORMATION, 
+		    POLICY_CREATE_ACCOUNT | POLICY_LOOKUP_NAMES, 
 		    &lsa_policy )) != STATUS_SUCCESS) {
 			error("%s: unable to open policy handle, error: %d", __FUNCTION__, LsaNtStatusToWinError(lsa_ret));
 			goto cleanup;
@@ -639,7 +639,7 @@ HANDLE generate_sshd_virtual_token()
 	}
 
 	/* Logon virtual and create token */
-	if (!LogonUserExExWHelper(
+	if (!pLogonUserExExW(
 	    va_name,
 	    VIRTUALUSER_DOMAIN,
 	    L"",
