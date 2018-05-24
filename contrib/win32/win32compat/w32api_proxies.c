@@ -142,16 +142,57 @@ BOOLEAN pTranslateNameW(LPCWSTR name,
 	PULONG psize)
 {
 	HMODULE hm;
-	typedef BOOLEAN(WINAPI *TranslateNameWFunc)(LPCWSTR, EXTENDED_NAME_FORMAT, EXTENDED_NAME_FORMAT, LPWSTR, PULONG);
-	static TranslateNameWFunc s_pTranslateNameW = NULL;
+	typedef BOOLEAN(WINAPI *TranslateNameWType)(LPCWSTR, EXTENDED_NAME_FORMAT, EXTENDED_NAME_FORMAT, LPWSTR, PULONG);
+	static TranslateNameWType s_pTranslateNameW = NULL;
 
 	if (!s_pTranslateNameW) {
 		if ((hm = load_secur32()) == NULL)
 			return FALSE;
 
-		if ((s_pTranslateNameW = (TranslateNameWFunc)get_proc_address(hm, "TranslateNameW")) == NULL)
+		if ((s_pTranslateNameW = (TranslateNameWType)get_proc_address(hm, "TranslateNameW")) == NULL)
 			return FALSE;
 	}
 
 	return s_pTranslateNameW(name, account_format, desired_name_format, translated_name, psize);
+}
+
+NTSTATUS pLsaOpenPolicy(PLSA_UNICODE_STRING system_name,
+	PLSA_OBJECT_ATTRIBUTES attrib,
+	ACCESS_MASK access,
+	PLSA_HANDLE handle)
+{
+	HMODULE hm;
+	typedef NTSTATUS(*LsaOpenPolicyType)(PLSA_UNICODE_STRING, PLSA_OBJECT_ATTRIBUTES, ACCESS_MASK, PLSA_HANDLE);
+	static LsaOpenPolicyType s_pLsaOpenPolicy = NULL;
+
+	if (!s_pLsaOpenPolicy) {
+		if ((hm = load_advapi32()) == NULL)
+			return STATUS_ASSERTION_FAILURE;
+
+		if ((s_pLsaOpenPolicy = (LsaOpenPolicyType)get_proc_address(hm, "LsaOpenPolicy")) == NULL)
+			return STATUS_ASSERTION_FAILURE;
+	}
+
+	return s_pLsaOpenPolicy(system_name, attrib, access, handle);
+}
+
+
+NTSTATUS pLsaAddAccountRights(LSA_HANDLE lsa_h,
+	PSID psid,
+	PLSA_UNICODE_STRING rights,
+	ULONG num_rights)
+{
+	HMODULE hm;
+	typedef NTSTATUS(*LsaAddAccountRightsType)(LSA_HANDLE, PSID, PLSA_UNICODE_STRING, ULONG);
+	static LsaAddAccountRightsType s_pLsaAddAccountRights = NULL;
+
+	if (!s_pLsaAddAccountRights) {
+		if ((hm = load_advapi32()) == NULL)
+			return STATUS_ASSERTION_FAILURE;
+
+		if ((s_pLsaAddAccountRights = (LsaAddAccountRightsType)get_proc_address(hm, "LsaAddAccountRights")) == NULL)
+			return STATUS_ASSERTION_FAILURE;
+	}
+	
+	return s_pLsaAddAccountRights(lsa_h, psid, rights, num_rights);
 }

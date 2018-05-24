@@ -608,14 +608,14 @@ HANDLE generate_sshd_virtual_token()
 		NTSTATUS lsa_ret;
 
 		ZeroMemory(&ObjectAttributes, sizeof(ObjectAttributes));
-		if ((lsa_ret = LsaOpenPolicy(NULL, &ObjectAttributes,
+		if ((lsa_ret = pLsaOpenPolicy(NULL, &ObjectAttributes,
 		    POLICY_CREATE_ACCOUNT | POLICY_LOOKUP_NAMES, 
 		    &lsa_policy )) != STATUS_SUCCESS) {
 			error("%s: unable to open policy handle, error: %d", __FUNCTION__, LsaNtStatusToWinError(lsa_ret));
 			goto cleanup;
 		}
 		InitUnicodeString(&svcLogonRight, L"SeServiceLogonRight");
-		if ((lsa_ret = LsaAddAccountRights(lsa_policy, sid_user, &svcLogonRight, 1)) != STATUS_SUCCESS) {
+		if ((lsa_ret = pLsaAddAccountRights(lsa_policy, sid_user, &svcLogonRight, 1)) != STATUS_SUCCESS) {
 			error("%s: unable to assign SE_SERVICE_LOGON_NAME privilege, error: %d", __FUNCTION__, LsaNtStatusToWinError(lsa_ret));
 			goto cleanup;
 		}
