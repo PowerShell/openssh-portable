@@ -122,6 +122,7 @@ pLogonUserExExW(wchar_t *user_name, wchar_t *domain, wchar_t *password, DWORD lo
 	static LogonUserExExWType s_pLogonUserExExW = NULL;
 
 	if (!s_pLogonUserExExW) {
+		/* this API is typically found in sspicli, but this dll doesn't exist on some downlevel machines - we fallback to advapi32 then */
 		if ((hm = load_sspicli()) == NULL &&
 		    (hm = load_advapi32()) == NULL)
 			return FALSE;
