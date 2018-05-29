@@ -103,9 +103,7 @@ static VOID WINAPI service_handler(DWORD dwControl)
 static void 
 generate_host_keys()
 {
-	TOKEN_USER* info = NULL;
-	DWORD info_len = 0, dwError = 0;
-	HANDLE proc_token = NULL;
+	DWORD dwError = 0;
 	UUID uuid;
 	RPC_CWSTR rpc_str;
 	USER_INFO_1 ui;
@@ -114,13 +112,8 @@ generate_host_keys()
 	PROCESS_INFORMATION pi;
 	wchar_t cmdline[MAX_PATH];
 
-	if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &proc_token) == FALSE ||
-	    GetTokenInformation(proc_token, TokenUser, NULL, 0, &info_len) == TRUE ||
-	    (info = (TOKEN_USER*)malloc(info_len)) == NULL ||
-	    GetTokenInformation(proc_token, TokenUser, info, info_len, &info_len) == FALSE)
-		goto cleanup;
 
-	if (IsWellKnownSid(info->User.Sid, WinLocalSystemSid)) {
+	if (am_system()) {
 		/* create sshd account if it does not exist */
 		UuidCreate(&uuid);
 		UuidToStringW(&uuid, (RPC_WSTR*)&rpc_str);
@@ -146,11 +139,6 @@ generate_host_keys()
 			CloseHandle(pi.hProcess);
 		}
 	}
-cleanup:
-	if (proc_token)
-		CloseHandle(proc_token);
-	if (info)
-		free(info);
 }
 
 /*
@@ -162,34 +150,32 @@ static void
 create_prgdata_ssh_folder()
 {
 	/* create ssh cfg folder */
-	char ssh_cfg_dir[PATH_MAX] = { 0, };
-	strcpy_s(ssh_cfg_dir, _countof(ssh_cfg_dir), get_program_data_path());
-	strcat_s(ssh_cfg_dir, _countof(ssh_cfg_dir), "\\ssh");
-	if (create_directory_withsddl(ssh_cfg_dir, "O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;AU)") < 0) {
+	wchar_t ssh_cfg_dir[PATH_MAX] = { 0, };
+	wcscpy_s(ssh_cfg_dir, _countof(ssh_cfg_dir), get_program_data_path());
+	wcscat_s(ssh_cfg_dir, _countof(ssh_cfg_dir), L"\\ssh");
+	if (create_directory_withsddl(ssh_cfg_dir, L"O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;AU)") < 0) {
 		printf("failed to create %s", ssh_cfg_dir);
 		exit(255);
 	}
 
 	/* create logs folder */
-	char logs_dir[PATH_MAX] = { 0, };
-	strcat_s(logs_dir, _countof(logs_dir), ssh_cfg_dir);
-	strcat_s(logs_dir, _countof(logs_dir), "\\logs");
-	if (create_directory_withsddl(logs_dir, "O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)") < 0) {
+	wchar_t logs_dir[PATH_MAX] = { 0, };
+	wcscat_s(logs_dir, _countof(logs_dir), ssh_cfg_dir);
+	wcscat_s(logs_dir, _countof(logs_dir), L"\\logs");
+	if (create_directory_withsddl(logs_dir, L"O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)") < 0) {
 		printf("failed to create %s", logs_dir);
 		exit(255);
 	}
 
-	/* COPY sshd_config_default to %programData%\openssh\sshd_config */
-	char sshd_config_path[PATH_MAX] = { 0, };
-	strcat_s(sshd_config_path, _countof(sshd_config_path), ssh_cfg_dir);
-	strcat_s(sshd_config_path, _countof(sshd_config_path), "\\sshd_config");
-	struct stat st;
-	if (stat(sshd_config_path, &st) < 0) {
-		char sshd_config_default_path[PATH_MAX] = { 0, };
-		strcat_s(sshd_config_default_path, _countof(sshd_config_default_path), w32_programdir());
-		strcat_s(sshd_config_default_path, _countof(sshd_config_default_path), "\\sshd_config_default");
+	/* copy sshd_config_default to %programData%\ssh\sshd_config */
+	wchar_t sshd_config_path[PATH_MAX] = { 0, };
+	wcscat_s(sshd_config_path, _countof(sshd_config_path), ssh_cfg_dir);
+	wcscat_s(sshd_config_path, _countof(sshd_config_path), L"\\sshd_config");
+	if (GetFileAttributesW(sshd_config_path) == INVALID_FILE_ATTRIBUTES) {
+		wchar_t sshd_config_default_path[PATH_MAX] = { 0, };
+		swprintf_s(sshd_config_default_path, PATH_MAX, L"%S\\%s", w32_programdir(), L"sshd_config_default");
 
-		if (copy_file(sshd_config_default_path, sshd_config_path) < 0) {
+		if (CopyFileW(sshd_config_default_path, sshd_config_path, TRUE) == 0) {
 			printf("Failed to copy %s to %s, error:%d", sshd_config_default_path, sshd_config_path, GetLastError());
 			exit(255);
 		}
@@ -267,7 +253,7 @@ int wmain(int argc, wchar_t **wargv) {
 		return -1;
 	_wchdir(path_utf16);
 	free(path_utf16);
-	
+
 	if (!StartServiceCtrlDispatcherW(dispatch_table)) {
 		if (GetLastError() == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT)
 			return sshd_main(argc, wargv); /* sshd running NOT as service*/

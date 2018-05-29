@@ -1,6 +1,9 @@
 /*
 * Author: Manoj Ampalam <manoj.ampalam@microsoft.com>
 *
+* Author: Bryan Berns <berns@uwalumni.com>
+*   Modified group detection use s4u token information 
+*
 * Copyright(c) 2016 Microsoft Corp.
 * All rights reserved
 *
@@ -28,6 +31,8 @@
 * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#define UMDF_USING_NTSTATUS 
+#define SECURITY_WIN32
 #include <Windows.h>
 #include <stdio.h>
 #include <time.h>
@@ -36,6 +41,9 @@
 #include <LM.h>
 #include <Sddl.h>
 #include <Aclapi.h>
+#include <Ntsecapi.h>
+#include <security.h>
+#include <ntstatus.h>
 
 #include "inc\unistd.h"
 #include "inc\sys\stat.h"
@@ -49,11 +57,14 @@
 #include "inc\fcntl.h"
 #include "inc\utf.h"
 #include "signal_internal.h"
+#include "misc_internal.h"
 #include "debug.h"
 #include "w32fd.h"
 #include "inc\string.h"
 #include "inc\grp.h"
 #include "inc\time.h"
+
+#include <wchar.h>
 
 static char* s_programdir = NULL;
 
@@ -120,6 +131,12 @@ char* _sys_errlist_ext[] = {
 	"Text file busy",					/* ETXTBSY         139 */
 	"Operation would block"					/* EWOULDBLOCK     140 */
 };
+
+/* chroot state */
+char* chroot_path = NULL;
+int chroot_path_len = 0;
+/* UTF-16 version of the above */
+wchar_t* chroot_pathw = NULL;
 
 int
 usleep(unsigned int useconds)
@@ -230,15 +247,15 @@ dlsym(HMODULE handle, const char *symbol)
 FILE *
 w32_fopen_utf8(const char *input_path, const char *mode)
 {
-	wchar_t wpath[PATH_MAX], wmode[5];
-	FILE* f;
+	wchar_t *wmode = NULL, *wpath = NULL;
+	FILE* f = NULL;
 	char utf8_bom[] = { 0xEF,0xBB,0xBF };
 	char first3_bytes[3];
 	int status = 1;
-	errno_t r = 0;	
-	char *path = NULL;
+	errno_t r = 0;
+	int nonfs_dev = 0; /* opening a non file system device */
 
-	if (mode[1] != '\0') {
+	if (mode == NULL || mode[1] != '\0') {
 		errno = ENOTSUP;
 		return NULL;
 	}
@@ -249,36 +266,40 @@ w32_fopen_utf8(const char *input_path, const char *mode)
 		return NULL; 
 	}
 
-	path = resolved_path(input_path);
-
 	/* if opening null device, point to Windows equivalent */
-	if (0 == strncmp(path, NULL_DEVICE, strlen(NULL_DEVICE)+1)) {
-		if ((r = wcsncpy_s(wpath, PATH_MAX, L"NUL", 3)) != 0) {
-			debug3("wcsncpy_s failed with error: %d.", r);
-			return NULL;
-		}
+	if (strncmp(input_path, NULL_DEVICE, sizeof(NULL_DEVICE)) == 0) {
+		nonfs_dev = 1;
+		wpath = utf8_to_utf16(NULL_DEVICE_WIN);
 	}
 	else
-		status = MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, PATH_MAX);
-
-	if ((0 == status) ||
-	    (0 == MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, 5))) {
-		errno = EFAULT;
-		debug3("WideCharToMultiByte failed for %c - ERROR:%d", path, GetLastError());
-		return NULL;
-	}
+		wpath = resolved_path_utf16(input_path);
+	
+	wmode = utf8_to_utf16(mode);
+	if (wpath == NULL || wmode == NULL)
+		goto cleanup;
 
 	if ((_wfopen_s(&f, wpath, wmode) != 0) || (f == NULL)) {
-		debug3("Failed to open file:%s error:%d", path, errno);
-		return NULL;
-	}		
+		debug3("Failed to open file:%s error:%d", input_path, errno);
+		goto cleanup;
+	}	
+
+	if (chroot_pathw && !nonfs_dev) {
+		/* ensure final path is within chroot */
+		HANDLE h = (HANDLE)_get_osfhandle(_fileno(f));
+		if (!file_in_chroot_jail(h, input_path)) {
+			fclose(f);
+			f = NULL;
+			errno = EACCES;
+			goto cleanup;
+		}
+	}
 
 	/* BOM adjustments for file streams*/
 	if (mode[0] == 'w' && fseek(f, 0, SEEK_SET) != EBADF) {
 		/* write UTF-8 BOM - should we ?*/
 		/*if (fwrite(utf8_bom, sizeof(utf8_bom), 1, f) != 1) {
 			fclose(f);
-			return NULL;
+			goto cleanup;
 		}*/
 
 	} else if (mode[0] == 'r' && fseek(f, 0, SEEK_SET) != EBADF) {
@@ -288,6 +309,13 @@ w32_fopen_utf8(const char *input_path, const char *mode)
 			fseek(f, 0, SEEK_SET);
 		}
 	}
+
+cleanup:
+
+	if (wpath) 
+		free(wpath);
+	if (wmode)
+		free(wmode);
 
 	return f;
 }
@@ -512,11 +540,10 @@ int
 w32_chmod(const char *pathname, mode_t mode)
 {
 	int ret;
-	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(resolved_path(pathname));
-	if (resolvedPathName_utf16 == NULL) {
-		errno = ENOMEM;
+	wchar_t *resolvedPathName_utf16 = resolved_path_utf16(pathname);
+	if (resolvedPathName_utf16 == NULL) 
 		return -1;
-	}
+
 	ret = _wchmod(resolvedPathName_utf16, mode);
 	free(resolvedPathName_utf16);
 	return ret;
@@ -640,11 +667,10 @@ w32_utimes(const char *filename, struct timeval *tvp)
 {
 	int ret;
 	FILETIME acttime, modtime;
-	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(resolved_path(filename));
-	if (resolvedPathName_utf16 == NULL) {
-		errno = ENOMEM;
+	wchar_t *resolvedPathName_utf16 = resolved_path_utf16(filename);
+	if (resolvedPathName_utf16 == NULL) 
 		return -1;
-	}
+
 	memset(&acttime, 0, sizeof(FILETIME));
 	memset(&modtime, 0, sizeof(FILETIME));
 
@@ -670,42 +696,34 @@ w32_link(const char *oldpath, const char *newpath)
 int
 w32_rename(const char *old_name, const char *new_name)
 {
-	char old_name_resolved[PATH_MAX] = {0, };
-	char new_name_resolved[PATH_MAX] = {0, };
-
 	if (old_name == NULL || new_name == NULL) {
 		errno = EFAULT;
 		return -1;
 	}
 
-	strcpy_s(old_name_resolved, _countof(old_name_resolved), resolved_path(old_name));
-	strcpy_s(new_name_resolved, _countof(new_name_resolved), resolved_path(new_name));
+	wchar_t *resolvedOldPathName_utf16 = resolved_path_utf16(old_name);
+	wchar_t *resolvedNewPathName_utf16 = resolved_path_utf16(new_name);
 
-	wchar_t *resolvedOldPathName_utf16 = utf8_to_utf16(old_name_resolved);
-	wchar_t *resolvedNewPathName_utf16 = utf8_to_utf16(new_name_resolved);
-
-	if (NULL == resolvedOldPathName_utf16 || NULL == resolvedNewPathName_utf16) {
-		errno = ENOMEM;
+	if (NULL == resolvedOldPathName_utf16 || NULL == resolvedNewPathName_utf16) 
 		return -1;
-	}
-
+	
 	/*
 	 * To be consistent with POSIX rename(),
 	 * 1) if the new_name is file, then delete it so that _wrename will succeed.
 	 * 2) if the new_name is directory and it is empty then delete it so that _wrename will succeed.
 	 */
-	struct _stat64 st;
-	if (fileio_stat(resolved_path(new_name_resolved), &st) != -1) {
+	struct w32_stat st;
+	if (w32_stat(new_name, &st) != -1) {
 		if (((st.st_mode & _S_IFMT) == _S_IFREG))
-			w32_unlink(new_name_resolved);
+			w32_unlink(new_name);
 		else {
-			DIR *dirp = opendir(new_name_resolved);
+			DIR *dirp = opendir(new_name);
 			if (NULL != dirp) {
 				struct dirent *dp = readdir(dirp);
 				closedir(dirp);
 
 				if (dp == NULL)
-					w32_rmdir(new_name_resolved);
+					w32_rmdir(new_name);
 			}
 		}
 	}
@@ -720,11 +738,9 @@ w32_rename(const char *old_name, const char *new_name)
 int
 w32_unlink(const char *path)
 {
-	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(resolved_path(path));
-	if (NULL == resolvedPathName_utf16) {
-		errno = ENOMEM;
+	wchar_t *resolvedPathName_utf16 = resolved_path_utf16(path);
+	if (NULL == resolvedPathName_utf16) 
 		return -1;
-	}
 
 	int returnStatus = _wunlink(resolvedPathName_utf16);
 	free(resolvedPathName_utf16);
@@ -735,11 +751,9 @@ w32_unlink(const char *path)
 int
 w32_rmdir(const char *path)
 {
-	wchar_t *resolvedPathName_utf16 = utf8_to_utf16(resolved_path(path));
-	if (NULL == resolvedPathName_utf16) {
-		errno = ENOMEM;
+	wchar_t *resolvedPathName_utf16 = resolved_path_utf16(path);
+	if (NULL == resolvedPathName_utf16) 
 		return -1;
-	}
 
 	int returnStatus = _wrmdir(resolvedPathName_utf16);
 	free(resolvedPathName_utf16);
@@ -750,11 +764,9 @@ w32_rmdir(const char *path)
 int
 w32_chdir(const char *dirname_utf8)
 {
-	wchar_t *dirname_utf16 = utf8_to_utf16(dirname_utf8);
-	if (dirname_utf16 == NULL) {
-		errno = ENOMEM;
+	wchar_t *dirname_utf16 = resolved_path_utf16(dirname_utf8);
+	if (dirname_utf16 == NULL) 
 		return -1;
-	}
 
 	int returnStatus = _wchdir(dirname_utf16);
 	free(dirname_utf16);
@@ -788,6 +800,30 @@ w32_getcwd(char *buffer, int maxlen)
 		return NULL;
 	free(putf8);
 
+	to_lower_case(buffer);
+
+	if (chroot_path) {
+		/* ensure we are within chroot jail */
+		char c = buffer[chroot_path_len];
+		if ( strlen(buffer) < chroot_path_len ||
+		    memcmp(chroot_path, buffer, chroot_path_len) != 0 ||
+		    (c != '\0' && c!= '\\') ) {
+			errno = EOTHER;
+			error("cwb is not currently within chroot");
+			return NULL;
+		}
+
+		/* is cwd chroot ?*/
+		if (c == '\0') {
+			buffer[0] = '\\';
+			buffer[1] = '\0';
+		}
+		else {
+			char *tail = buffer + chroot_path_len;
+			memmove_s(buffer, maxlen, tail, strlen(tail) + 1);
+		}
+	}
+
 	return buffer;
 }
 
@@ -795,11 +831,10 @@ int
 w32_mkdir(const char *path_utf8, unsigned short mode)
 {
 	int curmask;
-	wchar_t *path_utf16 = utf8_to_utf16(resolved_path(path_utf8));
-	if (path_utf16 == NULL) {
-		errno = ENOMEM;
+	wchar_t *path_utf16 = resolved_path_utf16(path_utf8);
+	if (path_utf16 == NULL) 
 		return -1;
-	}
+
 	int returnStatus = _wmkdir(path_utf16);
 	if (returnStatus < 0) {
 		free(path_utf16);
@@ -819,20 +854,20 @@ w32_mkdir(const char *path_utf8, unsigned short mode)
 int
 w32_stat(const char *input_path, struct w32_stat *buf)
 {
-	return fileio_stat(resolved_path(input_path), (struct _stat64*)buf);
+	return fileio_stat(input_path, (struct _stat64*)buf);
 }
 
 int
 w32_lstat(const char *input_path, struct w32_stat *buf)
 {
-	return fileio_lstat(resolved_path(input_path), (struct _stat64*)buf);
+	return fileio_lstat(input_path, (struct _stat64*)buf);
 }
 
 /* if file is symbolic link, copy its link into "link" */
 int
 w32_readlink(const char *path, char *link, int linklen)
 {
-	return fileio_readlink(resolved_path(path), link, linklen);
+	return fileio_readlink(path, link, linklen);
 }
 
 /* convert forward slash to back slash */
@@ -874,25 +909,55 @@ convertToForwardslash(char *str)
 char *
 realpath(const char *path, char resolved[PATH_MAX])
 {
-	errno_t r = 0;
 	if (!path || !resolved) return NULL;
 
 	char tempPath[PATH_MAX];
 	size_t path_len = strlen(path);
+	resolved[0] = '\0';
 
 	if (path_len > PATH_MAX - 1) {
 		errno = EINVAL;
 		return NULL;
 	}
 
-	if ((path_len >= 2) && (path[0] == '/') && path[1] && (path[2] == ':')) {
-		if((r = strncpy_s(resolved, PATH_MAX, path + 1, path_len)) != 0 ) /* skip the first '/' */ {
-			debug3("memcpy_s failed with error: %d.", r);
+	/* resolve root directory to the same */
+	if (path_len == 1 && (path[0] == '/' || path[0] == '\\')) {
+		resolved[0] = '/';
+		resolved[1] = '\0';
+		return resolved;
+	}
+
+	/* resolve this common case scenario to root */
+	/* "cd .." from within a drive root */
+	if (path_len == 6 && !chroot_path) {
+		char *tmplate = "/x:/..";
+		strcat(resolved, path);
+		resolved[1] = 'x';
+		if (strcmp(tmplate, resolved) == 0) {
+			resolved[0] = '/';
+			resolved[1] = '\0';
+			return resolved;
+		}
+	}
+
+	if (chroot_path) {
+		resolved[0] = '\0';
+		strcat(resolved, chroot_path);
+		/* if path is relative, add cwd within chroot */
+		if (path[0] != '/' && path[0] != '\\') {
+			w32_getcwd(resolved + chroot_path_len, PATH_MAX - chroot_path_len);
+			strcat(resolved, "/");
+		}
+		strcat(resolved, path);
+	}
+	else if ((path_len >= 2) && (path[0] == '/') && path[1] && (path[2] == ':')) {
+		if((errno = strncpy_s(resolved, PATH_MAX, path + 1, path_len)) != 0 ) /* skip the first '/' */ {
+			debug3("memcpy_s failed with error: %d.", errno);
 			return NULL;
 		}
 	}
-	else if(( r = strncpy_s(resolved, PATH_MAX, path, path_len + 1)) != 0) {
-		debug3("memcpy_s failed with error: %d.", r);
+	else if(( errno = strncpy_s(resolved, PATH_MAX, path, path_len + 1)) != 0) {
+		debug3("memcpy_s failed with error: %d.", errno);
 		return NULL;
 	}
 
@@ -901,57 +966,121 @@ realpath(const char *path, char resolved[PATH_MAX])
 		resolved[3] = '\0';
 	}
 
-	if (_fullpath(tempPath, resolved, PATH_MAX) == NULL)
-		return NULL;
-
-	convertToForwardslash(tempPath);
-
-	resolved[0] = '/'; /* will be our first slash in /x:/users/test1 format */
-	if ((r = strncpy_s(resolved+1, PATH_MAX - 1, tempPath, sizeof(tempPath) - 1)) != 0) {
-		debug3("memcpy_s failed with error: %d.", r);
+	if (_fullpath(tempPath, resolved, PATH_MAX) == NULL) {
+		errno = EINVAL;
 		return NULL;
 	}
-	return resolved;
+
+	if (chroot_path) {
+		if (strlen(tempPath) < strlen(chroot_path)) {
+			errno = EACCES;
+			return NULL;
+		}
+		if (memcmp(chroot_path, tempPath, strlen(chroot_path)) != 0) {
+			errno = EACCES;
+			return NULL;
+		}
+
+		resolved[0] = '\0';
+
+		
+		if (strlen(tempPath) == strlen(chroot_path))
+			/* realpath is the same as chroot_path */
+			strcat(resolved, "\\");
+		else
+			strcat(resolved, tempPath + strlen(chroot_path));
+
+		if (resolved[0] != '\\') {
+			errno = EACCES;
+			return NULL;
+		}
+
+		convertToForwardslash(resolved);
+		return resolved;		
+	}
+	else {
+		convertToForwardslash(tempPath);
+		resolved[0] = '/'; /* will be our first slash in /x:/users/test1 format */
+		if ((errno = strncpy_s(resolved + 1, PATH_MAX - 1, tempPath, sizeof(tempPath) - 1)) != 0) {
+			debug3("memcpy_s failed with error: %d.", errno);
+			return NULL;
+		}
+		return resolved;
+	}
 }
 
-/* This function is not thread safe. 
-* TODO - It uses static memory. Is this a good design?
-*/
-char*
-resolved_path(const char *input_path)
+/* on error returns NULL and sets errno */
+wchar_t*
+resolved_path_utf16(const char *input_path)
 {
-	static char resolved_path[PATH_MAX] = {0,};
-	static char newPath[PATH_MAX] = { '\0', };
-	errno_t r = 0;
+	wchar_t *resolved_path = NULL;
 
-	if (!input_path) return NULL;
-
-	/* If filename contains __PROGRAMDATA__ then expand it to %programData% and return the resolved path */
-	if ((strlen(input_path) >= strlen(PROGRAM_DATA)) && (memcmp(input_path, PROGRAM_DATA, strlen(PROGRAM_DATA)) == 0)) {
-		resolved_path[0] = '\0';
-		strcat_s(resolved_path, _countof(resolved_path), get_program_data_path());
-		strcat_s(resolved_path, _countof(resolved_path), &input_path[strlen(PROGRAM_DATA)]);
-
-		return resolved_path; /* return here as its doesn't start with "/" */
+	if (!input_path) {
+		errno = EINVAL;
+		return NULL;
 	}
 
-	strcpy_s(resolved_path, _countof(resolved_path), input_path);
-	if (resolved_path[0] == '/' && resolved_path[1]) {
-		if (resolved_path[2] == ':') {
-			if (resolved_path[3] == '\0') { 
-				/* make "/x:" as "x:\\" */
-				resolved_path[0] = resolved_path[1];
-				resolved_path[1] = resolved_path[2];
-				resolved_path[2] = '\\';
-				resolved_path[3] = '\0';
+	if (chroot_path) {
+		char actual_path[MAX_PATH], jail_path[MAX_PATH];
 
-				return resolved_path;
-			} else
-				return (char *)(resolved_path + 1); /* skip the first "/" */
+		if (realpath(input_path, jail_path) == NULL)
+			return NULL;
+
+		actual_path[0] = '\0';
+		strcat_s(actual_path, MAX_PATH, chroot_path);
+		strcat_s(actual_path, MAX_PATH, jail_path);
+		resolved_path = utf8_to_utf16(actual_path);
+	}
+	else
+		resolved_path = utf8_to_utf16(input_path);
+	
+	if (resolved_path == NULL) {
+		errno = ENOMEM;
+		return NULL;
+	}
+
+	int resolved_len = (int) wcslen(resolved_path);
+	const int variable_len = (int) wcslen(PROGRAM_DATAW);
+
+	/* search for program data flag and switch it with the real path */
+	if (_wcsnicmp(resolved_path, PROGRAM_DATAW, variable_len) == 0) {
+		wchar_t * program_data = get_program_data_path();
+		const int programdata_len = (int) wcslen(program_data);
+		const int changed_req = programdata_len - variable_len;
+
+		/* allocate more memory if required */
+		if (changed_req > 0) {
+			wchar_t * resolved_path_new = realloc(resolved_path, 
+				(resolved_len + changed_req + 1) * sizeof(wchar_t));
+			if (resolved_path_new == NULL) {
+				debug3("%s: memory allocation failed.", __FUNCTION__);
+				free(resolved_path);
+				errno = ENOMEM;
+				return NULL;
+			}
+			else resolved_path = resolved_path_new;
+		}
+
+		/* shift memory contents over based on side of the new string */
+		wmemmove_s(&resolved_path[variable_len + changed_req], resolved_len - variable_len + 1,
+			&resolved_path[variable_len], resolved_len - variable_len + 1);
+		resolved_len += changed_req;
+		wmemcpy_s(resolved_path, resolved_len + 1, program_data, programdata_len);
+	}
+
+	if (resolved_path[0] == L'/' && iswalpha(resolved_path[1]) && resolved_path[2] == L':') {
+
+		/* shift memory to remove forward slash including null terminator */
+		wmemmove_s(resolved_path, resolved_len + 1, resolved_path + 1, (resolved_len + 1 - 1));
+
+		/* if just a drive letter path, make x: into x:\ */
+		if (resolved_path[2] == L'\0') {
+			resolved_path[2] = L'\\';
+			resolved_path[3] = L'\0';
 		}
 	}
 
-	return (char *)resolved_path;
+	return resolved_path;
 }
 
 int
@@ -962,9 +1091,12 @@ statvfs(const char *path, struct statvfs *buf)
 	DWORD freeClusters;
 	DWORD totalClusters;
 
-	wchar_t* path_utf16 = utf8_to_utf16(resolved_path(path));
-	if (path_utf16 && (GetDiskFreeSpaceW(path_utf16, &sectorsPerCluster, &bytesPerSector,
-	    &freeClusters, &totalClusters) == TRUE)) {
+	wchar_t* path_utf16 = resolved_path_utf16(path);
+	if (path_utf16 == NULL)
+		return -1;
+
+	if (GetDiskFreeSpaceW(path_utf16, &sectorsPerCluster, &bytesPerSector,
+	    &freeClusters, &totalClusters)) {
 		debug5("path              : [%s]", path);
 		debug5("sectorsPerCluster : [%lu]", sectorsPerCluster);
 		debug5("bytesPerSector    : [%lu]", bytesPerSector);
@@ -988,7 +1120,7 @@ statvfs(const char *path, struct statvfs *buf)
 		return 0;
 	} else {
 		debug5("ERROR: Cannot get free space for [%s]. Error code is : %d.\n", path, GetLastError());
-
+		errno = errno_from_Win32LastError();
 		free(path_utf16);
 		return -1;
 	}
@@ -1079,28 +1211,6 @@ invalid_parameter_handler(const wchar_t* expression, const wchar_t* function, co
 	debug3("Expression: %s", expression);
 }
 
-int
-get_machine_domain_name(wchar_t *domain, int size)
-{
-	LPWKSTA_INFO_100 pBuf = NULL;
-	NET_API_STATUS nStatus;
-	LPWSTR pszServerName = NULL;
-
-	nStatus = NetWkstaGetInfo(pszServerName, 100, (LPBYTE *)&pBuf);
-	if (nStatus != NERR_Success) {
-		error("Unable to fetch the machine domain, error:%d\n", nStatus);
-		return 0;
-	}
-
-	debug3("Machine domain:%ls", pBuf->wki100_langroup);
-	wcscpy_s(domain, size, pBuf->wki100_langroup);
-
-	if (pBuf != NULL)
-		NetApiBufferFree(pBuf);
-	
-	return 1;
-}
-
 /*
  * This method will fetch all the groups (listed below) even if the user is indirectly a member.
  * - Local machine groups
@@ -1110,216 +1220,129 @@ get_machine_domain_name(wchar_t *domain, int size)
 */
 char **
 getusergroups(const char *user, int *ngroups)
-{	
-	LPGROUP_USERS_INFO_0 local_groups = NULL;
-	LPGROUP_USERS_INFO_0 domain_groups = NULL;
-	LPGROUP_USERS_INFO_0 global_universal_groups = NULL;	
-	DWORD num_local_groups_read = 0;
-	DWORD total_local_groups = 0;
-	DWORD num_domain_groups_read = 0;
-	DWORD total_domain_groups = 0;
-	DWORD num_global_universal_groups_read = 0;
-	DWORD total_global_universal_groups = 0;
+{
+	/* early declarations and initializations to support cleanup */
+	HANDLE logon_token = NULL;
+	PTOKEN_GROUPS group_buf = NULL;
 
-	DWORD flags = LG_INCLUDE_INDIRECT;
-	NET_API_STATUS nStatus;
-	wchar_t *user_name_utf16 = NULL;
-	char *user_domain = NULL;
-	LPWSTR dc_name_utf16 = NULL;
-	char **user_groups = NULL;
-	int num_user_groups = 0;
-	wchar_t machine_domain_name_utf16[DNLEN + 1] = { 0 };
-	wchar_t local_user_fmt_utf16[UNLEN + DNLEN + 2] = { 0 };
-	size_t local_user_fmt_len = UNLEN + DNLEN + 2;
-	char *user_name = NULL;
-	
-	user_name = malloc(strlen(user)+1);
-	if(!user_name) {
-		error("failed to allocate memory!");
+	/* initialize return values */
+	errno = 0;
+	*ngroups = 0;
+	char ** user_groups = NULL;
+
+	/* fetch the computer name so we can determine if the specified user is local or not */
+	wchar_t computer_name[CNLEN + 1];
+	DWORD computer_name_size = ARRAYSIZE(computer_name);
+	if (GetComputerNameW(computer_name, &computer_name_size) == 0) {
 		goto cleanup;
 	}
 
-	memcpy(user_name, user, strlen(user)+1);
-
-	if (user_domain = strchr(user_name, '@')) {
-		char *t = user_domain;
-		user_domain++;
-		*t='\0';
-	}
-
-	user_name_utf16 = utf8_to_utf16(user_name);
-	if (!user_name_utf16) {
-		error("utf8_to_utf16 failed! for %s", user_name);
+	/* get token that can be used for getting group information */
+	if ((logon_token = get_user_token((char *)user, 0)) == NULL) {
+		debug3("%s: get_user_token() failed for user %s.", __FUNCTION__, user);
 		goto cleanup;
 	}
 
-	/* Fetch groups on the Local machine */	
-	if(get_machine_domain_name(machine_domain_name_utf16, DNLEN+1)) {
-		if (machine_domain_name_utf16) {
-			if(!machine_domain_name)
-				machine_domain_name = utf16_to_utf8(machine_domain_name_utf16);
-		
-			if (user_domain) {
-				wcscpy_s(local_user_fmt_utf16, local_user_fmt_len, machine_domain_name_utf16);
-				wcscat_s(local_user_fmt_utf16, local_user_fmt_len, L"\\");
+	/* allocate area for group information */
+	DWORD group_size = 0;
+	if (GetTokenInformation(logon_token, TokenGroups, NULL, 0, &group_size) == 0 
+		&& GetLastError() != ERROR_INSUFFICIENT_BUFFER ||
+		(group_buf = (PTOKEN_GROUPS)malloc(group_size)) == NULL) {
+		debug3("%s: GetTokenInformation() failed: %d", __FUNCTION__, GetLastError());
+		goto cleanup;
+	}
+
+	/* read group sids from logon token -- this will return a list of groups
+	 * similar to the data returned when you do a whoami /groups command */
+	if (GetTokenInformation(logon_token, TokenGroups, group_buf, group_size, &group_size) == 0) {
+		debug3("%s: GetTokenInformation() failed for user '%s'.", __FUNCTION__, user);
+		goto cleanup;
+	}
+
+	/* allocate memory to hold points to all group names; we double the value
+	 * in order to account for local groups that we trim the domain qualifier */
+	if ((user_groups = (char**)malloc(sizeof(char*) * group_buf->GroupCount * 2)) == NULL) {
+		errno = ENOMEM;
+		goto cleanup;
+	}
+
+	for (DWORD i = 0; i < group_buf->GroupCount; i++) {
+
+		/* only bother with group thats are 'enabled' from a security perspective */
+		if ((group_buf->Groups[i].Attributes & SE_GROUP_ENABLED) == 0 ||
+			!IsValidSid(group_buf->Groups[i].Sid))
+			continue;
+
+		/* only bother with groups that are builtin or classic domain/local groups 
+		 * also ignore domain users and builtin users since these will be meaningless 
+		 * since they do not resolve properly on workgroup computers; these would 
+		 * never meaningfully be used in the server configuration */
+		SID * sid = group_buf->Groups[i].Sid;
+		DWORD sub = sid->SubAuthority[0];
+		DWORD rid = sid->SubAuthority[sid->SubAuthorityCount - 1]; 
+		SID_IDENTIFIER_AUTHORITY nt_authority = SECURITY_NT_AUTHORITY;
+		if (memcmp(&nt_authority, GetSidIdentifierAuthority(sid), sizeof(SID_IDENTIFIER_AUTHORITY)) == 0 && (
+			sub == SECURITY_NT_NON_UNIQUE || sub == SECURITY_BUILTIN_DOMAIN_RID) &&
+			rid != DOMAIN_GROUP_RID_USERS && rid != DOMAIN_ALIAS_RID_USERS) {
+
+			/* lookup the account name for this sid */
+			wchar_t name[GNLEN + 1];
+			DWORD name_len = ARRAYSIZE(name);
+			wchar_t domain[DNLEN + 1];
+			DWORD domain_len = ARRAYSIZE(domain);
+			SID_NAME_USE name_use = 0;
+			if (LookupAccountSidW(NULL, sid, name, &name_len, domain, &domain_len, &name_use) == 0) {
+				errno = ENOENT;
+				debug("%s: LookupAccountSid() failed: %d.", __FUNCTION__, GetLastError());
+				goto cleanup;
 			}
 
-			wcscat_s(local_user_fmt_utf16, local_user_fmt_len, user_name_utf16);
-			nStatus = NetUserGetLocalGroups(NULL,
-				    local_user_fmt_utf16,
-				    0,
-				    flags,
-				    (LPBYTE *)&local_groups,
-				    MAX_PREFERRED_LENGTH,
-				    &num_local_groups_read,
-				    &total_local_groups);
+			/* add group name in netbios\\name format */
+			int current_group = (*ngroups)++;
+			wchar_t formatted_group[DNLEN + 1 + GNLEN + 1];
+			swprintf_s(formatted_group, ARRAYSIZE(formatted_group), L"%s\\%s", domain, name);
+			_wcslwr_s(formatted_group, ARRAYSIZE(formatted_group));
+			debug3("Added group '%ls' for user '%s'.", formatted_group, user);
+			user_groups[current_group] = utf16_to_utf8(formatted_group);
+			if (user_groups[current_group] == NULL) {
+				errno = ENOMEM;
+				goto cleanup;
+			}
 
-			if (NERR_Success != nStatus)
-				error("Failed to get local groups on this machine, error: %d\n", nStatus);
+			/* for local accounts trim the domain qualifier */
+			if (_wcsicmp(computer_name, domain) == 0)
+			{
+				current_group = (*ngroups)++;
+				swprintf_s(formatted_group, ARRAYSIZE(formatted_group), L"%s", name);
+				_wcslwr_s(formatted_group, ARRAYSIZE(formatted_group));
+				debug3("Added group '%ls' for user '%s'.", formatted_group, user);
+				user_groups[current_group] = utf16_to_utf8(formatted_group);
+				if (user_groups[current_group] == NULL) {
+					errno = ENOMEM;
+					goto cleanup;
+				}
+			}
 		}
 	}
 
-	if (user_domain) {
-		/* Fetch Domain groups */
-		nStatus = NetGetDCName(NULL, machine_domain_name_utf16, (LPBYTE *)&dc_name_utf16);
-		if (NERR_Success == nStatus) {
-			debug3("domain controller name: %ls", dc_name_utf16);
+cleanup:
 
-			nStatus = NetUserGetLocalGroups(dc_name_utf16,
-				    user_name_utf16,
-				    0,
-				    flags,
-				    (LPBYTE *)&domain_groups,
-				    MAX_PREFERRED_LENGTH,
-				    &num_domain_groups_read,
-				    &total_domain_groups);
+	if (group_buf)
+		free(group_buf);
+	if (logon_token) 
+		CloseHandle(logon_token);
 
-			if (NERR_Success != nStatus)
-				error("Failed to get domain groups from DC:%s error: %d\n", dc_name_utf16, nStatus);
-		}
-		else
-			error("Failed to get the domain controller name, error: %d\n", nStatus);
-
-		/* Fetch global, universal groups */
-		nStatus = NetUserGetGroups(dc_name_utf16,
-			user_name_utf16,
-			0,
-			(LPBYTE *)&global_universal_groups,
-			MAX_PREFERRED_LENGTH,
-			&num_global_universal_groups_read,
-			&total_global_universal_groups);
-
-		if (NERR_Success != nStatus)
-			error("Failed to get global,universal groups from DC:%ls error: %d\n", dc_name_utf16, nStatus);
-	}
-
-	int total_user_groups = num_local_groups_read + num_domain_groups_read + num_global_universal_groups_read;
-
-	/* populate the output */
-	user_groups = malloc(total_user_groups * sizeof(*user_groups));	
-
-	populate_user_groups(user_groups, &num_user_groups, num_local_groups_read, total_local_groups, (LPBYTE) local_groups, LOCAL_GROUP);
-	if (user_domain) {
-		populate_user_groups(user_groups, &num_user_groups, num_domain_groups_read, total_domain_groups, (LPBYTE)domain_groups, DOMAIN_GROUP);
-		populate_user_groups(user_groups, &num_user_groups, num_global_universal_groups_read, total_global_universal_groups, (LPBYTE)global_universal_groups, GLOBAL_UNIVERSAL_GROUP);
-	}
-	
-	for (int i = 0; i < num_user_groups; i++)
-		to_lower_case(user_groups[i]);
-
-	print_user_groups(user, user_groups, num_user_groups);
-
-	cleanup:
-		if(local_groups)
-			NetApiBufferFree(local_groups);
-
-		if(domain_groups)
-			NetApiBufferFree(domain_groups);
-
-		if(global_universal_groups)
-			NetApiBufferFree(global_universal_groups);
-
-		if(dc_name_utf16)
-			NetApiBufferFree(dc_name_utf16);
-	
-		if(user_name_utf16)
-			free(user_name_utf16);
-				
-		if(user_name)
-			free(user_name);
-
-		*ngroups = num_user_groups;
-		return user_groups;
-}
-
-/* This method will return in "group@domain" format */
-char *
-append_domain_to_groupname(char *groupname)
-{
-	if(!groupname) return NULL;
-
-	int len = (int) strlen(machine_domain_name) + (int) strlen(groupname) + 2;
-	char *groupname_with_domain = malloc(len);
-	if(!groupname_with_domain) {
-		error("failed to allocate memory!");
+	/* special cleanup - if ran out of memory while allocating groups */
+	if (user_groups && errno == ENOMEM || *ngroups == 0) {
+		for (int group = 0; group < *ngroups; group++)
+			if (user_groups[group]) free(user_groups[group]);
+		*ngroups = 0;
+		free(user_groups);
 		return NULL;
 	}
 
-	strcpy_s(groupname_with_domain, len, groupname);
-	strcat_s(groupname_with_domain, len, "@");
-	strcat_s(groupname_with_domain, len, machine_domain_name);	
-
-	groupname_with_domain[len-1]= '\0';
-
-	return groupname_with_domain;
-}
-
-void
-populate_user_groups(char **group_name, int *group_index, DWORD groupsread, DWORD totalgroups, LPBYTE buf, group_type groupType)
-{
-	if(0 == groupsread) return;
-	char *user_group_name = NULL;
-		
-	if (groupType == GLOBAL_UNIVERSAL_GROUP) {
-		LPGROUP_USERS_INFO_0 pTmpBuf = (LPGROUP_USERS_INFO_0)buf;
-		for (DWORD i = 0; (i < groupsread) && pTmpBuf; i++, pTmpBuf++) {
-			if (!(user_group_name = utf16_to_utf8(pTmpBuf->grui0_name))) {
-				error("utf16_to_utf8 failed to convert:%ls", pTmpBuf->grui0_name);
-				return;
-			}
-
-			group_name[*group_index] = append_domain_to_groupname(user_group_name);
-			if(group_name[*group_index])
-				(*group_index)++;
-		}
-	} else {
-		LPLOCALGROUP_USERS_INFO_0 pTmpBuf = (LPLOCALGROUP_USERS_INFO_0)buf;
-		for (DWORD i = 0; (i < groupsread) && pTmpBuf; i++, pTmpBuf++) {
-			if (!(user_group_name = utf16_to_utf8(pTmpBuf->lgrui0_name))) {
-				error("utf16_to_utf8 failed to convert:%ls", pTmpBuf->lgrui0_name);
-				return;
-			}				
-
-			if(groupType == DOMAIN_GROUP)
-				group_name[*group_index] = append_domain_to_groupname(user_group_name);
-			else
-				group_name[*group_index] = user_group_name;
-
-			if (group_name[*group_index])
-				(*group_index)++;
-		}
-	}
-
-	if (groupsread < totalgroups)
-		error("groupsread:%d totalgroups:%d groupType:%d", groupsread, totalgroups, groupType);
-}
-
-void 
-print_user_groups(const char *user, char **user_groups, int num_user_groups)
-{
-	debug3("Group list for user:%s", user);
-	for(int i=0; i < num_user_groups; i++)
-		debug3("group name:%s", user_groups[i]);
+	/* downsize the array to the actual size and return */
+	return (char**)realloc(user_groups, sizeof(char*) * (*ngroups));
 }
 
 void
@@ -1327,6 +1350,13 @@ to_lower_case(char *s)
 {
 	for (; *s; s++)
 		*s = tolower((u_char)*s);
+}
+
+void 
+to_wlower_case(wchar_t *s)
+{
+	for (; *s; s++)
+		*s = towlower(*s);
 }
 
 static int
@@ -1432,23 +1462,19 @@ cleanup:
 	return ret;
 }
 
-char*
+wchar_t*
 get_program_data_path()
 {
-	if (ssh_cfg_dir_path) return ssh_cfg_dir_path;
+	static wchar_t ssh_cfg_dir_path_w[PATH_MAX] = L"";
+	if (wcslen(ssh_cfg_dir_path_w) > 0) return ssh_cfg_dir_path_w;
 
-	wchar_t ssh_cfg_dir_path_w[PATH_MAX] = {0, };
-	int return_val = ExpandEnvironmentStringsW(L"%programData%", ssh_cfg_dir_path_w, PATH_MAX);
+	int return_val = ExpandEnvironmentStringsW(L"%ProgramData%", ssh_cfg_dir_path_w, PATH_MAX);
 	if (return_val > PATH_MAX)
-		fatal("%s, buffer too small to expand:%s", __func__, "%programData%");
+		fatal("%s, buffer too small to expand:%s", __func__, "%ProgramData%");
 	else if (!return_val)
-		fatal("%s, failed to expand:%s error:%s", __func__, "%programData%", GetLastError());
-	
-	ssh_cfg_dir_path = utf16_to_utf8(ssh_cfg_dir_path_w);
-	if(!ssh_cfg_dir_path)
-		fatal("%s utf16_to_utf8 failed", __func__);
+		fatal("%s, failed to expand:%s error:%s", __func__, "%ProgramData%", GetLastError());
 
-	return ssh_cfg_dir_path;
+	return ssh_cfg_dir_path_w;
 }
 
 /* Windows absolute paths - \abc, /abc, c:\abc, c:/abc, __PROGRAMDATA__\openssh\sshd_config */
@@ -1468,27 +1494,14 @@ is_absolute_path(const char *path)
 
 /* return -1 - in case of failure, 0 - success */
 int
-create_directory_withsddl(char *path, char *sddl)
+create_directory_withsddl(wchar_t *path_w, wchar_t *sddl_w)
 {
-	struct stat st;
-	if (stat(path, &st) < 0) {
+	if (GetFileAttributesW(path_w) == INVALID_FILE_ATTRIBUTES) {
 		PSECURITY_DESCRIPTOR pSD = NULL;
 		SECURITY_ATTRIBUTES sa;
 		memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
 		sa.nLength = sizeof(SECURITY_ATTRIBUTES);
 		sa.bInheritHandle = FALSE;
-
-		wchar_t *path_w = utf8_to_utf16(path);
-		if (!path_w) {
-			error("%s utf8_to_utf16() has failed to convert string:%s", __func__, path);
-			return -1;
-		}
-
-		wchar_t *sddl_w = utf8_to_utf16(sddl);
-		if (!sddl_w) {
-			error("%s utf8_to_utf16() has failed to convert string:%s", __func__, sddl);
-			return -1;
-		}
 
 		if (ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl_w, SDDL_REVISION, &pSD, NULL) == FALSE) {
 			error("ConvertStringSecurityDescriptorToSecurityDescriptorW failed with error code %d", GetLastError());
@@ -1539,7 +1552,7 @@ copy_file(char *source, char *destination)
 	return 0;
 }
 
-struct tm* 
+struct tm*
 localtime_r(const time_t *timep, struct tm *result)
 {
 	struct tm *t = NULL;
@@ -1557,4 +1570,158 @@ freezero(void *ptr, size_t sz)
 		return;
 	explicit_bzero(ptr, sz);
 	free(ptr);
+}
+
+int
+chroot(const char *path)
+{
+	char cwd[MAX_PATH];
+
+	if (strcmp(path, ".") == 0) {
+		if (w32_getcwd(cwd, MAX_PATH) == NULL)
+			return -1;
+		path = (const char *)cwd;
+	} else if (*(path + 1) != ':') {
+		errno = ENOTSUP;
+		error("chroot only supports absolute paths");
+		return -1;
+	} else {
+		/* TODO - ensure path exists and is a directory */
+	}
+
+	if ((chroot_path = _strdup(path)) == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+
+	to_lower_case(chroot_path);
+	convertToBackslash(chroot_path);
+
+	/* strip trailing \ */
+	if (chroot_path[strlen(chroot_path) - 1] == '\\')
+		chroot_path[strlen(chroot_path) - 1] = '\0';
+
+	chroot_path_len = strlen(chroot_path);
+
+	if ((chroot_pathw = utf8_to_utf16(chroot_path)) == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+
+	/* TODO - set the env variable just in time in a posix_spawn_chroot like API */
+#define POSIX_CHROOTW L"c28fc6f98a2c44abbbd89d6a3037d0d9_POSIX_CHROOT"
+	_wputenv_s(POSIX_CHROOTW, chroot_pathw);
+
+	return 0;
+}
+
+/*
+ * Am I running as SYSTEM ?
+ * a security sensitive call - fatal exits if it cannot definitively conclude 
+ */
+int 
+am_system()
+{
+	HANDLE proc_token = NULL;
+	DWORD info_len;
+	TOKEN_USER* info = NULL;
+	static int running_as_system = -1;
+
+	if (running_as_system != -1)
+		return running_as_system;
+
+	if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &proc_token) == FALSE ||
+		GetTokenInformation(proc_token, TokenUser, NULL, 0, &info_len) == TRUE ||
+		(info = (TOKEN_USER*)malloc(info_len)) == NULL ||
+		GetTokenInformation(proc_token, TokenUser, info, info_len, &info_len) == FALSE)
+		fatal("unable to know if I am running as system");
+
+	if (IsWellKnownSid(info->User.Sid, WinLocalSystemSid))
+		running_as_system = 1;
+	else
+		running_as_system = 0;
+
+	CloseHandle(proc_token);
+	free(info);
+	return running_as_system;
+}
+
+/* returns SID of user or current user if (user = NULL) */
+PSID
+get_user_sid(char* name)
+{
+	HANDLE token = NULL;
+	TOKEN_USER* info = NULL;
+	DWORD info_len = 0;
+	PSID ret = NULL, psid;
+	wchar_t* name_utf16 = NULL;
+
+	if (name) {
+		DWORD sid_len = 0;
+		SID_NAME_USE n_use;
+		WCHAR dom[DNLEN + 1] = L"";
+		DWORD dom_len = DNLEN + 1;
+
+		if ((name_utf16 = utf8_to_utf16(name)) == NULL)
+			goto cleanup;
+
+		LookupAccountNameW(NULL, name_utf16, NULL, &sid_len, dom, &dom_len, &n_use);
+
+		if (sid_len == 0) {
+			errno = errno_from_Win32LastError();
+			goto cleanup;
+		}
+
+		if ((psid = malloc(sid_len)) == NULL) {
+			errno = ENOMEM;
+			goto cleanup;
+		}
+
+		if (!LookupAccountNameW(NULL, name_utf16, psid, &sid_len, dom, &dom_len, &n_use)) {
+			errno = errno_from_Win32LastError();
+			goto cleanup;
+		}
+	}
+	else {
+		if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token) == FALSE ||
+		    GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE) {
+			errno = EOTHER;
+			goto cleanup;
+		}
+
+		if ((info = (TOKEN_USER*)malloc(info_len)) == NULL) {
+			errno = ENOMEM;
+			goto cleanup;
+		}
+
+		if (GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE) {
+			errno = errno_from_Win32LastError();
+			goto cleanup;
+		}
+
+		if ((psid = malloc(GetLengthSid(info->User.Sid))) == NULL) {
+			errno = ENOMEM;
+			goto cleanup;
+		}
+
+		if (!CopySid(GetLengthSid(info->User.Sid), psid, info->User.Sid)) {
+			errno = errno_from_Win32LastError();
+			goto cleanup;
+		}
+	}
+
+	ret = psid;
+	psid = NULL;
+cleanup:
+
+	if (token)
+		CloseHandle(token);
+	if (name_utf16)
+		free(name_utf16);
+	if (psid)
+		free(psid);
+	if (info)
+		free(info);
+
+	return ret;
 }

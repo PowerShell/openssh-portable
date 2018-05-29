@@ -96,6 +96,7 @@ errno_from_Win32Error(int win32_error)
 		return EEXIST;
 	case ERROR_FILE_NOT_FOUND:
 	case ERROR_PATH_NOT_FOUND:
+	case ERROR_INVALID_NAME:
 		return ENOENT;
 	default:
 		return win32_error;
@@ -365,18 +366,8 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 			return -1;
 		}
 
-		if ((pwd = getpwuid(0)) == NULL)
-			fatal("getpwuid failed.");
-
-		if ((sid_utf16 = utf8_to_utf16(pwd->pw_sid)) == NULL) {
-			debug3("Failed to get utf16 of the sid string");
-			errno = ENOMEM;
-			goto cleanup;
-		}
-
-		if (ConvertStringSidToSid(pwd->pw_sid, &owner_sid) == FALSE ||
-			(IsValidSid(owner_sid) == FALSE)) {
-			debug3("cannot retrieve SID of user %s", pwd->pw_name);
+		if ((owner_sid = get_user_sid(NULL)) == NULL || (!ConvertSidToStringSidW(owner_sid, &sid_utf16))) {
+			debug3("cannot retrieve current user's SID");
 			goto cleanup;
 		}
 
@@ -415,10 +406,33 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 	ret = 0;
 cleanup:
 	if (owner_sid)
-		LocalFree(owner_sid);
+		free(owner_sid);
+
 	if (sid_utf16)
-		free(sid_utf16);
+		LocalFree(sid_utf16);
+		
 	return ret;
+}
+
+/* returns 1 if true, 0 otherwise */
+int
+file_in_chroot_jail(HANDLE handle, const char* path_utf8) {
+	/* ensure final path is within chroot */
+	wchar_t path_buf[MAX_PATH], *final_path;
+	if (GetFinalPathNameByHandleW(handle, path_buf, MAX_PATH, 0) == 0) {
+		debug3("failed to get final path of file:%s error:%d", path_utf8, GetLastError());
+		return 0;
+	}
+	final_path = path_buf + 4;
+	to_wlower_case(final_path);
+	if ((wcslen(final_path) < wcslen(chroot_pathw)) ||
+		memcmp(final_path, chroot_pathw, 2 * wcslen(chroot_pathw)) != 0 ||
+		final_path[wcslen(chroot_pathw)] != '\\') {
+		debug3("access denied due to attempt to escape chroot jail");
+		return 0;
+	}
+
+	return 1;
 }
 
 /* open() implementation. Uses CreateFile to open file, console, device, etc */
@@ -427,8 +441,9 @@ fileio_open(const char *path_utf8, int flags, mode_t mode)
 {
 	struct w32_io* pio = NULL;
 	struct createFile_flags cf_flags;
-	HANDLE handle;
+	HANDLE handle = INVALID_HANDLE_VALUE;
 	wchar_t *path_utf16 = NULL;
+	int nonfs_dev = 0; /* opening a non file system device */
 
 	debug4("open - pathname:%s, flags:%d, mode:%d", path_utf8, flags, mode);
 	/* check input params*/
@@ -439,14 +454,15 @@ fileio_open(const char *path_utf8, int flags, mode_t mode)
 	}
 
 	/* if opening null device, point to Windows equivalent */
-	if (strncmp(path_utf8, NULL_DEVICE, strlen(NULL_DEVICE)+1) == 0) 
-		path_utf8 = "NUL";
-
-	if ((path_utf16 = utf8_to_utf16(path_utf8)) == NULL) {
-		errno = ENOMEM;
-		debug3("utf8_to_utf16 failed for file:%s error:%d", path_utf8, GetLastError());
-		return NULL;
+	if (strncmp(path_utf8, NULL_DEVICE, sizeof(NULL_DEVICE)) == 0) {
+		nonfs_dev = 1;
+		path_utf16 = utf8_to_utf16(NULL_DEVICE_WIN);
 	}
+	else
+		path_utf16 = resolved_path_utf16(path_utf8);
+
+	if (path_utf16 == NULL) 
+		return NULL;
 
 	if (createFile_flags_setup(flags, mode, &cf_flags) == -1) {
 		debug3("createFile_flags_setup() failed.");
@@ -463,6 +479,10 @@ fileio_open(const char *path_utf8, int flags, mode_t mode)
 		goto cleanup;
 	}
 
+	if (chroot_pathw && !nonfs_dev && !file_in_chroot_jail(handle, path_utf8)) {		
+		errno = EACCES;
+		goto cleanup;
+	}
 	
 	pio = (struct w32_io*)malloc(sizeof(struct w32_io));
 	if (pio == NULL) {
@@ -478,11 +498,16 @@ fileio_open(const char *path_utf8, int flags, mode_t mode)
 		pio->fd_status_flags = O_NONBLOCK;
 
 	pio->handle = handle;
+	handle = INVALID_HANDLE_VALUE;
+
 cleanup:
 	if ((&cf_flags.securityAttributes != NULL) && (&cf_flags.securityAttributes.lpSecurityDescriptor != NULL))
 		LocalFree(cf_flags.securityAttributes.lpSecurityDescriptor);
 	if(path_utf16)
 		free(path_utf16);
+	if (handle != INVALID_HANDLE_VALUE)
+		CloseHandle(handle);
+
 	return pio;
 }
 
@@ -774,11 +799,8 @@ fileio_stat_or_lstat_internal(const char *path, struct _stat64 *buf, int do_lsta
 		return 0;
 	}
 
-	if ((wpath = utf8_to_utf16(path)) == NULL) {
-		errno = ENOMEM;
-		debug3("utf8_to_utf16 failed for file:%s error:%d", path, GetLastError());
+	if ((wpath = resolved_path_utf16(path)) == NULL)
 		return -1;
-	}
 
 	/* get the file attributes (or symlink attributes if symlink) */
 	if (GetFileAttributesExW(wpath, GetFileExInfoStandard, &attributes) == FALSE) {
@@ -1013,8 +1035,6 @@ fileio_readlink(const char *path, char *buf, size_t bufsiz)
 	 * for more info: https://msdn.microsoft.com/en-us/library/cc232006.aspx
 	 */
 
-	debug4("readlink - io:%p", pio);
-
 	typedef struct _REPARSE_DATA_BUFFER_SYMLINK {
 		ULONG ReparseTag;
 		USHORT ReparseDataLength;
@@ -1041,10 +1061,8 @@ fileio_readlink(const char *path, char *buf, size_t bufsiz)
 		goto cleanup;
 	}
 
-	if ((wpath = utf8_to_utf16(path)) == NULL) {
-		errno = ENOMEM;
+	if ((wpath = resolved_path_utf16(path)) == NULL)
 		goto cleanup;
-	}
 
 	/* obtain a handle to send to deviceioctl */
 	handle = CreateFileW(wpath, 0, 0, NULL, OPEN_EXISTING, 
@@ -1054,8 +1072,14 @@ fileio_readlink(const char *path, char *buf, size_t bufsiz)
 		goto cleanup;
 	}
 
+	/* allocate the maximum possible size the reparse buffer size could be */
+	reparse_buffer = (PREPARSE_DATA_BUFFER_SYMLINK)malloc(MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
+	if (reparse_buffer == NULL) {
+		errno = ENOMEM;
+		goto cleanup;
+	}
+
 	/* send a request to the file system to get the real path */
-	reparse_buffer = (PREPARSE_DATA_BUFFER_SYMLINK) malloc(MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
 	DWORD dwBytesReturned = 0;
 	if (DeviceIoControl(handle, FSCTL_GET_REPARSE_POINT, NULL, 0,
 		(LPVOID) reparse_buffer, MAXIMUM_REPARSE_DATA_BUFFER_SIZE, &dwBytesReturned, 0) == 0) {
@@ -1125,18 +1149,21 @@ cleanup:
 int
 fileio_symlink(const char *target, const char *linkpath)
 {
+	DWORD ret = -1;
+
 	if (target == NULL || linkpath == NULL) {
 		errno = EFAULT;
 		return -1;
 	}
 
-	DWORD ret = 0;
-	wchar_t *target_utf16 = utf8_to_utf16(resolved_path(target));
-	wchar_t *linkpath_utf16 = utf8_to_utf16(resolved_path(linkpath));
+	wchar_t *target_utf16 = resolved_path_utf16(target);
+	wchar_t *linkpath_utf16 = resolved_path_utf16(linkpath);
 	wchar_t *resolved_utf16 = _wcsdup(target_utf16);
-	if (target_utf16 == NULL || linkpath_utf16 == NULL || resolved_utf16 == NULL) {
+	if (target_utf16 == NULL || linkpath_utf16 == NULL)
+		goto cleanup;
+
+	if (resolved_utf16 == NULL) {
 		errno = ENOMEM;
-		ret = -1;
 		goto cleanup;
 	}
 
@@ -1153,7 +1180,6 @@ fileio_symlink(const char *target, const char *linkpath)
 		resolved_utf16 = malloc(resolved_len * sizeof(wchar_t));
 		if (resolved_utf16 == NULL) {
 			errno = ENOMEM;
-			ret = -1;
 			goto cleanup;
 		}
 
@@ -1173,7 +1199,6 @@ fileio_symlink(const char *target, const char *linkpath)
 	WIN32_FILE_ATTRIBUTE_DATA attributes = { 0 };
 	if (GetFileAttributesExW(resolved_utf16, GetFileExInfoStandard, &attributes) == FALSE) {
 		errno = errno_from_Win32LastError();
-		ret = -1;
 		goto cleanup;
 	}
 
@@ -1189,11 +1214,11 @@ fileio_symlink(const char *target, const char *linkpath)
 	if (CreateSymbolicLinkW(linkpath_utf16, target_utf16, create_flags) == 0) {
 		if (CreateSymbolicLinkW(linkpath_utf16, target_utf16, create_flags | 0x2) == 0) {
 			errno = errno_from_Win32LastError();
-			ret = -1;
 			goto cleanup;
 		}
 	}
-
+	
+	ret = 0;
 cleanup:
 
 	if (target_utf16)
@@ -1208,26 +1233,25 @@ cleanup:
 int 
 fileio_link(const char *oldpath, const char *newpath)
 {
+	DWORD ret = -1;
+
 	if (oldpath == NULL || newpath == NULL) {
 		errno = EFAULT;
 		return -1;
 	}
 
-	DWORD ret = 0;
-	wchar_t *oldpath_utf16 = utf8_to_utf16(resolved_path(oldpath));
-	wchar_t *newpath_utf16 = utf8_to_utf16(resolved_path(newpath));
-	if (oldpath_utf16 == NULL || newpath_utf16 == NULL) {
-		errno = ENOMEM;
-		ret = -1;
+	wchar_t *oldpath_utf16 = resolved_path_utf16(oldpath);
+	wchar_t *newpath_utf16 = resolved_path_utf16(newpath);
+
+	if (oldpath_utf16 == NULL || newpath_utf16 == NULL)
 		goto cleanup;
-	}
 
 	if (CreateHardLinkW(newpath_utf16, oldpath_utf16, NULL) == 0) {
 		errno = errno_from_Win32LastError();
-		ret = -1;
 		goto cleanup;
 	}
 
+	ret = 0;
 cleanup:
 
 	if (oldpath_utf16)

@@ -1,6 +1,10 @@
 /*
 * Author: Manoj Ampalam <manoj.ampalam@microsoft.com>
-* Utitilites to generate user tokens
+*   Utilities to generate user tokens
+*
+* Author: Bryan Berns <berns@uwalumni.com>
+*   Updated s4u, logon, and profile loading routines to use 
+*   normalized login names.
 *
 * Copyright (c) 2015 Microsoft Corp.
 * All rights reserved
@@ -28,7 +32,7 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-
+#define SECURITY_WIN32
 #define UMDF_USING_NTSTATUS 
 #include <Windows.h>
 #include <UserEnv.h>
@@ -36,9 +40,10 @@
 #include <ntstatus.h>
 #include <Shlobj.h>
 #include <LM.h>
+#include <security.h>
 
 #include "inc\utf.h"
-#include "logonuser.h"
+#include "w32api_proxies.h"
 #include <Ntsecapi.h>
 #include <Strsafe.h>
 #include <sddl.h>
@@ -46,6 +51,7 @@
 #include "misc_internal.h"
 #include "lsa_missingdefs.h"
 #include "Debug.h"
+#include "inc\pwd.h"
 
 #pragma warning(push, 3)
 
@@ -87,142 +93,130 @@ done:
 	return;
 }
 
-
-static HANDLE
-LoadProfile(HANDLE user_token, wchar_t* user, wchar_t* domain) {
-	PROFILEINFOW profileInfo;
-	HANDLE ret = NULL;
-
-	profileInfo.dwFlags = PI_NOUI;
-	profileInfo.lpProfilePath = NULL;
-	profileInfo.lpUserName = user;
-	profileInfo.lpDefaultPath = NULL;
-	profileInfo.lpServerName = domain;
-	profileInfo.lpPolicyPath = NULL;
-	profileInfo.hProfile = NULL;
-	profileInfo.dwSize = sizeof(profileInfo);
-	EnablePrivilege("SeBackupPrivilege", 1);
-	EnablePrivilege("SeRestorePrivilege", 1);
-	if (LoadUserProfileW(user_token, &profileInfo) == FALSE) {
-		debug("Loading user (%ls,%ls) profile failed ERROR: %d", user, domain, GetLastError());
-		goto done;
-	}
-	else
-		ret = profileInfo.hProfile;
-done:
-	EnablePrivilege("SeBackupPrivilege", 0);
-	EnablePrivilege("SeRestorePrivilege", 0);
-	return ret;
-}
-
-#define MAX_USER_LEN 64
-/* https://technet.microsoft.com/en-us/library/active-directory-maximum-limits-scalability(v=ws.10).aspx */
-#define MAX_FQDN_LEN 64 
-#define MAX_PW_LEN 64
-
-static HANDLE
-generate_s4u_user_token(wchar_t* user_cpn) {
-	HANDLE lsa_handle = 0, token = 0;
-	LSA_OPERATIONAL_MODE mode;
+HANDLE
+generate_s4u_user_token(wchar_t* user_cpn, int impersonation) {
+	HANDLE lsa_handle = NULL, token = NULL;
 	ULONG auth_package_id;
 	NTSTATUS ret, subStatus;
 	void * logon_info = NULL;
 	size_t logon_info_size;
-	LSA_STRING logon_process_name, auth_package_name, originName;
-	TOKEN_SOURCE sourceContext;
-	PKERB_INTERACTIVE_PROFILE pProfile = NULL;
-	LUID logonId;
+	LSA_STRING logon_process_name, auth_package_name, origin_name;
+	TOKEN_SOURCE source_context;
+	PKERB_INTERACTIVE_PROFILE profile = NULL;
+	LUID logon_id = { 0, 0 };
 	QUOTA_LIMITS quotas;
-	DWORD cbProfile;
-	BOOL domain_user;
+	DWORD profile_size;
 
-	domain_user = wcschr(user_cpn, L'@')? TRUE : FALSE;
+	/* the format for the user will be constrained to the output of get_passwd()
+	 * so only the only two formats are a NetBiosDomain\SamAccountName which is
+	 * a domain account or just SamAccountName in which is a local account */
+	BOOL domain_user = wcschr(user_cpn, L'\\') != NULL;
+	
+	/* initialize connection to local security provider */
+	if (impersonation) {
 
-	InitLsaString(&logon_process_name, "sshd");
-	if (domain_user)
-		InitLsaString(&auth_package_name, MICROSOFT_KERBEROS_NAME_A);
-	else
-		InitLsaString(&auth_package_name, MSV1_0_PACKAGE_NAME);
+		/* trusted mode - used for impersonation */
+		LSA_OPERATIONAL_MODE mode;
+		InitLsaString(&logon_process_name, "sshd");
+		if ((ret = LsaRegisterLogonProcess(&logon_process_name, &lsa_handle, &mode)) != STATUS_SUCCESS)
+			goto done;
+	}
+	else {
+		/* untrusted mode - used for information lookup */
+		if (LsaConnectUntrusted(&lsa_handle) != STATUS_SUCCESS)
+			goto done;
+	}
 
-	InitLsaString(&originName, "sshd");
-	if (ret = LsaRegisterLogonProcess(&logon_process_name, &lsa_handle, &mode) != STATUS_SUCCESS)
-		goto done;
-
+	InitLsaString(&auth_package_name, (domain_user) ? MICROSOFT_KERBEROS_NAME_A : MSV1_0_PACKAGE_NAME);
 	if (ret = LsaLookupAuthenticationPackage(lsa_handle, &auth_package_name, &auth_package_id) != STATUS_SUCCESS)
 		goto done;
 
 	if (domain_user) {
+
+		/* assemble the path to the name translation library */
+		WCHAR domain_upn[MAX_UPN_LEN + 1];
+		ULONG domain_upn_len = ARRAYSIZE(domain_upn);
+		if (pTranslateNameW(user_cpn, NameSamCompatible, NameUserPrincipal, domain_upn, &domain_upn_len) == 0) {
+
+			/* upn lookup failed so resort to attempting samcompatiblename */
+			debug3("%s: Unable to discover upn for user '%s': %d",
+				__FUNCTION__, user_cpn, GetLastError());
+			wcscpy_s(domain_upn, ARRAYSIZE(domain_upn), user_cpn);
+		}
+
 		KERB_S4U_LOGON *s4u_logon;
 		logon_info_size = sizeof(KERB_S4U_LOGON);
-		logon_info_size += (wcslen(user_cpn) * 2 + 2);
-		logon_info = malloc(logon_info_size);
+
+		/* additional buffer is necessary at end to hold user name */
+		logon_info_size += (wcslen(domain_upn) * sizeof(wchar_t));
+		logon_info = calloc(1, logon_info_size);
 		if (logon_info == NULL)
 			goto done;
 		s4u_logon = (KERB_S4U_LOGON*)logon_info;
 		s4u_logon->MessageType = KerbS4ULogon;
-		s4u_logon->Flags = 0;
-		s4u_logon->ClientUpn.Length = (USHORT)wcslen(user_cpn) * 2;
+		s4u_logon->Flags = (impersonation) ? 0x0 : 0x8;
+
+		/* copy the user name into the memory immediately after the structure */
+		s4u_logon->ClientUpn.Length = (USHORT)wcslen(domain_upn) * sizeof(wchar_t);
 		s4u_logon->ClientUpn.MaximumLength = s4u_logon->ClientUpn.Length;
-		s4u_logon->ClientUpn.Buffer = (WCHAR*)(s4u_logon + 1);
-		if (memcpy_s(s4u_logon->ClientUpn.Buffer, s4u_logon->ClientUpn.Length + 2, user_cpn, s4u_logon->ClientUpn.Length + 2))
+		s4u_logon->ClientUpn.Buffer = (PWSTR)(s4u_logon + 1);
+		if (memcpy_s(s4u_logon->ClientUpn.Buffer, s4u_logon->ClientUpn.Length,
+			domain_upn, s4u_logon->ClientUpn.Length))
 			goto done;
-		s4u_logon->ClientRealm.Length = 0;
-		s4u_logon->ClientRealm.MaximumLength = 0;
-		s4u_logon->ClientRealm.Buffer = 0;
-	} else {
+	}
+	else {
+
 		MSV1_0_S4U_LOGON *s4u_logon;
 		logon_info_size = sizeof(MSV1_0_S4U_LOGON);
-		/* additional buffer size = size of user_cpn + size of "." and their null terminators */
-		logon_info_size += (wcslen(user_cpn) * 2 + 2) + 4;
-		logon_info = malloc(logon_info_size);
+
+		/* additional buffer is necessary at end to hold user and computer name */
+		logon_info_size += (wcslen(user_cpn) + wcslen(L".")) * sizeof(wchar_t);
+		logon_info = calloc(1, logon_info_size);
 		if (logon_info == NULL)
 			goto done;
 		s4u_logon = (MSV1_0_S4U_LOGON*)logon_info;
 		s4u_logon->MessageType = MsV1_0S4ULogon;
-		s4u_logon->Flags = 0;
-		s4u_logon->UserPrincipalName.Length = (USHORT)wcslen(user_cpn) * 2;
+		s4u_logon->Flags = 0x0;
+
+		/* copy the user name into the memory immediately after the structure */
+		s4u_logon->UserPrincipalName.Length = (USHORT)wcslen(user_cpn) * sizeof(wchar_t);
 		s4u_logon->UserPrincipalName.MaximumLength = s4u_logon->UserPrincipalName.Length;
 		s4u_logon->UserPrincipalName.Buffer = (WCHAR*)(s4u_logon + 1);
-		if(memcpy_s(s4u_logon->UserPrincipalName.Buffer, s4u_logon->UserPrincipalName.Length + 2, user_cpn, s4u_logon->UserPrincipalName.Length + 2))
+		if (memcpy_s(s4u_logon->UserPrincipalName.Buffer, s4u_logon->UserPrincipalName.Length,
+			user_cpn, s4u_logon->UserPrincipalName.Length))
 			goto done;
-		s4u_logon->DomainName.Length = 2;
-		s4u_logon->DomainName.MaximumLength = 2;
-		s4u_logon->DomainName.Buffer = ((WCHAR*)s4u_logon->UserPrincipalName.Buffer) + wcslen(user_cpn) + 1;
-		if(memcpy_s(s4u_logon->DomainName.Buffer, 4, L".", 4))
+
+		/* copy the computer name immediately after the user name */
+		s4u_logon->DomainName.Length = (USHORT)wcslen(L".") * sizeof(wchar_t);
+		s4u_logon->DomainName.MaximumLength = s4u_logon->DomainName.Length;
+		s4u_logon->DomainName.Buffer = (PWSTR)(((PBYTE)s4u_logon->UserPrincipalName.Buffer)
+			+ s4u_logon->UserPrincipalName.Length);
+		if (memcpy_s(s4u_logon->DomainName.Buffer, s4u_logon->DomainName.Length,
+			L".", s4u_logon->DomainName.Length))
 			goto done;
 	}
 
-	if(memcpy_s(sourceContext.SourceName, TOKEN_SOURCE_LENGTH, "sshd", sizeof(sourceContext.SourceName)))
+	if (strcpy_s(source_context.SourceName, TOKEN_SOURCE_LENGTH, "sshd") != 0 ||
+		AllocateLocallyUniqueId(&source_context.SourceIdentifier) != TRUE)
 		goto done;
 
-	if (AllocateLocallyUniqueId(&sourceContext.SourceIdentifier) != TRUE)
-		goto done;
-
-	if (ret = LsaLogonUser(lsa_handle,
-		&originName,
-		Network,
-		auth_package_id,
-		logon_info,
-		(ULONG)logon_info_size,
-		NULL,
-		&sourceContext,
-		(PVOID*)&pProfile,
-		&cbProfile,
-		&logonId,
-		&token,
-		&quotas,
-		&subStatus) != STATUS_SUCCESS) {
-		debug("LsaLogonUser failed NTSTATUS: %d", ret);
+	InitLsaString(&origin_name, "sshd");
+	if ((ret = LsaLogonUser(lsa_handle, &origin_name, Network, auth_package_id,
+		logon_info, (ULONG)logon_info_size, NULL, &source_context,
+		(PVOID*)&profile, &profile_size, &logon_id, &token, &quotas, &subStatus)) != STATUS_SUCCESS) {
+		debug("%s: LsaLogonUser() failed: %d SubStatus %d.", __FUNCTION__, ret, subStatus);
 		goto done;
 	}
-	debug3("LsaLogonUser succeeded");
+
+	debug3("LsaLogonUser Succeeded (Impersonation: %d)", impersonation);
+
 done:
 	if (lsa_handle)
 		LsaDeregisterLogonProcess(lsa_handle);
 	if (logon_info)
 		free(logon_info);
-	if (pProfile)
-		LsaFreeReturnBuffer(pProfile);
+	if (profile)
+		LsaFreeReturnBuffer(profile);
 
 	return token;
 }
@@ -230,53 +224,45 @@ done:
 HANDLE
 process_custom_lsa_auth(const char* user, const char* pwd, const char* lsa_pkg)
 {
-	wchar_t *providerw = NULL;
 	HANDLE token = NULL, lsa_handle = NULL;
 	LSA_OPERATIONAL_MODE mode;
-	ULONG auth_package_id, logon_info_size = 0;
+	ULONG auth_package_id;
 	NTSTATUS ret, subStatus;
-	wchar_t *logon_info_w = NULL;
-	LSA_STRING logon_process_name, lsa_auth_package_name, originName;
-	TOKEN_SOURCE sourceContext;
-	PVOID pProfile = NULL;
-	LUID logonId;
+	LSA_STRING logon_process_name, lsa_auth_package_name, origin_name;
+	TOKEN_SOURCE source_context;
+	PVOID profile = NULL;
+	LUID logon_id = { 0, 0 };
 	QUOTA_LIMITS quotas;
-	DWORD cbProfile;
+	DWORD profile_size;
 	int retVal = -1;
-	char *domain = NULL, *logon_info = NULL, user_name[UNLEN] = { 0, }, *tmp = NULL;
+	wchar_t *user_utf16 = NULL, *pwd_utf16 = NULL, *seperator = NULL;
+	wchar_t logon_info[UNLEN + 1 + PWLEN + 1 + DNLEN + 1];
+	ULONG logon_info_size = ARRAYSIZE(logon_info);
 
 	debug3("LSA auth request, user:%s lsa_pkg:%s ", user, lsa_pkg);
 
-	logon_info_size = (ULONG)(strlen(user) + strlen(pwd) + 2); // 1 - ";", 1 - "\0"
-	strcpy_s(user_name, _countof(user_name), user);
-	if (tmp = strstr(user_name, "@")) {
-		domain = tmp + 1;
-		*tmp = '\0';
-		logon_info_size++; // 1 - ";"
-	}
-
-	logon_info = malloc(logon_info_size);
-	if(!logon_info)
-		fatal("%s out of memory", __func__);
-
-	strcpy_s(logon_info, logon_info_size, user_name);
-	strcat_s(logon_info, logon_info_size, ";");
-	strcat_s(logon_info, logon_info_size, pwd);
-
-	if (domain) {
-		strcat_s(logon_info, logon_info_size, ";");
-		strcat_s(logon_info, logon_info_size, domain);
-	}
-
-	if (NULL == (logon_info_w = utf8_to_utf16(logon_info))) {
-		error("utf8_to_utf16 failed to convert %s", logon_info);
+	if ((user_utf16 = utf8_to_utf16(user)) == NULL ||
+		(pwd_utf16 = utf8_to_utf16(pwd)) == NULL)
 		goto done;
+	
+	/* the format for the user will be constrained to the output of get_passwd()
+	* so only the only two formats are NetBiosDomain\SamAccountName which is
+	* a domain account or just SamAccountName in which is a local account */
+
+	seperator = wcschr(user_utf16, L'\\');
+	if (seperator != NULL) {
+		/* domain user: generate login info string user;password;domain */
+		swprintf_s(logon_info, ARRAYSIZE(logon_info), L"%s;%s;%.*s",
+			seperator + 1, pwd_utf16, (int) (seperator - user_utf16), user_utf16);
+	} else {
+		/* local user: generate login info string user;password */
+		swprintf_s(logon_info, ARRAYSIZE(logon_info), L"%s;%s",
+			user_utf16, pwd_utf16);
 	}
 
-	/* call into LSA provider , get and duplicate token */
 	InitLsaString(&logon_process_name, "sshd");
 	InitLsaString(&lsa_auth_package_name, lsa_pkg);
-	InitLsaString(&originName, "sshd");
+	InitLsaString(&origin_name, "sshd");
 
 	if ((ret = LsaRegisterLogonProcess(&logon_process_name, &lsa_handle, &mode)) != STATUS_SUCCESS) {
 		error("LsaRegisterLogonProcess failed, error:%x", ret);
@@ -288,32 +274,17 @@ process_custom_lsa_auth(const char* user, const char* pwd, const char* lsa_pkg)
 		goto done;
 	}
 
-	memcpy(sourceContext.SourceName, "sshd", sizeof(sourceContext.SourceName));
+	strcpy_s(source_context.SourceName, sizeof(source_context.SourceName), "sshd");
 
-	if (!AllocateLocallyUniqueId(&sourceContext.SourceIdentifier)) {
+	if (!AllocateLocallyUniqueId(&source_context.SourceIdentifier)) {
 		error("AllocateLocallyUniqueId failed, error:%d", GetLastError());
 		goto done;
 	}
 
-	if ((ret = LsaLogonUser(lsa_handle,
-		&originName,
-		Network,
-		auth_package_id,
-		logon_info_w,
-		logon_info_size * sizeof(wchar_t),
-		NULL,
-		&sourceContext,
-		&pProfile,
-		&cbProfile,
-		&logonId,
-		&token,
-		&quotas,
-		&subStatus)) != STATUS_SUCCESS) {
-		if (ret == STATUS_ACCOUNT_RESTRICTION)
-			error("LsaLogonUser failed, error:%x subStatus:%ld", ret, subStatus);
-		else
-			error("LsaLogonUser failed error:%x", ret);
-
+	if ((ret = LsaLogonUser(lsa_handle, &origin_name, Network, auth_package_id,
+		logon_info, (ULONG)logon_info_size, NULL, &source_context,
+		(PVOID*)&profile, &profile_size, &logon_id, &token, &quotas, &subStatus)) != STATUS_SUCCESS) {
+		debug("%s: LsaLogonUser() failed: %d SubStatus %d.", __FUNCTION__, ret, subStatus);
 		goto done;
 	}
 
@@ -322,40 +293,59 @@ process_custom_lsa_auth(const char* user, const char* pwd, const char* lsa_pkg)
 done:
 	if (lsa_handle)
 		LsaDeregisterLogonProcess(lsa_handle);
-	if (pProfile)
-		LsaFreeReturnBuffer(pProfile);
-	if (logon_info)
-		free(logon_info);
-	if (logon_info_w)
-		free(logon_info_w);
+	if (profile)
+		LsaFreeReturnBuffer(profile);
+	if (user_utf16)
+		free(user_utf16);
+	if (pwd_utf16) {
+		SecureZeroMemory(pwd_utf16, wcslen(pwd_utf16) * sizeof(WCHAR));
+		free(pwd_utf16);
+	}
+	SecureZeroMemory(logon_info, sizeof(logon_info));
 
 	return token;
 }
 
 HANDLE generate_sshd_virtual_token();
+HANDLE generate_sshd_token_as_nonsystem();
 
 HANDLE
-get_user_token(char* user) {
+get_user_token(char* user, int impersonation) {
 	HANDLE token = NULL;
 	wchar_t *user_utf16 = NULL;
-	
+
 	if ((user_utf16 = utf8_to_utf16(user)) == NULL) {
 		debug("out of memory");
 		goto done;
 	}
 
 	if (wcscmp(user_utf16, L"sshd") == 0) {
-		if ((token = generate_sshd_virtual_token()) != 0)
+		/* not running as system, try generating sshd token as admin */
+		if (!am_system() && (token = generate_sshd_token_as_nonsystem()) != 0)
 			goto done;
-		debug3("unable to generate sshd virtual token, falling back to s4u");
+			
+		if ((token = generate_sshd_virtual_token()) == 0)
+  		    error("unable to generate sshd virtual token, ensure sshd service has TCB privileges");
+
+		goto done;
 	}
 
-	if ((token = generate_s4u_user_token(user_utf16)) == 0) {
-		error("unable to generate token for user %ls", user_utf16);
+	if (!am_system()) {
+		struct passwd* pwd = w32_getpwuid(0);
+		if (strcmp(pwd->pw_name, user) == 0)
+			OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS_P, &token);
+		else
+			debug("unable to generate user token for %s as I am not running as system", user);
+
+		goto done;
+	}
+
+	if ((token = generate_s4u_user_token(user_utf16, impersonation)) == 0) {
+		debug3("unable to generate token for user %ls", user_utf16);
 		/* work around for https://github.com/PowerShell/Win32-OpenSSH/issues/727 by doing a fake login */
-		LogonUserExExWHelper(L"FakeUser", L"FakeDomain", L"FakePasswd",
+		pLogonUserExExW(L"FakeUser", L"FakeDomain", L"FakePasswd",
 			LOGON32_LOGON_NETWORK_CLEARTEXT, LOGON32_PROVIDER_DEFAULT, NULL, &token, NULL, NULL, NULL, NULL);
-		if ((token = generate_s4u_user_token(user_utf16)) == 0) {
+		if ((token = generate_s4u_user_token(user_utf16, impersonation)) == 0) {
 			error("unable to generate token on 2nd attempt for user %ls", user_utf16);
 			goto done;
 		}
@@ -368,29 +358,52 @@ done:
 	return token;
 }
 
-int load_user_profile(HANDLE user_token, char* user) {
-	int r = 0;
-	HANDLE profile_handle = NULL;
-	wchar_t *user_utf16 = NULL, *dom_utf16 = NULL, *tmp;
+int 
+load_user_profile(HANDLE user_token, char* user)
+{
+	wchar_t * user_utf16 = NULL;
+
+	if (!am_system()) {
+	    debug("Not running as SYSTEM: skipping loading user profile");
+	    return 0;
+	}
 
 	if ((user_utf16 = utf8_to_utf16(user)) == NULL) {
-		debug("out of memory");
-		goto done;
+		fatal("out of memory");
+		return -1;
 	}
 
-	/* split user and domain */
-	if ((tmp = wcschr(user_utf16, L'@')) != NULL) {
-		dom_utf16 = tmp + 1;
-		*tmp = L'\0';
+	/* note: user string will normalized form output of get_passwd() */
+	wchar_t * user_name = user_utf16;
+	wchar_t * domain_name = NULL;
+	wchar_t * seperator = wcschr(user_name, L'\\');
+	if (seperator != NULL) {
+		domain_name = user_name;
+		*seperator = L'\0';
+		user_name = seperator + 1;
 	}
 
-	if ((profile_handle = LoadProfile(user_token, user_utf16, dom_utf16)) == NULL)
-		goto done;
+	PROFILEINFOW profileInfo = { 0 };
+	profileInfo.dwSize = sizeof(profileInfo);
+	profileInfo.dwFlags = PI_NOUI;
+	profileInfo.lpProfilePath = NULL;
+	profileInfo.lpUserName = user_name;
+	profileInfo.lpDefaultPath = NULL;
+	profileInfo.lpServerName = domain_name;
+	profileInfo.lpPolicyPath = NULL;
+	profileInfo.hProfile = NULL;
+	EnablePrivilege("SeBackupPrivilege", 1);
+	EnablePrivilege("SeRestorePrivilege", 1);
+	if (LoadUserProfileW(user_token, &profileInfo) == FALSE) {
+		debug3("%s: LoadUserProfileW() failed for user %S with error %d.", __FUNCTION__, GetLastError());
+	}
+	EnablePrivilege("SeBackupPrivilege", 0);
+	EnablePrivilege("SeRestorePrivilege", 0);
 
-done:
 	if (user_utf16)
 		free(user_utf16);
-	return r;
+
+	return 0;
 }
 
 
@@ -443,9 +456,8 @@ AddSidMappingToLsa(PUNICODE_STRING domain_name,
 			error("LsaManageSidNameMapping failed with ntstatus: %d \n", status);
 	}
 
-	/* TODO - Free p_output */
-	/*if (p_output)
-		LsaFreeMemory(p_output);*/
+	if (p_output)
+		LsaFreeMemory(p_output);
 
 	return ret;
 }
@@ -485,11 +497,39 @@ InitUnicodeString(PUNICODE_STRING dest, PWSTR source)
 	dest->MaximumLength = dest->Length + 2;
 }
 
+HANDLE generate_sshd_token_as_nonsystem()
+{
+	/*
+	 * This logic tries to reset sshd account password and generate sshd token via logon user
+	 * however this token cannot be used to spawn child processes in typical interactive 
+	 * scenarios, without modifying ACLs on desktop station. 
+	 * Since sshd is run in interactive mode primarily for debugging/testing purposes, we are
+	 * simply returing the process token (to be used for spawning unprivileged worker)
+	 {
+	    UUID uuid;
+	    RPC_CWSTR rpc_str;
+	    USER_INFO_1003 info;
+	    HANDLE token = 0;
+	    UuidCreate(&uuid);
+	    UuidToStringW(&uuid, (RPC_WSTR*)&rpc_str);
+
+	    info.usri1003_password = (LPWSTR)rpc_str;
+	    NetUserSetInfo(NULL, L"sshd", 1003, (LPBYTE)&info, NULL);
+
+	    LogonUserW(L"sshd", NULL, (LPCWSTR)rpc_str, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT, &token);
+	}
+	*/
+	HANDLE token = 0;
+	OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS_P , &token);
+	return token;
+}
+
 HANDLE generate_sshd_virtual_token()
 {
 	SID_IDENTIFIER_AUTHORITY nt_authority = SECURITY_NT_AUTHORITY;
 	UNICODE_STRING domain, group, account;
 	WCHAR va_name[32]; /* enough to accomodate sshd_123457890 */
+	LSA_HANDLE lsa_policy = NULL;
 
 	PSID sid_domain = NULL, sid_group = NULL, sid_user = NULL;
 	HANDLE va_token = 0, va_token_restricted = 0;
@@ -560,12 +600,32 @@ HANDLE generate_sshd_virtual_token()
 	if (AddSidMappingToLsa(&domain, &account, sid_user) != 0)
 		goto cleanup;
 
+	/* assign service logon privilege to virtual account */
+	{
+		LSA_OBJECT_ATTRIBUTES ObjectAttributes;
+		UNICODE_STRING svcLogonRight;
+		NTSTATUS lsa_ret;
+
+		ZeroMemory(&ObjectAttributes, sizeof(ObjectAttributes));
+		if ((lsa_ret = LsaOpenPolicy(NULL, &ObjectAttributes,
+		    POLICY_CREATE_ACCOUNT | POLICY_LOOKUP_NAMES, 
+		    &lsa_policy )) != STATUS_SUCCESS) {
+			error("%s: unable to open policy handle, error: %d", __FUNCTION__, LsaNtStatusToWinError(lsa_ret));
+			goto cleanup;
+		}
+		InitUnicodeString(&svcLogonRight, L"SeServiceLogonRight");
+		if ((lsa_ret = LsaAddAccountRights(lsa_policy, sid_user, &svcLogonRight, 1)) != STATUS_SUCCESS) {
+			error("%s: unable to assign SE_SERVICE_LOGON_NAME privilege, error: %d", __FUNCTION__, LsaNtStatusToWinError(lsa_ret));
+			goto cleanup;
+		}
+	}
+
 	/* Logon virtual and create token */
-	if (!LogonUserExExWHelper(
+	if (!pLogonUserExExW(
 	    va_name,
 	    VIRTUALUSER_DOMAIN,
 	    L"",
-	    LOGON32_LOGON_INTERACTIVE,
+	    LOGON32_LOGON_SERVICE,
 	    LOGON32_PROVIDER_VIRTUAL,
 	    NULL,
 	    &va_token,
@@ -592,6 +652,8 @@ cleanup:
 		FreeSid(sid_user);
 	if (sid_group)
 		FreeSid(sid_group);
+	if (lsa_policy)
+		LsaClose(lsa_policy);
 
 	return va_token_restricted;
 }

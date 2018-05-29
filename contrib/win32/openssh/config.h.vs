@@ -1580,6 +1580,7 @@
 /* #undef socklen_t */
 #define WIN32_LEAN_AND_MEAN 1
 #define WINDOWS 1
+#define SUPPORT_CRLF 1
 
 #define BROKEN_READV_COMPARISON
 
@@ -1656,6 +1657,8 @@
 
 
 #define WITH_OPENSSL 1
+#define OPENSSL_HAVE_EVPGCM 1
+#define HAVE_EVP_CIPHER_CTX_CTRL 1
 #define HAVE_DECL_NFDBITS 0
 #define HAVE_DECL_HOWMANY 0
 #define HAVE_STRTOULL 1

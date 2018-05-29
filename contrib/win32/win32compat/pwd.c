@@ -1,6 +1,10 @@
 /*
  * Author: NoMachine <developers@nomachine.com>
  *
+ * Author: Bryan Berns <berns@uwalumni.com>
+ *   Normalized and optimized login routines and added support for
+ *   internet-linked accounts.
+ *
  * Copyright (c) 2009, 2011 NoMachine
  * All rights reserved
  *
@@ -45,32 +49,73 @@
 
 static struct passwd pw;
 static char* pw_shellpath = NULL;
-#define SHELL_HOST "\\ssh-shellhost.exe"
+char* shell_command_option = NULL;
+
+/* returns 0 on success, and -1 with errno set on failure */
+static int
+set_defaultshell()
+{
+	HKEY reg_key = 0;
+	int tmp_len, ret = -1;
+	REGSAM mask = STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY;
+	wchar_t path_buf[PATH_MAX], option_buf[32];
+	char *pw_shellpath_local = NULL, *command_option_local = NULL;
+
+	errno = 0;
+
+	/* if already set, return success */
+	if (pw_shellpath != NULL)
+		return 0;
+
+	path_buf[0] = L'\0';
+	option_buf[0] = L'\0';
+
+	tmp_len = _countof(path_buf);
+	if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\OpenSSH", 0, mask, &reg_key) == ERROR_SUCCESS) &&
+	    (RegQueryValueExW(reg_key, L"DefaultShell", 0, NULL, (LPBYTE)path_buf, &tmp_len) == ERROR_SUCCESS) &&
+	    (path_buf[0] != L'\0')) {
+		/* fetched default shell path from registry */
+		tmp_len = _countof(option_buf);
+		if (RegQueryValueExW(reg_key, L"DefaultShellCommandOption", 0, NULL, (LPBYTE)option_buf, &tmp_len) != ERROR_SUCCESS)
+			option_buf[0] = L'\0';
+	} else {
+		if (!GetSystemDirectoryW(path_buf, _countof(path_buf))) {
+			errno = GetLastError();
+			goto cleanup;
+		}
+		if (wcscat_s(path_buf, _countof(path_buf), L"\\cmd.exe") != 0)
+			goto cleanup;
+	}
+
+	if ((pw_shellpath_local = utf16_to_utf8(path_buf)) == NULL)
+		goto cleanup;
+
+	if (option_buf[0] != L'\0')
+		if ((command_option_local = utf16_to_utf8(option_buf)) == NULL)
+			goto cleanup;
+
+	pw_shellpath = pw_shellpath_local;
+	pw_shellpath_local = NULL;
+	shell_command_option = command_option_local;
+	command_option_local = NULL;
+
+	ret = 0;
+cleanup:
+	if (pw_shellpath_local)
+		free(pw_shellpath_local);
+
+	if (command_option_local)
+		free(command_option_local);
+
+	return ret;
+}
 
 
 int
 initialize_pw()
 {
-	errno_t r = 0;
-	char* program_dir = w32_programdir();
-	size_t program_dir_len = strlen(program_dir);
-	size_t shell_host_len = strlen(SHELL_HOST);
-	if (pw_shellpath == NULL) {
-		if ((pw_shellpath = malloc(program_dir_len + shell_host_len + 1)) == NULL)
-			fatal("initialize_pw - out of memory");
-		else {
-			char* head = pw_shellpath;
-			if ((r= memcpy_s(head, program_dir_len + shell_host_len + 1, w32_programdir(), program_dir_len)) != 0) {
-				fatal("memcpy_s failed with error: %d.", r);
-			}
-			head += program_dir_len;
-			if ((r = memcpy_s(head, shell_host_len + 1, SHELL_HOST, shell_host_len)) != 0) {
-				fatal("memcpy_s failed with error: %d.", r);
-			}
-			head += shell_host_len;
-			*head = '\0';
-		}
-	}
+	if (set_defaultshell() != 0)
+		return -1;
 
 	if (pw.pw_shell != pw_shellpath) {
 		memset(&pw, 0, sizeof(pw));
@@ -83,229 +128,211 @@ initialize_pw()
 	return 0;
 }
 
-void
-reset_pw()
+static void 
+clean_pw()
 {
-	initialize_pw();
 	if (pw.pw_name)
 		free(pw.pw_name);
 	if (pw.pw_dir)
 		free(pw.pw_dir);
-	if (pw.pw_sid)
-		free(pw.pw_sid);
 	pw.pw_name = NULL;
 	pw.pw_dir = NULL;
-	pw.pw_sid = NULL;
+}
+
+static int
+reset_pw()
+{
+	if (initialize_pw() != 0)
+		return -1;
+
+	clean_pw();
+
+	return 0;
 }
 
 static struct passwd*
-get_passwd(const char *user_utf8, LPWSTR user_sid)
+get_passwd(const wchar_t * user_utf16, PSID sid)
 {
+	wchar_t user_resolved[DNLEN + 1 + UNLEN + 1];
 	struct passwd *ret = NULL;
-	wchar_t *user_utf16 = NULL, *uname_utf16, *udom_utf16, *tmp;
-	char *uname_utf8 = NULL, *uname_upn = NULL, *udom_utf8 = NULL, *pw_home_utf8 = NULL, *user_sid_utf8 = NULL;
-	LPBYTE user_info = NULL;
-	LPWSTR user_sid_local = NULL;
+	wchar_t *sid_string = NULL;
 	wchar_t reg_path[PATH_MAX], profile_home[PATH_MAX], profile_home_exp[PATH_MAX];
-	HKEY reg_key = 0;
-	int tmp_len = PATH_MAX;
-	PDOMAIN_CONTROLLER_INFOW pdc = NULL;
-	DWORD dsStatus, uname_upn_len = 0, uname_len = 0, udom_len = 0;
-	wchar_t wmachine_name[MAX_COMPUTERNAME_LENGTH + 1];
-	DWORD wmachine_name_len = MAX_COMPUTERNAME_LENGTH + 1;
-	errno_t r = 0;
+	DWORD reg_path_len = PATH_MAX;
+	HKEY reg_key = 0;	
+	
+	BYTE binary_sid[SECURITY_MAX_SID_SIZE];
+	DWORD sid_size = ARRAYSIZE(binary_sid);
+	WCHAR domain_name[DNLEN + 1] = L"";
+	DWORD domain_name_size = DNLEN + 1;
+	SID_NAME_USE account_type = 0;
 
 	errno = 0;
-	reset_pw();
-	if ((user_utf16 = utf8_to_utf16(user_utf8)) == NULL) {
-		errno = ENOMEM;
-		goto done;
+	if (reset_pw() != 0)
+		return NULL;
+
+	/* skip forward lookup on name if sid was passed in */
+	if (sid != NULL)
+		CopySid(sizeof(binary_sid), binary_sid, sid);
+	/* else attempt to lookup the account; this will verify the account is valid and
+	 * is will return its sid and the realm that owns it */
+	else if(LookupAccountNameW(NULL, user_utf16, binary_sid, &sid_size,
+	    domain_name, &domain_name_size, &account_type) == 0) {
+		errno = ENOENT;
+		debug("%s: LookupAccountName() failed: %d.", __FUNCTION__, GetLastError());
+		goto cleanup;
 	}
 
-	/*find domain part if any*/
-	if ((tmp = wcschr(user_utf16, L'\\')) != NULL) {
-		udom_utf16 = user_utf16;
-		uname_utf16 = tmp + 1;
-		*tmp = L'\0';
-
-	} else if ((tmp = wcschr(user_utf16, L'@')) != NULL) {
-		udom_utf16 = tmp + 1;
-		uname_utf16 = user_utf16;
-		*tmp = L'\0';
-	} else {
-		uname_utf16 = user_utf16;
-		udom_utf16 = NULL;
+	/* convert the binary string to a string */
+	if (ConvertSidToStringSidW((PSID) binary_sid, &sid_string) == FALSE) {
+		errno = errno_from_Win32LastError();
+		goto cleanup;
 	}
 
-	if (udom_utf16) {
-		/* this should never fail */
-		GetComputerNameW(wmachine_name, &wmachine_name_len);
-		/* If this is a local account (domain part and computer name are the same), strip out domain */
-		if (_wcsicmp(udom_utf16, wmachine_name) == 0)
-			udom_utf16 = NULL;
+	/* lookup the account name from the sid */
+	WCHAR user_name[UNLEN + 1];
+	DWORD user_name_length = ARRAYSIZE(user_name);
+	domain_name_size = DNLEN + 1;
+	if (LookupAccountSidW(NULL, binary_sid, user_name, &user_name_length,
+	    domain_name, &domain_name_size, &account_type) == 0) {
+		errno = errno_from_Win32LastError();
+		debug("%s: LookupAccountSid() failed: %d.", __FUNCTION__, GetLastError());
+		goto cleanup;
 	}
 
-	if (user_sid == NULL) {
-		NET_API_STATUS status;
-		if ((status = NetUserGetInfo(udom_utf16, uname_utf16, 23, &user_info)) != NERR_Success) {
-			debug3("NetUserGetInfo() failed with error: %d for user: %ls and domain: %ls \n", status, uname_utf16, udom_utf16);
-
-			if ((dsStatus = DsGetDcNameW(NULL, udom_utf16, NULL, NULL, DS_DIRECTORY_SERVICE_PREFERRED, &pdc)) != ERROR_SUCCESS) {
-				error("DsGetDcNameW() failed with error: %d \n", dsStatus);
-				errno = ENOENT;
-				goto done;
-			}
-
-			if ((status = NetUserGetInfo(pdc->DomainControllerName, uname_utf16, 23, &user_info)) != NERR_Success) {
-				debug3("NetUserGetInfo() with domainController: %ls failed with error: %d \n", pdc->DomainControllerName, status);
-				errno = ENOENT;
-				goto done;
-			}
-		}
-
-		if (ConvertSidToStringSidW(((LPUSER_INFO_23)user_info)->usri23_user_sid, &user_sid_local) == FALSE) {
-			debug3("NetUserGetInfo() Succeded but ConvertSidToStringSidW() failed with error: %d\n", GetLastError());
-			errno = ENOENT;
-			goto done;
-		}
-
-		user_sid = user_sid_local;
+	/* verify passed account is actually a user account */
+	if (account_type != SidTypeUser) {
+		errno = ENOENT;
+		debug3("%s: Invalid account type: %d.", __FUNCTION__, account_type);
+		goto cleanup;
 	}
+
+	/* fetch the computer name so we can determine if the specified user is local or not */
+	wchar_t computer_name[CNLEN + 1];
+	DWORD computer_name_size = ARRAYSIZE(computer_name);
+	if (GetComputerNameW(computer_name, &computer_name_size) == 0) {
+		goto cleanup;
+	}
+
+	/* if standard local user name, just use name without decoration */
+	if (_wcsicmp(domain_name, computer_name) == 0) 
+		wcscpy_s(user_resolved, ARRAYSIZE(user_resolved), user_name);
+
+	/* put any other format in sam compatible format */
+	else
+		swprintf_s(user_resolved, ARRAYSIZE(user_resolved), L"%s\\%s", domain_name, user_name);
 
 	/* if one of below fails, set profile path to Windows directory */
-	if (swprintf_s(reg_path, PATH_MAX, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\%ls", user_sid) == -1 ||
+	if (swprintf_s(reg_path, PATH_MAX, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\ProfileList\\%ls", sid_string) == -1 ||
 	    RegOpenKeyExW(HKEY_LOCAL_MACHINE, reg_path, 0, STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &reg_key) != 0 ||
-	    RegQueryValueExW(reg_key, L"ProfileImagePath", 0, NULL, (LPBYTE)profile_home, &tmp_len) != 0 ||
-	    ExpandEnvironmentStringsW(profile_home, NULL, 0) > PATH_MAX || 
+	    RegQueryValueExW(reg_key, L"ProfileImagePath", 0, NULL, (LPBYTE)profile_home, &reg_path_len) != 0 ||
+	    ExpandEnvironmentStringsW(profile_home, NULL, 0) > PATH_MAX ||
 	    ExpandEnvironmentStringsW(profile_home, profile_home_exp, PATH_MAX) == 0)
 		if (GetWindowsDirectoryW(profile_home_exp, PATH_MAX) == 0) {
 			debug3("GetWindowsDirectoryW failed with %d", GetLastError());
 			errno = EOTHER;
-			goto done;
+			goto cleanup;
 		}
 
-	if ((uname_utf8 = utf16_to_utf8(uname_utf16)) == NULL ||
-	    (udom_utf16 && (udom_utf8 = utf16_to_utf8(udom_utf16)) == NULL) ||
-	    (pw_home_utf8 = utf16_to_utf8(profile_home_exp)) == NULL ||
-	    (user_sid_utf8 = utf16_to_utf8(user_sid)) == NULL) {
+	/* convert to utf8, make name lowercase, and assign to output structure*/
+	_wcslwr_s(user_resolved, wcslen(user_resolved) + 1);
+	if ((pw.pw_name = utf16_to_utf8(user_resolved)) == NULL ||
+	    (pw.pw_dir = utf16_to_utf8(profile_home_exp)) == NULL) {
+		clean_pw();
 		errno = ENOMEM;
-		goto done;
-	}
-	uname_len = (DWORD)strlen(uname_utf8);	
-	uname_upn_len = uname_len + 1;
-	if (udom_utf8) {
-		udom_len = (DWORD)strlen(udom_utf8);
-		uname_upn_len += udom_len + 1;
+		goto cleanup;
 	}
 
-	if ((uname_upn = malloc(uname_upn_len)) == NULL) {
-		errno = ENOMEM;
-		goto done;
-	}
-
-	if ((r = memcpy_s(uname_upn, uname_upn_len, uname_utf8, uname_len + 1)) != 0) {
-		debug3("memcpy_s failed with error: %d.", r);
-		goto done;
-	}
-	if (udom_utf8) {
-		/* TODO - get domain FQDN */
-		uname_upn[uname_len] = '@';
-		if ((r = memcpy_s(uname_upn + uname_len + 1, udom_len + 1, udom_utf8, udom_len + 1)) != 0) {
-			debug3("memcpy_s failed with error: %d.", r);
-			goto done;
-		}
-	}
-
-	to_lower_case(uname_upn);
-	pw.pw_name = uname_upn;
-	uname_upn = NULL;
-	pw.pw_dir = pw_home_utf8;
-	pw_home_utf8 = NULL;
-	pw.pw_sid = user_sid_utf8;
-	user_sid_utf8 = NULL;
 	ret = &pw;
 
-done:
-	if (user_utf16)
-		free(user_utf16);
-	if (uname_utf8)
-		free(uname_utf8);
-	if (uname_upn)
-		free(uname_upn);
-	if (udom_utf8)
-		free(udom_utf8);
-	if (pw_home_utf8)
-		free(pw_home_utf8);
-	if (user_sid_utf8)
-		free(user_sid_utf8);
-	if (user_info)
-		NetApiBufferFree(user_info);
-	if (user_sid_local)
-		LocalFree(user_sid_local);
+cleanup:
+
+	if (sid_string)
+		LocalFree(sid_string);
 	if (reg_key)
 		RegCloseKey(reg_key);
-	if (pdc)
-		NetApiBufferFree(pdc);
+
+	return ret;
+}
+
+static struct passwd*
+getpwnam_placeholder(const char* user) {
+	wchar_t tmp_home[PATH_MAX];
+	char *pw_name = NULL, *pw_dir = NULL;
+	struct passwd* ret = NULL;
+
+	if (GetWindowsDirectoryW(tmp_home, PATH_MAX) == 0) {
+		debug3("GetWindowsDirectoryW failed with %d", GetLastError());
+		errno = EOTHER;
+		goto cleanup;
+	}
+	pw_name = strdup(user);
+	pw_dir = utf16_to_utf8(tmp_home);
+
+	if (!pw_name || !pw_dir) {
+		errno = ENOMEM;
+		goto cleanup;
+	}
+
+	pw.pw_name = pw_name;
+	pw_name = NULL;
+	pw.pw_dir = pw_dir;
+	pw_dir = NULL;
+
+	ret = &pw;
+cleanup:
+	if (pw_name)
+		free(pw_name);
+	if (pw_dir)
+		free(pw_dir);
+
 	return ret;
 }
 
 struct passwd*
 w32_getpwnam(const char *user_utf8)
 {
-	return get_passwd(user_utf8, NULL);
-}
-
-struct passwd*
-w32_getpwtoken(HANDLE t)
-{
-	wchar_t* wuser = NULL;
-	char* user_utf8 = NULL;
-	ULONG needed = 0;
-	struct passwd *ret = NULL;
-	DWORD info_len = 0;
-	TOKEN_USER* info = NULL;
-	LPWSTR user_sid = NULL;
-
-	errno = 0;
-
-	if (GetUserNameExW(NameSamCompatible, NULL, &needed) != 0 ||
-	    (wuser = malloc(needed * sizeof(wchar_t))) == NULL ||
-	    GetUserNameExW(NameSamCompatible, wuser, &needed) == 0 ||
-	    (user_utf8 = utf16_to_utf8(wuser)) == NULL ||
-	    GetTokenInformation(t, TokenUser, NULL, 0, &info_len) == TRUE ||
-	    (info = (TOKEN_USER*)malloc(info_len)) == NULL ||
-	    GetTokenInformation(t, TokenUser, info, info_len, &info_len) == FALSE ||
-	    ConvertSidToStringSidW(info->User.Sid, &user_sid) == FALSE) {
+	struct passwd* ret = NULL;
+	wchar_t * user_utf16 = utf8_to_utf16(user_utf8);
+	if (user_utf16 == NULL) {
 		errno = ENOMEM;
-		goto done;
+		return NULL;
 	}
-	ret = get_passwd(user_utf8, user_sid);
 
-done:
-	if (wuser)
-		free(wuser);
-	if (user_utf8)
-		free(user_utf8);
-	if (info)
-		free(info);
-	if (user_sid)
-		LocalFree(user_sid);
+	ret = get_passwd(user_utf16, NULL);
+	if (ret != NULL)
+		return ret;
+
+	/* check if custom passwd auth is enabled */
+	{
+		int lsa_auth_pkg_len = 0;
+		HKEY reg_key = 0;
+
+		REGSAM mask = STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY;
+		if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\OpenSSH", 0, mask, &reg_key) == ERROR_SUCCESS) &&
+		    (RegQueryValueExW(reg_key, L"LSAAuthenticationPackage", 0, NULL, NULL, &lsa_auth_pkg_len) == ERROR_SUCCESS))
+			ret = getpwnam_placeholder(user_utf8);
+
+		if (reg_key)
+			RegCloseKey(reg_key);
+	}
 	return ret;
 }
 
 struct passwd*
 w32_getpwuid(uid_t uid)
 {
-	HANDLE token;
-	struct passwd* ret;
-	if ((OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) == FALSE) {
-		debug("unable to get process token");
-		errno = EOTHER;
-		return NULL;
-	}
+	struct passwd* ret = NULL;
+	PSID cur_user_sid = NULL;
+	
+	if ((cur_user_sid = get_user_sid(NULL)) == NULL)
+		goto cleanup;
 
-	ret = w32_getpwtoken(token);
-	CloseHandle(token);
+	ret = get_passwd(NULL, cur_user_sid);
+
+cleanup:
+	if (cur_user_sid)
+		free(cur_user_sid);
+
 	return ret;
 }
 
@@ -324,7 +351,7 @@ user_from_uid(uid_t uid, int nouser)
 uid_t
 getuid(void)
 {
-	return 0;
+	return 1;
 }
 
 gid_t
@@ -336,7 +363,7 @@ getgid(void)
 uid_t
 geteuid(void)
 {
-	return 0;
+	return 1;
 }
 
 gid_t

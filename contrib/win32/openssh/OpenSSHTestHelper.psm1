@@ -5,6 +5,8 @@ Import-Module $PSScriptRoot\OpenSSHUtils -Force
 
 [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
 # test environment parameters initialized with defaults
+$SetupTestResultsFileName = "setupTestResults.xml"
+$UninstallTestResultsFileName = "UninstallTestResults.xml"
 $E2ETestResultsFileName = "E2ETestResults.xml"
 $UnitTestResultsFileName = "UnitTestResults.txt"
 $TestSetupLogFileName = "TestSetupLog.txt"
@@ -16,6 +18,8 @@ $OpenSSHTestAccounts = $Script:SSOUser, $Script:PubKeyUser, $Script:PasswdUser
 $OpenSSHConfigPath = Join-Path $env:ProgramData "ssh"
 
 $Script:TestDataPath = "$env:SystemDrive\OpenSSHTests"
+$Script:SetupTestResultsFile = Join-Path $TestDataPath $SetupTestResultsFileName
+$Script:UninstallTestResultsFile = Join-Path $TestDataPath $UninstallTestResultsFileName
 $Script:E2ETestResultsFile = Join-Path $TestDataPath $E2ETestResultsFileName
 $Script:UnitTestResultsFile = Join-Path $TestDataPath $UnitTestResultsFileName
 $Script:TestSetupLogFile = Join-Path $TestDataPath $TestSetupLogFileName
@@ -42,100 +46,43 @@ function Set-OpenSSHTestEnvironment
         [Switch] $PostmortemDebugging,
         [Switch] $NoLibreSSL
     )
+
+    $params = $PSBoundParameters
+    $params.Remove("DebugMode") | Out-Null
+    $params.Remove("NoAppVerifier") | Out-Null
+    $params.Remove("PostmortemDebugging") | Out-Null
     
     if($PSBoundParameters.ContainsKey("Verbose"))
     {
         $verboseInfo =  ($PSBoundParameters['Verbose']).IsPresent
     }
-    
-    if($Global:OpenSSHTestInfo -ne $null)
-    {
-        $Global:OpenSSHTestInfo.Clear()
-        $Global:OpenSSHTestInfo = $null
-    }
-    $Script:TestDataPath = $TestDataPath;
-    $Script:E2ETestResultsFile = Join-Path $TestDataPath "E2ETestResults.xml"
-    $Script:UnitTestResultsFile = Join-Path $TestDataPath "UnitTestResults.txt"
-    $Script:TestSetupLogFile = Join-Path $TestDataPath "TestSetupLog.txt"
-    $Script:UnitTestDirectory = Get-UnitTestDirectory
+
+    Set-BasicTestInfo @params
+
+    $Global:OpenSSHTestInfo.Add("Target", "localhost")                                 # test listener name
+    $Global:OpenSSHTestInfo.Add("Port", "47002")                                       # test listener port
+    $Global:OpenSSHTestInfo.Add("SSOUser", $SSOUser)                                   # test user with single sign on capability
+    $Global:OpenSSHTestInfo.Add("PubKeyUser", $PubKeyUser)                             # test user to be used with explicit key for key auth
+    $Global:OpenSSHTestInfo.Add("PasswdUser", $PasswdUser)                             # test user to be used for password auth
+    $Global:OpenSSHTestInfo.Add("TestAccountPW", $OpenSSHTestAccountsPassword)         # common password for all test accounts
+    $Global:OpenSSHTestInfo.Add("DebugMode", $DebugMode.IsPresent)                     # run openssh E2E in debug mode
+
+
     $Script:EnableAppVerifier = -not ($NoAppVerifier.IsPresent)
-    $Script:NoLibreSSL = $NoLibreSSL.IsPresent
+    if($Script:WindowsInBox = $true)
+    {
+        $Script:EnableAppVerifier = $false
+    }
+    $Global:OpenSSHTestInfo.Add("EnableAppVerifier", $Script:EnableAppVerifier)
+
     if($Script:EnableAppVerifier)
     {
         $Script:PostmortemDebugging = $PostmortemDebugging.IsPresent
-    }
-
-    $Global:OpenSSHTestInfo = @{        
-        "Target"= "localhost";                                 # test listener name
-        "Port"= "47002";                                       # test listener port
-        "SSOUser"= $SSOUser;                                   # test user with single sign on capability
-        "PubKeyUser"= $PubKeyUser;                             # test user to be used with explicit key for key auth
-        "PasswdUser"= $PasswdUser;                             # common password for all test accounts
-        "TestAccountPW"= $OpenSSHTestAccountsPassword;         # common password for all test accounts
-        "TestDataPath" = $TestDataPath;                        # openssh tests path
-        "TestSetupLogFile" = $Script:TestSetupLogFile;         # openssh test setup log file
-        "E2ETestResultsFile" = $Script:E2ETestResultsFile;     # openssh E2E test results file
-        "UnitTestResultsFile" = $Script:UnitTestResultsFile;   # openssh unittest test results file
-        "E2ETestDirectory" = $Script:E2ETestDirectory          # the directory of E2E tests
-        "UnitTestDirectory" = $Script:UnitTestDirectory        # the directory of unit tests
-        "DebugMode" = $DebugMode.IsPresent                     # run openssh E2E in debug mode
-        "EnableAppVerifier" = $Script:EnableAppVerifier
-        "PostmortemDebugging" = $Script:PostmortemDebugging
-        "NoLibreSSL" = $Script:NoLibreSSL
-        }
+    }    
+    $Global:OpenSSHTestInfo.Add("PostmortemDebugging", $Script:PostmortemDebugging)
 
     #start service if not already started
     Start-Service -Name sshd
-        
-    #if user does not set path, pick it up
-    if([string]::IsNullOrEmpty($OpenSSHBinPath))
-    {
-        $sshcmd = get-command ssh.exe -ErrorAction SilentlyContinue       
-        if($sshcmd -eq $null)
-        {
-            Throw "Cannot find ssh.exe. Please specify -OpenSSHBinPath to the OpenSSH installed location."
-        }
-        else
-        {
-            $dirToCheck = split-path $sshcmd.Path
-            $description = "Pick up ssh.exe from $dirToCheck."
-            $prompt = "Are you sure you want to pick up ssh.exe from $($dirToCheck)?"           
-            $caption = "Found ssh.exe from $dirToCheck"
-            if(-not $pscmdlet.ShouldProcess($description, $prompt, $caption))
-            {
-                Write-Host "User decided not to pick up ssh.exe from $dirToCheck. Please specify -OpenSSHBinPath to the OpenSSH installed location."
-                return
-            }
-            $script:OpenSSHBinPath = $dirToCheck
-        }        
-    }
-    else
-    {
-        if (-not (Test-Path (Join-Path $OpenSSHBinPath ssh.exe) -PathType Leaf))
-        {
-            Throw "Cannot find OpenSSH binaries under $OpenSSHBinPath. Please specify -OpenSSHBinPath to the OpenSSH installed location"
-        }
-        else
-        {
-            $script:OpenSSHBinPath = $OpenSSHBinPath
-        }
-    }
-
-    $Global:OpenSSHTestInfo.Add("OpenSSHBinPath", $script:OpenSSHBinPath)
-    if (-not ($env:Path.ToLower().Contains($script:OpenSSHBinPath.ToLower())))
-    {
-        $env:Path = "$($script:OpenSSHBinPath);$($env:path)"
-    }
-
-    $acl = get-acl (join-path $script:OpenSSHBinPath "ssh.exe")
-    
-    if($acl.Owner -ieq "NT SERVICE\TrustedInstaller")
-    {
-        $Script:WindowsInBox = $true
-        $Global:OpenSSHTestInfo.Add("WindowsInBox", $true)
-        $Global:OpenSSHTestInfo["EnableAppVerifier"] = $false
-        $Script:EnableAppVerifier = $false
-    }
 
     $description = @"
 WARNING: Following changes will be made to OpenSSH configuration
@@ -160,12 +107,7 @@ WARNING: Following changes will be made to OpenSSH configuration
         return
     }
 
-    Install-OpenSSHTestDependencies
-
-    if(-not (Test-path $TestDataPath -PathType Container))
-    {
-       New-Item -ItemType Directory -Path $TestDataPath -Force -ErrorAction SilentlyContinue | out-null
-    }
+    Install-OpenSSHTestDependencies    
 
     $backupConfigPath = Join-Path $OpenSSHConfigPath sshd_config.ori
     $targetsshdConfig = Join-Path $OpenSSHConfigPath sshd_config
@@ -179,20 +121,17 @@ WARNING: Following changes will be made to OpenSSH configuration
         $con = (Get-Content $targetsshdConfig | Out-String).Replace("#SyslogFacility AUTH","SyslogFacility LOCAL0")
         Set-Content -Path $targetsshdConfig -Value "$con" -Force    
     }
-    
+    $sshdSvc = Get-service ssh-agent
+    if($sshdSvc.StartType -eq [System.ServiceProcess.ServiceStartMode]::Disabled)
+    {
+        Set-service ssh-agent -StartupType Manual
+    }
     Start-Service ssh-agent
 
     #copy sshtest keys
     Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $OpenSSHConfigPath -Force  
-    Get-ChildItem "$($OpenSSHConfigPath)\sshtest*hostkey*"| % {
-        #workaround for the cariggage new line added by git before copy them
-        $filePath = "$($_.FullName)"
-        $con = (Get-Content $filePath | Out-String).Replace("`r`n","`n")
-        Set-Content -Path $filePath -Value "$con"
-        if (-not ($_.Name.EndsWith(".pub")))
-        {
+    Get-ChildItem "$($OpenSSHConfigPath)\sshtest*hostkey*" -Exclude *.pub| % {
             Repair-SshdHostKeyPermission -FilePath $_.FullName -confirm:$false
-        }        
     }
 
     #copy ca pubkey to ssh config path
@@ -200,10 +139,8 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     #copy ca private key to test dir
     $ca_priv_key = (Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_ca_userkeys)
-    Copy-Item (Join-Path $Script:E2ETestDirectory sshtest_ca_userkeys) $ca_priv_key -Force
-    $con = (Get-Content $ca_priv_key | Out-String).Replace("`r`n","`n")
-    Set-Content -Path $ca_priv_key -Value "$con"
-    Repair-UserSshConfigPermission -FilePath $ca_priv_key -confirm:$false    
+    Copy-Item (Join-Path $Script:E2ETestDirectory sshtest_ca_userkeys) $ca_priv_key -Force    
+    Repair-UserSshConfigPermission -FilePath $ca_priv_key -confirm:$false
     $Global:OpenSSHTestInfo["CA_Private_Key"] = $ca_priv_key
 
     Restart-Service sshd -Force
@@ -256,9 +193,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     Repair-AuthorizedKeyPermission -FilePath $authorizedKeyPath -confirm:$false 
     
     copy-item (Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519) $Global:OpenSSHTestInfo["TestDataPath"]
-    $testPriKeypath = Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_userssokey_ed25519
-    $con = (Get-Content $testPriKeypath | Out-String).Replace("`r`n","`n")
-    Set-Content -Path $testPriKeypath -Value "$con"
+    $testPriKeypath = Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_userssokey_ed25519    
     cmd /c "ssh-add -D 2>&1 >> $Script:TestSetupLogFile"
     Repair-UserKeyPermission -FilePath $testPriKeypath -confirm:$false
     cmd /c "ssh-add $testPriKeypath 2>&1 >> $Script:TestSetupLogFile"
@@ -282,6 +217,98 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     Backup-OpenSSHTestInfo
 }
+
+function Set-BasicTestInfo
+{
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
+    param
+    (   
+        [string] $OpenSSHBinPath,
+        [string] $TestDataPath = "$env:SystemDrive\OpenSSHTests", 
+        [Switch] $NoLibreSSL
+    )
+
+    if($Global:OpenSSHTestInfo -ne $null)
+    {
+        $Global:OpenSSHTestInfo.Clear()
+        $Global:OpenSSHTestInfo = $null
+    }
+    $Script:TestDataPath = $TestDataPath;
+    $Script:E2ETestResultsFile = Join-Path $TestDataPath $E2ETestResultsFileName
+    $Script:SetupTestResultsFile = Join-Path $TestDataPath $SetupTestResultsFileName
+    $Script:UninstallTestResultsFile = Join-Path $TestDataPath $UninstallTestResultsFileName
+    $Script:UnitTestResultsFile = Join-Path $TestDataPath $UnitTestResultsFileName        
+    $Script:TestSetupLogFile = Join-Path $TestDataPath $TestSetupLogFileName
+    $Script:UnitTestDirectory = Get-UnitTestDirectory
+    $Script:NoLibreSSL = $NoLibreSSL.IsPresent
+
+    $Global:OpenSSHTestInfo = @{
+        "TestDataPath" = $TestDataPath;                                     # openssh tests path
+        "TestSetupLogFile" = $Script:TestSetupLogFile;                      # openssh test setup log file
+        "E2ETestResultsFile" = $Script:E2ETestResultsFile;                  # openssh E2E test results file
+        "SetupTestResultsFile" = $Script:SetupTestResultsFile;              # openssh setup test test results file
+        "UninstallTestResultsFile" = $Script:UninstallTestResultsFile;      # openssh Uninstall test test results file
+        "UnitTestResultsFile" = $Script:UnitTestResultsFile;                # openssh unittest test results file
+        "E2ETestDirectory" = $Script:E2ETestDirectory                       # the directory of E2E tests
+        "UnitTestDirectory" = $Script:UnitTestDirectory                     # the directory of unit tests
+        "NoLibreSSL" = $Script:NoLibreSSL
+        "WindowsInBox" = $Script:WindowsInBox
+        }
+    #if user does not set path, pick it up
+    if([string]::IsNullOrEmpty($OpenSSHBinPath))
+    {
+        $sshcmd = get-command ssh.exe -ErrorAction SilentlyContinue       
+        if($sshcmd -eq $null)
+        {
+            Throw "Cannot find ssh.exe. Please specify -OpenSSHBinPath to the OpenSSH installed location."
+        }
+        else
+        {
+            $dirToCheck = split-path $sshcmd.Path
+            $description = "Pick up ssh.exe from $dirToCheck."
+            $prompt = "Are you sure you want to pick up ssh.exe from $($dirToCheck)?"           
+            $caption = "Found ssh.exe from $dirToCheck"
+            if(-not $pscmdlet.ShouldProcess($description, $prompt, $caption))
+            {
+                Write-Host "User decided not to pick up ssh.exe from $dirToCheck. Please specify -OpenSSHBinPath to the OpenSSH installed location."
+                return
+            }
+            $script:OpenSSHBinPath = $dirToCheck
+        }        
+    }
+    else
+    {
+        if (-not (Test-Path (Join-Path $OpenSSHBinPath ssh.exe) -PathType Leaf))
+        {
+            Throw "Cannot find OpenSSH binaries under $OpenSSHBinPath. Please specify -OpenSSHBinPath to the OpenSSH installed location"
+        }
+        else
+        {
+            $script:OpenSSHBinPath = $OpenSSHBinPath
+        }
+    }
+
+    $Global:OpenSSHTestInfo.Add("OpenSSHBinPath", $script:OpenSSHBinPath)
+    if (-not ($env:Path.ToLower().Contains($script:OpenSSHBinPath.ToLower())))
+    {
+        $env:Path = "$($script:OpenSSHBinPath);$($env:path)"
+    }
+
+    $acl = get-acl (join-path $script:OpenSSHBinPath "ssh.exe")
+    
+    if($acl.Owner -ieq "NT SERVICE\TrustedInstaller")
+    {
+        $Script:WindowsInBox = $true
+        $Global:OpenSSHTestInfo["WindowsInBox"]= $true
+    }
+
+    Install-OpenSSHTestDependencies -TestHarness
+    if(-not (Test-path $TestDataPath -PathType Container))
+    {
+       New-Item -ItemType Directory -Path $TestDataPath -Force -ErrorAction SilentlyContinue | out-null
+    }
+}
+
 #TODO - this is Windows specific. Need to be in PAL
 function Get-LocalUserProfile
 {
@@ -310,7 +337,7 @@ function Get-LocalUserProfile
 function Install-OpenSSHTestDependencies
 {
     [CmdletBinding()]
-    param ()
+    param ([Switch] $TestHarness)
     
     #$isOpenSSHUtilsAvailable = Get-Module 'OpenSSHUtils' -ListAvailable
     #if (-not ($isOpenSSHUtilsAvailable))
@@ -337,6 +364,11 @@ function Install-OpenSSHTestDependencies
     {      
         Write-Log -Message "Installing Pester..." 
         choco install Pester --version 3.4.6 -y --force --limitoutput 2>&1 >> $Script:TestSetupLogFile
+    }
+
+    if($TestHarness)
+    {
+        return
     }
 
     if($Script:PostmortemDebugging -or (($OpenSSHTestInfo -ne $null) -and ($OpenSSHTestInfo["PostmortemDebugging"])))
@@ -581,6 +613,36 @@ function Get-UnitTestDirectory
 
 <#
     .Synopsis
+    Run OpenSSH Setup tests.
+#>
+function Invoke-OpenSSHSetupTest
+{    
+    # Discover all CI tests and run them.
+    Import-Module pester -force -global
+    Push-Location $Script:E2ETestDirectory
+    Write-Log -Message "Running OpenSSH Setup tests..."
+    $testFolders = @(Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique)
+    Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $Script:SetupTestResultsFile -Tag 'Setup' -PassThru
+    Pop-Location
+}
+
+<#
+    .Synopsis
+    Run OpenSSH uninstall tests.
+#>
+function Invoke-OpenSSHUninstallTest
+{    
+    # Discover all CI tests and run them.
+    Import-Module pester -force -global
+    Push-Location $Script:E2ETestDirectory
+    Write-Log -Message "Running OpenSSH Uninstall tests..."
+    $testFolders = @(Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique)
+    Invoke-Pester $testFolders -OutputFormat NUnitXml -OutputFile $Script:UninstallTestResultsFile -Tag 'Uninstall' -PassThru
+    Pop-Location
+}
+
+<#
+    .Synopsis
     Run OpenSSH pester tests.
 #>
 function Invoke-OpenSSHE2ETest
@@ -616,31 +678,49 @@ function Invoke-OpenSSHUnitTest
     {
         $null = Remove-Item -Path $Script:UnitTestResultsFile -Force -ErrorAction SilentlyContinue
     }
-    $testFolders = Get-ChildItem -filter unittest-*.exe -Recurse -Exclude unittest-sshkey.exe,unittest-kex.exe |
+    $testFolders = Get-ChildItem -filter unittest-*.exe -Recurse |
                  ForEach-Object{ Split-Path $_.FullName} |
                  Sort-Object -Unique
     $testfailed = $false
     if ($testFolders -ne $null)
     {
-        $testFolders | % {            
+        $testFolders | % {
             $unittestFile = "$(Split-Path $_ -Leaf).exe"
             $unittestFilePath = join-path $_ $unittestFile
-            $Error.clear()
-            $LASTEXITCODE=0
             if(Test-Path $unittestFilePath -pathtype leaf)
-            {
-                Push-Location $_
-                Write-Log "Running OpenSSH unit $unittestFile ..."
-                & "$unittestFilePath" >> $Script:UnitTestResultsFile
-                Pop-Location
-            }
-            
-            $errorCode = $LASTEXITCODE
-            if ($errorCode -ne 0)
-            {
-                $testfailed = $true
-                $errorMessage = "$_ test failed for OpenSSH.`nExitCode: $errorCode. Detail test log is at $($Script:UnitTestResultsFile)."
-                Write-Warning $errorMessage                         
+            {                
+                $pinfo = New-Object System.Diagnostics.ProcessStartInfo
+                $pinfo.FileName = "$unittestFilePath"
+                $pinfo.RedirectStandardError = $true
+                $pinfo.RedirectStandardOutput = $true
+                $pinfo.UseShellExecute = $false
+                $pinfo.WorkingDirectory = "$_"
+                $p = New-Object System.Diagnostics.Process
+                $p.StartInfo = $pinfo
+                $p.Start() | Out-Null
+                $stdout = $p.StandardOutput.ReadToEnd()
+                $stderr = $p.StandardError.ReadToEnd()
+                $p.WaitForExit()
+                $errorCode = $p.ExitCode
+                Write-Host "Running unit test: $unittestFile ..."
+                if(-not [String]::IsNullOrWhiteSpace($stdout))
+                {
+                    Add-Content $Script:UnitTestResultsFile $stdout
+                }
+                if(-not [String]::IsNullOrWhiteSpace($stderr))
+                {
+                    Add-Content $Script:UnitTestResultsFile $stderr
+                }
+                if ($errorCode -ne 0)
+                {
+                    $testfailed = $true
+                    $errorMessage = "$unittestFile failed.`nExitCode: $errorCode. Detail test log is at $($Script:UnitTestResultsFile)."
+                    Write-Warning $errorMessage                         
+                }
+                else
+                {
+                    Write-Host "$unittestFile passed!"
+                }
             }            
         }
     }
@@ -719,4 +799,4 @@ function Write-Log
     }  
 }
 
-Export-ModuleMember -Function Set-OpenSSHTestEnvironment, Clear-OpenSSHTestEnvironment, Invoke-OpenSSHUnitTest, Invoke-OpenSSHE2ETest, Backup-OpenSSHTestInfo, Restore-OpenSSHTestInfo
+Export-ModuleMember -Function Set-BasicTestInfo, Set-OpenSSHTestEnvironment, Clear-OpenSSHTestEnvironment, Invoke-OpenSSHSetupTest, Invoke-OpenSSHUnitTest, Invoke-OpenSSHE2ETest, Invoke-OpenSSHUninstallTest, Backup-OpenSSHTestInfo, Restore-OpenSSHTestInfo

@@ -110,13 +110,11 @@ openlog_file()
 		while (tail > module_path && *tail != L'\\' && *tail != L'/')
 			tail--;
 		
-		char ssh_cfg_path[PATH_MAX] = {0 ,};
-		strcat_s(ssh_cfg_path, _countof(ssh_cfg_path), get_program_data_path()); /* "%programData%" */
-		strcat_s(ssh_cfg_path, _countof(ssh_cfg_path), "\\ssh"); /* "%programData%\\ssh" */
+		wchar_t ssh_cfg_path[PATH_MAX] = {0 ,};
+		wcscat_s(ssh_cfg_path, _countof(ssh_cfg_path), get_program_data_path()); /* "%programData%" */
+		wcscat_s(ssh_cfg_path, _countof(ssh_cfg_path), L"\\ssh"); /* "%programData%\\ssh" */
 
-		wchar_t* ssh_root_path_w = utf8_to_utf16(ssh_cfg_path); /* "%programData%\\ssh" */
-
-		if ((wcsncat_s(log_file, PATH_MAX + 12, ssh_root_path_w, wcslen(ssh_root_path_w)) != 0) ||
+		if ((wcsncat_s(log_file, PATH_MAX + 12, ssh_cfg_path, wcslen(ssh_cfg_path)) != 0) ||
 		    (wcsncat_s(log_file, PATH_MAX + 12, logs_dir, 6) != 0) ||
 		    (wcsncat_s(log_file, PATH_MAX + 12, tail + 1, wcslen(tail + 1) - 3) != 0 ) ||
 		    (wcsncat_s(log_file, PATH_MAX + 12, L"log", 3) != 0))
@@ -144,7 +142,7 @@ syslog_file(int priority, const char *format, const char *formatBuffer)
 		GetCurrentProcessId(), st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond,
 		st.wMilliseconds, formatBuffer);
 	if (r == -1) {
-		_write(logfd, "_snprintf_s failed.", 30);
+		_write(logfd, "_snprintf_s failed.", 20);
 		return;
 	}
 	msgbufTimestamp[strnlen(msgbufTimestamp, MSGBUFSIZ)] = '\0';

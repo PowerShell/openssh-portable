@@ -20,7 +20,6 @@ struct passwd {
 	gid_t	pw_gid;		/* numerical group ID */
 	char	*pw_dir;	/* initial working directory */
 	char	*pw_shell;	/* path to shell */
-	char	*pw_sid;	/* sid of user */
 };
 
 /*start - declarations not applicable in Windows */
@@ -38,7 +37,6 @@ char *user_from_uid(uid_t uid, int nouser);
 
 struct passwd *w32_getpwuid(uid_t uid);
 struct passwd *w32_getpwnam(const char *username);
-struct passwd* w32_getpwtoken(HANDLE);
 struct passwd *getpwent(void);
 void endpwent(void);
 
