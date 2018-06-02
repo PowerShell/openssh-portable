@@ -1552,15 +1552,10 @@ copy_file(char *source, char *destination)
 	return 0;
 }
 
-struct tm*
+struct tm *
 localtime_r(const time_t *timep, struct tm *result)
 {
-	struct tm *t = NULL;
-
-	if(!localtime_s(t, timep))
-		memcpy(result, t, sizeof(struct tm));
-
-	return t;
+	return localtime_s(result, timep) == 0 ? result : NULL;
 }
 
 void
@@ -1653,7 +1648,7 @@ get_user_sid(char* name)
 	HANDLE token = NULL;
 	TOKEN_USER* info = NULL;
 	DWORD info_len = 0;
-	PSID ret = NULL, psid;
+	PSID ret = NULL, psid = NULL;
 	wchar_t* name_utf16 = NULL;
 
 	if (name) {
