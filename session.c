@@ -605,17 +605,37 @@ do {					\
 			}
 
 			p = command_enhanced;
+
+			/* assume relative path is relative to program directory */
+			CMDLINE_APPEND(p, "\"");
 			CMDLINE_APPEND(p, progdir);
 			CMDLINE_APPEND(p, "\\");
 			
 			/* since Windows does not support fork, launch sftp-server.exe for internal_sftp */
 			if (IS_INTERNAL_SFTP(command)) {
 				CMDLINE_APPEND(p, "sftp-server.exe");
-				/* add subsystem arguments if any */
-				CMDLINE_APPEND(p, command + strlen(INTERNAL_SFTP_NAME));
-			} else
+			} else {
 				CMDLINE_APPEND(p, command);
+
+				/* truncate any extra arguments */
+				char * cmd_end = strstr(command_enhanced, ".exe");
+				if (cmd_end != NULL)
+					p = &cmd_end[sizeof(".exe") - 1];
+			}
 			
+			/* add double-quote to other end of command */
+			CMDLINE_APPEND(p, "\"");
+
+			/* add subsystem arguments if any */
+			if (IS_INTERNAL_SFTP(command)) {
+				CMDLINE_APPEND(p, command + strlen(INTERNAL_SFTP_NAME));
+			} else {
+				/* search for file extension and append any extra arguments */
+				char * cmd_end = strstr(command, ".exe");
+				if (cmd_end != NULL && cmd_end[sizeof(".exe") - 1] != '\0')
+					CMDLINE_APPEND(p, &cmd_end[sizeof(".exe") - 1]);
+			}
+
 			*p = '\0';
 
 			command = command_enhanced;
