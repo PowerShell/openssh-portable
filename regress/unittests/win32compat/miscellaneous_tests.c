@@ -311,6 +311,18 @@ test_chroot()
 	//_wsystem(L"RD /S /Q chroot-testdir >NUL 2>&1");
 }
 
+char* build_session_commandline(const char *shell, const char *shell_arg, const char *command, int pty);
+void
+test_build_session_commandline()
+{
+	char* out;
+	TEST_START("test 1");
+	out = build_session_commandline("c:\\system32\\cmd.exe", NULL, "internal-sftp -arg", 0);
+	ASSERT_PTR_NE(out, NULL);
+	TEST_DONE();
+}
+
+
 void
 miscellaneous_tests()
 {
@@ -321,4 +333,5 @@ miscellaneous_tests()
 	test_realpath();
 	test_statvfs();
 	test_chroot();
+	test_build_session_commandline();
 }

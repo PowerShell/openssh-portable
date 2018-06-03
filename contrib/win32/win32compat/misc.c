@@ -1725,3 +1725,151 @@ cleanup:
 
 	return ret;
 }
+
+/* builds session commandline. returns NULL with errno set on failure, caller should free returned string */
+char* build_session_commandline(const char *shell, const char* shell_arg, const char *command, int pty)
+{
+	enum sh_type { SH_CMD, SH_PS, SH_BASH, SH_OTHER } shell_type = SH_OTHER;
+	enum cmd_type { CMD_OTHER, CMD_SFTP, CMD_SCP } command_type = CMD_OTHER;
+	char *progdir = w32_programdir(), *cmd_sp = NULL, *cmdline = NULL, *ret = NULL, *p;
+	int cmdline_len;
+
+#define CMDLINE_APPEND(P, S)		\
+do {					\
+	int _S_len = strlen(S);		\
+	memcpy((P), (S), _S_len);	\
+	(P) += _S_len;			\
+} while(0)
+
+	/* get shell type */
+	if (strstr(shell, "system32\\cmd"))
+		shell_type = SH_CMD;
+	else if (strstr(shell, "powershell"))
+		shell_type = SH_PS;
+	else if (strstr(shell, "bash"))
+		shell_type = SH_BASH;
+	else if (strstr(shell, "cygwin"))
+		shell_type = SH_BASH;
+
+	/* special case where incoming command needs to be adjusted */
+	do {
+		int command_len = strlen(command);
+		char *command_args = NULL;
+
+		/*
+		* identify scp and sftp sessions
+		* we want to launch scp and sftp executables from the same binary directory
+		* that sshd is hosted in. This will facilitate hosting and evaluating
+		* multiple versions of OpenSSH at the same time.
+		*/
+
+		if (!command)
+			break;
+
+		if (command_len >= 13 && _memicmp(command, "internal-sftp", 13) == 0) {
+			command_type = CMD_SFTP;
+			command_args = command + 13;
+		} else if (command_len >= 11 && _memicmp(command, "sftp-server", 11) == 0) {
+			command_type = CMD_SFTP;
+
+			/* account for possible .exe extension */
+			if (command_len >= 14 && _memicmp(command + 11, ".exe", 4))
+				command_args = command + 14;
+			else
+				command_args = command + 11;
+		} else if (command_len >= 3 && _memicmp(command, "scp", 3) == 0) {
+			command_type = CMD_SCP;
+
+			/* account for possible .exe extension */
+			if (command_len >= 7 && _memicmp(command + 3, ".exe", 4))
+				command_args = command + 7;
+			else
+				command_args = command + 3;
+		}
+
+		if (command_type == CMD_OTHER)
+			break;
+
+		if ((cmd_sp = malloc(PATH_MAX + command_len)) == NULL) {
+			errno = ENOMEM;
+			goto done;
+		}
+
+		p = cmd_sp;
+
+		if (shell_type == SH_CMD || shell_type == SH_PS) {
+
+			CMDLINE_APPEND(p, "\"");
+			CMDLINE_APPEND(p, progdir);
+
+			if (command_type = CMD_SCP)
+				CMDLINE_APPEND(p, "\\scp\"");
+			else
+				CMDLINE_APPEND(p, "\\sftp-server\"");
+
+		} else {
+			if (command_type = CMD_SCP)
+				CMDLINE_APPEND(p, "scp");
+			else
+				CMDLINE_APPEND(p, "sftp-server");
+		}
+
+		CMDLINE_APPEND(p, command_args);
+		*p = '\0';
+		command = cmd_sp;
+	} while (0);
+
+	cmdline_len = 0;
+	if (pty)
+		cmdline_len += strlen(progdir) + strlen("ssh-shellhost") + 5;
+	cmdline_len += strlen(shell) + 3;/* 3 for " around shell path and trailing space */
+	if (command) {
+		cmdline_len += 15; /* for shell command argument, typically -c or /c */
+		cmdline_len += strlen(command) + 5; /* 5 for possible " around command and null term*/
+	}
+	
+	if ((cmdline = malloc(cmdline_len)) == NULL) {
+		errno = ENOMEM;
+		goto done;
+	}
+
+	p = cmdline;
+	if (pty) {
+		CMDLINE_APPEND(p, "\"");
+		CMDLINE_APPEND(p, progdir);
+		CMDLINE_APPEND(p, "\\ssh-shellhost\" ");
+	}
+	CMDLINE_APPEND(p, "\"");
+	CMDLINE_APPEND(p, shell);
+	CMDLINE_APPEND(p, "\"");
+	if (command) {
+		if (shell_arg) {
+			CMDLINE_APPEND(p, " ");
+			CMDLINE_APPEND(p, shell_arg);
+			CMDLINE_APPEND(p, " ");
+		}
+		else if (shell_type == SH_CMD)
+			CMDLINE_APPEND(p, " /c ");
+		else
+			CMDLINE_APPEND(p, " -c ");
+
+		/* bash type shells require " decoration around command*/
+		if (shell_type == SH_BASH)
+			CMDLINE_APPEND(p, "\"");
+
+		CMDLINE_APPEND(p, command);
+
+		if (shell_type == SH_BASH)
+			CMDLINE_APPEND(p, "\"");
+	}
+	*p = '\0';
+	ret = cmdline;
+	cmdline = NULL;
+done:
+	if (cmd_sp)
+		free(cmd_sp);
+	if (cmdline)
+		free(cmdline);
+
+	return ret;
+}
