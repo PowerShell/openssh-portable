@@ -468,13 +468,15 @@ setup_session_vars(Session* s)
 	wchar_t *pw_dir_w = NULL, *tmp = NULL;
 	char buf[256];
 	wchar_t wbuf[256];
-	char* laddr;
+	char *laddr, *c;
 	int ret = -1;
 
 	struct ssh *ssh = active_state; /* XXX */
 
 	UTF8_TO_UTF16_WITH_CLEANUP(pw_dir_w, s->pw->pw_dir);
-	UTF8_TO_UTF16_WITH_CLEANUP(tmp, s->pw->pw_name);
+	/* skip domain part (if there) while setting USERNAME */
+	c = strchr(s->pw->pw_name, '\\');
+	UTF8_TO_UTF16_WITH_CLEANUP(tmp, c ? c + 1 : s->pw->pw_name);
 	SetEnvironmentVariableW(L"USERNAME", tmp);
 	if (s->display) {
 		UTF8_TO_UTF16_WITH_CLEANUP(tmp, s->display);
