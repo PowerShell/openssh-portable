@@ -1776,7 +1776,9 @@ do {					\
 		* note that .exe extension and case matters for WSL bash
 		* note that double quotes matter for WSL and Cygwin bash, they dont matter for PS
 		*
-		* a consequence - sftp and scp installation path is expected to be in machine wide PATH
+		* consequence - 
+		* for non-cmd shells - sftp and scp installation path is expected to be in machine wide PATH
+		* 
 		*/
 
 		int command_len;

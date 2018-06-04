@@ -25,7 +25,6 @@ tests()
 	dir_tests();
 	str_tests();
 	miscellaneous_tests();
-	test_build_session_commandline();
 }
 
 char *
