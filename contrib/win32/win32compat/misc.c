@@ -1727,7 +1727,8 @@ cleanup:
 }
 
 /* builds session commandline. returns NULL with errno set on failure, caller should free returned string */
-char* build_session_commandline(const char *shell, const char* shell_arg, const char *command, int pty)
+char* 
+build_session_commandline(const char *shell, const char* shell_arg, const char *command, int pty)
 {
 	enum sh_type { SH_CMD, SH_PS, SH_WSL_BASH, SH_CYGWIN, SH_OTHER } shell_type = SH_OTHER;
 	enum cmd_type { CMD_OTHER, CMD_SFTP, CMD_SCP } command_type = CMD_OTHER;
