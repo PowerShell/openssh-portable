@@ -527,9 +527,8 @@ cleanup:
 	return ret;
 }
 
-char* w32_programdir();
 int register_child(void* child, unsigned long pid);
-char* build_session_commandline(const char *shell, const char *shell_arg, const char *command, int pty);
+char* build_session_commandline(const char *, const char *, const char *, int);
 
 int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	int pipein[2], pipeout[2], pipeerr[2], r, ret = -1;
@@ -654,8 +653,6 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	ret = 0;
 
 cleanup:
-	if (!command_enhanced)
-		free(command_enhanced);
 	if (!exec_command)
 		free(exec_command);
 	if (!exec_command_w)
