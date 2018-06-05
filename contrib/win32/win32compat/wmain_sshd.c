@@ -104,39 +104,45 @@ static void
 generate_host_keys()
 {
 	DWORD dwError = 0;
-	UUID uuid;
 	USER_INFO_1 ui;
 	NET_API_STATUS nStatus;
 	STARTUPINFOW si;
 	PROCESS_INFORMATION pi;
 	wchar_t cmdline[MAX_PATH];
-	wchar_t password[PWLEN + 1] = L"";
+	wchar_t password[PWLEN + 1] = { 0 };
 
 	if (am_system()) {
-		/* create sshd account if it does not exist */
-		ui.usri1_name = L"sshd";
-		ui.usri1_password = password;
-		ui.usri1_priv = USER_PRIV_USER;
-		ui.usri1_home_dir = NULL;
-		ui.usri1_comment = NULL;
-		ui.usri1_flags = UF_SCRIPT | UF_DONT_EXPIRE_PASSWD;
-		ui.usri1_script_path = NULL;
 
-		/* generate random password  for sshd account */
-		while (wcslen(password) < PWLEN) {
-			UCHAR rand_byte;
-			if (BCryptGenRandom(NULL, &rand_byte, sizeof(rand_byte),
-				BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0) {
+		LPUSER_INFO_0 user_check = NULL;
+		if (NetUserGetInfo(NULL, L"sshd", 0, (LPBYTE*) &user_check) != NERR_Success)
+		{
+			/* account does not exist -- done with existence checking structure */
+			NetApiBufferFree(user_check);
+
+			/* create sshd account if it does not exist */
+			ui.usri1_name = L"sshd";
+			ui.usri1_password = password;
+			ui.usri1_priv = USER_PRIV_USER;
+			ui.usri1_home_dir = NULL;
+			ui.usri1_comment = NULL;
+			ui.usri1_flags = UF_SCRIPT | UF_DONT_EXPIRE_PASSWD;
+			ui.usri1_script_path = NULL;
+
+			/* generate a random string */
+			if (BCryptGenRandom(NULL, (PUCHAR)password, sizeof(password) - sizeof(WCHAR),
+			    BCRYPT_USE_SYSTEM_PREFERRED_RNG) != 0) {
 				printf("failed to generate sshd user temporary password");
 				exit(255);
 			}
-			wchar_t rand_char = rand_byte % 128;
-			if (iswprint(rand_char))
-				wcsncat_s(password, ARRAYSIZE(password), &rand_char, 1);
-		}
 
-		NetUserAdd(NULL, 1, (LPBYTE)&ui, &dwError);
-		SecureZeroMemory(password, sizeof(password));
+			/* normalize characters to printable ascii */
+			for (int i = 0; i < PWLEN; i++)
+				password[i] = (password[i] % ((L'~' + 1) - L'!')) + L'!';
+
+			/* add user to local accounts */
+			NetUserAdd(NULL, 1, (LPBYTE)&ui, &dwError);
+			SecureZeroMemory(password, sizeof(password));
+		}
 
 		/* create host keys if they dont already exist */
 		ZeroMemory(&si, sizeof(si));
