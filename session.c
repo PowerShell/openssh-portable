@@ -95,6 +95,7 @@
 #include "monitor_wrap.h"
 #include "sftp.h"
 #include "atomicio.h"
+#include "conhost_conpty.h"
 
 #if defined(KRB5) && defined(USE_AFS)
 #include <kafs.h>
@@ -598,13 +599,33 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		si.lpDesktop = NULL;
 
 		debug("Executing command: %s", exec_command);
-		if ((exec_command_w = utf8_to_utf16(exec_command)) == NULL)
-			goto cleanup;
+		
+		/* Try launching the conhost pty first */
+		int conhost_pty_successful = 0;
+		if (pty && is_conpty_supported()) {
+			HANDLE conhost_pty_sighandle;
+			char *p = strstr(exec_command, "ssh-shellhost.exe");			
+			p = p + strlen("ssh-shellhost.exe") + 2; /* Advance p to command */
+			if (0 == CreateConPty(p, si.dwXCountChars, si.dwYCountChars,
+				si.hStdInput, si.hStdOutput, &conhost_pty_sighandle, &pi)) {
+				debug("conhost pty is successful %d", pi.dwProcessId);
+				conhost_pty_successful = 1;
 
-		if (!CreateProcessW(NULL, exec_command_w, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
-			errno = EOTHER;
-			error("ERROR. Cannot create process (%u).\n", GetLastError());
-			goto cleanup;
+				Channel *c;
+				if (c = channel_by_id(ssh, s->chanid))
+					c->conhost_pty_sighandle = conhost_pty_sighandle;
+			}
+		}
+
+		if (!conhost_pty_successful) {
+			if ((exec_command_w = utf8_to_utf16(exec_command)) == NULL)
+				goto cleanup;
+
+			if (!CreateProcessW(NULL, exec_command_w, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+				errno = EOTHER;
+				error("ERROR. Cannot create process (%u).\n", GetLastError());
+				goto cleanup;
+			}
 		}
 
 		CloseHandle(pi.hThread);
@@ -2190,7 +2211,15 @@ session_window_change_req(struct ssh *ssh, Session *s)
 	s->xpixel = packet_get_int();
 	s->ypixel = packet_get_int();
 	packet_check_eom();
+
+#ifdef WINDOWS
+	Channel *c;
+	if ((c = channel_by_id(ssh, s->chanid)) && c->conhost_pty_sighandle)
+		SignalResizeWindow(c->conhost_pty_sighandle, s->col, s->row);	
+#else
 	pty_change_window_size(s->ptyfd, s->row, s->col, s->xpixel, s->ypixel);
+#endif
+
 	return 1;
 }
 
