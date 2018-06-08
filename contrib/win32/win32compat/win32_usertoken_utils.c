@@ -454,10 +454,12 @@ AddSidMappingToLsa(PUNICODE_STRING domain_name,
 		}
 		else
 			error("LsaManageSidNameMapping failed with ntstatus: %d \n", status);
+	}	
+	if (p_output) {
+		status = pLsaFreeMemory(p_output);
+		if(status != STATUS_SUCCESS)
+			debug3("LsaFreeMemory failed with ntstatus: %d \n", status);
 	}
-
-	if (p_output)
-		LsaFreeMemory(p_output);
 
 	return ret;
 }
@@ -481,10 +483,9 @@ int RemoveVirtualAccountLSAMapping(PUNICODE_STRING domain_name,
 		&p_output);
 	if (status != STATUS_SUCCESS)
 		ret = -1;
-
-	/* TODO - Free p_output */
-	/*if (p_output)
-		LsaFreeMemory(p_output);*/
+		
+	if (p_output)
+		pLsaFreeMemory(p_output);
 
 	return ret;
 }
@@ -543,31 +544,35 @@ HANDLE generate_sshd_virtual_token()
 	/* Initialize SIDs */
 	/* domain SID - S-1-5-111 */
 	if (!(AllocateAndInitializeSid(&nt_authority,
-	    1,
-	    111,
-	    0,
-	    0,
-	    0,
-	    0,
-	    0,
-	    0,
-	    0,
-	    &sid_domain)))
+		1,
+		111,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		&sid_domain))) {
+		debug3("AllocateAndInitializeSid failed with domain SID");
 		goto cleanup;
+	}
 
 	/* group SID - S-1-5-111-0 */
 	if (!(AllocateAndInitializeSid(&nt_authority,
-	    2,
-	    111,
-	    0,
-	    0,
-	    0,
-	    0,
-	    0,
-	    0,
-	    0,
-	    &sid_group)))
+		2,
+		111,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		&sid_group))) {
+		debug3("AllocateAndInitializeSid failed with group SID");
 		goto cleanup;
+	}
 
 	/* 
 	 * account SID 
@@ -576,29 +581,37 @@ HANDLE generate_sshd_virtual_token()
 	 * Ex account SID - S-1-5-111-3847866527-469524349-687026318-516638107-1125189541-123
 	 */
 	if (!(AllocateAndInitializeSid(&nt_authority,
-	    7,
-	    111,
-	    3847866527,
-	    469524349,
-	    687026318,
-	    516638107,
-	    1125189541,
-	    GetCurrentProcessId(),
-	    0,
-	    &sid_user)))
+		7,
+		111,
+		3847866527,
+		469524349,
+		687026318,
+		516638107,
+		1125189541,
+		GetCurrentProcessId(),
+		0,
+		&sid_user))) {
+		debug3("AllocateAndInitializeSid failed with account SID");
 		goto cleanup;
+	}
 
 	/* Map the domain SID */
-	if (AddSidMappingToLsa(&domain, NULL, sid_domain) != 0)
+	if (AddSidMappingToLsa(&domain, NULL, sid_domain) != 0) {
+		debug3("AddSidMappingToLsa failed to map the domain Sid");
 		goto cleanup;
+	}
 
 	/* Map the group SID */
-	if (AddSidMappingToLsa(&domain, &group, sid_group) != 0)
+	if (AddSidMappingToLsa(&domain, &group, sid_group) != 0) {
+		debug3("AddSidMappingToLsa failed to map the group Sid");
 		goto cleanup;
+	}
 
 	/* Map the user SID */
-	if (AddSidMappingToLsa(&domain, &account, sid_user) != 0)
+	if (AddSidMappingToLsa(&domain, &account, sid_user) != 0) {
+		debug3("AddSidMappingToLsa failed to map the user Sid");
 		goto cleanup;
+	}
 
 	/* assign service logon privilege to virtual account */
 	{
@@ -607,15 +620,15 @@ HANDLE generate_sshd_virtual_token()
 		NTSTATUS lsa_ret;
 
 		ZeroMemory(&ObjectAttributes, sizeof(ObjectAttributes));
-		if ((lsa_ret = LsaOpenPolicy(NULL, &ObjectAttributes,
+		if ((lsa_ret = pLsaOpenPolicy(NULL, &ObjectAttributes,
 		    POLICY_CREATE_ACCOUNT | POLICY_LOOKUP_NAMES, 
 		    &lsa_policy )) != STATUS_SUCCESS) {
-			error("%s: unable to open policy handle, error: %d", __FUNCTION__, LsaNtStatusToWinError(lsa_ret));
+			error("%s: unable to open policy handle, error: %d", __FUNCTION__, pRtlNtStatusToDosError(lsa_ret));
 			goto cleanup;
 		}
 		InitUnicodeString(&svcLogonRight, L"SeServiceLogonRight");
-		if ((lsa_ret = LsaAddAccountRights(lsa_policy, sid_user, &svcLogonRight, 1)) != STATUS_SUCCESS) {
-			error("%s: unable to assign SE_SERVICE_LOGON_NAME privilege, error: %d", __FUNCTION__, LsaNtStatusToWinError(lsa_ret));
+		if ((lsa_ret = pLsaAddAccountRights(lsa_policy, sid_user, &svcLogonRight, 1)) != STATUS_SUCCESS) {
+			error("%s: unable to assign SE_SERVICE_LOGON_NAME privilege, error: %d", __FUNCTION__, pRtlNtStatusToDosError(lsa_ret));
 			goto cleanup;
 		}
 	}
@@ -653,7 +666,7 @@ cleanup:
 	if (sid_group)
 		FreeSid(sid_group);
 	if (lsa_policy)
-		LsaClose(lsa_policy);
+		pLsaClose(lsa_policy);
 
 	return va_token_restricted;
 }

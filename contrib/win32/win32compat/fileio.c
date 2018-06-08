@@ -207,7 +207,7 @@ fileio_pipe(struct w32_io* pio[2], int duplex)
 
 	sec_attributes.bInheritHandle = TRUE;
 	sec_attributes.lpSecurityDescriptor = NULL;
-	sec_attributes.nLength = 0;
+	sec_attributes.nLength = sizeof(sec_attributes);
 
 	/* create named pipe */
 	write_handle = CreateNamedPipeA(pipe_name,
