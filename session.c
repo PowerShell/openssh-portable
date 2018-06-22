@@ -599,9 +599,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		si.lpDesktop = NULL;
 
 		debug("Executing command: %s", exec_command);
-		
-		/* Try launching the conhost pty first */
-		int conhost_pty_successful = 0;
+
 		if (pty && is_conpty_supported()) {
 			HANDLE conhost_pty_sighandle;
 			char *p = strstr(exec_command, "ssh-shellhost.exe");			
@@ -609,15 +607,12 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 			if (0 == CreateConPty(p, si.dwXCountChars, si.dwYCountChars,
 				si.hStdInput, si.hStdOutput, &conhost_pty_sighandle, &pi)) {
 				debug("conhost pty is successful %d", pi.dwProcessId);
-				conhost_pty_successful = 1;
 
 				Channel *c;
 				if (c = channel_by_id(ssh, s->chanid))
 					c->conhost_pty_sighandle = conhost_pty_sighandle;
 			}
-		}
-
-		if (!conhost_pty_successful) {
+		} else {
 			if ((exec_command_w = utf8_to_utf16(exec_command)) == NULL)
 				goto cleanup;
 

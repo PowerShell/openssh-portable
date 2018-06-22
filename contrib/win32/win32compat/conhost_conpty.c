@@ -24,14 +24,14 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#include "includes.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "log.h"
+#include "Debug.h"
 
 #include "conhost_conpty.h"
+#include "misc_internal.h"
 
 const unsigned int PTY_SIGNAL_RESIZE_WINDOW = 8u;
 
@@ -116,35 +116,39 @@ is_conpty_supported()
 	// TODO - 
 	// As of today, conpty doesn't have a way to distinguish between RS5 and above (VS) downlevel.
 	// The below logic should be enabled once conpty changes are in place.
-	return 1; 
+	return 1;
 
-//	wchar_t system32_path[PATH_MAX] = { 0, };
-//	wchar_t kernelbase_dll_path[PATH_MAX] = { 0, };
-//	HMODULE hm_kernelbase = NULL;
-//
-//	int retVal = 0;
-//	
-//	if (!GetSystemDirectoryW(system32_path, PATH_MAX))
-//		goto done;
-//	
-//	wcscat_s(kernelbase_dll_path, PATH_MAX, system32_path);
-//	wcscat_s(kernelbase_dll_path, PATH_MAX, L"\\KernelBase.dll");
-//
-//	if ((hm_kernelbase = LoadLibraryW(kernelbase_dll_path)) == NULL) {
-//		error("failed to load kernerlbase dll:%s", kernelbase_dll_path);
-//		goto done;
-//	}
-//
-//	if (GetProcAddress(hm_kernelbase, "CreatePseudoConsole") == NULL) {
-//		debug3("couldn't find CreatePseudoConsole() in kernerlbase dll");
-//		goto done;
-//	}
-//
-//	retVal = 1;
-//
-//done:
-//	if (!retVal)
-//		debug3("This windows OS doesn't support conpty");
-//
-//	return retVal;
+	/*wchar_t system32_path[PATH_MAX] = { 0, };
+	wchar_t kernelbase_dll_path[PATH_MAX] = { 0, };
+	HMODULE hm_kernelbase = NULL;
+	static int retVal = -1;
+	
+	if (retVal != -1)
+		return retVal;
+
+	if (!GetSystemDirectoryW(system32_path, PATH_MAX))
+		goto done;
+	
+	wcscat_s(kernelbase_dll_path, PATH_MAX, system32_path);
+	wcscat_s(kernelbase_dll_path, PATH_MAX, L"\\KernelBase.dll");
+
+	if ((hm_kernelbase = LoadLibraryW(kernelbase_dll_path)) == NULL) {
+		error("failed to load kernerlbase dll:%s", kernelbase_dll_path);
+		goto done;
+	}
+
+	if (GetProcAddress(hm_kernelbase, "CreatePseudoConsole") == NULL) {
+		debug3("couldn't find CreatePseudoConsole() in kernerlbase dll");
+		goto done;
+	}
+
+	retVal = 1;
+
+done:
+	if (!retVal) {
+		debug3("This windows OS doesn't support conpty");
+		retVal = 0;
+  }
+
+	return retVal;*/
 }

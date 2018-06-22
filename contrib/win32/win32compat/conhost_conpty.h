@@ -1,5 +1,5 @@
-#include <windows.h>
 #pragma once
+#include <windows.h>
 
 int CreateConPty(const char *cmdline,
 	const unsigned short width,
