@@ -317,8 +317,8 @@ HANDLE
 get_user_token(const char* user, int impersonation) {
 	HANDLE token = NULL;
 	wchar_t *user_utf16 = NULL;
-	PSID user_sid = NULL;
-
+	PSID user_sid = NULL, process_sid = NULL;
+	
 	if ((user_utf16 = utf8_to_utf16(user)) == NULL) {
 		debug("out of memory");
 		goto done;
@@ -330,30 +330,37 @@ get_user_token(const char* user, int impersonation) {
 			goto done;
 			
 		if ((token = generate_sshd_virtual_token()) == 0)
-  		    error("unable to generate sshd virtual token, ensure sshd service has TCB privileges");
+  		    error("%s - unable to generate sshd virtual token, ensure sshd service has TCB privileges", __func__);
 
 		goto done;
 	}
 
 	if (!am_system()) {
-		PSID process_sid, user_sid;
 		process_sid = get_sid(NULL);
 		user_sid = get_sid(user);
+		HANDLE t1;
 
-		if (EqualSid(process_sid, user_sid) || get_custom_lsa_package()){
-			debug("************ DUPLICATING PROCESS TOKEN ****************");
-			HANDLE t1;
-			OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS_P, &t1);
-			if (impersonation)
-				token = t1;
-			else {
-				DuplicateToken(t1, SecurityIdentification, &token);
-				CloseHandle(t1);
-			}
+		if (user_sid == NULL && get_custom_lsa_package())
+			debug3("%s - i am running as %s, returning process token since custom lsa is configured", __func__, user);
+		else if (EqualSid(process_sid, user_sid))
+			debug3("%s - i am running as %s, returning process token", __func__, user);
+		else {
+			debug("%s - unable to generate user token for %s as i am not running as system", __func__, user);
+			goto done;
 		}
-		else
-			debug("unable to generate user token for %s as I am not running as system", user);
 
+		if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS_P, &t1)) {
+			error("%s - OpenProcessToken failed with %d", __func__, GetLastError());
+			goto done;
+		}
+
+		if (impersonation) {
+			token = t1;
+			goto done;
+		} else if (!DuplicateToken(t1, SecurityIdentification, &token))
+			error("%s - DuplicateToken failed with %d", __func__, GetLastError());
+				
+		CloseHandle(t1);
 		goto done;
 	}
 
@@ -361,18 +368,19 @@ get_user_token(const char* user, int impersonation) {
 	if ((user_sid = get_sid(user)) == NULL && get_custom_lsa_package() && !impersonation) {
 		token = process_custom_lsa_auth(user, "", get_custom_lsa_package());
 		if (token = NULL) {
-			error("unable to generate identity token for %s from custom lsa provider: %s", user, get_custom_lsa_package());
+			error("%s - unable to generate identity token for %s from custom lsa provider: %s", 
+				__func__, user, get_custom_lsa_package());
 			goto done;
 		}
 	}
 
 	if ((token = generate_s4u_user_token(user_utf16, impersonation)) == 0) {
-		debug3("unable to generate token for user %ls", user_utf16);
+		debug3("%s - unable to generate token for user %ls", __func__, user_utf16);
 		/* work around for https://github.com/PowerShell/Win32-OpenSSH/issues/727 by doing a fake login */
 		pLogonUserExExW(L"FakeUser", L"FakeDomain", L"FakePasswd",
 			LOGON32_LOGON_NETWORK_CLEARTEXT, LOGON32_PROVIDER_DEFAULT, NULL, &token, NULL, NULL, NULL, NULL);
 		if ((token = generate_s4u_user_token(user_utf16, impersonation)) == 0) {
-			error("unable to generate token on 2nd attempt for user %ls", user_utf16);
+			error("%s - unable to generate token on 2nd attempt for user %ls", __func__, user_utf16);
 			goto done;
 		}
 	}
@@ -383,6 +391,9 @@ done:
 
 	if (user_sid)
 		free(user_sid);
+
+	if (process_sid)
+		free(process_sid);
 
 	return token;
 }
