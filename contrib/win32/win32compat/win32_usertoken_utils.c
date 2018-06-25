@@ -317,6 +317,7 @@ HANDLE
 get_user_token(char* user, int impersonation) {
 	HANDLE token = NULL;
 	wchar_t *user_utf16 = NULL;
+	PSID user_sid = NULL;
 
 	if ((user_utf16 = utf8_to_utf16(user)) == NULL) {
 		debug("out of memory");
@@ -344,6 +345,15 @@ get_user_token(char* user, int impersonation) {
 		goto done;
 	}
 
+	/* is this is a virtual user to be authenticated via custom lsa provider ? */
+	if ((user_sid = get_sid(user)) == NULL && get_custom_lsa_package() && !impersonation) {
+		token = process_custom_lsa_auth(user, "", get_custom_lsa_package());
+		if (token = NULL) {
+			error("unable to generate identity token for %s from custom lsa provider: %s", user, get_custom_lsa_package());
+			goto done;
+		}
+	}
+
 	if ((token = generate_s4u_user_token(user_utf16, impersonation)) == 0) {
 		debug3("unable to generate token for user %ls", user_utf16);
 		/* work around for https://github.com/PowerShell/Win32-OpenSSH/issues/727 by doing a fake login */
@@ -358,6 +368,9 @@ get_user_token(char* user, int impersonation) {
 done:
 	if (user_utf16)
 		free(user_utf16);
+
+	if (user_sid)
+		free(user_sid);
 
 	return token;
 }
@@ -428,7 +441,7 @@ char* LSAMappingErrorDetails[] = {
 
 /* returns 0 on success -1 on failure */
 int
-AddSidMappingToLsa(PUNICODE_STRING domain_name,
+add_sid_mapping_to_lsa(PUNICODE_STRING domain_name,
 	 PUNICODE_STRING account_name,
 	 PSID sid)
 {
@@ -470,7 +483,7 @@ AddSidMappingToLsa(PUNICODE_STRING domain_name,
 }
 
 
-int RemoveVirtualAccountLSAMapping(PUNICODE_STRING domain_name,
+int remove_virtual_account_lsa_mapping(PUNICODE_STRING domain_name,
 	PUNICODE_STRING account_name)
 {
 	int ret = 0;
@@ -498,7 +511,7 @@ int RemoveVirtualAccountLSAMapping(PUNICODE_STRING domain_name,
 }
 
 void 
-InitUnicodeString(PUNICODE_STRING dest, PWSTR source)
+init_unicode_string(PUNICODE_STRING dest, PWSTR source)
 {
 	dest->Buffer = source;
 	dest->Length = (USHORT)(wcslen(source) * sizeof(wchar_t));
@@ -544,9 +557,9 @@ HANDLE generate_sshd_virtual_token()
 
 	StringCchPrintfW(va_name, 32, L"%s_%d", L"sshd", GetCurrentProcessId());
 
-	InitUnicodeString(&domain, VIRTUALUSER_DOMAIN);
-	InitUnicodeString(&group, VIRTUALUSER_GROUP_NAME);
-	InitUnicodeString(&account, va_name);
+	init_unicode_string(&domain, VIRTUALUSER_DOMAIN);
+	init_unicode_string(&group, VIRTUALUSER_GROUP_NAME);
+	init_unicode_string(&account, va_name);
 
 	/* Initialize SIDs */
 	/* domain SID - S-1-5-111 */
@@ -604,20 +617,20 @@ HANDLE generate_sshd_virtual_token()
 		
 
 	/* Map the domain SID */
-	if (AddSidMappingToLsa(&domain, NULL, sid_domain) != 0) {
-		debug3("AddSidMappingToLsa failed to map the domain Sid");
+	if (add_sid_mapping_to_lsa(&domain, NULL, sid_domain) != 0) {
+		debug3("add_sid_mapping_to_lsa failed to map the domain Sid");
 		goto cleanup;
 	}		
 
 	/* Map the group SID */
-	if (AddSidMappingToLsa(&domain, &group, sid_group) != 0) {
-		debug3("AddSidMappingToLsa failed to map the group Sid");
+	if (add_sid_mapping_to_lsa(&domain, &group, sid_group) != 0) {
+		debug3("add_sid_mapping_to_lsa failed to map the group Sid");
 		goto cleanup;
 	}
 
 	/* Map the user SID */
-	if (AddSidMappingToLsa(&domain, &account, sid_user) != 0) {
-		debug3("AddSidMappingToLsa failed to map the user Sid");
+	if (add_sid_mapping_to_lsa(&domain, &account, sid_user) != 0) {
+		debug3("add_sid_mapping_to_lsa failed to map the user Sid");
 		goto cleanup;
 	}
 
@@ -634,7 +647,7 @@ HANDLE generate_sshd_virtual_token()
 			error("%s: unable to open policy handle, error: %d", __FUNCTION__, pRtlNtStatusToDosError(lsa_ret));
 			goto cleanup;
 		}
-		InitUnicodeString(&svcLogonRight, L"SeServiceLogonRight");
+		init_unicode_string(&svcLogonRight, L"SeServiceLogonRight");
 		if ((lsa_ret = LsaAddAccountRights(lsa_policy, sid_user, &svcLogonRight, 1)) != STATUS_SUCCESS) {
 			error("%s: unable to assign SE_SERVICE_LOGON_NAME privilege, error: %d", __FUNCTION__, pRtlNtStatusToDosError(lsa_ret));
 			goto cleanup;
@@ -665,7 +678,7 @@ HANDLE generate_sshd_virtual_token()
 	CloseHandle(va_token);
 
 cleanup:
-	RemoveVirtualAccountLSAMapping(&domain, &account);
+	remove_virtual_account_lsa_mapping(&domain, &account);
 
 	if (sid_domain)
 		FreeSid(sid_domain);
@@ -680,5 +693,41 @@ cleanup:
 }
 
 
+/* returns NULL if not configured, fatal exists on error */
+char *
+get_custom_lsa_package()
+{
+	static char *s_lsa_auth_pkg = NULL;
+	static int *s_processed = 0;
+	wchar_t *lsa_auth_pkg_w = NULL;
+	int lsa_auth_pkg_len = 0;
+	HKEY reg_key = 0;
+	REGSAM mask = STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY;
+
+	if (s_processed)
+		return s_lsa_auth_pkg;
+
+	if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\OpenSSH", 0, mask, &reg_key) == ERROR_SUCCESS) &&
+	    (RegQueryValueExW(reg_key, L"LSAAuthenticationPackage", 0, NULL, NULL, &lsa_auth_pkg_len) == ERROR_SUCCESS)) {
+		lsa_auth_pkg_w = (wchar_t *)malloc(lsa_auth_pkg_len); // lsa_auth_pkg_len includes the null terminating character.
+		if (!lsa_auth_pkg_w)
+			fatal("%s: out of memory", __func__);
+
+		memset(lsa_auth_pkg_w, 0, lsa_auth_pkg_len);
+		if (RegQueryValueExW(reg_key, L"LSAAuthenticationPackage", 0, NULL, (LPBYTE)lsa_auth_pkg_w, &lsa_auth_pkg_len) == ERROR_SUCCESS) {
+			s_lsa_auth_pkg = utf16_to_utf8(lsa_auth_pkg_w);
+			if (!s_lsa_auth_pkg)
+				fatal("utf16_to_utf8 failed to convert lsa_auth_pkg_w:%ls", lsa_auth_pkg_w);
+		}
+	}
+
+	if (lsa_auth_pkg_w)
+		free(lsa_auth_pkg_w);
+	if (reg_key)
+		RegCloseKey(reg_key);
+
+	s_processed = 1;
+	return s_lsa_auth_pkg;
+}
 
 #pragma warning(pop)
