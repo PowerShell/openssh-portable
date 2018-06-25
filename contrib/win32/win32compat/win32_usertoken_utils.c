@@ -144,7 +144,7 @@ generate_s4u_user_token(wchar_t* user_cpn, int impersonation) {
 			wcscpy_s(domain_upn, ARRAYSIZE(domain_upn), user_cpn);
 		}
 		else
-			debug3("%s: Successfully discovered principal name: '%ls'=>'%ls'", user_cpn, domain_upn);
+			debug3("%s: Successfully discovered principal name: '%ls'=>'%ls'", __FUNCTION__, user_cpn, domain_upn);
 
 		KERB_S4U_LOGON *s4u_logon;
 		logon_info_size = sizeof(KERB_S4U_LOGON);
@@ -314,7 +314,7 @@ HANDLE generate_sshd_virtual_token();
 HANDLE generate_sshd_token_as_nonsystem();
 
 HANDLE
-get_user_token(char* user, int impersonation) {
+get_user_token(const char* user, int impersonation) {
 	HANDLE token = NULL;
 	wchar_t *user_utf16 = NULL;
 	PSID user_sid = NULL;
@@ -336,9 +336,21 @@ get_user_token(char* user, int impersonation) {
 	}
 
 	if (!am_system()) {
-		struct passwd* pwd = w32_getpwuid(0);
-		if (strcmp(pwd->pw_name, user) == 0)
-			OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS_P, &token);
+		PSID process_sid, user_sid;
+		process_sid = get_sid(NULL);
+		user_sid = get_sid(user);
+
+		if (EqualSid(process_sid, user_sid) || get_custom_lsa_package()){
+			debug("************ DUPLICATING PROCESS TOKEN ****************");
+			HANDLE t1;
+			OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS_P, &t1);
+			if (impersonation)
+				token = t1;
+			else {
+				DuplicateToken(t1, SecurityIdentification, &token);
+				CloseHandle(t1);
+			}
+		}
 		else
 			debug("unable to generate user token for %s as I am not running as system", user);
 
@@ -698,7 +710,7 @@ char *
 get_custom_lsa_package()
 {
 	static char *s_lsa_auth_pkg = NULL;
-	static int *s_processed = 0;
+	static int s_processed = 0;
 	wchar_t *lsa_auth_pkg_w = NULL;
 	int lsa_auth_pkg_len = 0;
 	HKEY reg_key = 0;

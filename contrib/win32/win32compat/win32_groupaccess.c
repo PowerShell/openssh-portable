@@ -49,6 +49,7 @@
 
 static int ngroups;
 static char **groups_byname;
+static char *user_name;
 static HANDLE user_token;
 
 /*
@@ -59,16 +60,22 @@ static HANDLE user_token;
 * - universal groups
 */
 static int
-get_user_groups(char *user)
+get_user_groups()
 {
 	/* early declarations and initializations to support cleanup */
 	HANDLE logon_token = user_token;
 	PTOKEN_GROUPS group_buf = NULL;
 	int ret = -1, num_groups = 0;
+	static int processed = 0;
+
+	if (processed)
+		return 0;
 
 	/* initialize return values */
 	errno = 0;
 	char ** user_groups = NULL;
+
+	debug2("%s: extracting all groups of user %s", __func__, user_name);
 
 	/* fetch the computer name so we can determine if the specified user is local or not */
 	wchar_t computer_name[CNLEN + 1];
@@ -92,7 +99,7 @@ get_user_groups(char *user)
 	/* read group sids from logon token -- this will return a list of groups
 	* similar to the data returned when you do a whoami /groups command */
 	if (GetTokenInformation(logon_token, TokenGroups, group_buf, group_size, &group_size) == 0) {
-		debug3("%s: GetTokenInformation() failed for user '%s'.", __FUNCTION__, user);
+		debug3("%s: GetTokenInformation() failed with error %d", __FUNCTION__, GetLastError());
 		errno = EOTHER;
 		goto cleanup;
 	}
@@ -138,7 +145,7 @@ get_user_groups(char *user)
 				swprintf_s(formatted_group, ARRAYSIZE(formatted_group), L"%s\\%s", domain, name);
 			
 			_wcslwr_s(formatted_group, ARRAYSIZE(formatted_group));
-			debug3("Added group '%ls' for user '%s'.", formatted_group, user);
+			debug3("Added group '%ls' for user %s", formatted_group, user_name);
 			user_groups[current_group] = utf16_to_utf8(formatted_group);
 			if (user_groups[current_group] == NULL) {
 				errno = ENOMEM;
@@ -149,6 +156,7 @@ get_user_groups(char *user)
 
 
 	ngroups = num_groups;
+	/* downsize the array to the actual size */
 	groups_byname = (char**)realloc(user_groups, sizeof(char*) * num_groups);;
 	user_groups = NULL;
 	ret = 0;
@@ -163,9 +171,36 @@ cleanup:
 		free(user_groups);
 	}
 
-	/* downsize the array to the actual size and return */
+	debug2("%s: done extracting all groups of user %s", __func__, user_name);
+	processed = 1;
 	return ret;
 }
+
+/* 
+ *
+ * checks if user_token has "group" membership, fatal exits on error 
+ * returns 1 if true, 0 otherwise
+ */
+static int
+check_group_membership(const char* group)
+{
+	PSID sid = NULL;
+	BOOL is_member = 0;
+	
+	if ((sid = get_sid(group)) == NULL) {
+		error("unable to resolve group %s", group);
+		goto cleanup;
+	}
+	
+	if (!CheckTokenMembership(user_token, sid, &is_member))
+		fatal("%s CheckTokenMembership for user %s failed with %d for group %s", __func__, user_name, GetLastError(), group);
+
+cleanup:
+	if (sid)
+		free(sid);
+	return is_member? 1: 0;
+}
+
 
 /*
  * Initialize group access list for user with primary (base) and
@@ -178,12 +213,17 @@ ga_init(const char *user, gid_t base)
 	groups_byname = NULL;
 	user_token = NULL;
 
-	if ((user_token = get_user_token(user, 0)) == NULL)
-		fatal("%s, unable to resolve user %s", __func__, user);
+	user_name = xstrdup(user);
 
-	get_user_groups(user);
+	if ((user_token = get_user_token(user_name, 0)) == NULL)
+		fatal("%s, unable to resolve user %s", __func__, user_name);
 
-	return ngroups;
+	/* 
+	 * supposed to retun number of groups associated with user 
+	 * since we do lazy group evaluation, returning 1 here
+	 */
+
+	return 1;
 }
 
 /*
@@ -194,6 +234,21 @@ int
 ga_match(char * const *groups, int n)
 {
 	int i, j;
+
+	/* group retrieval is expensive, optmizing the common case scenario with no wild cards */
+	for (j = 0; j < n; j++)
+		if (strchr(groups[j], '?') || strchr(groups[j], '*'))
+			goto fetch_all;
+
+	for (j = 0; j < n; j++)
+		if (check_group_membership(groups[j]))
+			return 1;
+
+	return 0;
+
+fetch_all:
+	if (get_user_groups() == -1)
+		fatal("unable to retrieve group info for user %s", user_name);
 
 	for (i = 0; i < ngroups; i++)
 		for (j = 0; j < n; j++)
@@ -210,6 +265,14 @@ int
 ga_match_pattern_list(const char *group_pattern)
 {
 	int i, found = 0;
+
+	/* group retrieval is expensive, optmizing the common case scenario - only one group with no wild cards and no negation */
+	if (!strchr(group_pattern, ',') && !strchr(group_pattern, '?') && 
+	    !strchr(group_pattern, '*') && !strchr(group_pattern, '!'))
+		return check_group_membership(group_pattern);
+
+	if (get_user_groups() == -1)
+		fatal("unable to retrieve group info for user %s", user_name);
 
 	for (i = 0; i < ngroups; i++) {
 		switch (match_pattern_list(groups_byname[i], group_pattern, 0)) {
@@ -239,4 +302,10 @@ ga_free(void)
 		free(groups_byname);
 	}
 	groups_byname = NULL;
+
+	if (user_name)
+		free(user_name);
+	user_name = NULL;
+	CloseHandle(user_token);
+	user_token = NULL;
 }

@@ -1507,9 +1507,12 @@ am_system()
 	return running_as_system;
 }
 
-/* returns SID of user/group or current user if (user = NULL) */
+/* 
+ * returns SID of user/group or current user if (user = NULL) 
+ * caller should free() return value
+ */
 PSID
-get_sid(char* name)
+get_sid(const char* name)
 {
 	HANDLE token = NULL;
 	TOKEN_USER* info = NULL;
