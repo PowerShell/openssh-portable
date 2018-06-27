@@ -366,12 +366,10 @@ get_user_token(const char* user, int impersonation) {
 
 	/* is this is a virtual user to be authenticated via custom lsa provider ? */
 	if ((user_sid = get_sid(user)) == NULL && get_custom_lsa_package() && !impersonation) {
-		token = process_custom_lsa_auth(user, "", get_custom_lsa_package());
-		if (token = NULL) {
+		if ((token = process_custom_lsa_auth(user, "", get_custom_lsa_package())) == NULL)
 			error("%s - unable to generate identity token for %s from custom lsa provider: %s", 
 				__func__, user, get_custom_lsa_package());
-			goto done;
-		}
+		goto done;
 	}
 
 	if ((token = generate_s4u_user_token(user_utf16, impersonation)) == 0) {
@@ -379,10 +377,9 @@ get_user_token(const char* user, int impersonation) {
 		/* work around for https://github.com/PowerShell/Win32-OpenSSH/issues/727 by doing a fake login */
 		pLogonUserExExW(L"FakeUser", L"FakeDomain", L"FakePasswd",
 			LOGON32_LOGON_NETWORK_CLEARTEXT, LOGON32_PROVIDER_DEFAULT, NULL, &token, NULL, NULL, NULL, NULL);
-		if ((token = generate_s4u_user_token(user_utf16, impersonation)) == 0) {
+		if ((token = generate_s4u_user_token(user_utf16, impersonation)) == 0)
 			error("%s - unable to generate token on 2nd attempt for user %ls", __func__, user_utf16);
-			goto done;
-		}
+		goto done;
 	}
 
 done:
