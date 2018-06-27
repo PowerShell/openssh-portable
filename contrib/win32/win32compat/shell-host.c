@@ -1349,20 +1349,94 @@ cleanup:
 	return child_exit_code;
 }
 
-int 
-wmain(int ac, wchar_t **av)
+/* implements a basic shell - launches given cmd using CreateProcess */
+int start_as_shell(wchar_t* cmd)
 {
-	wchar_t *exec_command;
+	STARTUPINFOW si;
+	PROCESS_INFORMATION pi;
 
-	_set_invalid_parameter_handler(my_invalid_parameter_handler);
+	memset(&si, 0, sizeof(STARTUPINFOW));
+	memset(&pi, 0, sizeof(PROCESS_INFORMATION));
+	si.cb = sizeof(STARTUPINFOW);
 
-	if (ac == 1) {
-		printf("usage: shellhost.exe <cmdline to be executed with PTY support>\n");
+	if (CreateProcessW(NULL, cmd, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi) == FALSE) {
+		printf("ssh-shellhost cannot run '%ls', error: %d", cmd, GetLastError());
 		exit(255);
 	}
 
-	/* get past shellhost.exe in commandline */
-	exec_command = wcsstr(GetCommandLineW(), L"shellhost.exe") + wcslen(L"shellhost.exe") + 1;
+	CloseHandle(pi.hThread);
+	/* close std io handles */
+	CloseHandle(GetStdHandle(STD_INPUT_HANDLE));
+	CloseHandle(GetStdHandle(STD_OUTPUT_HANDLE));
+	CloseHandle(GetStdHandle(STD_ERROR_HANDLE));
+	child_exit_code = 255;
 
-	return start_with_pty(exec_command);
+	/* wait for child to exit */
+	WaitForSingleObject(pi.hProcess, INFINITE);
+
+	if (!GetExitCodeProcess(pi.hProcess, &child_exit_code))
+		printf("ssh-shellhost unable to track child process, error: %d", GetLastError());
+
+	CloseHandle(pi.hProcess);
+	return child_exit_code;
+}
+
+/*
+ * Usage:
+ * Execute commandline with PTY 
+ *   ssh-shellhost.exe -p commandline
+ *
+ * Execute commandline like shell (plain IO redirection)
+ * Syntax mimics cmd.exe -c usage. Note the explicit double quotes
+ * around actual commandline to execute.
+ *   ssh-shellhost.exe -c "commandline"
+ * Ex.	ssh-shellhost.exe -c "notepad.exe file.txt"
+ *	ssh-shellhost.exe -c ""my program.exe" "arg 1" "arg 2""
+ */
+int 
+wmain(int ac, wchar_t **av)
+{
+	wchar_t *exec_command, *option, *cmdline;
+	int with_pty, len;
+
+	_set_invalid_parameter_handler(my_invalid_parameter_handler);
+
+	if (ac == 1)
+		goto usage;
+
+	if ((cmdline = _wcsdup(GetCommandLineW())) == NULL) {
+		printf("ssh-shellhost.exe ran out of memory");
+		exit(255);
+	}
+
+	if (option = wcsstr(cmdline, L" -c "))
+		with_pty = 0;
+	else if (option = wcsstr(cmdline, L" -p "))
+		with_pty = 1;
+	else
+		goto usage;
+
+	exec_command = option + 4;
+
+	/* strip preceding white spaces */
+	while (*exec_command != L'\0' && *exec_command == L' ')
+		exec_command++;
+
+	if (exec_command == L'\0')
+		goto usage;
+
+	if (with_pty)
+		return start_with_pty(exec_command);
+	else {
+		/* if commandline is enclosed in double quotes, remove them */
+		len = (int)wcslen(exec_command);
+		if (len > 2 && *exec_command == L'\"' && *(exec_command + len - 1) == L'\"') {
+			*(exec_command + len - 1) = L'\0';
+			exec_command++;
+		}
+		return start_as_shell(exec_command);
+	}
+usage:
+	printf("ssh-shellhost does not support command line: %ls", cmdline);
+	exit(255);
 }

@@ -80,8 +80,8 @@ CreateConPty(const char *cmdline,
 	si.hStdError = hOutput;
 	si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESIZE | STARTF_USECOUNTCHARS;
 
-	debug3("conhostcmdline:%s", conhostCmdline);
-	
+	debug("Executing command: %s", conhostCmdline);
+
 	if (0 == CreateProcess(NULL, conhostCmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, piPty)) {
 		debug("Failed to create the conhost pty, error:%d", GetLastError());
 		

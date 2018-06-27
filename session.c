@@ -598,15 +598,13 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		si.hStdError = (HANDLE)w32_fd_to_handle(pipeerr[1]);
 		si.lpDesktop = NULL;
 
-		debug("Executing command: %s", exec_command);
-
 		if (pty && is_conpty_supported()) {
 			HANDLE conhost_pty_sighandle;
-			char *p = strstr(exec_command, "ssh-shellhost.exe");			
-			p = p + strlen("ssh-shellhost.exe") + 2; /* Advance p to command */
+			char *p = strstr(exec_command, " -p ");			
+			p = p + strlen(" -p "); /* Advance p to command */
 			if (0 == CreateConPty(p, si.dwXCountChars, si.dwYCountChars,
 				si.hStdInput, si.hStdOutput, &conhost_pty_sighandle, &pi)) {
-				debug("conhost pty is successful %d", pi.dwProcessId);
+				debug2("conhost based pty is hosted in pid %d", pi.dwProcessId);
 
 				Channel *c;
 				if (c = channel_by_id(ssh, s->chanid))
@@ -615,6 +613,8 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		} else {
 			if ((exec_command_w = utf8_to_utf16(exec_command)) == NULL)
 				goto cleanup;
+
+			debug("Executing command: %s", exec_command);
 
 			if (!CreateProcessW(NULL, exec_command_w, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
 				errno = EOTHER;

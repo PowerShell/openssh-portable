@@ -1776,7 +1776,7 @@ do {					\
 		if (!command)
 			break;
 		command_len = (int)strlen(command);
-
+		/*TODO - replace numbers below with readable compile time operators*/
 		if (command_len >= 13 && _memicmp(command, "internal-sftp", 13) == 0) {
 			command_type = CMD_SFTP;
 			command_args = command + 13;
@@ -1835,7 +1835,9 @@ do {					\
 
 	len = 0;
 	if (pty)
-		len += progdir_len + (int)strlen("ssh-shellhost.exe") + 5;
+		/* TODO: consolidate ssh-shellhost usage for PTY */
+		/* Note: keep ssh-shellhost.exe usage in session.c in sync */
+		len += progdir_len + (int)strlen("ssh-shellhost.exe -p ") + 5;
 	len +=(int) strlen(shell) + 3;/* 3 for " around shell path and trailing space */
 	if (command) {
 		len += 15; /* for shell command argument, typically -c or /c */
@@ -1851,7 +1853,7 @@ do {					\
 	if (pty) {
 		CMDLINE_APPEND(p, "\"");
 		CMDLINE_APPEND(p, progdir);
-		CMDLINE_APPEND(p, "\\ssh-shellhost.exe\" ");
+		CMDLINE_APPEND(p, "\\ssh-shellhost.exe\" -p ");
 	}
 	CMDLINE_APPEND(p, "\"");
 	CMDLINE_APPEND(p, shell);
