@@ -1,8 +1,12 @@
 /*
  *
  * Author: Manoj Ampalam <manoj.ampalam@microsoft.com> 
+ *   groupaccess interface implementation for Windows
  *
- * groupaccess interface implementation for Windows
+ * Author: Bryan Berns <berns@uwalumni.com>
+ *   Added support for running configuration rules against nested groups 
+ *   spawning multiple domains/forests.
+ *   Core logic implemented in get_user_groups()
  *
  * Copyright (c) 2018 Microsoft Corp.
  * All rights reserved
