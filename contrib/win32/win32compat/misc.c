@@ -1868,14 +1868,10 @@ do {					\
 		else
 			CMDLINE_APPEND(p, " -c ");
 
-		/* bash type shells require " decoration around command*/
-		if (shell_type == SH_BASH)
-			CMDLINE_APPEND(p, "\"");
-
+		/* Add double quotes around command */
+		CMDLINE_APPEND(p, "\"");
 		CMDLINE_APPEND(p, command);
-
-		if (shell_type == SH_BASH)
-			CMDLINE_APPEND(p, "\"");
+		CMDLINE_APPEND(p, "\"");
 	}
 	*p = '\0';
 	ret = cmdline;
