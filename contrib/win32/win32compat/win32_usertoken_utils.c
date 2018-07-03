@@ -579,10 +579,10 @@ HANDLE generate_sshd_virtual_token()
 
 	StringCchPrintfW(va_name, 32, L"%s_%d", L"sshd", GetCurrentProcessId());
 
-	InitUnicodeString(&svcLogonRight, L"SeServiceLogonRight");
-	InitUnicodeString(&domain, VIRTUALUSER_DOMAIN);
-	InitUnicodeString(&group, VIRTUALUSER_GROUP_NAME);
-	InitUnicodeString(&account, va_name);
+	init_unicode_string(&svcLogonRight, L"SeServiceLogonRight");
+	init_unicode_string(&domain, VIRTUALUSER_DOMAIN);
+	init_unicode_string(&group, VIRTUALUSER_GROUP_NAME);
+	init_unicode_string(&account, va_name);
 
 	/* Initialize SIDs */
 	/* domain SID - S-1-5-111 */
