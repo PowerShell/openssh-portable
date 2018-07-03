@@ -467,8 +467,8 @@ static int
 setup_session_vars(Session* s) 
 {
 	wchar_t *pw_dir_w = NULL, *tmp = NULL;
-	char buf[256];
-	wchar_t wbuf[256];
+	char buf[1024] = { 0 };
+	wchar_t wbuf[1024] = { 0 };
 	char *laddr, *c;
 	int ret = -1;
 
@@ -514,8 +514,15 @@ setup_session_vars(Session* s)
 		SetEnvironmentVariableA("TERM", s->term);
 
 	if (!s->is_subsystem) {
-		UTF8_TO_UTF16_WITH_CLEANUP(tmp, s->pw->pw_name);
-		_snwprintf(wbuf, sizeof(wbuf)/2, L"%ls@%ls $P$G", tmp, _wgetenv(L"COMPUTERNAME"));
+		_snprintf(buf, ARRAYSIZE(buf), "%s@%s", s->pw->pw_name, getenv("COMPUTERNAME"));
+		UTF8_TO_UTF16_WITH_CLEANUP(tmp, buf);
+		/* escape $ characters as $$ to distinguish from special prompt characters */
+		for (int i = 0, j = 0; i < wcslen(tmp) && j < ARRAYSIZE(wbuf) - 1; i++) {
+			wbuf[j] = tmp[i];
+			if (wbuf[j++] == L'$')
+				wbuf[j++] = L'$';
+		}
+		wcscat_s(wbuf, ARRAYSIZE(wbuf), L" $P$G");
 		SetEnvironmentVariableW(L"PROMPT", wbuf);
 	}
 
@@ -571,8 +578,10 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	if (!in_chroot)
 		chdir(s->pw->pw_dir);
 
-	if (s->is_subsystem >= SUBSYSTEM_INT_SFTP_ERROR)
+	if (s->is_subsystem >= SUBSYSTEM_INT_SFTP_ERROR) {
 		command = "echo This service allows sftp connections only.";
+		pty = 0;
+	}
 
 	exec_command = build_session_commandline(s->pw->pw_shell, shell_command_option, command, pty);
 	if (exec_command == NULL)

@@ -132,7 +132,8 @@ pLogonUserExExW(wchar_t *user_name, wchar_t *domain, wchar_t *password, DWORD lo
 	DWORD logon_provider, PTOKEN_GROUPS token_groups, PHANDLE token, PSID *logon_sid, 
 	PVOID *profile_buffer, LPDWORD profile_length, PQUOTA_LIMITS quota_limits)
 {
-	HMODULE hm= NULL;
+	HMODULE hm = NULL;
+
 	typedef BOOL(WINAPI *LogonUserExExWType)(wchar_t*, wchar_t*, wchar_t*, DWORD, DWORD, PTOKEN_GROUPS, PHANDLE, PSID, PVOID, LPDWORD, PQUOTA_LIMITS);
 	static LogonUserExExWType s_pLogonUserExExW = NULL;
 
@@ -179,38 +180,29 @@ NTSTATUS pLsaOpenPolicy(PLSA_UNICODE_STRING system_name,
 	HMODULE hm = NULL;
 	typedef NTSTATUS(NTAPI *LsaOpenPolicyType)(PLSA_UNICODE_STRING, PLSA_OBJECT_ATTRIBUTES, ACCESS_MASK, PLSA_HANDLE);
 	static LsaOpenPolicyType s_pLsaOpenPolicy = NULL;
-
 	if (!s_pLsaOpenPolicy) {
 		if ((hm = load_api_security_lsapolicy()) == NULL &&
 			((hm = load_advapi32()) == NULL))
 			return STATUS_ASSERTION_FAILURE;
-
 		if ((s_pLsaOpenPolicy = (LsaOpenPolicyType)get_proc_address(hm, "LsaOpenPolicy")) == NULL)
 			return STATUS_ASSERTION_FAILURE;
 	}
-
 	return s_pLsaOpenPolicy(system_name, attrib, access, handle);
 }
-
 NTSTATUS pLsaFreeMemory(PVOID buffer)
 {
 	HMODULE hm = NULL;
 	typedef NTSTATUS(NTAPI *LsaFreeMemoryType)(PVOID);
 	static LsaFreeMemoryType s_pLsaFreeMemory = NULL;
-
 	if (!s_pLsaFreeMemory) {
 		if ((hm = load_api_security_lsapolicy()) == NULL &&
 			((hm = load_advapi32()) == NULL))
 			return STATUS_ASSERTION_FAILURE;
-
 		if ((s_pLsaFreeMemory = (LsaFreeMemoryType)get_proc_address(hm, "LsaFreeMemory")) == NULL)
 			return STATUS_ASSERTION_FAILURE;
 	}
-
 	return s_pLsaFreeMemory(buffer);
 }
-
-
 NTSTATUS pLsaAddAccountRights(LSA_HANDLE lsa_h,
 	PSID psid,
 	PLSA_UNICODE_STRING rights,
@@ -219,16 +211,14 @@ NTSTATUS pLsaAddAccountRights(LSA_HANDLE lsa_h,
 	HMODULE hm = NULL;
 	typedef NTSTATUS(NTAPI *LsaAddAccountRightsType)(LSA_HANDLE, PSID, PLSA_UNICODE_STRING, ULONG);
 	static LsaAddAccountRightsType s_pLsaAddAccountRights = NULL;
-
 	if (!s_pLsaAddAccountRights) {
 		if ((hm = load_api_security_lsapolicy()) == NULL &&
 			((hm = load_advapi32()) == NULL))
 			return STATUS_ASSERTION_FAILURE;
-
 		if ((s_pLsaAddAccountRights = (LsaAddAccountRightsType)get_proc_address(hm, "LsaAddAccountRights")) == NULL)
 			return STATUS_ASSERTION_FAILURE;
 	}
-	
+
 	return s_pLsaAddAccountRights(lsa_h, psid, rights, num_rights);
 }
 
