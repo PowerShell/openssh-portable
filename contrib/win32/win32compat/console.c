@@ -40,7 +40,7 @@
 #include "debug.h"
 #include "console.h"
 #include "ansiprsr.h"
-#include "conhost_conpty.h"
+#include "misc_internal.h"
 
 HANDLE	hOutputConsole = NULL;
 DWORD	stdin_dwSavedAttributes = 0;

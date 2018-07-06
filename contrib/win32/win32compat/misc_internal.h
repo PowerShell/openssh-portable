@@ -25,6 +25,14 @@
 /* maximum size for user principal name as defined in ad schema */
 #define MAX_UPN_LEN 1024
 
+/* PTY windows size event type (for conhost and ssh-shellhost) */
+#define PTY_SIGNAL_RESIZE_WINDOW  8u
+
+/* prog paths */
+extern char* __progname;
+extern char* __progdir;
+extern wchar_t* __wprogdir;
+
 static char *machine_domain_name;
 
 extern char* chroot_path;
@@ -35,7 +43,7 @@ extern wchar_t* chroot_pathw;
 wchar_t * resolved_path_utf16(const char *);
 void w32posix_initialize();
 void w32posix_done();
-char* w32_programdir();
+void init_prog_paths();
 void convertToBackslash(char *str);
 void convertToBackslashW(wchar_t *str);
 void convertToForwardslash(char *str);
@@ -54,5 +62,7 @@ int is_absolute_path(const char *);
 int file_in_chroot_jail(HANDLE, const char*);
 PSID get_sid(const char*);
 int am_system();
-char* build_session_commandline(const char *, const char *, const char *, int );
+char* build_session_commandline(const char *, const char *, const char *);
+int is_conpty_supported();
+int exec_command_with_pty(wchar_t*, STARTUPINFOW*, PROCESS_INFORMATION*, int);
 char* get_custom_lsa_package();

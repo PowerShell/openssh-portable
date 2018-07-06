@@ -419,34 +419,6 @@ w32_setvbuf(FILE *stream, char *buffer, int mode, size_t size) {
 		return setvbuf(stream, buffer, mode, size);
 }
 
-/* TODO - deprecate this. This is not a POSIX API, used internally only */
-char *
-w32_programdir()
-{
-	wchar_t* wpgmptr;
-
-	if (s_programdir != NULL)
-		return s_programdir;
-
-	if (_get_wpgmptr(&wpgmptr) != 0)
-		return NULL;
-
-	if ((s_programdir = utf16_to_utf8(wpgmptr)) == NULL)
-		return NULL;
-
-	/* null terminate after directory path */
-	char* tail = s_programdir + strlen(s_programdir);
-	while (tail > s_programdir && *tail != '\\' && *tail != '/')
-		tail--;
-
-	if (tail > s_programdir)
-		*tail = '\0';
-	else
-		*tail = '.'; /* current directory */
-
-	return s_programdir;
-}
-
 int
 daemon(int nochdir, int noclose)
 {
@@ -1592,11 +1564,11 @@ cleanup:
 
 /* builds session commandline. returns NULL with errno set on failure, caller should free returned string */
 char* 
-build_session_commandline(const char *shell, const char* shell_arg, const char *command, int pty)
+build_session_commandline(const char *shell, const char* shell_arg, const char *command)
 {
 	enum sh_type { SH_OTHER, SH_CMD, SH_PS, SH_BASH } shell_type = SH_OTHER;
 	enum cmd_type { CMD_OTHER, CMD_SFTP, CMD_SCP } command_type = CMD_OTHER;
-	char *progdir = w32_programdir(), *cmd_sp = NULL, *cmdline = NULL, *ret = NULL, *p;
+	char *progdir = __progdir, *cmd_sp = NULL, *cmdline = NULL, *ret = NULL, *p;
 	int len, progdir_len = (int)strlen(progdir);
 
 #define CMDLINE_APPEND(P, S)		\
@@ -1708,10 +1680,6 @@ do {					\
 	} while (0);
 
 	len = 0;
-	if (pty)
-		/* TODO: consolidate ssh-shellhost usage for PTY */
-		/* Note: keep ssh-shellhost.exe usage in session.c in sync */
-		len += progdir_len + (int)strlen("ssh-shellhost.exe -p ") + 5;
 	len +=(int) strlen(shell) + 3;/* 3 for " around shell path and trailing space */
 	if (command) {
 		len += 15; /* for shell command argument, typically -c or /c */
@@ -1724,11 +1692,6 @@ do {					\
 	}
 
 	p = cmdline;
-	if (pty) {
-		CMDLINE_APPEND(p, "\"");
-		CMDLINE_APPEND(p, progdir);
-		CMDLINE_APPEND(p, "\\ssh-shellhost.exe\" -p ");
-	}
 	CMDLINE_APPEND(p, "\"");
 	CMDLINE_APPEND(p, shell);
 	CMDLINE_APPEND(p, "\"");

@@ -37,7 +37,7 @@
 #include "ansiprsr.h"
 #include "inc\utf.h"
 #include "console.h"
-#include "conhost_conpty.h"
+#include "misc_internal.h"
 
 #define dwBuffer 4096
 

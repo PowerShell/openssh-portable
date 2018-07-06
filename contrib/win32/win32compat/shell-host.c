@@ -274,13 +274,14 @@ HANDLE child_in = INVALID_HANDLE_VALUE;
 HANDLE child_err = INVALID_HANDLE_VALUE;
 HANDLE pipe_in = INVALID_HANDLE_VALUE;
 HANDLE pipe_out = INVALID_HANDLE_VALUE;
-HANDLE pipe_err = INVALID_HANDLE_VALUE;
+HANDLE pipe_ctrl = INVALID_HANDLE_VALUE;
 HANDLE child = INVALID_HANDLE_VALUE;
 HANDLE job = NULL;
 HANDLE hConsoleBuffer = INVALID_HANDLE_VALUE;
 HANDLE monitor_thread = INVALID_HANDLE_VALUE;
 HANDLE io_thread = INVALID_HANDLE_VALUE;
 HANDLE ux_thread = INVALID_HANDLE_VALUE;
+HANDLE ctrl_thread = INVALID_HANDLE_VALUE;
 
 DWORD child_exit_code = 0;
 DWORD hostProcessId = 0;
@@ -800,6 +801,48 @@ MonitorChild(_In_ LPVOID lpParameter)
 	return 0;
 }
 
+unsigned __stdcall
+ControlThread(LPVOID p)
+{
+	short type, row, col;
+	DWORD len;
+	COORD coord;
+	SMALL_RECT rect;
+	while (1) {
+		if (!ReadFile(pipe_ctrl, &type, 2, &len, NULL))
+			break;
+		if (type != PTY_SIGNAL_RESIZE_WINDOW)
+			break;
+		if (!ReadFile(pipe_ctrl, &col, 2, &len, NULL))
+			break;
+		if (!ReadFile(pipe_ctrl, &row, 2, &len, NULL))
+			break;
+		
+		/* 
+		 * when reducing width, console seemed to retain prior width 
+		 * while increasing width, however, it behaves right
+		 * 
+		 * hence setting it less by 1 and setting it again to the right
+		 * count
+		 */
+		
+		coord.X = col - 1;
+		coord.Y = row;
+		rect.Top = 0;
+		rect.Left = 0;
+		rect.Bottom = row - 1;
+		rect.Right = col - 2;
+		SetConsoleScreenBufferSize(child_out, coord);
+		SetConsoleWindowInfo(child_out, TRUE, &rect);
+
+		coord.X = col;
+		rect.Right = col - 1;
+		SetConsoleScreenBufferSize(child_out, coord);
+		SetConsoleWindowInfo(child_out, TRUE, &rect);
+	}
+	return 0;
+}
+
 DWORD 
 ProcessEvent(void *p)
 {
@@ -1231,10 +1274,10 @@ start_with_pty(wchar_t *command)
 
 	pipe_in = GetStdHandle(STD_INPUT_HANDLE);
 	pipe_out = GetStdHandle(STD_OUTPUT_HANDLE);
-	pipe_err = GetStdHandle(STD_ERROR_HANDLE);
+	pipe_ctrl = GetStdHandle(STD_ERROR_HANDLE);
 
 	/* copy pipe handles passed through std io*/
-	if ((pipe_in == INVALID_HANDLE_VALUE) || (pipe_out == INVALID_HANDLE_VALUE) || (pipe_err == INVALID_HANDLE_VALUE))
+	if ((pipe_in == INVALID_HANDLE_VALUE) || (pipe_out == INVALID_HANDLE_VALUE) || (pipe_ctrl == INVALID_HANDLE_VALUE))
 		return -1;
 
 	cp = GetConsoleCP();
@@ -1311,6 +1354,10 @@ start_with_pty(wchar_t *command)
 	if (IS_INVALID_HANDLE(ux_thread))
 		goto cleanup;
 
+	ctrl_thread = (HANDLE)_beginthreadex(NULL, 0, ControlThread, NULL, 0, NULL);
+	if (IS_INVALID_HANDLE(ctrl_thread))
+		goto cleanup;
+
 	ProcessMessages(NULL);
 cleanup:
 	dwStatus = GetLastError();
@@ -1328,6 +1375,11 @@ cleanup:
 	if (!IS_INVALID_HANDLE(io_thread)) {
 		TerminateThread(io_thread, 0);
 		CloseHandle(io_thread);
+	}
+
+	if (!IS_INVALID_HANDLE(ctrl_thread)) {
+		TerminateThread(ctrl_thread, 0);
+		CloseHandle(ctrl_thread);
 	}
 
 	if (hEventHook)
@@ -1385,6 +1437,8 @@ int start_as_shell(wchar_t* cmd)
  * Usage:
  * Execute commandline with PTY 
  *   ssh-shellhost.exe -p commandline
+ * Note that in PTY mode, stderr is taken as the control channel
+ * to receive Windows size change events
  *
  * Execute commandline like shell (plain IO redirection)
  * Syntax mimics cmd.exe -c usage. Note the explicit double quotes

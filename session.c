@@ -95,7 +95,6 @@
 #include "monitor_wrap.h"
 #include "sftp.h"
 #include "atomicio.h"
-#include "conhost_conpty.h"
 
 #if defined(KRB5) && defined(USE_AFS)
 #include <kafs.h>
@@ -538,7 +537,7 @@ cleanup:
 }
 
 int register_child(void* child, unsigned long pid);
-char* build_session_commandline(const char *, const char *, const char *, int);
+char* build_session_commandline(const char *, const char *, const char *);
 
 int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	int pipein[2], pipeout[2], pipeerr[2], r, ret = -1;
@@ -583,7 +582,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		pty = 0;
 	}
 
-	exec_command = build_session_commandline(s->pw->pw_shell, shell_command_option, command, pty);
+	exec_command = build_session_commandline(s->pw->pw_shell, shell_command_option, command);
 	if (exec_command == NULL)
 		goto cleanup;
 
@@ -607,29 +606,21 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		si.hStdError = (HANDLE)w32_fd_to_handle(pipeerr[1]);
 		si.lpDesktop = NULL;
 
-		if (pty && is_conpty_supported()) {
-			HANDLE conhost_pty_sighandle;
-			char *p = strstr(exec_command, " -p ");			
-			p = p + strlen(" -p "); /* Advance p to command */
-			if (0 == CreateConPty(p, si.dwXCountChars, si.dwYCountChars,
-				si.hStdInput, si.hStdOutput, &conhost_pty_sighandle, &pi)) {
-				debug2("conhost based pty is hosted in pid %d", pi.dwProcessId);
+		if ((exec_command_w = utf8_to_utf16(exec_command)) == NULL)
+			goto cleanup;
 
-				Channel *c;
-				if (c = channel_by_id(ssh, s->chanid))
-					c->conhost_pty_sighandle = conhost_pty_sighandle;
-			}
-		} else {
-			if ((exec_command_w = utf8_to_utf16(exec_command)) == NULL)
+		debug("Executing command: %s with%spty", exec_command, pty? " ":" no ");
+		
+		if (pty) {
+			fcntl(s->ptyfd, F_SETFD, FD_CLOEXEC);
+			if (exec_command_with_pty(exec_command_w, &si, &pi, s->ttyfd) == -1)
 				goto cleanup;
-
-			debug("Executing command: %s", exec_command);
-
-			if (!CreateProcessW(NULL, exec_command_w, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
-				errno = EOTHER;
-				error("ERROR. Cannot create process (%u).\n", GetLastError());
-				goto cleanup;
-			}
+			close(s->ttyfd);
+			s->ttyfd = -1;
+		} else if (!CreateProcessW(NULL, exec_command_w, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+			errno = EOTHER;
+			error("ERROR. Cannot create process (%u).\n", GetLastError());
+			goto cleanup;
 		}
 
 		CloseHandle(pi.hThread);
@@ -657,12 +648,6 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		register_child(pi.hProcess, pi.dwProcessId);
 	}
 
-	/*
-	* Set interactive/non-interactive mode.
-	*/
-	packet_set_interactive(s->display != NULL, options.ip_qos_interactive,
-		options.ip_qos_bulk);
-
 	/* Close the child sides of the socket pairs. */
 	close(pipein[0]);
 	close(pipeout[1]);
@@ -672,10 +657,17 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	* Enter the interactive session.  Note: server_loop must be able to
 	* handle the case that fdin and fdout are the same.
 	*/
-	if (s->ttyfd == -1)
+	if (pty) {
+		/* Set interactive/non-interactive mode */
+		packet_set_interactive(1, options.ip_qos_interactive,
+			options.ip_qos_bulk);
+		session_set_fds(ssh, s, pipein[1], pipeout[0], -1, 1, 1);
+	} else {
+		/* Set interactive/non-interactive mode */
+		packet_set_interactive(s->display != NULL, options.ip_qos_interactive,
+			options.ip_qos_bulk);
 		session_set_fds(ssh, s, pipein[1], pipeout[0], pipeerr[0], s->is_subsystem, 0);
-	else
-		session_set_fds(ssh, s, pipein[1], pipeout[0], pipeerr[0], s->is_subsystem, 1); /* tty interactive session */
+	}
 
 	ret = 0;
 
@@ -2216,14 +2208,7 @@ session_window_change_req(struct ssh *ssh, Session *s)
 	s->ypixel = packet_get_int();
 	packet_check_eom();
 
-#ifdef WINDOWS
-	Channel *c;
-	if ((c = channel_by_id(ssh, s->chanid)) && c->conhost_pty_sighandle)
-		SignalResizeWindow(c->conhost_pty_sighandle, s->col, s->row);	
-#else
 	pty_change_window_size(s->ptyfd, s->row, s->col, s->xpixel, s->ypixel);
-#endif
-
 	return 1;
 }
 
