@@ -715,4 +715,22 @@ get_custom_lsa_package()
 	return s_lsa_auth_pkg;
 }
 
+/*
+ * Not thread safe 
+ * returned value is pointer from static buffer
+ * dont free()
+ */
+wchar_t* get_final_path_by_handle(HANDLE h)
+{
+	static wchar_t path_buf[PATH_MAX];
+
+	if (GetFinalPathNameByHandleW(h, path_buf, PATH_MAX, 0) == 0) {
+		errno = EOTHER;
+		debug3("failed to get final path of file with handle:%d error:%d", h, GetLastError());
+		return NULL;
+	}
+	
+	return (path_buf + 4);
+}
+
 #pragma warning(pop)

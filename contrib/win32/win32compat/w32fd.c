@@ -33,6 +33,7 @@
 #include "inc\sys\select.h"
 #include "inc\sys\uio.h"
 #include "inc\sys\types.h"
+#include "inc\sys\stat.h"
 #include "inc\unistd.h"
 #include "inc\fcntl.h"
 #include "inc\sys\un.h"
@@ -966,6 +967,28 @@ w32_ftruncate(int fd, off_t length)
 		return -1;
 
 	return 0;
+}
+
+int w32_fchmod(int fd, mode_t mode)
+{
+	wchar_t *file_path;
+	char *file_path_utf8 = NULL;
+	int ret = -1;
+	CHECK_FD(fd);
+
+	file_path = get_final_path_by_handle(fd_table.w32_ios[fd]->handle);
+	if (!file_path)
+		goto cleanup;
+
+	if ((file_path_utf8 = utf16_to_utf8(file_path)) == NULL)
+		goto cleanup;
+
+	ret = w32_chmod(file_path_utf8, mode);
+cleanup:
+	if (file_path_utf8)
+		free(file_path_utf8);
+
+	return ret;
 }
 
 int

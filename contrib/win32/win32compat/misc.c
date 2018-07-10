@@ -286,7 +286,8 @@ w32_fopen_utf8(const char *input_path, const char *mode)
 	if (chroot_pathw && !nonfs_dev) {
 		/* ensure final path is within chroot */
 		HANDLE h = (HANDLE)_get_osfhandle(_fileno(f));
-		if (!file_in_chroot_jail(h, input_path)) {
+		if (!file_in_chroot_jail(h)) {
+			debug3("%s is not in chroot jail", input_path);
 			fclose(f);
 			f = NULL;
 			errno = EACCES;
