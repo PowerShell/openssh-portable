@@ -779,8 +779,8 @@ fileio_fstat(struct w32_io* pio, struct _stat64 *buf)
 	int fd = _open_osfhandle(dup_handle, 0);
 	debug4("fstat - pio:%p", pio);
 	if (fd == -1) {
-	  CloseHandle(dup_handle);
-	  errno = EOTHER;
+		CloseHandle(dup_handle);
+		errno = EOTHER;
 		return -1;
 	}
 
