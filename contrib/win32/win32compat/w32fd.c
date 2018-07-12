@@ -1018,8 +1018,13 @@ spawn_child_internal(char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDL
 
 	if (argv) {
 		t1 = argv;
-		while (*t1)
+		while (*t1) {
+			char *l = *t1;
+			while (*l) {
+				if (*l++ == '\"') cmdline_len++;
+			}
 			cmdline_len += (DWORD)strlen(*t1++) + 1 + 2;
+		}
 	}
 
 	if ((cmdline = malloc(cmdline_len)) == NULL) {
@@ -1048,8 +1053,12 @@ spawn_child_internal(char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDL
 		while (*t1) {
 			*t++ = ' ';
 			*t++ = '\"';
-			memcpy(t, *t1, strlen(*t1));
-			t += strlen(*t1);
+			char *l = *t1;
+			while (*l) {
+				if (*l == '"') *t++ = '\\';
+				*t++ = *l;
+				l++;
+			}
 			*t++ = '\"';
 			t1++;
 		}
