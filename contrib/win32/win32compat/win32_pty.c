@@ -84,13 +84,13 @@ CreateConPty(const wchar_t *cmdline,
 
 int is_conpty_supported()
 {
-	return 0;
+	return 1;
 }
 
 int exec_command_with_pty(wchar_t* cmd, STARTUPINFOW* si, PROCESS_INFORMATION* pi, int ttyfd)
 {
 	HANDLE ttyh = (HANDLE)w32_fd_to_handle(ttyfd);
-	wchar_t pty_cmdline[8191] = { 0, };
+	wchar_t pty_cmdline[MAX_CMD_LEN] = { 0, };
 	int ret = -1;
 
 	if (is_conpty_supported())
@@ -98,7 +98,7 @@ int exec_command_with_pty(wchar_t* cmd, STARTUPINFOW* si, PROCESS_INFORMATION* p
 
 	/* launch via  "ssh-shellhost" -p command*/
 
-	_snwprintf_s(pty_cmdline, 8191, 8191, L"\"%ls\\ssh-shellhost.exe\" -p %ls", __wprogdir, cmd);
+	_snwprintf_s(pty_cmdline, MAX_CMD_LEN, MAX_CMD_LEN, L"\"%ls\\ssh-shellhost.exe\" ---pty %ls", __wprogdir, cmd);
 	/* 
 	 * In PTY mode, ssh-shellhost takes stderr as control channel
 	 * TODO - fix this and pass control channel pipe as a command line parameter

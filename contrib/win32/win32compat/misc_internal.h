@@ -28,6 +28,9 @@
 /* PTY windows size event type (for conhost and ssh-shellhost) */
 #define PTY_SIGNAL_RESIZE_WINDOW  8u
 
+/* maximum command line length */
+#define MAX_CMD_LEN 8191
+
 /* prog paths */
 extern char* __progname;
 extern char* __progdir;

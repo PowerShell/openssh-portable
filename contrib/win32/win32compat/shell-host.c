@@ -44,7 +44,6 @@
 
 #define MAX_CONSOLE_COLUMNS 9999
 #define MAX_CONSOLE_ROWS 9999
-#define MAX_CMD_LEN 8191 // msdn
 #define WM_APPEXIT WM_USER+1
 #define MAX_EXPECTED_BUFFER_SIZE 1024
 /* 4KB is the largest size for which writes are guaranteed to be atomic */
@@ -1315,11 +1314,8 @@ start_with_pty(wchar_t *command)
 	/*
 	* Launch via cmd.exe /c, otherwise known issues exist with color rendering in powershell
 	*/
-	cmd[0] = L'\0';
-	GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, system32_path));
-	GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, L"\\cmd.exe /c "));
-	GOTO_CLEANUP_ON_ERR(wcscat_s(cmd, MAX_CMD_LEN, command));
-
+	_snwprintf_s(cmd, MAX_CMD_LEN, MAX_CMD_LEN, L"\"%ls\\cmd.exe\" /c \"%ls\"", system32_path, command);
+	
 	SetConsoleCtrlHandler(NULL, FALSE);
 	GOTO_CLEANUP_ON_FALSE(CreateProcess(NULL, cmd, NULL, NULL, TRUE, CREATE_NEW_CONSOLE,
 				NULL, NULL, &si, &pi));
@@ -1436,7 +1432,7 @@ int start_as_shell(wchar_t* cmd)
 /*
  * Usage:
  * Execute commandline with PTY 
- *   ssh-shellhost.exe -p commandline
+ *   ssh-shellhost.exe ---pty commandline
  * Note that in PTY mode, stderr is taken as the control channel
  * to receive Windows size change events
  *
@@ -1463,14 +1459,17 @@ wmain(int ac, wchar_t **av)
 		exit(255);
 	}
 
-	if (option = wcsstr(cmdline, L" -c "))
-		with_pty = 0;
-	else if (option = wcsstr(cmdline, L" -p "))
+	if (option = wcsstr(cmdline, L" ---pty "))
 		with_pty = 1;
+	else if (option = wcsstr(cmdline, L" -c "))
+		with_pty = 0;
 	else
 		goto usage;
 
-	exec_command = option + 4;
+	if (with_pty)
+		exec_command = option + wcslen(L" ---pty ");
+	else
+		exec_command = option + wcslen(L" -c ");
 
 	/* strip preceding white spaces */
 	while (*exec_command != L'\0' && *exec_command == L' ')
