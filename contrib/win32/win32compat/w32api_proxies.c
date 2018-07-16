@@ -222,6 +222,26 @@ NTSTATUS pLsaAddAccountRights(LSA_HANDLE lsa_h,
 	return s_pLsaAddAccountRights(lsa_h, psid, rights, num_rights);
 }
 
+NTSTATUS pLsaRemoveAccountRights(LSA_HANDLE lsa_h,
+	PSID psid,
+	BOOLEAN all_rights,
+	PLSA_UNICODE_STRING rights,
+	ULONG num_rights)
+{
+	HMODULE hm = NULL;
+	typedef NTSTATUS(NTAPI *LsaRemoveAccountRightsType)(LSA_HANDLE, PSID, BOOLEAN, PLSA_UNICODE_STRING, ULONG);
+	static LsaRemoveAccountRightsType s_pLsaRemoveAccountRights = NULL;
+	if (!s_pLsaRemoveAccountRights) {
+		if ((hm = load_api_security_lsapolicy()) == NULL &&
+			((hm = load_advapi32()) == NULL))
+			return STATUS_ASSERTION_FAILURE;
+		if ((s_pLsaRemoveAccountRights = (LsaRemoveAccountRightsType)get_proc_address(hm, "LsaRemoveAccountRights")) == NULL)
+			return STATUS_ASSERTION_FAILURE;
+	}
+
+	return s_pLsaRemoveAccountRights(lsa_h, psid, all_rights, rights, num_rights);
+}
+
 ULONG pRtlNtStatusToDosError(NTSTATUS status)
 {	
 	HMODULE hm = NULL;

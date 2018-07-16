@@ -662,7 +662,7 @@ cleanup:
 
 	/* attempt to remove virtual account permissions if previous add succeeded */
 	if (lsa_add_ret == STATUS_SUCCESS)
-		if ((lsa_ret = LsaRemoveAccountRights(lsa_policy, sid_user, FALSE, &svcLogonRight, 1)) != STATUS_SUCCESS)
+		if ((lsa_ret = pLsaRemoveAccountRights(lsa_policy, sid_user, FALSE, &svcLogonRight, 1)) != STATUS_SUCCESS)
 			debug("%s: unable to remove SE_SERVICE_LOGON_NAME privilege, error: %d", __FUNCTION__, pRtlNtStatusToDosError(lsa_ret));
 
 	if (sid_domain)

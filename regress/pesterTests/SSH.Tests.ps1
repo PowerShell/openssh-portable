@@ -293,7 +293,7 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             $kh = Join-Path $testDir "$tC.$tI.known_hosts"
             $nul | Set-Content $kh
             # doing via cmd to intercept and drain stderr output
-            iex "cmd /c ssh -o UserKnownHostsFile=`"$kh`" -o StrictHostKeyChecking=no test_target hostname 2>&1"
+            iex "cmd /c `"ssh -o UserKnownHostsFile=`"$kh`" -o StrictHostKeyChecking=no test_target hostname 2>&1`""
             (Get-Content $kh).Count | Should Be 1
         }
     }
