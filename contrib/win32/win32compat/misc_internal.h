@@ -70,3 +70,4 @@ int is_conpty_supported();
 int exec_command_with_pty(wchar_t*, STARTUPINFOW*, PROCESS_INFORMATION*, int);
 char* get_custom_lsa_package();
 wchar_t* get_final_path_by_handle(HANDLE h);
+int lookup_principal_name(const wchar_t * sam_account_name, wchar_t * user_principal_name);
