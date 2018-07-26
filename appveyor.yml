@@ -1,4 +1,4 @@
-version: 7.7.0.0.{build}
+version: 7.7.2.0.{build}
 image: Visual Studio 2015
 
 branches:
@@ -9,7 +9,7 @@ branches:
 build_script:
   - ps: |
       Import-Module $env:APPVEYOR_BUILD_FOLDER\contrib\win32\openssh\AppveyorHelper.psm1
-      Invoke-AppVeyorBuild
+      Invoke-AppVeyorBuild 
 
 after_build:
   - ps: |
