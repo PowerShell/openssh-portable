@@ -475,7 +475,7 @@ fileio_open(const char *path_utf8, int flags, mode_t mode)
 
 	if (handle == INVALID_HANDLE_VALUE) {
 		errno = errno_from_Win32LastError();
-		debug3("failed to open file:%s error:%d", path_utf8, GetLastError());
+		debug3("failed to open file:%S error:%d", path_utf16, GetLastError());
 		goto cleanup;
 	}
 

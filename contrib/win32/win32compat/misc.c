@@ -279,7 +279,7 @@ w32_fopen_utf8(const char *input_path, const char *mode)
 		goto cleanup;
 
 	if ((_wfopen_s(&f, wpath, wmode) != 0) || (f == NULL)) {
-		debug3("Failed to open file:%s error:%d", input_path, errno);
+		debug3("Failed to open file:%S error:%d", wpath, errno);
 		goto cleanup;
 	}	
 
@@ -900,7 +900,7 @@ realpath(const char *inputpath, char resolved[PATH_MAX])
 	size_t path_len = strlen(inputpath);
 	resolved[0] = '\0';
 
-	if (path_len > PATH_MAX - 1) {
+	if (path_len > PATH_MAX) {
 		errno = EINVAL;
 		return NULL;
 	}
@@ -915,6 +915,12 @@ realpath(const char *inputpath, char resolved[PATH_MAX])
 		} else {
 			memcpy_s(path, PATH_MAX, inputpath, strlen(inputpath));
 		}
+	}
+
+	path_len = strlen(path);
+	if (path_len > PATH_MAX) {
+		errno = EINVAL;
+		return NULL;
 	}
 
 	/* resolve root directory to the same */
