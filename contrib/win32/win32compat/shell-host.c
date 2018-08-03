@@ -808,7 +808,7 @@ ControlThread(LPVOID p)
 	* With the current resize logic, we have two issues
 	* 1) console screen buffer rows should be always 9999, irrespective of the user setting.
 	* 2) when ssh client window is resized it clears everything and gives a blank screen.
-	* For now, we are disabling this logic so window resize is not handled.
+	* For now we disable this logic.
 	*
 	* It looks to be a bug in our console hook event pty implementation.
 	*/
