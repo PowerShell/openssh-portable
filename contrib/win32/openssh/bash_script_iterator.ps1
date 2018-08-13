@@ -8,7 +8,8 @@ param (
 	# Individual bash test file (Ex - connect.sh)
 	[Parameter(Mandatory=$false)] [string[]] $TestFilePath,
 	[Parameter(Mandatory=$false)] [string] $ArtifactsPath=".",
-	[switch] $SkipCleanup
+	[switch] $SkipCleanup,
+	[switch] $SkipInstallSSHD
 )
 
 # Resolve the relative paths
@@ -38,24 +39,27 @@ if(Test-Path "$BashTestsPath\config.h" -PathType Leaf) {
 # store user directory
 $user_pwd=pwd | select -ExpandProperty Path
 
-# Make sure install-sshd.ps1 exists.
-if(!(Test-Path "$PSScriptRoot\install-sshd.ps1" -PathType Leaf)) {
-	Write-Error "$PSScriptRoot\install-sshd.ps1 doesn't exists"
-	exit
+# If we are using a SKU with desired OpenSSH binaries then we can skip these steps.
+if(!$SkipInstallSSHD) {
+	# Make sure install-sshd.ps1 exists.
+	if(!(Test-Path "$PSScriptRoot\install-sshd.ps1" -PathType Leaf)) {
+		Write-Error "$PSScriptRoot\install-sshd.ps1 doesn't exists"
+		exit
+	}
+
+	# Make sure uninstall-sshd.ps1 exists.
+	if(!(Test-Path "$PSScriptRoot\uninstall-sshd.ps1" -PathType Leaf)) {
+		Write-Error "$PSScriptRoot\uninstall-sshd.ps1 doesn't exists"
+		exit
+	}
+
+	#copy to binary folder and execute install-sshd.ps1
+	Copy-Item $PSScriptRoot\install-sshd.ps1 -Force $OpenSSHBinPath
+	Copy-Item $PSScriptRoot\uninstall-sshd.ps1 -Force $OpenSSHBinPath
+
+	# We need ssh-agent to be installed as service to run some bash tests.
+	& "$OpenSSHBinPath\install-sshd.ps1"
 }
-
-# Make sure uninstall-sshd.ps1 exists.
-if(!(Test-Path "$PSScriptRoot\uninstall-sshd.ps1" -PathType Leaf)) {
-	Write-Error "$PSScriptRoot\uninstall-sshd.ps1 doesn't exists"
-	exit
-}
-
-#copy to binary folder and execute install-sshd.ps1
-Copy-Item $PSScriptRoot\install-sshd.ps1 -Force $OpenSSHBinPath
-Copy-Item $PSScriptRoot\uninstall-sshd.ps1 -Force $OpenSSHBinPath
-
-# We need ssh-agent to be installed as service to run some bash tests.
-& "$OpenSSHBinPath\install-sshd.ps1"
 
 try
 {
@@ -71,8 +75,8 @@ try
 
 	if (!(Test-Path $registryPath)) {
 		# start and stop the sshd so that "HKLM:\Software\OpenSSH" registry path is created.
-		Start-Service sshd
-		Stop-Service sshd
+		Start-Service sshd -ErrorAction Stop
+		Stop-Service sshd -ErrorAction SilentlyContinue
 	}
 
 	Set-ItemProperty -Path $registryPath -Name $dfltShell -Value $ShellPath -Force
@@ -127,7 +131,7 @@ try
 	$env:BUILDDIR=$BUILDDIR
 	$env:TEST_WINDOWS_SSH=1
 	$user = &"$env:windir\system32\whoami.exe"
-	if($user.Contains($user.Contains($env:COMPUTERNAME.ToLower()))) {
+	if($user.Contains($env:COMPUTERNAME.ToLower())) {
 		# for local accounts, skip COMPUTERNAME
 		$user = Split-Path $user -leaf
 		$env:TEST_SSH_USER=$user
@@ -175,7 +179,9 @@ try
 		# User can specify individual test file path.
 		$all_tests=$TestFilePath
 	} else {
-		$all_tests=awk.exe 'sub(/.*LTESTS=/,""""){f=1} f{print $1; if (!/\\\\/) exit}' Makefile 
+		# picking the gawk.exe from bash folder.
+		# TODO - check if gawk.exe is present in WSL.
+		$all_tests=gawk.exe 'sub(/.*LTESTS=/,""""){f=1} f{print $1; if (!/\\\\/) exit}' Makefile 
 	}
 
 	foreach($test_case in $all_tests) {
@@ -244,8 +250,10 @@ finally
 		# remove temp test folder
 		&$ShellPath -c "rm -rf $BashTestsPath/temp_test"
 
-		# Uninstall the sshd, ssh-agent service
-		& "$PSScriptRoot\uninstall-sshd.ps1"
+		if(!$SkipInstallSSHD) {
+			# Uninstall the sshd, ssh-agent service
+			& "$PSScriptRoot\uninstall-sshd.ps1"
+		}
 
 		# Remove the test environment variable
 		Remove-Item ENV:\SSH_TEST_ENVIRONMENT
