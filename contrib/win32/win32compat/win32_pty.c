@@ -73,11 +73,19 @@ CreateConPty(const wchar_t *cmdline,
 
 	debug3("pty commandline: %ls", conhostCmdline);
 
+	/* 
+	 * process CTRL+C input.
+	 * Child processes will inherit this behavior.
+	 */
+	SetConsoleCtrlHandler(NULL, FALSE);
 	if (0 == CreateProcessW(NULL, conhostCmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, piPty)) {
 		debug("%s - failed to execute %ls, error:%d", __func__, conhostCmdline, GetLastError());
 		errno = EOTHER;
 		return -1;
 	}
+
+	/* disable Ctrl+C hander in this process*/
+	SetConsoleCtrlHandler(NULL, TRUE);
 
 	return 0;
 }
