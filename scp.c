@@ -529,7 +529,7 @@ main(int argc, char **argv)
 				convertToForwardslash(p);
 			else
 				convertToForwardslash(argdup);
-			if (glob(argdup, GLOB_NOCHECK, NULL, &g)) {
+			if (glob(argdup, GLOB_NOCHECK | GLOB_NOESCAPE, NULL, &g)) {
 				if (expandargc > argc)
 					newargv = xreallocarray(newargv, expandargc + 1, sizeof(*newargv));
 				newargv[expandargc++] = xstrdup(argdup);
