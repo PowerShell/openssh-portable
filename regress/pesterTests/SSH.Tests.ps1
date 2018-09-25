@@ -297,14 +297,14 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             @(Get-Content $kh).Count | Should Be 1
         }
 
-        It "ProxyCommand with absolute path" {        
-            cmd /c "ssh -o `"ProxyCommand=cmd.exe /c echo Invalid proxy 1>&2`" abc" 2>$stderrFile
+        It "ProxyCommand with absolute path" {            
+            & cmd /c "ssh -o ProxyCommand=`"cmd.exe /c echo Invalid proxy 1>&2`" abc 2>$stderrFile"
             $stderrFile | Should Contain "Invalid proxy"
             $stderrFile | Should Contain "Connection closed by remote host"
         }
 
         It "ProxyCommand with file name" {
-            cmd /c "ssh -o `"ProxyCommand=$($env:ComSpec) /c echo Invalid proxy 1>&2`" abc" 2>$stderrFile
+            & cmd /c "ssh -o ProxyCommand=`"$($env:ComSpec) /c echo Invalid proxy 1>&2`" abc 2>$stderrFile"
             $stderrFile | Should Contain "Invalid proxy"
             $stderrFile | Should Contain "Connection closed by remote host"
         }
