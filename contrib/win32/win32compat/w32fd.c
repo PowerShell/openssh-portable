@@ -1068,7 +1068,7 @@ spawn_child_internal(char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDL
 		cmdline_len += (DWORD)strlen(__progdir) + 1 + (DWORD)strlen(path) + 1 + 2;
 	else
 		cmdline_len += (DWORD)strlen(path) + 1 + 2;
-	
+
 	if (argv) {
 		t1 = argv;
 		while (*t1)

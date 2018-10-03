@@ -108,7 +108,6 @@ struct Channel {
 	int     rfd;		/* read fd */
 	int     wfd;		/* write fd */
 	int     efd;		/* extended fd */
-
 	int     sock;		/* sock fd */
 	int     ctl_chan;	/* control channel (multiplexed connections) */
 	int     isatty;		/* rfd is a tty */

@@ -300,7 +300,7 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 	PSECURITY_DESCRIPTOR pSD = NULL;
 	wchar_t sddl[SDDL_LENGTH + 1] = { 0 }, owner_ace[MAX_ACE_LENGTH + 1] = {0}, everyone_ace[MAX_ACE_LENGTH + 1] = {0};
 	wchar_t owner_access[MAX_ATTRIBUTE_LENGTH + 1] = {0}, everyone_access[MAX_ATTRIBUTE_LENGTH + 1] = {0}, *sid_utf16 = NULL;
-	PACL dacl = NULL;	
+	PACL dacl = NULL;
 	PSID owner_sid = NULL;
 
 	/*
@@ -1171,10 +1171,10 @@ fileio_symlink(const char *target, const char *linkpath)
 		goto cleanup;
 
 	/* Relative targets are relative to the link and not our current directory
-	* so attempt to calculate a resolvable path by removing the link file name
-	* leaving only the parent path and then append the relative link:
-	* C:\Path\Link with Link->SubDir\Target to C:\Path\SubDir\Target
-	*/
+	 * so attempt to calculate a resolvable path by removing the link file name
+	 * leaving only the parent path and then append the relative link:
+	 * C:\Path\Link with Link->SubDir\Target to C:\Path\SubDir\Target
+	 */
 	if (!is_absolute_path(target)) {
 		strcpy_s(target_modified, _countof(target_modified), linkpath_resolved);
 		convertToBackslash(target_modified);

@@ -513,9 +513,9 @@ int
 w32_chmod(const char *pathname, mode_t mode)
 {
 	/* TODO - 
-	* _wchmod() doesn't behave like unix "chmod" command.
-	* _wchmod() only toggles the read-only bit and it doesn't touch ACL.
-	*/	
+	 * _wchmod() doesn't behave like unix "chmod" command.
+	 * _wchmod() only toggles the read-only bit and it doesn't touch ACL.
+	 */	
 	int ret;
 	wchar_t *resolvedPathName_utf16 = resolved_path_utf16(pathname);
 	if (resolvedPathName_utf16 == NULL) 

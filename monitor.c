@@ -1926,3 +1926,4 @@ mm_answer_gss_userok(int sock, Buffer *m)
 }
 #endif /* GSSAPI */
 
+
