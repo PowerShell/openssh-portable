@@ -910,7 +910,7 @@ realpath(const char *inputpath, char resolved[PATH_MAX])
 
 	if (is_win_path) {
 		if (_strnicmp(inputpath, PROGRAM_DATA, strlen(PROGRAM_DATA)) == 0) {
-			strcat_s(path, PATH_MAX, __progdata);
+			strcpy_s(path, PATH_MAX, __progdata);
 			strcat_s(path, PATH_MAX, &inputpath[strlen(PROGRAM_DATA)]);
 		} else {
 			memcpy_s(path, PATH_MAX, inputpath, strlen(inputpath));
@@ -1584,198 +1584,70 @@ cleanup:
 	return ret;
 }
 
-/* builds session commandline. returns NULL with errno set on failure, caller should free returned string */
-char* 
-build_session_commandline(const char *shell, const char* shell_arg, const char *command)
+char * build_command_string( const char * command)
 {
-	enum sh_type { SH_OTHER, SH_CMD, SH_PS, SH_BASH, SH_CYGWIN } shell_type = SH_OTHER;
 	enum cmd_type { CMD_OTHER, CMD_SFTP, CMD_SCP } command_type = CMD_OTHER;
-	char *progdir = __progdir, *cmd_sp = NULL, *cmdline = NULL, *ret = NULL, *p;
-	int len, progdir_len = (int)strlen(progdir);
+	char *cmd_sp = NULL;
+	int len = 0;
 
-#define CMDLINE_APPEND(P, S)		\
-do {					\
-	int _S_len = (int)strlen(S);		\
-	memcpy((P), (S), _S_len);	\
-	(P) += _S_len;			\
-} while(0)
+	if (!command)
+		return NULL;
 
-	/* get shell type */
-	if (strstr(shell, "system32\\cmd"))
-		shell_type = SH_CMD;
-	else if (strstr(shell, "powershell"))
-		shell_type = SH_PS;
-	else if (strstr(shell, "\\bash"))
-		shell_type = SH_BASH;
-	else if (strstr(shell, "cygwin")) {
-		shell_type = SH_CYGWIN;
+	/*
+	* special case where incoming command needs to be adjusted 
+	* identify scp and sftp sessions
+	* we want to launch scp and sftp executables from the same binary directory
+	* that sshd is hosted in. This will facilitate hosting and evaluating
+	* multiple versions of OpenSSH at the same time.
+	*/
+
+	int command_len;
+	const char *command_args = NULL;
+
+	if (!command)
+		return NULL;
+	command_len = (int)strlen(command);
+	/*TODO - replace numbers below with readable compile time operators*/
+	if (command_len >= 13 && _memicmp(command, "internal-sftp", 13) == 0) {
+		command_type = CMD_SFTP;
+		command_args = command + 13;
 	}
+	else if (command_len >= 11 && _memicmp(command, "sftp-server", 11) == 0) {
+		command_type = CMD_SFTP;
 
-	/* special case where incoming command needs to be adjusted */
-	do {
-		/*
-		* identify scp and sftp sessions
-		* we want to launch scp and sftp executables from the same binary directory
-		* that sshd is hosted in. This will facilitate hosting and evaluating
-		* multiple versions of OpenSSH at the same time.
-		*
-		* currently we can only accomodate this for cmd.exe, since cmd.exe simply executes 
-		* its commandline without applying CRT or shell specific rules
-		*
-		* Ex.
-		* this works
-		*	cmd /c "c:\program files\sftp" -d
-		* this following wouldn't work in powershell, cygwin's or WSL bash unless we put
-		* some shell specific rules 
-		*	powershell -c "c:\program files\scp" -t
-		*	cygwin\bash -c "c:\program files\scp" -t
-		*	bash -c "c:\program files\scp" -t
-		* 
-		* for now, for all non-cmd shells, we launch scp and sftp-server directly -
-		*	shell -c "scp.exe -t"
-		* note that .exe extension and case matters for WSL bash
-		* note that double quotes matter for WSL and Cygwin bash, they dont matter for PS
-		*
-		* consequence - 
-		* for non-cmd shells - sftp and scp installation path is expected to be in machine wide PATH
-		* 
-		*/
-
-		int command_len;
-		const char *command_args = NULL;
-
-		if (!command)
-			break;
-		command_len = (int)strlen(command);
-		/*TODO - replace numbers below with readable compile time operators*/
-		if (command_len >= 13 && _memicmp(command, "internal-sftp", 13) == 0) {
-			command_type = CMD_SFTP;
-			command_args = command + 13;
-		} else if (command_len >= 11 && _memicmp(command, "sftp-server", 11) == 0) {
-			command_type = CMD_SFTP;
-
-			/* account for possible .exe extension */
-			if (command_len >= 15 && _memicmp(command + 11, ".exe", 4) == 0)
-				command_args = command + 15;
-			else
-				command_args = command + 11;
-		} else if (command_len >= 3 && _memicmp(command, "scp", 3) == 0) {
-			command_type = CMD_SCP;
-
-			/* account for possible .exe extension */
-			if (command_len >= 7 && _memicmp(command + 3, ".exe", 4) == 0)
-				command_args = command + 7;
-			else
-				command_args = command + 3;
-		}
-
-		if (command_type == CMD_OTHER)
-			break;
-
-		len = 0;
-		len += progdir_len + 4; /* account for " around */
-		len += command_len + 4; /* account for possible .exe addition */
-
-		if ((cmd_sp = malloc(len)) == NULL) {
-			errno = ENOMEM;
-			goto done;
-		}
-
-		p = cmd_sp;
-
-		if ((shell_type == SH_CMD) || (shell_type == SH_CYGWIN)) {
-			CMDLINE_APPEND(p, "\"");
-			CMDLINE_APPEND(p, progdir);
-
-			if (command_type == CMD_SCP)
-				CMDLINE_APPEND(p, "\\scp.exe\"");
-			else
-				CMDLINE_APPEND(p, "\\sftp-server.exe\"");
-		} else {
-			if (command_type == CMD_SCP)
-				CMDLINE_APPEND(p, "scp.exe");
-			else
-				CMDLINE_APPEND(p, "sftp-server.exe");
-		}
-
-		if (shell_type == SH_CYGWIN) {
-			*p = '\0';
-			convertToForwardslash(cmd_sp);
-		}
-
-		CMDLINE_APPEND(p, command_args);
-		*p = '\0';
-		command = cmd_sp;
-	} while (0);
-
-	len = 0;
-	len +=(int) strlen(shell) + 3;/* 3 for " around shell path and trailing space */
-	if (command) {
-		len += 15; /* for shell command argument, typically -c or /c */
-		
-		int extra_buffer_len = 0;
-		if (is_bash_test_env())
-			extra_buffer_len = 50; /* 50 - To escape double quotes or backslash in command (Ex - yes-head.sh) */
-
-		len += (int)strlen(command) + 5 + extra_buffer_len; /* 5 for possible " around command and null term*/
-	}
-	
-	if ((cmdline = malloc(len)) == NULL) {
-		errno = ENOMEM;
-		goto done;
-	}
-
-	p = cmdline;
-	CMDLINE_APPEND(p, "\"");
-	CMDLINE_APPEND(p, shell);
-	CMDLINE_APPEND(p, "\"");
-	if (command) {
-		if (shell_arg) {
-			CMDLINE_APPEND(p, " ");
-			CMDLINE_APPEND(p, shell_arg);
-			CMDLINE_APPEND(p, " ");
-		}
-		else if (shell_type == SH_CMD)
-			CMDLINE_APPEND(p, " /c ");
+		/* account for possible .exe extension */
+		if (command_len >= 15 && _memicmp(command + 11, ".exe", 4) == 0)
+			command_args = command + 15;
 		else
-			CMDLINE_APPEND(p, " -c ");
-
-		/* Add double quotes around command */		
-		CMDLINE_APPEND(p, "\"");
-		if (is_bash_test_env()) {
-			/* Escape the double quotes and backslash as per CRT rules.
-			 * Right now this logic is applied only in bash test environment.
-			 * TODO - verify if this logic is applicable to all the shells.
-			 */
-			for (int i = 0; i < strlen(command); i++) {
-				if (command[i] == '\\') {
-					CMDLINE_APPEND(p, "\\");
-					CMDLINE_APPEND(p, "\\"); // For every backslash add another backslash.
-				}
-				else if (command[i] == '\"') {
-					CMDLINE_APPEND(p, "\\");  // Add backslash for every double quote.
-					CMDLINE_APPEND(p, "\"");
-				}
-				else {
-					*p++ = command[i];
-				}
-			}
-		} else {
-			CMDLINE_APPEND(p, command);
-		}
-
-		CMDLINE_APPEND(p, "\"");
+			command_args = command + 11;
 	}
-	*p = '\0';
-	ret = cmdline;
-	cmdline = NULL;
-done:
-	if (cmd_sp)
-		free(cmd_sp);
-	if (cmdline)
-		free(cmdline);
+	else if (command_len >= 3 && _memicmp(command, "scp", 3) == 0) {
+		command_type = CMD_SCP;
 
-	return ret;
+		/* account for possible .exe extension */
+		if (command_len >= 7 && _memicmp(command + 3, ".exe", 4) == 0)
+			command_args = command + 7;
+		else
+			command_args = command + 3;
+	}
+
+	len = command_len + 5; /* account for possible .exe addition and null term */
+	if ((cmd_sp = malloc(len)) == NULL) {
+		errno = ENOMEM;
+		return NULL;
+	}
+	memset(cmd_sp, '\0', len);
+	if (command_type == CMD_SCP) {
+		strcpy_s(cmd_sp, len, "scp.exe");
+		strcat_s(cmd_sp, len, command_args);
+	}
+	else if (command_type == CMD_SFTP) {
+		strcpy_s(cmd_sp, len, "sftp-server.exe");
+		strcat_s(cmd_sp, len, command_args);
+	}
+	else
+		strcpy_s(cmd_sp, len, command);
+	return cmd_sp;
 }
 
 BOOL
@@ -1800,14 +1672,14 @@ bash_to_win_path(const char *in, char *out, const size_t out_len)
 {
 	int retVal = 0;
 	const size_t cygwin_path_prefix_len = strlen(CYGWIN_PATH_PREFIX);
+	memset(out, 0, out_len);
 	if (_strnicmp(in, CYGWIN_PATH_PREFIX, cygwin_path_prefix_len) == 0) {
-		memset(out, 0, out_len);
 		out[0] = in[cygwin_path_prefix_len];
 		out[1] = ':';
 		strcat_s(out, out_len, &in[cygwin_path_prefix_len + 1]);
 		retVal = 1;
 	} else {
-		strcat_s(out, out_len, in);
+		strcpy_s(out, out_len, in);
 	}
 
 	return retVal;

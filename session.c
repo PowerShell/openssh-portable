@@ -578,18 +578,17 @@ cleanup :
 	return ret;
 }
 
-int register_child(void* child, unsigned long pid);
-char* build_session_commandline(const char *, const char *, const char *);
+char * build_command_string( const char *);
 
 int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	int pipein[2], pipeout[2], pipeerr[2], r, ret = -1;
 	wchar_t *exec_command_w = NULL;
 	char *exec_command = NULL;
-	HANDLE job = NULL;
+	HANDLE job = NULL, process_handle;
 	extern char* shell_command_option;
-	
+
 	/* Create three pipes for stdin, stdout and stderr */
-	if (pipe(pipein) == -1 || pipe(pipeout) == -1 || pipe(pipeerr) == -1) 
+	if (pipe(pipein) == -1 || pipe(pipeout) == -1 || pipe(pipeerr) == -1)
 		goto cleanup;
 
 	set_nonblock(pipein[0]);
@@ -602,8 +601,8 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	fcntl(pipein[1], F_SETFD, FD_CLOEXEC);
 	fcntl(pipeout[0], F_SETFD, FD_CLOEXEC);
 	fcntl(pipeerr[0], F_SETFD, FD_CLOEXEC);
-	
-	/* setup Environment varibles */ 
+
+	/* setup Environment varibles */
 	do {
 		static int environment_set = 0;
 
@@ -624,71 +623,76 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		pty = 0;
 	}
 
-	exec_command = build_session_commandline(s->pw->pw_shell, shell_command_option, command);
-	if (exec_command == NULL)
-		goto cleanup;
+	JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info;
+	HANDLE job_dup;
+	pid_t pid = -1;
+	exec_command = build_command_string(command);
 
-	/* start the process */
-	{
-		PROCESS_INFORMATION pi;
-		STARTUPINFOW si;
-		JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info;
-		HANDLE job_dup;
-
-		memset(&si, 0, sizeof(STARTUPINFO));
-		si.cb = sizeof(STARTUPINFO);
-		si.dwXSize = 5;
-		si.dwYSize = 5;
-		si.dwXCountChars = s->col;
-		si.dwYCountChars = s->row;
-		si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESIZE | STARTF_USECOUNTCHARS;
-		
-		si.hStdInput = (HANDLE)w32_fd_to_handle(pipein[0]);
-		si.hStdOutput = (HANDLE)w32_fd_to_handle(pipeout[1]);
-		si.hStdError = (HANDLE)w32_fd_to_handle(pipeerr[1]);
-		si.lpDesktop = NULL;
-
-		if ((exec_command_w = utf8_to_utf16(exec_command)) == NULL)
+	if (pty) {
+		if ((exec_command_w = utf8_to_utf16(s->pw->pw_shell)) == NULL)
 			goto cleanup;
-
-		debug("Executing command: %s with%spty", exec_command, pty? " ":" no ");
-		
-		if (pty) {
-			fcntl(s->ptyfd, F_SETFD, FD_CLOEXEC);
-			if (exec_command_with_pty(exec_command_w, &si, &pi, s->ttyfd) == -1)
-				goto cleanup;
-			close(s->ttyfd);
-			s->ttyfd = -1;
-		} else if (!CreateProcessW(NULL, exec_command_w, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
-			errno = EOTHER;
-			error("ERROR. Cannot create process (%u).\n", GetLastError());
+		fcntl(s->ptyfd, F_SETFD, FD_CLOEXEC);
+		if (exec_command_with_pty(&pid, exec_command_w, pipein[0], pipeout[1], pipeerr[1], s->col, s->row, s->ttyfd) == -1)
 			goto cleanup;
-		}
-
-		CloseHandle(pi.hThread);
-		memset(&job_info, 0, sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
-		job_info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
-
-		/* 
-		 * assign job object to control processes spawned by shell 
-		 * 1. create job object
-		 * 2. assign child to job object
-		 * 3. duplicate job handle into child so it would be the last to close it
-		 */
-		if ((job = CreateJobObjectW(NULL, NULL)) == NULL ||
-		    !SetInformationJobObject(job, JobObjectExtendedLimitInformation, &job_info, sizeof(job_info)) ||
-		    !AssignProcessToJobObject(job, pi.hProcess) ||
-		    !DuplicateHandle(GetCurrentProcess(), job, pi.hProcess, &job_dup, 0, FALSE, DUPLICATE_SAME_ACCESS)) {
-			error("cannot associate job object: %d", GetLastError());			
-			errno = EOTHER;
-			TerminateProcess(pi.hProcess, 255);
-			CloseHandle(pi.hProcess);
-			goto cleanup;
-		}
-
-		s->pid = pi.dwProcessId;
-		register_child(pi.hProcess, pi.dwProcessId);
+		close(s->ttyfd);
+		s->ttyfd = -1;
 	}
+	else {
+		posix_spawn_file_actions_t actions;
+		char *spawn_argv[4] = { NULL, };
+		spawn_argv[0] = s->pw->pw_shell;
+		if (exec_command) {
+			if (shell_command_option) {
+				spawn_argv[1] = shell_command_option;
+			}
+			else if (strstr(s->pw->pw_shell, "system32\\cmd"))
+				spawn_argv[1] = "/c";
+			else
+				spawn_argv[1] = "-c";
+			spawn_argv[2] = exec_command;
+		}
+
+		if (posix_spawn_file_actions_init(&actions) != 0 ||
+			posix_spawn_file_actions_adddup2(&actions, pipein[0], STDIN_FILENO) != 0 ||
+			posix_spawn_file_actions_adddup2(&actions, pipeout[1], STDOUT_FILENO) != 0 ||
+			posix_spawn_file_actions_adddup2(&actions, pipeerr[1], STDERR_FILENO) != 0) {
+			errno = EOTHER;
+			error("posix_spawn initialization failed");
+			goto cleanup;
+		} 
+		if (posix_spawn(&pid, spawn_argv[0], &actions, NULL, spawn_argv, NULL) != 0) {
+			errno = EOTHER;
+			error("spawn_child_internal: %s", strerror(errno));			
+			goto cleanup;
+		}
+		posix_spawn_file_actions_destroy(&actions);
+	}
+
+	memset(&job_info, 0, sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
+	job_info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+
+	if((process_handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid)) == NULL) {
+		errno = EOTHER;
+		error("cannot get process handle: %d", GetLastError());
+		goto cleanup;
+	}
+
+	/*
+		* assign job object to control processes spawned
+		* 1. create job object
+		* 2. assign child to job object
+		* 3. duplicate job handle into child so it would be the last to close it
+		*/
+	if ((job = CreateJobObjectW(NULL, NULL)) == NULL ||
+		!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &job_info, sizeof(job_info)) ||
+		!AssignProcessToJobObject(job, process_handle) ||
+		!DuplicateHandle(GetCurrentProcess(), job, process_handle, &job_dup, 0, FALSE, DUPLICATE_SAME_ACCESS)) {
+		errno = EOTHER;
+		error("cannot associate job object: %d", GetLastError());
+		TerminateProcess(process_handle, 255);
+		goto cleanup;
+	}
+	s->pid = pid;
 
 	/* Close the child sides of the socket pairs. */
 	close(pipein[0]);
@@ -714,13 +718,14 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	ret = 0;
 
 cleanup:
-	if (!exec_command)
-		free(exec_command);
-	if (!exec_command_w)
-		free(exec_command_w);
 	if (job)
 		CloseHandle(job);
-
+	if(exec_command)
+		free(exec_command);
+	if (exec_command_w)
+		free(exec_command_w);
+	if (process_handle)
+		CloseHandle(process_handle);
 	return ret;
 }
 
