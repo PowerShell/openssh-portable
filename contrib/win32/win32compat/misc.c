@@ -1846,3 +1846,11 @@ debug_assert_internal()
 	DebugBreak();
 #endif
 }
+
+char 
+*crypt(const char *key, const char *salt)
+{
+	verbose("%s is not supported", __func__);
+	errno = ENOTSUP;
+	return NULL;
+}
