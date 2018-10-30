@@ -1816,7 +1816,7 @@ bash_to_win_path(const char *in, char *out, const size_t out_len)
 int
 getpeereid(int s, uid_t *euid, gid_t *egid)
 {
-	error("%s is not supported", __func__);
+	verbose("%s is not supported", __func__);
 	errno = ENOTSUP;
 	return -1;
 }
@@ -1826,7 +1826,7 @@ getrrsetbyname(const char *hostname, unsigned int rdclass,
 	unsigned int rdtype, unsigned int flags,
 	struct rrsetinfo **res)
 {
-	error("%s is not supported", __func__);
+	verbose("%s is not supported", __func__);
 	errno = ENOTSUP;
 	return -1;
 }
@@ -1834,6 +1834,15 @@ getrrsetbyname(const char *hostname, unsigned int rdclass,
 void
 freerrset(struct rrsetinfo *rrset)
 {
-	error("%s is not supported", __func__);
+	verbose("%s is not supported", __func__);
 	return;
+}
+
+void 
+debug_assert_internal()
+{
+	/* debug break on non-release builds */
+#ifndef NDEBUG
+	DebugBreak();
+#endif
 }
