@@ -1854,3 +1854,26 @@ char
 	errno = ENOTSUP;
 	return NULL;
 }
+
+int 
+w32_system(const char *command)
+{
+	int ret = -1;
+	wchar_t *command_w = NULL; 
+
+	if (!command) {
+		errno = ENOTSUP;
+		goto cleanup;
+	}
+
+	if ((command_w = utf8_to_utf16(command)) == NULL)
+		goto cleanup;
+
+	ret = _wsystem(command_w);
+
+cleanup:
+	if (command_w)
+		free(command_w);
+
+	return ret;
+}

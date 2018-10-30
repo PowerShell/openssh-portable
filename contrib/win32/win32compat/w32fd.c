@@ -1031,7 +1031,7 @@ w32_fsync(int fd)
 
 int fork() 
 { 
-	error("fork is not supported"); 
+	verbose("fork is not supported"); 
 	return -1;
 }
 
