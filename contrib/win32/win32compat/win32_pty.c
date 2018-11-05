@@ -33,6 +33,8 @@
 #include "inc\fcntl.h"
 #include "misc_internal.h"
 
+static int isConpty = -1;
+
 // Return Value: 0 for success, -1 for failure
 int
 CreateConPty(const wchar_t *cmdline,
@@ -97,6 +99,9 @@ is_conpty_supported()
 	wchar_t kernelbase_dll_path[PATH_MAX] = { 0, };
 	HMODULE hm_kernelbase = NULL;
 	int retVal = 0;
+
+	if (isConpty != -1)
+		return isConpty;
 
 	if (!GetSystemDirectoryW(system32_path, PATH_MAX)) {
 		error("failed to get system directory");
