@@ -33,8 +33,6 @@
 #include "inc\fcntl.h"
 #include "misc_internal.h"
 
-static int isConpty = -1;
-
 // Return Value: 0 for success, -1 for failure
 int
 CreateConPty(const wchar_t *cmdline,
@@ -98,11 +96,12 @@ is_conpty_supported()
 	wchar_t system32_path[PATH_MAX] = { 0, };
 	wchar_t kernelbase_dll_path[PATH_MAX] = { 0, };
 	HMODULE hm_kernelbase = NULL;
-	int retVal = 0;
+	static int isConpty = -1;
 
 	if (isConpty != -1)
 		return isConpty;
 
+	isConpty = 0;
 	if (!GetSystemDirectoryW(system32_path, PATH_MAX)) {
 		error("failed to get system directory");
 		goto done;
@@ -121,13 +120,13 @@ is_conpty_supported()
 		goto done;
 	}
 
-	retVal = 1;
-
+	isConpty = 1;
+	debug3("This windows OS supports conpty");
 done:
-	if (!retVal)
+	if (!isConpty)
 		debug3("This windows OS doesn't support conpty");
 
-	return retVal;
+	return isConpty;
 }
 
 int exec_command_with_pty(wchar_t* cmd, STARTUPINFOW* si, PROCESS_INFORMATION* pi, int ttyfd)
@@ -135,6 +134,8 @@ int exec_command_with_pty(wchar_t* cmd, STARTUPINFOW* si, PROCESS_INFORMATION* p
 	HANDLE ttyh = (HANDLE)w32_fd_to_handle(ttyfd);
 	wchar_t pty_cmdline[MAX_CMD_LEN] = { 0, };
 	int ret = -1;
+
+	is_conpty_supported();
 
 	if (is_conpty_supported())
 		return CreateConPty(cmd, (short)si->dwXCountChars, (short)si->dwYCountChars, si->hStdInput, si->hStdOutput, ttyh, pi);
