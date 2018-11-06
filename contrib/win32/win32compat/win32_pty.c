@@ -135,8 +135,6 @@ int exec_command_with_pty(wchar_t* cmd, STARTUPINFOW* si, PROCESS_INFORMATION* p
 	wchar_t pty_cmdline[MAX_CMD_LEN] = { 0, };
 	int ret = -1;
 
-	is_conpty_supported();
-
 	if (is_conpty_supported())
 		return CreateConPty(cmd, (short)si->dwXCountChars, (short)si->dwYCountChars, si->hStdInput, si->hStdOutput, ttyh, pi);
 
