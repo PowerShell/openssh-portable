@@ -84,7 +84,7 @@ GetConsoleOutputHandle()
 	static HANDLE	s_hOutputConsole = INVALID_HANDLE_VALUE;
 
 	if (s_hOutputConsole != INVALID_HANDLE_VALUE)
-		s_hOutputConsole;
+		return s_hOutputConsole;
 
 	sa.nLength = sizeof(SECURITY_ATTRIBUTES);
 	sa.lpSecurityDescriptor = NULL;
@@ -107,7 +107,7 @@ GetConsoleInputHandle()
 	static HANDLE	s_hInputConsole = INVALID_HANDLE_VALUE;
 
 	if (s_hInputConsole != INVALID_HANDLE_VALUE)
-		s_hInputConsole;
+		return s_hInputConsole;
 
 	sa.nLength = sizeof(SECURITY_ATTRIBUTES);
 	sa.lpSecurityDescriptor = NULL;
