@@ -154,34 +154,38 @@ int exec_command_with_pty(int * pid, char* cmd, int in, int out, int err, unsign
 	si.hStdError = (HANDLE)w32_fd_to_handle(err);
 	si.lpDesktop = NULL;
 
-	if (is_conpty_supported())
-		return CreateConPty(cmd_w, (short)si.dwXCountChars, (short)si.dwYCountChars, si.hStdInput, si.hStdOutput, ttyh, &pi);
+	do {
+		if (is_conpty_supported()) {
+			ret = CreateConPty(cmd_w, (short)si.dwXCountChars, (short)si.dwYCountChars, si.hStdInput, si.hStdOutput, ttyh, &pi);
+			break;
+		}
 
-	/* launch via  "ssh-shellhost" -p command*/
+		/* launch via  "ssh-shellhost" -p command*/
 
-	_snwprintf_s(pty_cmdline, MAX_CMD_LEN, MAX_CMD_LEN, L"\"%ls\\ssh-shellhost.exe\" ---pty %ls", __wprogdir, cmd_w);
-	/* 
-	 * In PTY mode, ssh-shellhost takes stderr as control channel
-	 * TODO - fix this and pass control channel pipe as a command line parameter
-	 */
-	si.hStdError = ttyh;
-	debug3("pty commandline: %ls", pty_cmdline);
+		_snwprintf_s(pty_cmdline, MAX_CMD_LEN, MAX_CMD_LEN, L"\"%ls\\ssh-shellhost.exe\" ---pty %ls", __wprogdir, cmd_w);
+		/*
+		 * In PTY mode, ssh-shellhost takes stderr as control channel
+		 * TODO - fix this and pass control channel pipe as a command line parameter
+		 */
+		si.hStdError = ttyh;
+		debug3("pty commandline: %ls", pty_cmdline);
 
-	if (CreateProcessW(NULL, pty_cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
-		if (register_child(pi.hProcess, pi.dwProcessId) == -1) {
-			TerminateProcess(pi.hProcess, 0);
-			CloseHandle(pi.hProcess);
+		if (CreateProcessW(NULL, pty_cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+			if (register_child(pi.hProcess, pi.dwProcessId) == -1) {
+				TerminateProcess(pi.hProcess, 0);
+				CloseHandle(pi.hProcess);
+				goto done;
+			}
+			CloseHandle(pi.hThread);
+		}
+		else {
+			debug("%s - failed to execute %ls, error:%d", __func__, pty_cmdline, GetLastError());
+			errno = EOTHER;
 			goto done;
 		}
-		CloseHandle(pi.hThread);
-	}
-	else {
-		debug("%s - failed to execute %ls, error:%d", __func__, pty_cmdline, GetLastError());
-		errno = EOTHER;
-		goto done;
-	}
+		ret = 0;
+	} while (0);
 	*pid = pi.dwProcessId;
-	ret = 0;
 
 done:
 	if (cmd_w)
