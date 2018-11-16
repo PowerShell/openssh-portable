@@ -91,7 +91,6 @@ int exec_command_with_pty(int * pid, char* cmd, int in, int out, int err, unsign
 	memset(&si, 0, sizeof(STARTUPINFO));
 	si.cb = sizeof(STARTUPINFO);
 	si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESIZE | STARTF_USECOUNTCHARS;
-
 	si.hStdInput = (HANDLE)w32_fd_to_handle(in);
 	si.hStdOutput = (HANDLE)w32_fd_to_handle(out);
 	si.lpDesktop = NULL;
@@ -145,11 +144,11 @@ int exec_command_with_pty(int * pid, char* cmd, int in, int out, int err, unsign
 		errno = EOTHER;
 		goto done;
 	}
-
 	*pid = pi.dwProcessId;
 	ret = 0;
 
 done:
+	/* disable Ctrl+C hander in this process*/
 	SetConsoleCtrlHandler(NULL, TRUE);
 	if (cmd_w)
 		free(cmd_w);
