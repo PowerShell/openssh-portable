@@ -29,6 +29,7 @@
 #include <time.h>
 
 #include "inc\utf.h"
+#include "inc\pwd.h"
 #include "debug.h"
 #include "gssapi.h"
 
@@ -747,9 +748,33 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 		else return GSS_S_FAILURE;
 	}
 
+	/* only do checks on the finalized context (no continue needed) */
+	if (status == SEC_E_OK)
+	{
+		/* validate accepted context is actually a host service ticket */
+		SecPkgContext_NativeNamesW target;
+		if (SecFunctions->QueryContextAttributesW((*context_handle == GSS_C_NO_CONTEXT) ? &sspi_context_handle : *context_handle,
+			SECPKG_ATTR_NATIVE_NAMES, &target) != SEC_E_OK)
+		{
+			return GSS_S_FAILURE;
+		}
+
+		const int valid_spn = _wcsnicmp(target.sServerName, L"host/", wcslen(L"host/")) == 0;
+		FreeContextBuffer(target.sServerName);
+		FreeContextBuffer(target.sClientName);
+		if (valid_spn == 0)
+		{
+			debug("client passed an invalid principal name");
+			return GSS_S_FAILURE;
+		}
+	}
+
 	/* copy the context handler to the caller */
-	*context_handle = malloc(sizeof(CtxtHandle));
-	memcpy(*context_handle, &sspi_context_handle, sizeof(CtxtHandle));
+	if (*context_handle == GSS_C_NO_CONTEXT)
+	{
+		*context_handle = malloc(sizeof(CtxtHandle));
+		memcpy(*context_handle, &sspi_context_handle, sizeof(CtxtHandle));
+	}
 
 	/* if requested, translate returned flags that are actually available */
 	if (ret_flags != NULL)
@@ -783,10 +808,20 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 		*time_rec = (OM_uint32)(expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
 	}
 
-	/* extract the username from the context handle will be domain\samaccountname format */
-	SecPkgContext_NamesW NamesBuffer;
-	SecFunctions->QueryContextAttributesW(*context_handle, SECPKG_ATTR_NAMES, &NamesBuffer);
-	*src_name = utf16_to_utf8(NamesBuffer.sUserName);
+	/* only do checks on the finalized context (no continue needed) */
+	if (status == SEC_E_OK)
+	{
+		/* extract the username from the context handle will be domain\samaccountname format */
+		SecPkgContext_NamesW NamesBuffer;
+		if (SecFunctions->QueryContextAttributesW(*context_handle, SECPKG_ATTR_NAMES, &NamesBuffer) != SEC_E_OK)
+		{
+			return GSS_S_FAILURE;
+		}
+
+		/* copy to internal utf8 string and free the sspi string */
+		*src_name = utf16_to_utf8(NamesBuffer.sUserName);
+		FreeContextBuffer(NamesBuffer.sUserName);
+	}
 
 	/* copy output token to output buffer */
 	output_token->length = output_buffer_token.cbBuffer;
@@ -895,10 +930,12 @@ ssh_gssapi_krb5_userok(ssh_gssapi_client *client, char *name)
 	 * via SSPI.  If this check fails, the authentication process will move
 	 * onto the next available method.
 	 */
-	if (_stricmp(client->displayname.value, name) != 0)
+	struct passwd * user = getpwnam(name);
+	if (_stricmp(client->displayname.value, user->pw_name) != 0)
 	{
 		/* check failed */
-		debug("sspi user '%s' did not match user-provided, resolved user '%s'", client, name);
+		debug("sspi user '%s' did not match user-provided, resolved user '%s'", 
+			(char *) client->displayname.value, name);
 		return 0;
 	}
 
