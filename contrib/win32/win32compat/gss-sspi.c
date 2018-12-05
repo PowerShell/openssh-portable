@@ -510,7 +510,7 @@ gss_init_sec_context(
 	output_token->length = output_buffer_token.cbBuffer;
 	output_token->value = malloc(output_token->length);
 	memcpy(output_token->value, output_buffer_token.pvBuffer, output_token->length);
-	SecFunctions->FreeContextBuffer(&output_buffer);
+	SecFunctions->FreeContextBuffer(output_buffer_token.pvBuffer);
 
 	/* if requested, translate returned flags that are actually available */
 	if (ret_flags != NULL)
@@ -827,7 +827,7 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 	output_token->length = output_buffer_token.cbBuffer;
 	output_token->value = malloc(output_token->length);
 	memcpy(output_token->value, output_buffer_token.pvBuffer, output_token->length);
-	SecFunctions->FreeContextBuffer(&output_buffer);
+	SecFunctions->FreeContextBuffer(output_buffer_token.pvBuffer);
 
 	/* get the user token for impersonation */
 	if (delegated_cred_handle != NULL)
