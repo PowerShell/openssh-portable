@@ -176,7 +176,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_WIN32_WINNT=0x501;WIN32;_DEBUG;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;$(Zlib-Src-Path);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -187,10 +187,11 @@
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"</Command>
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"
+powershell.exe -NoProfile -NoLogo -ExecutionPolicy Bypass -File "$(SolutionDir)GetZlib.ps1" -SourceDirectory "$(Zlib-Src-Path)\." -TargetLibrary "$(OpenSSH-Lib-Path)$(Platform)\$(Configuration)\zlib.lib"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h; fetch libressl sdk; fetch zlib source</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
@@ -210,7 +211,7 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_WIN32_WINNT=0x501;WIN32;_DEBUG;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;$(Zlib-Src-Path);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -221,10 +222,11 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"</Command>
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"
+powershell.exe -NoProfile -NoLogo -ExecutionPolicy Bypass -File "$(SolutionDir)GetZlib.ps1" -SourceDirectory "$(Zlib-Src-Path)\." -TargetLibrary "$(OpenSSH-Lib-Path)$(Platform)\$(Configuration)\zlib.lib"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h; fetch libressl sdk; fetch zlib source</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
@@ -244,7 +246,7 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_WIN32_WINNT=0x501;WIN32;_DEBUG;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;$(Zlib-Src-Path);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -255,10 +257,11 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"</Command>
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"
+powershell.exe -NoProfile -NoLogo -ExecutionPolicy Bypass -File "$(SolutionDir)GetZlib.ps1" -SourceDirectory "$(Zlib-Src-Path)\." -TargetLibrary "$(OpenSSH-Lib-Path)$(Platform)\$(Configuration)\zlib.lib"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h; fetch libressl sdk; fetch zlib source</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
@@ -278,7 +281,7 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_WIN32_WINNT=0x501;WIN32;_DEBUG;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;$(Zlib-Src-Path);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -289,10 +292,11 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"</Command>
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"
+powershell.exe -NoProfile -NoLogo -ExecutionPolicy Bypass -File "$(SolutionDir)GetZlib.ps1" -SourceDirectory "$(Zlib-Src-Path)\." -TargetLibrary "$(OpenSSH-Lib-Path)$(Platform)\$(Configuration)\zlib.lib"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h; fetch libressl sdk; fetch zlib source</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
@@ -314,7 +318,7 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_WIN32_WINNT=0x501;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;$(Zlib-Src-Path);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -327,10 +331,11 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"</Command>
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"
+powershell.exe -NoProfile -NoLogo -ExecutionPolicy Bypass -File "$(SolutionDir)GetZlib.ps1" -SourceDirectory "$(Zlib-Src-Path)\." -TargetLibrary "$(OpenSSH-Lib-Path)$(Platform)\$(Configuration)\zlib.lib"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h; fetch libressl sdk; fetch zlib source</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
@@ -352,7 +357,7 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_WIN32_WINNT=0x501;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;$(Zlib-Src-Path);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -365,10 +370,11 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"</Command>
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"
+powershell.exe -NoProfile -NoLogo -ExecutionPolicy Bypass -File "$(SolutionDir)GetZlib.ps1" -SourceDirectory "$(Zlib-Src-Path)\." -TargetLibrary "$(OpenSSH-Lib-Path)$(Platform)\$(Configuration)\zlib.lib"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h; fetch libressl sdk; fetch zlib source</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
@@ -390,7 +396,7 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_WIN32_WINNT=0x501;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;$(Zlib-Src-Path);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -403,10 +409,11 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"</Command>
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"
+powershell.exe -NoProfile -NoLogo -ExecutionPolicy Bypass -File "$(SolutionDir)GetZlib.ps1" -SourceDirectory "$(Zlib-Src-Path)\." -TargetLibrary "$(OpenSSH-Lib-Path)$(Platform)\$(Configuration)\zlib.lib"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h; fetch libressl sdk; fetch zlib source</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
@@ -428,7 +435,7 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_WIN32_WINNT=0x501;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat\includes;$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;$(Zlib-Src-Path);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -441,10 +448,11 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"</Command>
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1"
+powershell.exe -NoProfile -NoLogo -ExecutionPolicy Bypass -File "$(SolutionDir)GetZlib.ps1" -SourceDirectory "$(Zlib-Src-Path)\." -TargetLibrary "$(OpenSSH-Lib-Path)$(Platform)\$(Configuration)\zlib.lib"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h; fetch libressl sdk; fetch zlib source</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
