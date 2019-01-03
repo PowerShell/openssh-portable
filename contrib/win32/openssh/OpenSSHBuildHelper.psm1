@@ -137,6 +137,17 @@ function Write-BuildMsg
 
 <#
 .Synopsis
+    Returns $true if the PowerShell prompt is elevated, i.e. is running as Administrator, and $false otherwise.
+#>
+function IsAdministrator {
+    $windowsIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object System.Security.Principal.WindowsPrincipal($windowsIdentity)
+    $admin = [System.Security.Principal.WindowsBuiltInRole]::Administrator
+    $principal.IsInRole($admin)
+}
+
+<#
+.Synopsis
     Verifies all tools and dependencies required for building Open SSH are installed on the machine.
 #>
 function Start-OpenSSHBootstrap
@@ -201,8 +212,13 @@ function Start-OpenSSHBootstrap
     # Update machine environment path
     if ($newMachineEnvironmentPath -ne $machinePath)
     {
+        if (-not (IsAdministrator))
+        {
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "Please re-run this script as administrator to modify the machine path."
+        }
+
         [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
-    }    
+    }
 
     $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
     $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"    
