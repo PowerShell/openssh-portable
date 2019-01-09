@@ -515,9 +515,6 @@
 /* Define to 1 if you have the <gssapi.h> header file. */
 #define HAVE_GSSAPI_H 1
 
-/* Define to 1 if you have the <gssapi.h> header file. */
-#define HAVE_GSSAPI_H 1
-
 /* Define to 1 if you have the <gssapi_krb5.h> header file. */
 /* #undef HAVE_GSSAPI_KRB5_H */
 

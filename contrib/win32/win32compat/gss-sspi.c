@@ -31,7 +31,7 @@
 #include "inc\utf.h"
 #include "inc\pwd.h"
 #include "debug.h"
-#include "gssapi.h"
+#include "inc\gssapi.h"
 
  /*
   * This file provides the GSSAPI interface to support Kerberos SSPI within
@@ -81,18 +81,18 @@ HANDLE sspi_auth_user = 0;
  * environment is initialized properly.  Any additional implementation setup
  * should be added to this function.
  */
-int 
+static int 
 ssh_gss_sspi_init(_Out_ OM_uint32 * minor_status)
 {	
 	/* minor status never used - reset to zero*/
 	*minor_status = 0;
 
 	/* already initialized; return */
-	if (SecFunctions != NULL) return 1;
+	if (SecFunctions != NULL) 
+		return 1;
 
 	/* get a pointer to a function table containing all the function pointers */
-	if ((SecFunctions = InitSecurityInterfaceW()) == NULL)
-	{
+	if ((SecFunctions = InitSecurityInterfaceW()) == NULL) {
 		/* failure */
 		debug("failed to acquire function table for sspi support.");
 		return 0;
@@ -109,14 +109,13 @@ ssh_gss_sspi_init(_Out_ OM_uint32 * minor_status)
 OM_uint32 
 gss_indicate_mechs(_Out_ OM_uint32 * minor_status, _Outptr_ gss_OID_set *mech_set)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* create an list that contains the one oid that we support */
 	if (gss_create_empty_oid_set(minor_status, mech_set) != GSS_S_COMPLETE || 
-		gss_add_oid_set_member(minor_status, GSS_C_NT_HOSTBASED_SERVICE, mech_set) != GSS_S_COMPLETE)
-	{
+	    gss_add_oid_set_member(minor_status, GSS_C_NT_HOSTBASED_SERVICE, mech_set) != GSS_S_COMPLETE)
 		return GSS_S_FAILURE;
-	}
 
 	return GSS_S_COMPLETE;
 }
@@ -130,10 +129,12 @@ gss_indicate_mechs(_Out_ OM_uint32 * minor_status, _Outptr_ gss_OID_set *mech_se
 OM_uint32 
 gss_create_empty_oid_set(_Out_ OM_uint32 * minor_status, _Outptr_ gss_OID_set * oid_set)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* allocate / initialize space for this new oid set */
-	(*oid_set) = calloc(1, sizeof(gss_OID_set_desc));
+	if (((*oid_set) = calloc(1, sizeof(gss_OID_set_desc))) == NULL)
+		return GSS_S_FAILURE;
 
 	return GSS_S_COMPLETE;
 }
@@ -147,13 +148,12 @@ gss_create_empty_oid_set(_Out_ OM_uint32 * minor_status, _Outptr_ gss_OID_set * 
 OM_uint32 
 gss_release_oid_set(_Out_ OM_uint32 * minor_status, _In_ gss_OID_set * set)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* free all individual oid strings */
 	for (size_t oid_num = 0; oid_num < (*set)->count; oid_num++)
-	{
 		free((*set)->elements[oid_num].elements);
-	}
 
 	/* free overall oid set */
 	free((*set)->elements);
@@ -178,22 +178,35 @@ gss_release_oid_set(_Out_ OM_uint32 * minor_status, _In_ gss_OID_set * set)
 OM_uint32 
 gss_add_oid_set_member(_Out_ OM_uint32 * minor_status, _In_ gss_OID member_oid, _In_ gss_OID_set * oid_set)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	OM_uint32 ret = GSS_S_FAILURE;
+	void * member_oid_elements = NULL;
+
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
+
+	/* create our own copy of the oid entry itself to add to the set */
+	if ((member_oid_elements = malloc(member_oid->length)) == NULL)
+		goto cleanup;
+	memcpy(member_oid_elements, member_oid->elements, member_oid->length);
 
 	/* reallocate the new elements structure based on the increased size */
 	const size_t current_count = (*oid_set)->count;
 	(*oid_set)->elements = realloc((*oid_set)->elements, (current_count + 1) * sizeof(gss_OID_desc));
-
-	/* create our own copy of the oid entry itself to add to the set */
-	void * member_oid_elements = malloc(member_oid->length);
-	memcpy(member_oid_elements, member_oid->elements, member_oid->length);
-
+	if ((*oid_set)->elements == NULL)
+		goto cleanup;
+	
 	/* append the new oid to the end of the recently increased list */
 	(*oid_set)->elements[current_count].elements = member_oid_elements;
 	(*oid_set)->elements[current_count].length = member_oid->length;
 	(*oid_set)->count++;
 
-	return GSS_S_COMPLETE;
+	member_oid_elements = NULL;
+	ret = GSS_S_COMPLETE;
+cleanup:
+	if (member_oid_elements)
+		free(member_oid_elements);
+
+	return ret;
 }
 
 /*
@@ -206,17 +219,17 @@ OM_uint32
 gss_test_oid_set_member(_Out_ OM_uint32 * minor_status, _In_ gss_OID member,
 	_In_ gss_OID_set set, _Out_ int * present)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* loop through each oid in the passed set */
-	for (size_t oid_num = 0; oid_num < set->count; oid_num++)
-	{
+	for (size_t oid_num = 0; oid_num < set->count; oid_num++) {
 		/* do not bother doing memory comparison if sizes do not match */
-		if (set->elements[oid_num].length != member->length) continue;
+		if (set->elements[oid_num].length != member->length) 
+			continue;
 
 		/* compare the binary storage of the test oid to the one in our list */
-		if (memcmp(set->elements[oid_num].elements, member->elements, member->length) == 0)
-		{
+		if (memcmp(set->elements[oid_num].elements, member->elements, member->length) == 0) {
 			/* match found */
 			*present = TRUE;
 			return GSS_S_COMPLETE;
@@ -240,18 +253,20 @@ OM_uint32
 gss_import_name(_Out_ OM_uint32 * minor_status, _In_ gss_buffer_t input_name_buffer,
 	_In_ gss_OID input_name_type, _Outptr_ gss_name_t * output_name)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* make sure we support the passed type */
 	if (input_name_type->length != GSS_C_NT_HOSTBASED_SERVICE->length ||
-		memcmp(input_name_type->elements, GSS_C_NT_HOSTBASED_SERVICE->elements, input_name_type->length) != 0)
-	{
+	    memcmp(input_name_type->elements, GSS_C_NT_HOSTBASED_SERVICE->elements, input_name_type->length) != 0)
 		return GSS_S_BAD_NAMETYPE;
-	}
-
+	
 	/* there is nothing special we have to do for this type so just duplicate
 	the  */
 	(*output_name) = _strdup(input_name_buffer->value);
+
+	if (output_name == NULL)
+		return GSS_S_FAILURE;
 
 	return GSS_S_COMPLETE;
 }
@@ -264,14 +279,13 @@ gss_import_name(_Out_ OM_uint32 * minor_status, _In_ gss_buffer_t input_name_buf
 OM_uint32 
 gss_release_name(_Out_ OM_uint32 * minor_status, _Inout_ gss_name_t * input_name)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* validate input */
 	if (input_name == NULL || *input_name == NULL)
-	{
 		return GSS_S_BAD_NAME;
-	}
-
+	
 	/* deallocate memory associated with the name */
 	free(*input_name);
 	*input_name = GSS_C_NO_NAME;
@@ -289,16 +303,15 @@ OM_uint32
 gss_export_name(_Out_ OM_uint32 * minor_status, _In_ const gss_name_t input_name,
 	_Inout_ gss_buffer_t exported_name)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* convenience pointer to shorten the void */
 	const gss_OID_desc* const ntoid = GSS_C_NT_HOSTBASED_SERVICE;
 
 	/* make sure we support the passed type */
 	if (strstr(input_name, "host@") == input_name)
-	{
 		return GSS_S_BAD_NAMETYPE;
-	}
 
 	/* get the lengths of all the parts of the string */
 	/* note: assumes short format for encoding oid length (i.e. less than 128)
@@ -312,6 +325,8 @@ gss_export_name(_Out_ OM_uint32 * minor_status, _In_ const gss_name_t input_name
 	/* allocate space for the exported name */
 	exported_name->length = sizeof(token_id) + sizeof(oid_outer_len) + oid_outer_len + sizeof(name_len) + name_len;
 	exported_name->value = malloc(exported_name->length);
+	if (exported_name->value == NULL)
+		return GSS_S_FAILURE;
 
 	/* get big-endian values so we can just do a direct memcpy from the values
 	*/
@@ -344,7 +359,8 @@ gss_export_name(_Out_ OM_uint32 * minor_status, _In_ const gss_name_t input_name
 OM_uint32 
 gss_release_buffer(_Out_ OM_uint32 * minor_status, _Inout_ gss_buffer_t buffer)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* deallocate the buffer associated with the buffer */
 	free(buffer->value);	
@@ -369,7 +385,8 @@ gss_acquire_cred(_Out_ OM_uint32 *minor_status, _In_opt_ gss_name_t desired_name
 	_In_opt_ OM_uint32 time_req, _In_opt_ gss_OID_set desired_mechs, _In_ gss_cred_usage_t cred_usage,
 	_Outptr_opt_ gss_cred_id_t * output_cred_handle, _Outptr_opt_ gss_OID_set *actual_mechs, _Out_opt_ OM_uint32 *time_rec)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* get the current time so we can determine expiration if requested */
 	SYSTEMTIME current_time_system;
@@ -394,20 +411,17 @@ gss_acquire_cred(_Out_ OM_uint32 *minor_status, _In_opt_ gss_name_t desired_name
 
 	/* fail immediately if errors occurred */
 	if (status != SEC_E_OK)
-	{
 		return GSS_S_FAILURE;
-	}
-
+	
 	/* copy credential data out of local buffer */
-	if (output_cred_handle != NULL)
-	{
-		*output_cred_handle = malloc(sizeof(CredHandle));
+	if (output_cred_handle != NULL) {
+		if ((*output_cred_handle = malloc(sizeof(CredHandle))) == NULL)
+			return GSS_S_FAILURE;
 		memcpy(*output_cred_handle, &cred_handle, sizeof(CredHandle));
 	}
 	
 	/* determine expiration if requested */
-	if (time_rec != NULL)
-	{
+	if (time_rec != NULL) {
 		FILETIME current_time;
 		SystemTimeToFileTime(&current_time_system, &current_time);
 		*time_rec = (OM_uint32) (expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
@@ -415,10 +429,8 @@ gss_acquire_cred(_Out_ OM_uint32 *minor_status, _In_opt_ gss_name_t desired_name
 
 	/* set actual supported mechs if requested */
 	if (actual_mechs != NULL)
-	{
 		gss_indicate_mechs(minor_status, actual_mechs);
-	}
-
+	
 	return GSS_S_COMPLETE;
 }
 
@@ -437,15 +449,14 @@ gss_init_sec_context(
 	_In_ gss_buffer_t input_token, _Inout_ gss_OID * actual_mech_type, _Inout_ gss_buffer_t output_token, _Out_ OM_uint32 * ret_flags,
 	_Out_ OM_uint32 * time_rec)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* make sure we support the passed type */
 	if (mech_type->length != GSS_C_NT_HOSTBASED_SERVICE->length ||
-		memcmp(mech_type->elements, GSS_C_NT_HOSTBASED_SERVICE->elements, mech_type->length) != 0)
-	{
+	    memcmp(mech_type->elements, GSS_C_NT_HOSTBASED_SERVICE->elements, mech_type->length) != 0)
 		return GSS_S_BAD_NAMETYPE;
-	}
-
+	
 	unsigned long sspi_req_flags = ISC_REQ_ALLOCATE_MEMORY;
 	if (req_flags & GSS_C_MUTUAL_FLAG) sspi_req_flags |= ISC_REQ_MUTUAL_AUTH;
 	if (req_flags & GSS_C_CONF_FLAG) sspi_req_flags |= ISC_REQ_CONFIDENTIALITY;
@@ -471,18 +482,14 @@ gss_init_sec_context(
 	GetSystemTime(&current_time_system);
 
 	/* acquire default cred handler if none specified */
-	if (claimant_cred_handle == NULL)
-	{
+	if (claimant_cred_handle == NULL) {
 		static CredHandle cred_handle = { 0, 0 };
 		claimant_cred_handle = &cred_handle;
-		if (cred_handle.dwLower == 0 && cred_handle.dwUpper == 0)
-		{
+		if (cred_handle.dwLower == 0 && cred_handle.dwUpper == 0) {
 			TimeStamp expiry_cred;
 			if (SecFunctions->AcquireCredentialsHandleW(NULL, MICROSOFT_KERBEROS_NAME_W, SECPKG_CRED_OUTBOUND,
-				NULL, NULL, NULL, NULL, &cred_handle, &expiry_cred) != SEC_E_OK)
-			{
+			    NULL, NULL, NULL, NULL, &cred_handle, &expiry_cred) != SEC_E_OK)
 				return GSS_S_FAILURE;
-			}
 		}
 	}
 
@@ -502,10 +509,8 @@ gss_init_sec_context(
 
 	/* check if error occurred */
 	if (status != SEC_E_OK && status != SEC_I_CONTINUE_NEEDED)
-	{
 		return GSS_S_FAILURE;
-	}
-
+	
 	/* copy output token to output buffer */
 	output_token->length = output_buffer_token.cbBuffer;
 	output_token->value = malloc(output_token->length);
@@ -513,8 +518,7 @@ gss_init_sec_context(
 	SecFunctions->FreeContextBuffer(output_buffer_token.pvBuffer);
 
 	/* if requested, translate returned flags that are actually available */
-	if (ret_flags != NULL)
-	{
+	if (ret_flags != NULL) {
 		*ret_flags = 0;
 		if (sspi_ret_flags & ISC_RET_MUTUAL_AUTH) *ret_flags |= GSS_C_MUTUAL_FLAG;
 		if (sspi_ret_flags & ISC_RET_CONFIDENTIALITY) *ret_flags |= GSS_C_CONF_FLAG;
@@ -526,13 +530,10 @@ gss_init_sec_context(
 
 	/* report if delegation was requested by not fulfilled */
 	if ((sspi_req_flags & ISC_REQ_DELEGATE) != 0 && (sspi_ret_flags & ISC_RET_DELEGATE) == 0)
-	{
 		debug("sspi delegation was requested but not fulfilled");
-	}
 
 	/* if requested, translate the expiration time to number of second */
-	if (time_rec != NULL)
-	{
+	if (time_rec != NULL) {
 		FILETIME current_time;
 		SystemTimeToFileTime(&current_time_system, &current_time);
 		*time_rec = (OM_uint32)(expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
@@ -540,13 +541,10 @@ gss_init_sec_context(
 
 	/* if requested, return the supported mechanism oid */
 	if (actual_mech_type != NULL)
-	{
 		*actual_mech_type = GSS_C_NT_HOSTBASED_SERVICE;
-	}
-
+	
 	/* copy the credential context structure to the caller */
-	if (*context_handle == GSS_C_NO_CREDENTIAL)
-	{
+	if (*context_handle == GSS_C_NO_CREDENTIAL) {
 		*context_handle = malloc(sizeof(out_context));
 		memcpy(*context_handle, &out_context, sizeof(out_context));
 	}
@@ -563,10 +561,10 @@ gss_init_sec_context(
 OM_uint32 
 gss_release_cred(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_cred_id_t * cred_handle)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
-	if (*cred_handle != GSS_C_NO_CREDENTIAL)
-	{
+	if (*cred_handle != GSS_C_NO_CREDENTIAL) {
 		SecFunctions->FreeCredentialsHandle(*cred_handle);
 		*cred_handle = GSS_C_NO_CREDENTIAL;
 	}
@@ -587,16 +585,14 @@ OM_uint32
 gss_delete_sec_context(_Out_ OM_uint32 * minor_status, _Inout_ gss_ctx_id_t * context_handle, 
 	_Inout_opt_ gss_buffer_t output_token)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* input sanity checks */
 	if (context_handle == NULL)
-	{
 		return GSS_S_NO_CONTEXT;
-	}
 
-	if (output_token != GSS_C_NO_BUFFER)
-	{
+	if (output_token != GSS_C_NO_BUFFER) {
 		free(output_token->value);
 		output_token->value = NULL;
 		output_token->length = 0;
@@ -619,7 +615,8 @@ OM_uint32
 gss_verify_mic(_Out_ OM_uint32 * minor_status, _In_ gss_ctx_id_t context_handle,
 	_In_ gss_buffer_t message_buffer, _In_ gss_buffer_t message_token, _Out_opt_ gss_qop_t * qop_state)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* translate the message and token to a security buffer so we can verify it */
 	SecBuffer verify_buffer_set[] = { 
@@ -633,8 +630,7 @@ gss_verify_mic(_Out_ OM_uint32 * minor_status, _In_ gss_ctx_id_t context_handle,
 
 	/* translate error codes */
 	OM_uint32 return_code = GSS_S_COMPLETE;
-	if (status != SEC_E_OK)
-	{
+	if (status != SEC_E_OK) {
 		/* translate specific error */
 		if (status == SEC_E_MESSAGE_ALTERED) return_code = GSS_S_BAD_SIG;
 		else if (status == SEC_E_OUT_OF_SEQUENCE) return_code = GSS_S_UNSEQ_TOKEN;
@@ -645,10 +641,8 @@ gss_verify_mic(_Out_ OM_uint32 * minor_status, _In_ gss_ctx_id_t context_handle,
 	}
 
 	if (qop_state != NULL)
-	{
 		*qop_state = (OM_uint32) GSS_C_QOP_DEFAULT;
-	}
-
+	
 	return return_code;
 }
 
@@ -662,7 +656,8 @@ OM_uint32
 gss_get_mic(_Out_ OM_uint32 * minor_status, _In_ gss_ctx_id_t context_handle,
 	_In_opt_ gss_qop_t qop_req, _In_ gss_buffer_t message_buffer, _Out_ gss_buffer_t message_token)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* determine the max possible signature and allocate memory to support it */
 	SecPkgContext_Sizes sizes;
@@ -682,8 +677,7 @@ gss_get_mic(_Out_ OM_uint32 * minor_status, _In_ gss_ctx_id_t context_handle,
 
 	/* translate error codes */
 	OM_uint32 return_code = GSS_S_COMPLETE;
-	if (status != SEC_E_OK)
-	{
+	if (status != SEC_E_OK)  {
 		if (status == SEC_E_CONTEXT_EXPIRED) return_code = GSS_S_CONTEXT_EXPIRED;
 		else if (status == SEC_E_QOP_NOT_SUPPORTED) return_code = GSS_S_BAD_QOP;
 		else return_code = GSS_S_FAILURE;
@@ -712,7 +706,8 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 	_Out_opt_ gss_name_t * src_name, _Out_opt_ gss_OID * mech_type, _Outptr_ gss_buffer_t output_token,
 	_Out_ OM_uint32 * ret_flags, _Out_opt_ OM_uint32 * time_rec, _Outptr_opt_ gss_cred_id_t * delegated_cred_handle)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* setup input buffer */
 	SecBuffer input_buffer_token = { (unsigned long) input_token_buffer->length, 
@@ -741,44 +736,37 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 		&output_buffer, &sspi_ret_flags, &expiry);
 
 	/* translate error codes */
-	if (status != SEC_E_OK && status != SEC_I_CONTINUE_NEEDED)
-	{
+	if (status != SEC_E_OK && status != SEC_I_CONTINUE_NEEDED) {
 		if (status == SEC_E_INVALID_TOKEN) return GSS_S_DEFECTIVE_TOKEN;
 		else if (status == SEC_E_INVALID_HANDLE) return GSS_S_NO_CONTEXT;
 		else return GSS_S_FAILURE;
 	}
 
 	/* only do checks on the finalized context (no continue needed) */
-	if (status == SEC_E_OK)
-	{
+	if (status == SEC_E_OK) {
 		/* validate accepted context is actually a host service ticket */
 		SecPkgContext_NativeNamesW target;
 		if (SecFunctions->QueryContextAttributesW((*context_handle == GSS_C_NO_CONTEXT) ? &sspi_context_handle : *context_handle,
-			SECPKG_ATTR_NATIVE_NAMES, &target) != SEC_E_OK)
-		{
+		    SECPKG_ATTR_NATIVE_NAMES, &target) != SEC_E_OK)
 			return GSS_S_FAILURE;
-		}
-
+		
 		const int valid_spn = _wcsnicmp(target.sServerName, L"host/", wcslen(L"host/")) == 0;
 		FreeContextBuffer(target.sServerName);
 		FreeContextBuffer(target.sClientName);
-		if (valid_spn == 0)
-		{
+		if (valid_spn == 0) {
 			debug("client passed an invalid principal name");
 			return GSS_S_FAILURE;
 		}
 	}
 
 	/* copy the context handler to the caller */
-	if (*context_handle == GSS_C_NO_CONTEXT)
-	{
+	if (*context_handle == GSS_C_NO_CONTEXT) {
 		*context_handle = malloc(sizeof(CtxtHandle));
 		memcpy(*context_handle, &sspi_context_handle, sizeof(CtxtHandle));
 	}
 
 	/* if requested, translate returned flags that are actually available */
-	if (ret_flags != NULL)
-	{
+	if (ret_flags != NULL) {
 		*ret_flags = 0;
 		if (sspi_ret_flags & ASC_RET_MUTUAL_AUTH) *ret_flags |= GSS_C_MUTUAL_FLAG;
 		if (sspi_ret_flags & ASC_RET_CONFIDENTIALITY) *ret_flags |= GSS_C_CONF_FLAG;
@@ -790,34 +778,26 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 
 	/* report if delegation was requested by not fulfilled */
 	if ((sspi_req_flags & ASC_REQ_DELEGATE) != 0 && (sspi_ret_flags & ASC_RET_DELEGATE) == 0)
-	{
 		debug("%s: delegation was requested but not fulfilled", __FUNCTION__);
-	}
-
+	
 	/* if provided, specify the mechanism */
 	if (mech_type != NULL)
-	{
 		*mech_type = GSS_C_NT_HOSTBASED_SERVICE;
-	}
-
+	
 	/* if requested, translate the expiration time to number of second */
-	if (time_rec != NULL)
-	{
+	if (time_rec != NULL) {
 		FILETIME current_time;
 		SystemTimeToFileTime(&current_time_system, &current_time);
 		*time_rec = (OM_uint32)(expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
 	}
 
 	/* only do checks on the finalized context (no continue needed) */
-	if (status == SEC_E_OK)
-	{
+	if (status == SEC_E_OK) {
 		/* extract the username from the context handle will be domain\samaccountname format */
 		SecPkgContext_NamesW NamesBuffer;
 		if (SecFunctions->QueryContextAttributesW(*context_handle, SECPKG_ATTR_NAMES, &NamesBuffer) != SEC_E_OK)
-		{
 			return GSS_S_FAILURE;
-		}
-
+		
 		/* copy to internal utf8 string and free the sspi string */
 		*src_name = utf16_to_utf8(NamesBuffer.sUserName);
 		FreeContextBuffer(NamesBuffer.sUserName);
@@ -830,8 +810,7 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 	SecFunctions->FreeContextBuffer(output_buffer_token.pvBuffer);
 
 	/* get the user token for impersonation */
-	if (delegated_cred_handle != NULL)
-	{
+	if (delegated_cred_handle != NULL) {
 		SecFunctions->QuerySecurityContextToken(*context_handle, &sspi_auth_user);
 		*delegated_cred_handle = (gss_cred_id_t) &sspi_auth_user;
 	}
@@ -855,10 +834,8 @@ gss_display_name(_Out_ OM_uint32 * minor_status, _In_ gss_name_t input_name,
 
 	/* set the output oid type if requested */
 	if (output_name_type != NULL)
-	{
 		*output_name_type = GSS_C_NT_HOSTBASED_SERVICE;
-	}
-
+	
 	return GSS_S_COMPLETE;
 }
 
@@ -877,7 +854,8 @@ OM_uint32
 gss_display_status(_In_ OM_uint32 * minor_status, _In_ OM_uint32 status_value, _In_ int status_type,
 	_In_opt_ gss_OID mech_type, _Out_ OM_uint32 * message_context, _Inout_ gss_buffer_t status_string)
 {
-	if (ssh_gss_sspi_init(minor_status) == 0) return GSS_S_FAILURE;
+	if (ssh_gss_sspi_init(minor_status) == 0) 
+		return GSS_S_FAILURE;
 
 	/* lookup textual representation of the numeric status code */
 	char * message_string = NULL;
@@ -931,8 +909,7 @@ ssh_gssapi_krb5_userok(ssh_gssapi_client *client, char *name)
 	 * onto the next available method.
 	 */
 	struct passwd * user = getpwnam(name);
-	if (_stricmp(client->displayname.value, user->pw_name) != 0)
-	{
+	if (_stricmp(client->displayname.value, user->pw_name) != 0) {
 		/* check failed */
 		debug("sspi user '%s' did not match user-provided, resolved user '%s'", 
 			(char *) client->displayname.value, name);

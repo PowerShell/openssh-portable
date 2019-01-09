@@ -153,7 +153,7 @@
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\net\if.h">
       <Filter>inc\net</Filter>
     </ClInclude>
-    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\gssapi.h">
+    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\gssapi.h">
       <Filter>inc</Filter>
     </ClInclude>
   </ItemGroup>

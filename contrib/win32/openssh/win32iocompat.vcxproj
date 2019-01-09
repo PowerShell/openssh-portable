@@ -354,7 +354,7 @@
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\spawn.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\net\if.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\time.h" />
-    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\gssapi.h" />
+    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\gssapi.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
