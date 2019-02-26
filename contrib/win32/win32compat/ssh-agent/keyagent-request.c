@@ -125,6 +125,26 @@ process_unsupported_request(struct sshbuf* request, struct sshbuf* response, str
 	return r;
 }
 
+char *
+get_key_subkey_name(const struct sshkey * key)
+{
+	const char * key_type_string = sshkey_type(key);
+	char * key_fingerprint = sshkey_fingerprint(key, SSH_FP_HASH_DEFAULT, SSH_FP_DEFAULT);
+	char * key_subkey_name = NULL;
+
+	/* concatenate the hash with the key type */
+	if (key_type_string != NULL && key_fingerprint != NULL) {
+		const size_t key_subkey_size = strlen(key_fingerprint) + 1 + strlen(key_type_string) + 1;
+		key_subkey_name = malloc(key_subkey_size);
+		sprintf_s(key_subkey_name, key_subkey_size, "%s:%s", key_fingerprint, key_type_string);
+	}
+
+	if (key_fingerprint)
+		free(key_fingerprint);
+
+	return key_subkey_name;
+}
+
 int
 process_add_identity(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con) 
 {
@@ -154,7 +174,7 @@ process_add_identity(struct sshbuf* request, struct sshbuf* response, struct age
 	if ((!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL, SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sa.nLength)) ||
 	    sshkey_to_blob(key, &pubkey_blob, &pubkey_blob_len) != 0 ||
 	    convert_blob(con, blob, blob_len, &eblob, &eblob_len, 1) != 0 ||
-	    ((thumbprint = sshkey_fingerprint(key, SSH_FP_HASH_DEFAULT, SSH_FP_DEFAULT)) == NULL) ||
+	    ((thumbprint = get_key_subkey_name(key)) == NULL) ||
 	    get_user_root(con, &user_root) != 0 ||
 	    RegCreateKeyExW(user_root, SSH_KEYS_ROOT, 0, 0, 0, KEY_WRITE | KEY_WOW64_64KEY, &sa, &reg, NULL) != 0 ||
 	    RegCreateKeyExA(reg, thumbprint, 0, 0, 0, KEY_WRITE | KEY_WOW64_64KEY, &sa, &sub, NULL) != 0 ||
@@ -178,6 +198,12 @@ done:
 	/* delete created reg key if not succeeded*/
 	if ((success == 0) && reg && thumbprint)
 		RegDeleteKeyExA(reg, thumbprint, KEY_WOW64_64KEY, 0);
+
+	/* delete previous version of thumbprint keys without type */
+	if (thumbprint) {
+		*strrchr(thumbprint, ':') = '\0';
+		RegDeleteKeyExA(reg, thumbprint, KEY_WOW64_64KEY, 0);
+	}
 
 	if (eblob)
 		free(eblob);
@@ -212,7 +238,7 @@ static int sign_blob(const struct sshkey *pubkey, u_char ** sig, size_t *siglen,
 	*sig = NULL;
 	*siglen = 0;
 
-	if ((thumbprint = sshkey_fingerprint(pubkey, SSH_FP_HASH_DEFAULT, SSH_FP_DEFAULT)) == NULL ||
+	if ((thumbprint = get_key_subkey_name(pubkey)) == NULL ||
 	    get_user_root(con, &user_root) != 0 ||
 	    RegOpenKeyExW(user_root, SSH_KEYS_ROOT,
 			0, STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY | KEY_ENUMERATE_SUB_KEYS, &reg) != 0 ||
@@ -318,7 +344,7 @@ process_remove_key(struct sshbuf* request, struct sshbuf* response, struct agent
 		goto done;
 	}
 
-	if ((thumbprint = sshkey_fingerprint(key, SSH_FP_HASH_DEFAULT, SSH_FP_DEFAULT)) == NULL ||
+	if ((thumbprint = get_key_subkey_name(key)) == NULL ||
 	    get_user_root(con, &user_root) != 0 ||
 	    RegOpenKeyExW(user_root, SSH_KEYS_ROOT, 0,
 		DELETE | KEY_ENUMERATE_SUB_KEYS | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &root) != 0 ||
