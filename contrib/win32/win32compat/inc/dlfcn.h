@@ -8,4 +8,4 @@ HMODULE dlopen(const char *filename, int flags);
 
 int dlclose(HMODULE handle);
 
-FARPROC dlsym(HMODULE handle, const char *symbol);
+void * dlsym(HMODULE handle, const char *symbol);
