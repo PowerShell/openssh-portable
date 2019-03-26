@@ -226,9 +226,17 @@ static DWORD last_dlerror = ERROR_SUCCESS;
 HMODULE
 dlopen(const char *filename, int flags)
 {
-	HMODULE module = LoadLibraryA(filename);
+	wchar_t *wfilename = utf8_to_utf16(filename);
+	if (wfilename == NULL) {
+		last_dlerror = ERROR_INVALID_PARAMETER;
+		return NULL;
+	}
+
+	HMODULE module = LoadLibraryW(wfilename);
 	if (module == NULL)
 		last_dlerror = GetLastError();
+
+	free(wfilename);
 	return module;
 }
 
