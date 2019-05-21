@@ -1,4 +1,4 @@
-#	$OpenBSD: cert-hostkey.sh,v 1.15 2017/04/30 23:34:55 djm Exp $
+#	$OpenBSD: cert-hostkey.sh,v 1.16 2018/07/03 11:43:49 djm Exp $
 #	Placed in the Public Domain.
 
 tid="certified host keys"
@@ -9,11 +9,21 @@ rm -f $OBJ/cert_host_key* $OBJ/host_krl_*
 # Allow all hostkey/pubkey types, prefer certs for the client
 types=""
 for i in `$SSH -Q key`; do
+	if [ "$os" == "windows" ]; then
+		i=${i/$'\r'/} # remove CR (carriage return)
+	fi
 	if [ -z "$types" ]; then
 		types="$i"
 		continue
 	fi
 	case "$i" in
+	# Special treatment for RSA keys.
+	*rsa*cert*)
+		types="rsa-sha2-256-cert-v01@openssh.com,$i,$types"
+		types="rsa-sha2-512-cert-v01@openssh.com,$types";;
+	*rsa*)
+		types="$types,rsa-sha2-512,rsa-sha2-256,$i";;
+	# Prefer certificate to plain keys.
 	*cert*)	types="$i,$types";;
 	*)	types="$types,$i";;
 	esac
@@ -59,7 +69,12 @@ touch $OBJ/host_revoked_plain
 touch $OBJ/host_revoked_cert
 cat $OBJ/host_ca_key.pub $OBJ/host_ca_key2.pub > $OBJ/host_revoked_ca
 
-PLAIN_TYPES=`$SSH -Q key-plain | sed 's/^ssh-dss/ssh-dsa/g;s/^ssh-//'`
+if [ "$os" == "windows" ]; then
+	# remove CR (carriage return)
+	PLAIN_TYPES=`$SSH -Q key-plain | sed 's/\r$//' | sed 's/^ssh-dss/ssh-dsa/g;s/^ssh-//'`
+else
+	PLAIN_TYPES=`$SSH -Q key-plain | sed 's/^ssh-dss/ssh-dsa/g;s/^ssh-//'`
+fi
 
 if echo "$PLAIN_TYPES" | grep '^rsa$' >/dev/null 2>&1 ; then
 	PLAIN_TYPES="$PLAIN_TYPES rsa-sha2-256 rsa-sha2-512"

@@ -1,4 +1,4 @@
-/* $OpenBSD: sftp.c,v 1.182 2017/11/03 03:46:52 djm Exp $ */
+/* $OpenBSD: sftp.c,v 1.186 2018/09/07 04:26:56 dtucker Exp $ */
 /*
  * Copyright (c) 2001-2004 Damien Miller <djm@openbsd.org>
  *
@@ -70,6 +70,9 @@ typedef void EditLine;
 #include "sshbuf.h"
 #include "sftp-common.h"
 #include "sftp-client.h"
+#ifdef WINDOWS
+#include "misc_internal.h"
+#endif // WINDOWS
 
 #define DEFAULT_COPY_BUFLEN	32768	/* Size of buffer for up/download */
 #define DEFAULT_NUM_REQUESTS	64	/* # concurrent outstanding requests */
@@ -81,7 +84,7 @@ FILE* infile;
 int batchmode = 0;
 
 /* PID of ssh transport process */
-static pid_t sshpid = -1;
+static volatile pid_t sshpid = -1;
 
 /* Suppress diagnositic messages */
 int quiet = 0;
@@ -253,6 +256,25 @@ cmd_interrupt(int signo)
 	errno = olderrno;
 }
 
+/*ARGSUSED*/
+static void
+sigchld_handler(int sig)
+{
+	int save_errno = errno;
+	pid_t pid;
+	const char msg[] = "\rConnection closed.  \n";
+
+	/* Report if ssh transport process dies. */
+	while ((pid = waitpid(sshpid, NULL, WNOHANG)) == -1 && errno == EINTR)
+		continue;
+	if (pid == sshpid) {
+		(void)write(STDERR_FILENO, msg, sizeof(msg) - 1);
+		sshpid = -1;
+	}
+
+	errno = save_errno;
+}
+
 static void
 help(void)
 {
@@ -295,15 +317,30 @@ static void
 local_do_shell(const char *args)
 {
   #ifdef WINDOWS
-	/* execute via system call in Windows*/
-	char cmd_path[PATH_MAX] = { 0, };
-	if (!*args){
+	/* execute via system call in Windows*/	
+	if (!*args) {
+		char cmd_path[PATH_MAX] = { 0, };
 		if (!GetSystemDirectory(cmd_path, sizeof(cmd_path)))
 			fatal("GetSystemDirectory failed");
 
 		strcat_s(cmd_path, PATH_MAX, "\\cmd.exe");
 		args = cmd_path;
 	} else {
+		if (is_bash_test_env()) {
+			char *cygwin_path_prefix_start = NULL;
+			if (cygwin_path_prefix_start = strstr(args, CYGWIN_PATH_PREFIX)) {
+				int len = strlen(cygwin_path_prefix_start) + 1;
+				char *tmp = malloc(len);
+				memset(tmp, 0, len);
+
+				bash_to_win_path(cygwin_path_prefix_start, tmp, len);
+				strcpy_s(cygwin_path_prefix_start, len, tmp); /* override the original string */
+
+				if (tmp)
+					free(tmp);
+			}
+		}
+
 		convertToBackslash((char *) args);
 	}
 	
@@ -402,9 +439,6 @@ make_absolute(char *p, const char *pwd)
 		free(p);
 		p = abs_str;
 	}
-
-	/* convert '\\' to '/' */
-	convertToForwardslash(p);
 
 	/* Append "/" if needed to the absolute windows path */	
 	if (p && p[0] != '\0' && p[1] == ':') {
@@ -1472,6 +1506,7 @@ parse_args(const char **cpp, int *ignore_errors, int *aflag,
 	case I_LUMASK:
 	case I_CHMOD:
 		base = 8;
+		/* FALLTHROUGH */
 	case I_CHOWN:
 	case I_CHGRP:
 		if ((optidx = parse_no_flags(cmd, argv, argc)) == -1)
@@ -1577,6 +1612,7 @@ parse_dispatch_command(struct sftp_conn *conn, const char *cmd, char **pwd,
 		break;
 	case I_SYMLINK:
 		sflag = 1;
+		/* FALLTHROUGH */
 	case I_LINK:
 		if (!sflag)
 			path1 = make_absolute(path1, *pwd);
@@ -1899,7 +1935,7 @@ complete_cmd_parse(EditLine *el, char *cmd, int lastarg, char quote,
 		return 0;
 	}
 
-	/* Complete ambigious command */
+	/* Complete ambiguous command */
 	tmp = complete_ambiguous(cmd, list, count);
 	if (count > 1)
 		complete_display(list, 0);
@@ -2282,6 +2318,7 @@ interactive_loop(struct sftp_conn *conn, char *file1, char *file2)
 		if (err != 0)
 			break;
 	}
+	signal(SIGCHLD, SIG_DFL);
 	free(remote_path);
 	free(startdir);
 	free(conn);
@@ -2334,7 +2371,7 @@ connect_to_server(char *path, char **args, int *in, int *out)
 		    posix_spawn_file_actions_adddup2(&actions, c_in, STDIN_FILENO) != 0 ||
 		    posix_spawn_file_actions_adddup2(&actions, c_out, STDOUT_FILENO) != 0 ) 
 			fatal("posix_spawn initialization failed");
-		else if (posix_spawn(&sshpid, path, &actions, NULL, args, NULL) != 0) 
+		else if (posix_spawn((pid_t*)&sshpid, path, &actions, NULL, args, NULL) != 0) 
 			fatal("posix_spawn: %s", strerror(errno));
 		
 		posix_spawn_file_actions_destroy(&actions);
@@ -2373,6 +2410,7 @@ connect_to_server(char *path, char **args, int *in, int *out)
 	signal(SIGTSTP, suspchild);
 	signal(SIGTTIN, suspchild);
 	signal(SIGTTOU, suspchild);
+	signal(SIGCHLD, sigchld_handler);
 	close(c_in);
 	close(c_out);
 }
@@ -2556,11 +2594,13 @@ main(int argc, char **argv)
 			}
 			break;
 		}
-		
-		/* TODO: need to debug this. this parameter doesn't make sense
-		file2 = *(argv + 1);
-		*/
 
+#ifdef WINDOWS
+		if (argc == (optind + 2))
+			file2 = *(argv + 1);
+#else
+		file2 = *(argv + 1);
+#endif
 		if (!*host) {
 			fprintf(stderr, "Missing hostname\n");
 			usage();
@@ -2586,7 +2626,12 @@ main(int argc, char **argv)
 		connect_to_server(ssh_program, args.list, &in, &out);
 	} else {
 		args.list = NULL;
+
+#ifdef WINDOWS
+		addargs(&args, "sftp-server.exe");
+#elif
 		addargs(&args, "sftp-server");
+#endif // WINDOWS
 
 		connect_to_server(sftp_direct, args.list, &in, &out);
 	}
@@ -2615,7 +2660,7 @@ main(int argc, char **argv)
 	if (batchmode)
 		fclose(infile);
 
-	while (waitpid(sshpid, NULL, 0) == -1)
+	while (waitpid(sshpid, NULL, 0) == -1 && sshpid > 1)
 		if (errno != EINTR)
 			fatal("Couldn't wait for ssh process: %s",
 			    strerror(errno));

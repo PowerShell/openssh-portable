@@ -221,10 +221,23 @@ explicit_bzero(void *b, size_t len)
 	SecureZeroMemory(b, len);
 }
 
+static DWORD last_dlerror = ERROR_SUCCESS;
+
 HMODULE
 dlopen(const char *filename, int flags)
 {
-	return LoadLibraryA(filename);
+	wchar_t *wfilename = utf8_to_utf16(filename);
+	if (wfilename == NULL) {
+		last_dlerror = ERROR_INVALID_PARAMETER;
+		return NULL;
+	}
+
+	HMODULE module = LoadLibraryW(wfilename);
+	if (module == NULL)
+		last_dlerror = GetLastError();
+
+	free(wfilename);
+	return module;
 }
 
 int
@@ -237,9 +250,48 @@ dlclose(HMODULE handle)
 void *
 dlsym(HMODULE handle, const char *symbol)
 {
-	return GetProcAddress(handle, symbol);
+	void *ptr = GetProcAddress(handle, symbol);
+	if (ptr == NULL)
+		last_dlerror = GetLastError();
+	return ptr;
 }
 
+char *
+dlerror()
+{
+	static char *message = NULL;
+	if (message != NULL) {
+		free(message);
+		message = NULL;
+	}
+	if (last_dlerror == ERROR_SUCCESS)
+		return NULL;
+
+	wchar_t *wmessage = NULL;
+	DWORD length = FormatMessageW(
+		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+		NULL, last_dlerror, 0, (wchar_t *) &wmessage, 0, NULL);
+	last_dlerror = ERROR_SUCCESS;
+
+	if (length == 0)
+		goto error;
+
+	if (wmessage[length - 1] == L'\n')
+		wmessage[length - 1] = L'\0';
+	if (length > 1 && wmessage[length - 2] == L'\r')
+		wmessage[length - 2] = L'\0';
+
+	message = utf16_to_utf8(wmessage);
+	LocalFree(wmessage);
+
+	if (message == NULL)
+		goto error;
+
+	return message;
+
+error:
+	return "Failed to format error message";
+}
 
 /*fopen on Windows to mimic https://linux.die.net/man/3/fopen
 * only r, w, a are supported for now
@@ -279,14 +331,15 @@ w32_fopen_utf8(const char *input_path, const char *mode)
 		goto cleanup;
 
 	if ((_wfopen_s(&f, wpath, wmode) != 0) || (f == NULL)) {
-		debug3("Failed to open file:%s error:%d", input_path, errno);
+		debug3("Failed to open file:%S error:%d", wpath, errno);
 		goto cleanup;
 	}	
 
 	if (chroot_pathw && !nonfs_dev) {
 		/* ensure final path is within chroot */
 		HANDLE h = (HANDLE)_get_osfhandle(_fileno(f));
-		if (!file_in_chroot_jail(h, input_path)) {
+		if (!file_in_chroot_jail(h)) {
+			debug3("%s is not in chroot jail", input_path);
 			fclose(f);
 			f = NULL;
 			errno = EACCES;
@@ -419,34 +472,6 @@ w32_setvbuf(FILE *stream, char *buffer, int mode, size_t size) {
 		return setvbuf(stream, buffer, mode, size);
 }
 
-/* TODO - deprecate this. This is not a POSIX API, used internally only */
-char *
-w32_programdir()
-{
-	wchar_t* wpgmptr;
-
-	if (s_programdir != NULL)
-		return s_programdir;
-
-	if (_get_wpgmptr(&wpgmptr) != 0)
-		return NULL;
-
-	if ((s_programdir = utf16_to_utf8(wpgmptr)) == NULL)
-		return NULL;
-
-	/* null terminate after directory path */
-	char* tail = s_programdir + strlen(s_programdir);
-	while (tail > s_programdir && *tail != '\\' && *tail != '/')
-		tail--;
-
-	if (tail > s_programdir)
-		*tail = '\0';
-	else
-		*tail = '.'; /* current directory */
-
-	return s_programdir;
-}
-
 int
 daemon(int nochdir, int noclose)
 {
@@ -539,6 +564,10 @@ strmode(mode_t mode, char *p)
 int
 w32_chmod(const char *pathname, mode_t mode)
 {
+	/* TODO - 
+	 * _wchmod() doesn't behave like unix "chmod" command.
+	 * _wchmod() only toggles the read-only bit and it doesn't touch ACL.
+	 */	
 	int ret;
 	wchar_t *resolvedPathName_utf16 = resolved_path_utf16(pathname);
 	if (resolvedPathName_utf16 == NULL) 
@@ -712,11 +741,16 @@ w32_rename(const char *old_name, const char *new_name)
 	 * 1) if the new_name is file, then delete it so that _wrename will succeed.
 	 * 2) if the new_name is directory and it is empty then delete it so that _wrename will succeed.
 	 */
-	struct w32_stat st;
-	if (w32_stat(new_name, &st) != -1) {
-		if (((st.st_mode & _S_IFMT) == _S_IFREG))
+	struct _stat64 st_new;
+	struct _stat64 st_old;
+	if ((fileio_stat(new_name, &st_new) != -1) &&
+	    (fileio_stat(old_name, &st_old) != -1)) {
+		if (((st_old.st_mode & _S_IFMT) == _S_IFREG) &&
+		    ((st_new.st_mode & _S_IFMT) == _S_IFREG))
 			w32_unlink(new_name);
-		else {
+
+		if (((st_old.st_mode & _S_IFMT) == _S_IFDIR) &&
+		    ((st_new.st_mode & _S_IFMT) == _S_IFDIR)) {
 			DIR *dirp = opendir(new_name);
 			if (NULL != dirp) {
 				struct dirent *dp = readdir(dirp);
@@ -796,7 +830,7 @@ w32_getcwd(char *buffer, int maxlen)
 		return NULL;
 	}
 
-	if (strcpy_s(buffer, maxlen, putf8)) 
+	if (strcpy_s(buffer, maxlen, putf8))
 		return NULL;
 	free(putf8);
 
@@ -809,7 +843,7 @@ w32_getcwd(char *buffer, int maxlen)
 		    memcmp(chroot_path, buffer, chroot_path_len) != 0 ||
 		    (c != '\0' && c!= '\\') ) {
 			errno = EOTHER;
-			error("cwb is not currently within chroot");
+			error("cwd is not currently within chroot");
 			return NULL;
 		}
 
@@ -822,7 +856,7 @@ w32_getcwd(char *buffer, int maxlen)
 			char *tail = buffer + chroot_path_len;
 			memmove_s(buffer, maxlen, tail, strlen(tail) + 1);
 		}
-	}
+	} 
 
 	return buffer;
 }
@@ -907,15 +941,36 @@ convertToForwardslash(char *str)
  *  path to produce a canonicalized absolute pathname.
  */
 char *
-realpath(const char *path, char resolved[PATH_MAX])
+realpath(const char *inputpath, char resolved[PATH_MAX])
 {
-	if (!path || !resolved) return NULL;
+	char path[PATH_MAX] = { 0, }, tempPath[PATH_MAX] = { 0, }, *ret = NULL;
+	int is_win_path = 1;
 
-	char tempPath[PATH_MAX];
-	size_t path_len = strlen(path);
+	if (!inputpath || !resolved)
+		return NULL;
+	
+	size_t path_len = strlen(inputpath);
 	resolved[0] = '\0';
 
-	if (path_len > PATH_MAX - 1) {
+	if (path_len > PATH_MAX) {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	if (is_bash_test_env() && bash_to_win_path(inputpath, path, _countof(path)))
+		is_win_path = 0;
+
+	if (is_win_path) {
+		if (_strnicmp(inputpath, PROGRAM_DATA, strlen(PROGRAM_DATA)) == 0) {
+			strcpy_s(path, PATH_MAX, __progdata);
+			strcat_s(path, PATH_MAX, &inputpath[strlen(PROGRAM_DATA)]);
+		} else {
+			memcpy_s(path, PATH_MAX, inputpath, strlen(inputpath));
+		}
+	}
+
+	path_len = strlen(path);
+	if (path_len > PATH_MAX) {
 		errno = EINVAL;
 		return NULL;
 	}
@@ -924,7 +979,8 @@ realpath(const char *path, char resolved[PATH_MAX])
 	if (path_len == 1 && (path[0] == '/' || path[0] == '\\')) {
 		resolved[0] = '/';
 		resolved[1] = '\0';
-		return resolved;
+		ret = resolved;
+		goto done;
 	}
 
 	/* resolve this common case scenario to root */
@@ -936,7 +992,8 @@ realpath(const char *path, char resolved[PATH_MAX])
 		if (strcmp(tmplate, resolved) == 0) {
 			resolved[0] = '/';
 			resolved[1] = '\0';
-			return resolved;
+			ret = resolved;
+			goto done;
 		}
 	}
 
@@ -948,17 +1005,22 @@ realpath(const char *path, char resolved[PATH_MAX])
 			w32_getcwd(resolved + chroot_path_len, PATH_MAX - chroot_path_len);
 			strcat_s(resolved, PATH_MAX, "/");
 		}
+		/* TODO - This logic will fail if the chroot_path is more than PATH_MAX/2.
+		 * resolved variable is of PATH_MAX.
+		 * We first copy chroot_path to resolved variable then incoming path (which can be again chroot_path).
+		 * In this case strcat_s will thrown a run time insufficient buffer exception.
+		 */
 		strcat_s(resolved, PATH_MAX, path);
 	}
 	else if ((path_len >= 2) && (path[0] == '/') && path[1] && (path[2] == ':')) {
 		if((errno = strncpy_s(resolved, PATH_MAX, path + 1, path_len)) != 0 ) /* skip the first '/' */ {
 			debug3("memcpy_s failed with error: %d.", errno);
-			return NULL;
+			goto done;
 		}
 	}
 	else if(( errno = strncpy_s(resolved, PATH_MAX, path, path_len + 1)) != 0) {
 		debug3("memcpy_s failed with error: %d.", errno);
-		return NULL;
+		goto done;
 	}
 
 	if ((resolved[0]) && (resolved[1] == ':') && (resolved[2] == '\0')) { /* make "x:" as "x:\\" */
@@ -968,21 +1030,20 @@ realpath(const char *path, char resolved[PATH_MAX])
 
 	if (_fullpath(tempPath, resolved, PATH_MAX) == NULL) {
 		errno = EINVAL;
-		return NULL;
+		goto done;
 	}
 
 	if (chroot_path) {
 		if (strlen(tempPath) < strlen(chroot_path)) {
 			errno = EACCES;
-			return NULL;
+			goto done;
 		}
 		if (memcmp(chroot_path, tempPath, strlen(chroot_path)) != 0) {
 			errno = EACCES;
-			return NULL;
+			goto done;
 		}
 
 		resolved[0] = '\0';
-
 		
 		if (strlen(tempPath) == strlen(chroot_path))
 			/* realpath is the same as chroot_path */
@@ -992,21 +1053,41 @@ realpath(const char *path, char resolved[PATH_MAX])
 
 		if (resolved[0] != '\\') {
 			errno = EACCES;
-			return NULL;
+			goto done;
 		}
 
 		convertToForwardslash(resolved);
-		return resolved;		
+		ret = resolved;
+		goto done;
 	}
 	else {
 		convertToForwardslash(tempPath);
 		resolved[0] = '/'; /* will be our first slash in /x:/users/test1 format */
 		if ((errno = strncpy_s(resolved + 1, PATH_MAX - 1, tempPath, sizeof(tempPath) - 1)) != 0) {
 			debug3("memcpy_s failed with error: %d.", errno);
-			return NULL;
+			goto done;
 		}
-		return resolved;
+		ret = resolved;
+		goto done;
 	}
+
+done:
+	return ret;
+}
+
+/* on error returns NULL and sets errno */
+char* 
+resolved_path_utf8(const char *input_path)
+{
+	wchar_t *resolved_path_w = resolved_path_utf16(input_path);
+	char *resolved_path = NULL;
+
+	if (resolved_path_w) {
+		resolved_path = utf16_to_utf8(resolved_path_w);
+		free(resolved_path_w);
+	}
+
+	return resolved_path;
 }
 
 /* on error returns NULL and sets errno */
@@ -1014,70 +1095,26 @@ wchar_t*
 resolved_path_utf16(const char *input_path)
 {
 	wchar_t *resolved_path = NULL;
+	char real_path[PATH_MAX];
 
 	if (!input_path) {
 		errno = EINVAL;
 		return NULL;
 	}
 
-	if (chroot_path) {
-		char actual_path[MAX_PATH], jail_path[MAX_PATH];
-
-		if (realpath(input_path, jail_path) == NULL)
-			return NULL;
-
-		actual_path[0] = '\0';
-		strcat_s(actual_path, MAX_PATH, chroot_path);
-		strcat_s(actual_path, MAX_PATH, jail_path);
-		resolved_path = utf8_to_utf16(actual_path);
-	}
-	else
-		resolved_path = utf8_to_utf16(input_path);
-	
-	if (resolved_path == NULL) {
-		errno = ENOMEM;
+	if (realpath(input_path, real_path) == NULL)
 		return NULL;
-	}
 
-	int resolved_len = (int) wcslen(resolved_path);
-	const int variable_len = (int) wcslen(PROGRAM_DATAW);
-
-	/* search for program data flag and switch it with the real path */
-	if (_wcsnicmp(resolved_path, PROGRAM_DATAW, variable_len) == 0) {
-		wchar_t * program_data = get_program_data_path();
-		const int programdata_len = (int) wcslen(program_data);
-		const int changed_req = programdata_len - variable_len;
-
-		/* allocate more memory if required */
-		if (changed_req > 0) {
-			wchar_t * resolved_path_new = realloc(resolved_path, 
-				(resolved_len + changed_req + 1) * sizeof(wchar_t));
-			if (resolved_path_new == NULL) {
-				debug3("%s: memory allocation failed.", __FUNCTION__);
-				free(resolved_path);
-				errno = ENOMEM;
-				return NULL;
-			}
-			else resolved_path = resolved_path_new;
-		}
-
-		/* shift memory contents over based on side of the new string */
-		wmemmove_s(&resolved_path[variable_len + changed_req], resolved_len - variable_len + 1,
-			&resolved_path[variable_len], resolved_len - variable_len + 1);
-		resolved_len += changed_req;
-		wmemcpy_s(resolved_path, resolved_len + 1, program_data, programdata_len);
-	}
-
-	if (resolved_path[0] == L'/' && iswalpha(resolved_path[1]) && resolved_path[2] == L':') {
-
-		/* shift memory to remove forward slash including null terminator */
-		wmemmove_s(resolved_path, resolved_len + 1, resolved_path + 1, (resolved_len + 1 - 1));
-
-		/* if just a drive letter path, make x: into x:\ */
-		if (resolved_path[2] == L'\0') {
-			resolved_path[2] = L'\\';
-			resolved_path[3] = L'\0';
-		}
+	if (chroot_path) {
+		char actual_path[PATH_MAX] = { 0 };
+		strcat_s(actual_path, _countof(actual_path), chroot_path);
+		strcat_s(actual_path, _countof(actual_path), real_path);
+		resolved_path = utf8_to_utf16(actual_path);
+	} else {
+		if ((strlen(real_path) == 1) && (real_path[0] == '/'))
+			resolved_path = utf8_to_utf16(real_path);
+		else
+			resolved_path = utf8_to_utf16(real_path + 1); /* account for preceding / in real_path */
 	}
 
 	return resolved_path;
@@ -1265,8 +1302,9 @@ get_others_file_permissions(wchar_t * file_name, int isReadOnlyFile)
 		goto cleanup;
 	}
 
-	if (((is_valid_sid = IsValidSid(owner_sid)) == FALSE) || ((is_valid_acl = IsValidAcl(dacl)) == FALSE)) {
-		debug3("IsValidSid: %d; is_valid_acl: %d", is_valid_sid, is_valid_acl);
+	if (((is_valid_sid = IsValidSid(owner_sid)) == FALSE) || dacl == NULL ||
+		((is_valid_acl = IsValidAcl(dacl)) == FALSE)) {
+		debug3("IsValidSid: %d; NULL Acl: %d; IsValidAcl: %d", is_valid_sid, dacl == NULL, is_valid_acl);
 		goto cleanup;
 	}
 
@@ -1328,27 +1366,12 @@ cleanup:
 	return ret;
 }
 
-wchar_t*
-get_program_data_path()
-{
-	static wchar_t ssh_cfg_dir_path_w[PATH_MAX] = L"";
-	if (wcslen(ssh_cfg_dir_path_w) > 0) return ssh_cfg_dir_path_w;
-
-	int return_val = ExpandEnvironmentStringsW(L"%ProgramData%", ssh_cfg_dir_path_w, PATH_MAX);
-	if (return_val > PATH_MAX)
-		fatal("%s, buffer too small to expand:%s", __func__, "%ProgramData%");
-	else if (!return_val)
-		fatal("%s, failed to expand:%s error:%s", __func__, "%ProgramData%", GetLastError());
-
-	return ssh_cfg_dir_path_w;
-}
-
 /* Windows absolute paths - \abc, /abc, c:\abc, c:/abc, __PROGRAMDATA__\openssh\sshd_config */
 int
 is_absolute_path(const char *path)
 {
 	int retVal = 0;
-	if(*path == '\"') /* skip double quote if path is "c:\abc" */
+	if(*path == '\"' || *path == '\'') /* skip double quote if path is "c:\abc" */
 		path++;
 
 	if (*path == '/' || *path == '\\' || (*path != '\0' && isalpha(*path) && path[1] == ':') ||
@@ -1431,6 +1454,30 @@ freezero(void *ptr, size_t sz)
 		return;
 	explicit_bzero(ptr, sz);
 	free(ptr);
+}
+
+int 
+setenv(const char *name, const char *value, int rewrite)
+{
+	errno_t result = 0;
+
+	/* If rewrite is 0, then set only if the variable name doesn't already exist in environment */
+	if (!rewrite) {
+		char *envValue = NULL;
+		size_t len = 0;
+		_dupenv_s(&envValue, &len, name);
+
+		if (envValue)
+			return result; /* return success (as per setenv manpage) */
+	}
+
+	if (!(result = _putenv_s(name, value)))
+		return 0;
+	else {
+		error("failed to set the environment variable:%s to value:%s, error:%d", name, value, result);
+		errno = result;
+		return -1;
+	}
 }
 
 int
@@ -1589,176 +1636,317 @@ cleanup:
 
 	return ret;
 }
-
-/* builds session commandline. returns NULL with errno set on failure, caller should free returned string */
-char* 
-build_session_commandline(const char *shell, const char* shell_arg, const char *command, int pty)
+/* Interpret scp and sftp executables*/
+char *
+build_exec_command(const char * command)
 {
-	enum sh_type { SH_OTHER, SH_CMD, SH_PS, SH_BASH } shell_type = SH_OTHER;
 	enum cmd_type { CMD_OTHER, CMD_SFTP, CMD_SCP } command_type = CMD_OTHER;
-	char *progdir = w32_programdir(), *cmd_sp = NULL, *cmdline = NULL, *ret = NULL, *p;
-	int len, progdir_len = (int)strlen(progdir);
+	char *cmd_sp = NULL;
+	int len = 0, command_len;
+	const char *command_args = NULL;
 
-#define CMDLINE_APPEND(P, S)		\
-do {					\
-	int _S_len = (int)strlen(S);		\
-	memcpy((P), (S), _S_len);	\
-	(P) += _S_len;			\
-} while(0)
+	if (!command)
+		return NULL;
 
-	/* get shell type */
-	if (strstr(shell, "system32\\cmd"))
-		shell_type = SH_CMD;
-	else if (strstr(shell, "powershell"))
-		shell_type = SH_PS;
-	else if (strstr(shell, "\\bash"))
-		shell_type = SH_BASH;
-
-	/* special case where incoming command needs to be adjusted */
-	do {
-		/*
-		* identify scp and sftp sessions
-		* we want to launch scp and sftp executables from the same binary directory
-		* that sshd is hosted in. This will facilitate hosting and evaluating
-		* multiple versions of OpenSSH at the same time.
-		*
-		* currently we can only accomodate this for cmd.exe, since cmd.exe simply executes 
-		* its commandline without applying CRT or shell specific rules
-		*
-		* Ex.
-		* this works
-		*	cmd /c "c:\program files\sftp" -d
-		* this following wouldn't work in powershell, cygwin's or WSL bash unless we put
-		* some shell specific rules 
-		*	powershell -c "c:\program files\scp" -t
-		*	cygwin\bash -c "c:\program files\scp" -t
-		*	bash -c "c:\program files\scp" -t
-		* 
-		* for now, for all non-cmd shells, we launch scp and sftp-server directly -
-		*	shell -c "scp.exe -t"
-		* note that .exe extension and case matters for WSL bash
-		* note that double quotes matter for WSL and Cygwin bash, they dont matter for PS
-		*
-		* consequence - 
-		* for non-cmd shells - sftp and scp installation path is expected to be in machine wide PATH
-		* 
-		*/
-
-		int command_len;
-		const char *command_args = NULL;
-
-		if (!command)
-			break;
-		command_len = (int)strlen(command);
-
-		if (command_len >= 13 && _memicmp(command, "internal-sftp", 13) == 0) {
-			command_type = CMD_SFTP;
-			command_args = command + 13;
-		} else if (command_len >= 11 && _memicmp(command, "sftp-server", 11) == 0) {
-			command_type = CMD_SFTP;
-
-			/* account for possible .exe extension */
-			if (command_len >= 15 && _memicmp(command + 11, ".exe", 4) == 0)
-				command_args = command + 15;
-			else
-				command_args = command + 11;
-		} else if (command_len >= 3 && _memicmp(command, "scp", 3) == 0) {
-			command_type = CMD_SCP;
-
-			/* account for possible .exe extension */
-			if (command_len >= 7 && _memicmp(command + 3, ".exe", 4) == 0)
-				command_args = command + 7;
-			else
-				command_args = command + 3;
-		}
-
-		if (command_type == CMD_OTHER)
-			break;
-
-		len = 0;
-		len += progdir_len + 4; /* account for " around */
-		len += command_len + 4; /* account for possible .exe addition */
-
-		if ((cmd_sp = malloc(len)) == NULL) {
-			errno = ENOMEM;
-			goto done;
-		}
-
-		p = cmd_sp;
-
-		if (shell_type == SH_CMD) {
-
-			CMDLINE_APPEND(p, "\"");
-			CMDLINE_APPEND(p, progdir);
-
-			if (command_type == CMD_SCP)
-				CMDLINE_APPEND(p, "\\scp.exe\"");
-			else
-				CMDLINE_APPEND(p, "\\sftp-server.exe\"");
-
-		} else {
-			if (command_type == CMD_SCP)
-				CMDLINE_APPEND(p, "scp.exe");
-			else
-				CMDLINE_APPEND(p, "sftp-server.exe");
-		}
-
-		CMDLINE_APPEND(p, command_args);
-		*p = '\0';
-		command = cmd_sp;
-	} while (0);
-
-	len = 0;
-	if (pty)
-		len += progdir_len + (int)strlen("ssh-shellhost.exe") + 5;
-	len +=(int) strlen(shell) + 3;/* 3 for " around shell path and trailing space */
-	if (command) {
-		len += 15; /* for shell command argument, typically -c or /c */
-		len += (int)strlen(command) + 5; /* 5 for possible " around command and null term*/
+	command_len = (int)strlen(command);
+	/*TODO - replace numbers below with readable compile time operators*/
+	if (command_len >= 13 && _memicmp(command, "internal-sftp", 13) == 0) {
+		command_type = CMD_SFTP;
+		command_args = command + 13;
 	}
-	
-	if ((cmdline = malloc(len)) == NULL) {
-		errno = ENOMEM;
-		goto done;
-	}
+	else if (command_len >= 11 && _memicmp(command, "sftp-server", 11) == 0) {
+		command_type = CMD_SFTP;
 
-	p = cmdline;
-	if (pty) {
-		CMDLINE_APPEND(p, "\"");
-		CMDLINE_APPEND(p, progdir);
-		CMDLINE_APPEND(p, "\\ssh-shellhost.exe\" ");
-	}
-	CMDLINE_APPEND(p, "\"");
-	CMDLINE_APPEND(p, shell);
-	CMDLINE_APPEND(p, "\"");
-	if (command) {
-		if (shell_arg) {
-			CMDLINE_APPEND(p, " ");
-			CMDLINE_APPEND(p, shell_arg);
-			CMDLINE_APPEND(p, " ");
-		}
-		else if (shell_type == SH_CMD)
-			CMDLINE_APPEND(p, " /c ");
+		/* account for possible .exe extension */
+		if (command_len >= 15 && _memicmp(command + 11, ".exe", 4) == 0)
+			command_args = command + 15;
 		else
-			CMDLINE_APPEND(p, " -c ");
-
-		/* bash type shells require " decoration around command*/
-		if (shell_type == SH_BASH)
-			CMDLINE_APPEND(p, "\"");
-
-		CMDLINE_APPEND(p, command);
-
-		if (shell_type == SH_BASH)
-			CMDLINE_APPEND(p, "\"");
+			command_args = command + 11;
 	}
-	*p = '\0';
+	else if (command_len >= 3 && _memicmp(command, "scp", 3) == 0) {
+		command_type = CMD_SCP;
+
+		/* account for possible .exe extension */
+		if (command_len >= 7 && _memicmp(command + 3, ".exe", 4) == 0)
+			command_args = command + 7;
+		else
+			command_args = command + 3;
+	}
+
+	len = command_len + 5; /* account for possible .exe addition and null term */
+	if ((cmd_sp = malloc(len)) == NULL) {
+		errno = ENOMEM;
+		return NULL;
+	}
+	memset(cmd_sp, '\0', len);
+	if (command_type == CMD_SCP) {
+		strcpy_s(cmd_sp, len, "scp.exe");
+		strcat_s(cmd_sp, len, command_args);
+	}
+	else if (command_type == CMD_SFTP) {
+		strcpy_s(cmd_sp, len, "sftp-server.exe");
+		strcat_s(cmd_sp, len, command_args);
+	}
+	else
+		strcpy_s(cmd_sp, len, command);
+	return cmd_sp;
+}
+
+/*
+ * cmd is internally decoarated with a set of '"'
+ * to account for any spaces within the commandline
+ * the double quotes and backslash is escaped if needed 
+ * this decoration is done only when additional arguments are passed in argv
+*/
+char *
+build_commandline_string(const char* cmd, char *const argv[], BOOLEAN prepend_module_path)
+{
+	char *cmdline, *t, *tmp = NULL, *path = NULL, *ret = NULL;
+	char * const *t1;
+	DWORD cmdline_len = 0, path_len = 0;
+	int add_module_path = 0;
+
+	if (!cmd) {
+		error("%s invalid argument cmd:%s", __func__, cmd);
+		return NULL;
+	}
+
+	if (!(path = _strdup(cmd))) {
+		error("failed to duplicate %s", cmd);
+		return NULL;
+	}
+
+	path_len = (DWORD)strlen(path);
+
+	if (is_bash_test_env()) {
+		memset(path, 0, path_len + 1);
+		bash_to_win_path(cmd, path, path_len + 1);
+	}
+
+	if (!is_absolute_path(path) && prepend_module_path)
+		add_module_path = 1;
+
+	/* compute total cmdline len*/
+	if (add_module_path)
+		cmdline_len += (DWORD)strlen(__progdir) + 1 + (DWORD)strlen(path) + 1 + 2;
+	else
+		cmdline_len += (DWORD)strlen(path) + 1 + 2;
+
+	if (argv) {
+		t1 = argv;
+		while (*t1) {
+			char *p = *t1++;
+			for (int i = 0; i < (int)strlen(p); i++) {
+				if (p[i] == '\\') {
+					char * b = p + i;
+					int additional_backslash = 0;
+					int backslash_count = 0;
+					/*
+					Backslashes are interpreted literally, unless they immediately
+					precede a double quotation mark.
+					*/
+					while (b != NULL && *b == '\\') {
+						backslash_count++;
+						b++;
+						if (b != NULL &&  *b == '\"') {
+							additional_backslash = 1;
+							break;
+						}
+					}
+					cmdline_len += backslash_count * (additional_backslash + 1);
+					i += backslash_count - 1;
+				}
+				else if (p[i] == '\"')
+					/* backslash will be added for every double quote.*/
+					cmdline_len += 2;
+				else
+					cmdline_len++;
+			}
+			cmdline_len += 1 + 2; /*for "around cmd arg and traling space*/
+		}
+	}
+
+	if ((cmdline = malloc(cmdline_len)) == NULL) {
+		errno = ENOMEM;
+		goto cleanup;
+	}
+	t = cmdline;
+	*t++ = '\"';
+	if (add_module_path) {
+		/* add current module path to start if needed */
+		memcpy(t, __progdir, strlen(__progdir));
+		t += strlen(__progdir);
+		*t++ = '\\';
+	}
+	if (path[0] != '\"') {
+		memcpy(t, path, path_len);
+		t += path_len;
+		*t++ = '\"';
+	}
+	else {
+		/*path already contains "*/
+		memcpy(t, path + 1, path_len - 1);
+		t += path_len - 1;
+	}
+
+	*t = '\0';
+	t = cmdline + strlen(cmdline);
+
+	if (argv) {
+		t1 = argv;
+		while (*t1) {
+			*t++ = ' ';
+			char * p1 = *t1++;
+			BOOL add_quotes = FALSE;
+			/* leave as is if the command is surrounded by single quotes*/
+			if (p1[0] != '\'')
+				for (int i = 0; i < (int)strlen(p1); i++) {
+					if (p1[i] == ' ') {
+						add_quotes = TRUE;
+						break;
+					}
+				}
+			if (add_quotes)
+				*t++ = '\"';
+			for (int i = 0; i < (int)strlen(p1); i++) {
+				if (p1[i] == '\\') {
+					char * b = p1 + i;
+					int additional_backslash = 0;
+					int backslash_count = 0;
+					/*
+					* Backslashes are interpreted literally, unless they immediately
+					* precede a double quotation mark.
+					*/
+					while (b != NULL && *b == '\\') {
+						backslash_count++;
+						b++;
+						if (b != NULL && *b == '\"') {
+							additional_backslash = 1;
+							break;
+						}
+					}
+					i += backslash_count - 1;
+					int escaped_backslash_count = backslash_count * (additional_backslash + 1);
+					while (escaped_backslash_count--)
+						*t++ = '\\';
+				}
+				else if (p1[i] == '\"') {
+					/* Add backslash for every double quote.*/
+					*t++ = '\\';
+					*t++ = '\"';
+				}
+				else
+					*t++ = p1[i];
+			}
+			if (add_quotes)
+				*t++ = '\"';
+		}
+	}
+	*t = '\0';
 	ret = cmdline;
 	cmdline = NULL;
-done:
-	if (cmd_sp)
-		free(cmd_sp);
+cleanup:
+	if (path)
+		free(path);
 	if (cmdline)
 		free(cmdline);
+	return ret;
+}
+BOOL
+is_bash_test_env()
+{
+	char *envValue = NULL;
+	size_t len = 0;
+	BOOL retVal = FALSE;
+	_dupenv_s(&envValue, &len, "SSH_TEST_ENVIRONMENT");
+
+	if ((NULL != envValue) && atoi(envValue))
+		retVal = TRUE;
+
+	if (envValue)
+		free(envValue);
+
+	return retVal;
+}
+
+int
+bash_to_win_path(const char *in, char *out, const size_t out_len)
+{
+	int retVal = 0;
+	const size_t cygwin_path_prefix_len = strlen(CYGWIN_PATH_PREFIX);
+	memset(out, 0, out_len);
+	if (_strnicmp(in, CYGWIN_PATH_PREFIX, cygwin_path_prefix_len) == 0) {
+		out[0] = in[cygwin_path_prefix_len];
+		out[1] = ':';
+		strcat_s(out, out_len, &in[cygwin_path_prefix_len + 1]);
+		retVal = 1;
+	} else
+		strcpy_s(out, out_len, in);
+
+	return retVal;
+}
+
+int
+getpeereid(int s, uid_t *euid, gid_t *egid)
+{
+	verbose("%s is not supported", __func__);
+	errno = ENOTSUP;
+	return -1;
+}
+
+int
+getrrsetbyname(const char *hostname, unsigned int rdclass,
+	unsigned int rdtype, unsigned int flags,
+	struct rrsetinfo **res)
+{
+	verbose("%s is not supported", __func__);
+	errno = ENOTSUP;
+	return -1;
+}
+
+void
+freerrset(struct rrsetinfo *rrset)
+{
+	verbose("%s is not supported", __func__);
+	return;
+}
+
+void
+debug_assert_internal()
+{
+	/* debug break on non-release builds */
+#ifndef NDEBUG
+	DebugBreak();
+#endif
+}
+
+char
+*crypt(const char *key, const char *salt)
+{
+	verbose("%s is not supported", __func__);
+	errno = ENOTSUP;
+	return NULL;
+}
+
+int
+w32_system(const char *command)
+{
+	int ret = -1;
+	wchar_t *command_w = NULL;
+
+	if (!command) {
+		errno = ENOTSUP;
+		goto cleanup;
+	}
+
+	if ((command_w = utf8_to_utf16(command)) == NULL)
+		goto cleanup;
+
+	ret = _wsystem(command_w);
+
+cleanup:
+	if (command_w)
+		free(command_w);
 
 	return ret;
 }

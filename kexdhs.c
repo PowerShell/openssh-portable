@@ -1,4 +1,4 @@
-/* $OpenBSD: kexdhs.c,v 1.26 2018/02/07 02:06:51 jsing Exp $ */
+/* $OpenBSD: kexdhs.c,v 1.27 2018/04/10 00:10:49 djm Exp $ */
 /*
  * Copyright (c) 2001 Markus Friedl.  All rights reserved.
  *
@@ -34,6 +34,8 @@
 #include <signal.h>
 
 #include <openssl/dh.h>
+
+#include "openbsd-compat/openssl-compat.h"
 
 #include "sshkey.h"
 #include "cipher.h"
@@ -95,6 +97,7 @@ input_kex_dh_init(int type, u_int32_t seq, struct ssh *ssh)
 {
 	struct kex *kex = ssh->kex;
 	BIGNUM *shared_secret = NULL, *dh_client_pub = NULL;
+	const BIGNUM *pub_key;
 	struct sshkey *server_host_public, *server_host_private;
 	u_char *kbuf = NULL, *signature = NULL, *server_host_key_blob = NULL;
 	u_char hash[SSH_DIGEST_MAX_LENGTH];
@@ -121,6 +124,7 @@ input_kex_dh_init(int type, u_int32_t seq, struct ssh *ssh)
 		r = SSH_ERR_ALLOC_FAIL;
 		goto out;
 	}
+	DH_get0_key(kex->dh, &pub_key, NULL);
 	if ((r = sshpkt_get_bignum2(ssh, dh_client_pub)) != 0 ||
 	    (r = sshpkt_get_end(ssh)) != 0)
 		goto out;
@@ -130,12 +134,9 @@ input_kex_dh_init(int type, u_int32_t seq, struct ssh *ssh)
 	BN_print_fp(stderr, dh_client_pub);
 	fprintf(stderr, "\n");
 	debug("bits %d", BN_num_bits(dh_client_pub));
-#endif
-
-#ifdef DEBUG_KEXDH
 	DHparams_print_fp(stderr, kex->dh);
 	fprintf(stderr, "pub= ");
-	BN_print_fp(stderr, kex->dh->pub_key);
+	BN_print_fp(stderr, pub_key);
 	fprintf(stderr, "\n");
 #endif
 	if (!dh_pub_is_valid(kex->dh, dh_client_pub)) {
@@ -171,7 +172,7 @@ input_kex_dh_init(int type, u_int32_t seq, struct ssh *ssh)
 	    sshbuf_ptr(kex->my), sshbuf_len(kex->my),
 	    server_host_key_blob, sbloblen,
 	    dh_client_pub,
-	    kex->dh->pub_key,
+	    pub_key,
 	    shared_secret,
 	    hash, &hashlen)) != 0)
 		goto out;
@@ -194,10 +195,10 @@ input_kex_dh_init(int type, u_int32_t seq, struct ssh *ssh)
 
 	/* destroy_sensitive_data(); */
 
-	/* send server hostkey, DH pubkey 'f' and singed H */
+	/* send server hostkey, DH pubkey 'f' and signed H */
 	if ((r = sshpkt_start(ssh, SSH2_MSG_KEXDH_REPLY)) != 0 ||
 	    (r = sshpkt_put_string(ssh, server_host_key_blob, sbloblen)) != 0 ||
-	    (r = sshpkt_put_bignum2(ssh, kex->dh->pub_key)) != 0 ||	/* f */
+	    (r = sshpkt_put_bignum2(ssh, pub_key)) != 0 ||	/* f */
 	    (r = sshpkt_put_string(ssh, signature, slen)) != 0 ||
 	    (r = sshpkt_send(ssh)) != 0)
 		goto out;

@@ -1,4 +1,4 @@
-/* $OpenBSD: gss-serv.c,v 1.30 2017/06/24 06:34:38 djm Exp $ */
+/* $OpenBSD: gss-serv.c,v 1.31 2018/07/09 21:37:55 markus Exp $ */
 
 /*
  * Copyright (c) 2001-2003 Simon Wilkinson. All rights reserved.
@@ -36,8 +36,7 @@
 
 #include "openbsd-compat/sys-queue.h"
 #include "xmalloc.h"
-#include "buffer.h"
-#include "key.h"
+#include "sshkey.h"
 #include "hostfile.h"
 #include "auth.h"
 #include "log.h"
@@ -57,12 +56,12 @@ static ssh_gssapi_client gssapi_client =
 ssh_gssapi_mech gssapi_null_mech =
     { NULL, NULL, {0, NULL}, NULL, NULL, NULL, NULL};
 
-#ifdef KRB5
+#if defined(KRB5) || defined (GSSAPI_SSPI)
 extern ssh_gssapi_mech gssapi_kerberos_mech;
 #endif
 
 ssh_gssapi_mech* supported_mechs[]= {
-#ifdef KRB5
+#if defined (KRB5) || defined (GSSAPI_SSPI)
 	&gssapi_kerberos_mech,
 #endif
 	&gssapi_null_mech,

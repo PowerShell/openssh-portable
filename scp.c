@@ -1,4 +1,4 @@
-/* $OpenBSD: scp.c,v 1.195 2018/02/10 06:15:12 djm Exp $ */
+/* $OpenBSD: scp.c,v 1.197 2018/06/01 04:31:48 dtucker Exp $ */
 /*
  * scp - secure remote copy.  This is basically patched BSD rcp which
  * uses ssh to do the data transfer (instead of using rcmd).
@@ -214,13 +214,34 @@ do_local_cmd(arglist *a)
 		cmd = xmalloc(cmdlen);
 		cmd[0] = '\0';
 		for (i = 0; i < a->num; i++) {
-			if(i != 0)
-				strcat_s(cmd, cmdlen, " ");
-			strcat_s(cmd, cmdlen, a->list[i]);
+			char *path = a->list[i];
+			if (is_bash_test_env()) {
+				char resolved[PATH_MAX] = { 0, };
+				convertToForwardslash(path);
+
+				if(bash_to_win_path(path, resolved, _countof(resolved)))
+					convertToBackslash(resolved);
+
+				strcat(cmd, " ");
+				strcat(cmd, resolved);
+			} else {
+				if (i != 0)
+					strcat_s(cmd, cmdlen, " ");
+				strcat_s(cmd, cmdlen, a->list[i]);
+			}
 		}
-		if (system(cmd))
-			return -1; 
-		return 0;
+
+		wchar_t *cmd_w = utf8_to_utf16(cmd);
+		if (cmd_w) {
+			if (_wsystem(cmd_w))
+				return -1;
+
+			free(cmd_w);
+			return 0;
+		} else {
+			error("%s out of memory", __func__);
+			return -1;
+		}
 	}
 
 #else /* !WINDOWS */
@@ -298,7 +319,7 @@ do_cmd(char *host, char *remuser, int port, char *cmd, int *fdin, int *fdout)
 
 	/* Fork a child to execute the command on the remote host using ssh. */
 #ifdef FORK_NOT_SUPPORTED
-	replacearg(&args, 0, "%s", ssh_program);
+	replacearg(&args, 0, "%s", ssh_program);		
 	if (port != -1) {
 		addargs(&args, "-p");
 		addargs(&args, "%d", port);
@@ -368,7 +389,7 @@ do_cmd(char *host, char *remuser, int port, char *cmd, int *fdin, int *fdout)
 }
 
 /*
- * This functions executes a command similar to do_cmd(), but expects the
+ * This function executes a command similar to do_cmd(), but expects the
  * input and output descriptors to be setup by a previous call to do_cmd().
  * This way the input and output of two commands can be connected.
  */
@@ -389,8 +410,8 @@ do_cmd2(char *host, char *remuser, int port, char *cmd, int fdin, int fdout)
 
 	/* Fork a child to execute the command on the remote host using ssh. */
 #ifdef FORK_NOT_SUPPORTED
-	/* generate command line and spawn_child */
-	replacearg(&args, 0, "%s", ssh_program);
+	/* generate command line and spawn_child */	
+	replacearg(&args, 0, "%s", ssh_program);	
 	if (port != -1) {
 		addargs(&args, "-p");
 		addargs(&args, "%d", port);
@@ -502,13 +523,13 @@ main(int argc, char **argv)
 		glob_t g;
 		int expandargc = 0;
 		memset(&g, 0, sizeof(g));
-		for (n = 0; n < argc; n++) {			
+		for (n = 0; n < argc; n++) {
 			argdup = xstrdup(argv[n]);
 			if (p = colon(argdup))
 				convertToForwardslash(p);
 			else
 				convertToForwardslash(argdup);
-			if (glob(argdup, GLOB_NOCHECK, NULL, &g)) {
+			if (glob(argdup, GLOB_NOCHECK | GLOB_NOESCAPE, NULL, &g)) {
 				if (expandargc > argc)
 					newargv = xreallocarray(newargv, expandargc + 1, sizeof(*newargv));
 				newargv[expandargc++] = xstrdup(argdup);
@@ -910,16 +931,23 @@ tolocal(int argc, char **argv)
 					addargs(&alist, "/S /E /H");
 				if (pflag)
 					addargs(&alist, "/K /X");
-				addargs(&alist, "/Y /F /I");				
-				addargs(&alist, "%s", argv[i]);				
+				addargs(&alist, "/Y /F /I");
+				addargs(&alist, "%s", argv[i]);
 
-				if ((last = strrchr(argv[i], '\\')) == NULL)
-					last = argv[i];
-				else
-					++last;
-				
-				addargs(&alist, "%s%s%s", argv[argc - 1],
-					strcmp(argv[argc - 1], "\\") ? "\\" : "", last);
+				/* This logic is added to align with UNIX behavior.
+				 * If the argv[argc-1] exists then append direcorty name from argv[i]
+				 */
+				if (0 == stat(argv[argc - 1], &stb) && (S_ISDIR(stb.st_mode))) {
+					if ((last = strrchr(argv[i], '\\')) == NULL)
+						last = argv[i];
+					else
+						++last;
+
+					addargs(&alist, "%s%s%s", argv[argc - 1],
+						strcmp(argv[argc - 1], "\\") ? "\\" : "", last);
+				} else {
+					addargs(&alist, "%s", argv[argc - 1]);
+				}
 			} else {
 				addargs(&alist, "%s", _PATH_COPY);
 				addargs(&alist, "/Y");				
@@ -1250,6 +1278,8 @@ sink(int argc, char **argv)
 				SCREWUP("bad mode");
 			mode = (mode << 3) | (*cp - '0');
 		}
+		if (!pflag)
+			mode &= ~mask;
 		if (*cp++ != ' ')
 			SCREWUP("mode not delimited");
 

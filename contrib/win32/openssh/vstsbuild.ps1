@@ -18,7 +18,7 @@ if (-not $gitBinFullPath)
 function Get-RepoFork
 {
     [CmdletBinding()]    
-    param([string]$AccountURL, [string]$RepoFork, [string]$repoLocalPath, [string]$BranchName)
+    param([string]$AccountURL="https://github.com/powershell", [string]$RepoFork, [string]$repoLocalPath, [string]$BranchName)
     if (Test-Path -Path $repoLocalPath -PathType Container)
     {
         Remove-Item -Path $repoLocalPath -Recurse -Force
@@ -72,7 +72,7 @@ try
             if($SignedFilesPath)
             {
                 Write-Verbose "SignedFilesPath: $SignedFilesPath" -Verbose
-                $files = Get-ChildItem -Path $SignedFilesPath\* -Recurse -File | Select-Object -ExpandProperty FullName
+                $files = Get-ChildItem -Path $SignedFilesPath\* -File | Select-Object -ExpandProperty FullName
                 #Count the remaining file not signed files.
                 Get-ChildItem -Path $BuildPath\* -Recurse -File | % {
                     $src = $_.FullName                    
@@ -88,7 +88,7 @@ try
             else
             {
                 #did not run codesign, so publish the plain binaries
-                $files = Get-ChildItem -Path $BuildPath\* -Recurse -File | Select-Object -ExpandProperty FullName
+                $files = Get-ChildItem -Path $BuildPath\* -File | Select-Object -ExpandProperty FullName
             }
             $Bucket = (Split-Path $BuildPath -Leaf).Replace("_symbols", "")
 
@@ -110,6 +110,10 @@ try
                         $folderName = "$($Bucket)_Logs"
                         $artifactname = "$folderName-$leafFileName"
                         Write-Host "##vso[artifact.upload containerfolder=$folderName;artifactname=$artifactname]$fileName"
+                    }
+                    elseif($extension -ieq '.zip')
+                    {                        
+                        Write-Host "##vso[artifact.upload artifactname=$leafFileName]$fileName"
                     }
                     else
                     {

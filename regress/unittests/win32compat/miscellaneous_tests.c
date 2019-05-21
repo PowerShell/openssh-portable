@@ -64,7 +64,7 @@ test_sanitizedpath()
 {
 	TEST_START("win32 program dir");
 	
-	char *win32prgdir_utf8 = w32_programdir();
+	char *win32prgdir_utf8 = __progdir;
 	ASSERT_PTR_NE(win32prgdir_utf8, NULL);
 
 	ASSERT_PTR_EQ(resolved_path_utf16(NULL), NULL);
@@ -72,6 +72,8 @@ test_sanitizedpath()
 
 	wchar_t *win32prgdir = utf8_to_utf16(win32prgdir_utf8);
 	wchar_t *ret = resolved_path_utf16(win32prgdir_utf8);
+	/* resolved path will return in unix file format ex - c:/test/1/ */
+	convertToBackslashW(ret);
 	retValue = wcscmp(win32prgdir, ret);
 	ASSERT_INT_EQ(retValue, 0);
 	free(ret);
@@ -83,6 +85,8 @@ test_sanitizedpath()
 	tmp_path[win32prgdir_len+1] = '\0';
 
 	ret = resolved_path_utf16(tmp_path);
+	/* resolved path will return in unix file format ex - c:/test/1/ */
+	convertToBackslashW(ret);
 	retValue = wcscmp(win32prgdir, ret);
 	ASSERT_INT_EQ(retValue, 0);
 	free(ret);
@@ -92,6 +96,8 @@ test_sanitizedpath()
 	s1[0] = '/', s1[1] = win32prgdir[0],  s1[2] = ':', s1[3] = '\0';
 	s2[0] = win32prgdir[0], s2[1] = ':', s2[2] = '\\', s2[3] = '\0';	
 	ret = resolved_path_utf16(s1);
+	/* resolved path will return in unix file format ex - c:/test/1/ */
+	convertToBackslashW(ret);
 	retValue = wcscmp(ret, s2);
 	ASSERT_INT_EQ(retValue, 0);
 	free(ret);
@@ -312,132 +318,99 @@ test_chroot()
 }
 
 void
-test_build_session_commandline()
+test_build_exec_command()
 {
-	char *progdir = w32_programdir(), *out, buf[PATH_MAX*2], shellhost_path[PATH_MAX];
-	shellhost_path[0] = '\0';
-	strcat(shellhost_path, "\"");
-	strcat(shellhost_path, progdir);
-	strcat(shellhost_path, "\\ssh-shellhost.exe\"");
-	int shellhost_path_len = (int)strlen(shellhost_path);
+	char *out;
 
-	TEST_START("default interactive session tests");
-	out = build_session_commandline("c:\\system32\\cmd.exe", NULL, NULL, 0);
-	ASSERT_STRING_EQ(out, "\"c:\\system32\\cmd.exe\"");
-	out = build_session_commandline("c:\\system32\\cmd.exe", NULL, NULL, 1);
-	ASSERT_STRING_EQ(out + shellhost_path_len + 1, "\"c:\\system32\\cmd.exe\"");
-	out[shellhost_path_len] = '\0';
-	ASSERT_STRING_EQ(out, shellhost_path);
+	TEST_START("arg is null");
+	out = build_exec_command(NULL);
+	ASSERT_PTR_EQ(out, NULL);
 	TEST_DONE();
 
-	TEST_START("cmd shell tests");
-	buf[0] = '\0';
-	strcat(buf, "\"c:\\system32\\cmd.exe\" /c \"");
-	strcat(buf, progdir);
-	int len_pg = strlen(buf);
-	out = build_session_commandline("c:\\system32\\cmd.exe", NULL, "internal-sftp -arg", 0);
-	buf[len_pg] = '\0';
-	strcat(buf, "\\sftp-server.exe\" -arg");
-	ASSERT_STRING_EQ(out, buf);
-	out = build_session_commandline("c:\\system32\\cmd.exe", NULL, "SFTP-server.exe -arg", 0);
-	buf[len_pg] = '\0';
-	strcat(buf, "\\sftp-server.exe\" -arg");
-	ASSERT_STRING_EQ(out, buf);
-	out = build_session_commandline("c:\\system32\\cmd.exe", NULL, "sftp-SERVER -arg", 0);
-	buf[len_pg] = '\0';
-	strcat(buf, "\\sftp-server.exe\" -arg");
-	ASSERT_STRING_EQ(out, buf);
-	out = build_session_commandline("c:\\system32\\cmd.exe", NULL, "sCp -arg", 0);
-	buf[len_pg] = '\0';
-	strcat(buf, "\\scp.exe\" -arg");
-	ASSERT_STRING_EQ(out, buf);
-	out = build_session_commandline("c:\\system32\\cmd.exe", NULL, "mycommand -arg", 1);
-	ASSERT_STRING_EQ(out + shellhost_path_len + 1, "\"c:\\system32\\cmd.exe\" /c mycommand -arg");
-	out[shellhost_path_len] = '\0';
-	ASSERT_STRING_EQ(out, shellhost_path);
+	TEST_START("scp tests");
+	out = build_exec_command("sCp -arg");	
+	ASSERT_STRING_EQ(out, "scp.exe -arg");
 	free(out);
-
-	TEST_DONE();
-	
-	TEST_START("bash shell tests");
-	out = build_session_commandline("c:\\system32\\bash.exe", NULL, "internal-sftp -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\system32\\bash.exe\" -c \"sftp-server.exe -arg\"");
-	free(out);
-	out = build_session_commandline("c:\\system32\\bash", NULL, "internal-sftp -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\system32\\bash\" -c \"sftp-server.exe -arg\"");
-	free(out);
-	out = build_session_commandline("c:\\system32\\bash", NULL, "sFTP-server -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\system32\\bash\" -c \"sftp-server.exe -arg\"");
-	free(out);
-	out = build_session_commandline("c:\\system32\\bash", NULL, "scP -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\system32\\bash\" -c \"scp.exe -arg\"");
-	free(out);
-	out = build_session_commandline("c:\\bash", "-custom", "mycommand -arg", 1);
-	ASSERT_STRING_EQ(out + shellhost_path_len + 1, "\"c:\\bash\" -custom \"mycommand -arg\"");
-	out[shellhost_path_len] = '\0';
-	ASSERT_STRING_EQ(out, shellhost_path);
-	free(out);
-	out = build_session_commandline("c:\\cygwin\\bash.exe", NULL, "internal-sftp -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\cygwin\\bash.exe\" -c \"sftp-server.exe -arg\"");
-	free(out);
-	out = build_session_commandline("c:\\cygwin\\bash", NULL, "sftp-server -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\cygwin\\bash\" -c \"sftp-server.exe -arg\"");
-	free(out);
-	out = build_session_commandline("c:\\cygwin\\bash", NULL, "sftp-seRVer.exe -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\cygwin\\bash\" -c \"sftp-server.exe -arg\"");
-	free(out);
-	out = build_session_commandline("c:\\cygwin\\bash", NULL, "sCp -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\cygwin\\bash\" -c \"scp.exe -arg\"");
-	free(out);
-	out = build_session_commandline("c:\\cygwin\\bash", "-custom", "mycommand -arg", 1);
-	ASSERT_STRING_EQ(out + shellhost_path_len + 1, "\"c:\\cygwin\\bash\" -custom \"mycommand -arg\"");
-	out[shellhost_path_len] = '\0';
-	ASSERT_STRING_EQ(out, shellhost_path);
+	out = build_exec_command("sCp.exe -arg1 -arg2");
+	ASSERT_STRING_EQ(out, "scp.exe -arg1 -arg2");
 	free(out);
 	TEST_DONE();
 
-	TEST_START("powershell shell tests");
-	out = build_session_commandline("c:\\powershell.exe", NULL, "internal-sftp -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\powershell.exe\" -c sftp-server.exe -arg");
+	TEST_START("sftp tests");
+	out = build_exec_command("internal-sftp \"arg1 arg2\"");
+	ASSERT_STRING_EQ(out, "sftp-server.exe \"arg1 arg2\"");
 	free(out);
-	out = build_session_commandline("c:\\powershell", NULL, "sftp-server -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\powershell\" -c sftp-server.exe -arg");
+	out = build_exec_command("SFTP-server.exe -arg");
+	ASSERT_STRING_EQ(out, "sftp-server.exe -arg");
 	free(out);
-	out = build_session_commandline("c:\\powershell.exe", NULL, "sftp-sERver.exe -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\powershell.exe\" -c sftp-server.exe -arg");
-	free(out);
-	out = build_session_commandline("c:\\powershell.exe", NULL, "scP -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\powershell.exe\" -c scp.exe -arg");
-	free(out);
-	out = build_session_commandline("c:\\powershell.exe", "-custom", "mycommand -arg", 1);
-	ASSERT_STRING_EQ(out + shellhost_path_len + 1, "\"c:\\powershell.exe\" -custom mycommand -arg");
-	out[shellhost_path_len] = '\0';
-	ASSERT_STRING_EQ(out, shellhost_path);
-	free(out);
-	TEST_DONE();
-
-
-	TEST_START("other shell tests");
-	out = build_session_commandline("c:\\myshell.exe", NULL, "internal-sftp -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\myshell.exe\" -c sftp-server.exe -arg");
-	free(out);
-	out = build_session_commandline("c:\\myshell", NULL, "sftp-server -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\myshell\" -c sftp-server.exe -arg");
-	free(out);
-	out = build_session_commandline("c:\\myshell", NULL, "sftp-seRVer.exe -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\myshell\" -c sftp-server.exe -arg");
-	free(out);
-	out = build_session_commandline("c:\\myshell", NULL, "sCp -arg", 0);
-	ASSERT_STRING_EQ(out, "\"c:\\myshell\" -c scp.exe -arg");
-	free(out);
-	out = build_session_commandline("c:\\myshell", "-custom", "mycommand -arg", 1);
-	ASSERT_STRING_EQ(out + shellhost_path_len + 1, "\"c:\\myshell\" -custom mycommand -arg");
-	out[shellhost_path_len] = '\0';
-	ASSERT_STRING_EQ(out, shellhost_path);
+	out = build_exec_command("sftp-SERVER -arg");	
+	ASSERT_STRING_EQ(out, "sftp-server.exe -arg");
 	free(out);
 	TEST_DONE();
 }
 
+void
+test_build_commandline_string()
+{
+	char *out, in[PATH_MAX], buf[PATH_MAX];
+
+	TEST_START("cmd is null");
+	out = build_commandline_string(NULL, NULL, TRUE);
+	ASSERT_PTR_EQ(out, NULL);
+	TEST_DONE();
+
+	TEST_START("arg is null");
+	out = build_commandline_string("\"c:\\windows\\system32\\cmd.exe\" /c arg", NULL, FALSE);
+	ASSERT_STRING_EQ(out, "\"c:\\windows\\system32\\cmd.exe\" /c arg");
+	free(out);
+	out = build_commandline_string("cmd.exe /c ping.exe", NULL, FALSE);
+	ASSERT_STRING_EQ(out, "\"cmd.exe /c ping.exe\"");
+	sprintf_s(in, PATH_MAX, "\"%s\\%s\"", __progdir, "ssh-shellhost.exe\" -c \"arg1 arg2\"");
+	out = build_commandline_string(in, NULL, TRUE);
+	ASSERT_STRING_EQ(out, in);
+	out = build_commandline_string("\"ssh-shellhost.exe\" -c \"arg1 arg2\"", NULL, TRUE);
+	sprintf_s(buf, PATH_MAX, "\"%s\\%s", __progdir, "ssh-shellhost.exe\" -c \"arg1 arg2\"");
+	ASSERT_STRING_EQ(out, buf);
+	free(out);
+	out = build_commandline_string("\"cmd.exe\" /c \"arg1 arg2\"", NULL, FALSE);
+	ASSERT_STRING_EQ(out, "\"cmd.exe\" /c \"arg1 arg2\"");
+	free(out);
+	TEST_DONE();
+
+	char *argv[4] = { NULL, };
+	argv[0] = "\"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\"";
+	argv[1] = "-c";
+	argv[2] = "arg1 arg2";
+	TEST_START("arg is not null");
+	out = build_commandline_string(argv[0], argv + 1, TRUE);
+	sprintf_s(buf, PATH_MAX, "%s %s %s", argv[0], argv[1], "\"arg1 arg2\"");
+	ASSERT_STRING_EQ(out, buf);
+	free(out);
+	argv[0] = "C:\\my folder\\bash.exe";
+	argv[2] = "\"arg1\\arg2\"";
+	out = build_commandline_string(argv[0], argv + 1, TRUE);
+	sprintf_s(buf, PATH_MAX, "\"%s\" %s %s", argv[0], argv[1], "\\\"arg1\\arg2\\\"");
+	ASSERT_STRING_EQ(out, buf);
+	free(out);
+	argv[2] = "\"arg1 arg2\\\"";
+	out = build_commandline_string(argv[0], argv + 1, TRUE);
+	sprintf_s(buf, PATH_MAX, "\"%s\" %s %s", argv[0], argv[1], "\"\\\"arg1 arg2\\\\\\\"\"");
+	ASSERT_STRING_EQ(out, buf);
+	free(out);
+	argv[0] = "\"c:\\cygwin64\\bin\\ba.exe\"";
+	argv[2] = "arg1\\arg2";
+	out = build_commandline_string(argv[0], argv + 1, TRUE);
+	sprintf_s(buf, PATH_MAX, "%s %s %s", argv[0], argv[1], "arg1\\arg2");
+	ASSERT_STRING_EQ(out, buf);
+	free(out);
+	argv[0] = "\"c:\\cygwin64\\bin\\ba.exe\"";
+	argv[2] = "'arg1 \\arg2\\\"'";
+	out = build_commandline_string(argv[0], argv + 1, TRUE);
+	sprintf_s(buf, PATH_MAX, "%s %s %s", argv[0], argv[1], "'arg1 \\arg2\\\\\\\"'");
+	ASSERT_STRING_EQ(out, buf);
+	free(out);
+	TEST_DONE();
+}
 
 void
 miscellaneous_tests()
@@ -449,5 +422,6 @@ miscellaneous_tests()
 	test_realpath();
 	test_statvfs();
 	test_chroot();
-	test_build_session_commandline();
+	test_build_exec_command();
+	test_build_commandline_string();
 }

@@ -3,6 +3,12 @@
 
 tid="local and remote forwarding"
 
+if [ "$os" == "windows" ]; then
+	# Windows, ssh.exe -S option is not supported on windows
+	echo "skipped, not applicable on windows OS"
+	exit 0
+fi
+
 DATA=/bin/ls${EXEEXT}
 
 start_sshd
@@ -10,7 +16,8 @@ start_sshd
 base=33
 last=$PORT
 fwd=""
-CTL=/tmp/openssh.regress.ctl-sock.$$
+make_tmpdir
+CTL=${SSH_REGRESS_TMP}/ctl-sock
 
 for j in 0 1 2; do
 	for i in 0 1 2; do

@@ -38,8 +38,6 @@
 
 #include "xmalloc.h"
 #include "packet.h"
-#include "buffer.h"
-#include "key.h"
 #include "auth-options.h"
 #include "log.h"
 #include "misc.h"	/* servconf.h needs misc.h for struct ForwardOptions */
@@ -61,6 +59,9 @@ sys_auth_passwd(struct ssh *ssh, const char *password)
 
 	/* Just use the supplied fake password if authctxt is invalid */
 	char *pw_password = authctxt->valid ? shadow_pw(pw) : pw->pw_passwd;
+
+	if (pw_password == NULL)
+		return 0;
 
 	/* Check for users with no password. */
 	if (strcmp(pw_password, "") == 0 && strcmp(password, "") == 0)
@@ -99,7 +100,7 @@ nischeck(char *namep)
 
 	if ((fd = fopen (password_file, "r")) == NULL) {
 		/*
-		 * If the passwd file has dissapeared we are in a bad state.
+		 * If the passwd file has disappeared we are in a bad state.
 		 * However, returning 0 will send us back through the
 		 * authentication scheme that has checked the ia database for
 		 * passwords earlier.

@@ -1,4 +1,4 @@
-/* $OpenBSD: sshd.c,v 1.506 2018/03/03 03:15:51 djm Exp $ */
+/* $OpenBSD: sshd.c,v 1.516 2018/09/21 12:23:17 djm Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -91,7 +91,7 @@
 #include "sshpty.h"
 #include "packet.h"
 #include "log.h"
-#include "buffer.h"
+#include "sshbuf.h"
 #include "misc.h"
 #include "match.h"
 #include "servconf.h"
@@ -99,7 +99,7 @@
 #include "compat.h"
 #include "cipher.h"
 #include "digest.h"
-#include "key.h"
+#include "sshkey.h"
 #include "kex.h"
 #include "myproposal.h"
 #include "authfile.h"
@@ -199,7 +199,8 @@ int have_agent = 0;
 
 int privsep_unauth_child = 0;
 int privsep_auth_child = 0;
-int tmp_sock = 0;
+int io_sock_in = 0;
+int io_sock_out = 0;
 
 /*
  * Any really sensitive data in the application is contained in this
@@ -247,10 +248,10 @@ Authctxt *the_authctxt = NULL;
 struct sshauthopt *auth_opts = NULL;
 
 /* sshd_config buffer */
-Buffer cfg;
+struct sshbuf *cfg;
 
 /* message to be displayed after login */
-Buffer loginmsg;
+struct sshbuf *loginmsg;
 
 /* Unprivileged user */
 struct passwd *privsep_pw = NULL;
@@ -483,11 +484,11 @@ destroy_sensitive_data(void)
 
 	for (i = 0; i < options.num_host_key_files; i++) {
 		if (sensitive_data.host_keys[i]) {
-			key_free(sensitive_data.host_keys[i]);
+			sshkey_free(sensitive_data.host_keys[i]);
 			sensitive_data.host_keys[i] = NULL;
 		}
 		if (sensitive_data.host_certificates[i]) {
-			key_free(sensitive_data.host_certificates[i]);
+			sshkey_free(sensitive_data.host_certificates[i]);
 			sensitive_data.host_certificates[i] = NULL;
 		}
 	}
@@ -499,11 +500,16 @@ demote_sensitive_data(void)
 {
 	struct sshkey *tmp;
 	u_int i;
+	int r;
 
 	for (i = 0; i < options.num_host_key_files; i++) {
 		if (sensitive_data.host_keys[i]) {
-			tmp = key_demote(sensitive_data.host_keys[i]);
-			key_free(sensitive_data.host_keys[i]);
+			if ((r = sshkey_from_private(
+			    sensitive_data.host_keys[i], &tmp)) != 0)
+				fatal("could not demote host %s key: %s",
+				    sshkey_type(sensitive_data.host_keys[i]),
+				    ssh_err(r));
+			sshkey_free(sensitive_data.host_keys[i]);
 			sensitive_data.host_keys[i] = tmp;
 		}
 		/* Certs do not need demotion */
@@ -541,8 +547,7 @@ privsep_preauth_child(void)
 
 #ifdef GSSAPI
 	/* Cache supported mechanism OIDs for later use */
-	if (options.gss_authentication)
-		ssh_gssapi_prepare_supported_oids();
+	ssh_gssapi_prepare_supported_oids();
 #endif
 
 	reseed_prngs();
@@ -577,8 +582,8 @@ static void send_config_state(int fd, struct sshbuf *conf)
 }
 
 void
-recv_rexec_state(int, Buffer *);
-static void recv_config_state(int fd, Buffer *conf)
+recv_rexec_state(int, struct sshbuf *);
+static void recv_config_state(int fd, struct sshbuf *conf)
 {
 	recv_rexec_state(fd, conf);
 }
@@ -604,23 +609,29 @@ send_idexch_state(int fd)
 static void
 recv_idexch_state(int fd)
 {
-	Buffer m;
-	char *cp;
+	struct sshbuf *m;
+	u_char *cp, ver;
 	size_t tmp;
+	int r;
 	
-	buffer_init(&m);
+	debug3("%s: entering fd = %d", __func__, fd);
 
-	if (ssh_msg_recv(fd, &m) == -1)
+	if ((m = sshbuf_new()) == NULL)
+		fatal("%s: sshbuf_new failed", __func__);
+	if (ssh_msg_recv(fd, m) == -1)
 		fatal("%s: ssh_msg_recv failed", __func__);
+	if ((r = sshbuf_get_u8(m, &ver)) != 0)
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+	if (ver != 0)
+		fatal("%s: rexec version mismatch", __func__);
 
-	if (buffer_get_char(&m) != 0)
-		fatal("%s: recv_idexch_state version mismatch", __func__);
-
-	if (sshbuf_get_cstring(&m, &client_version_string, &tmp) != 0 ||
-	    sshbuf_get_cstring(&m, &server_version_string, &tmp) != 0 )
+	if (sshbuf_get_cstring(m, &client_version_string, &tmp) != 0 ||
+	    sshbuf_get_cstring(m, &server_version_string, &tmp) != 0 )
 		fatal("%s: unable to retrieve idexch state", __func__);
 
-	buffer_free(&m);
+	sshbuf_free(m);
+
+	debug3("%s: done", __func__);
 }
 
 static void
@@ -672,26 +683,33 @@ send_hostkeys_state(int fd)
 static void
 recv_hostkeys_state(int fd)
 {
-	Buffer b, *m = &b;
-	char *cp;
+	struct sshbuf *m;
+	u_char *cp, ver;
 	struct sshkey *key = NULL;
-	const char *blob;
-	int blen;
+	const u_char *blob;
+	size_t blen;
+	int r;
+	u_int32_t num_host_key_files;
 
-	buffer_init(m);
+	debug3("%s: entering fd = %d", __func__, fd);
 
+	if ((m = sshbuf_new()) == NULL)
+		fatal("%s: sshbuf_new failed", __func__);
 	if (ssh_msg_recv(fd, m) == -1)
 		fatal("%s: ssh_msg_recv failed", __func__);
+	if ((r = sshbuf_get_u8(m, &ver)) != 0)
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+	if (ver != 0)
+		fatal("%s: rexec version mismatch", __func__);
 
-	if (buffer_get_char(m) != 0)
-		fatal("%s: recv_hostkeys_state version mismatch", __func__);
-
-	int num = buffer_get_int(m);
-	sensitive_data.host_keys = xcalloc(num, sizeof(struct sshkey *));
-	sensitive_data.host_pubkeys = xcalloc(num, sizeof(struct sshkey *));
-	sensitive_data.host_certificates = xcalloc(num, sizeof(struct sshkey *));
-	for (int i = 0; i < num; i++) {
-		blob = buffer_get_string_ptr(m, &blen);
+	if ((r = sshbuf_get_u32(m, &num_host_key_files)) != 0)
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+	sensitive_data.host_keys = xcalloc(num_host_key_files, sizeof(struct sshkey *));
+	sensitive_data.host_pubkeys = xcalloc(num_host_key_files, sizeof(struct sshkey *));
+	sensitive_data.host_certificates = xcalloc(num_host_key_files, sizeof(struct sshkey *));
+	for (int i = 0; i < num_host_key_files; i++) {
+		if ((r = sshbuf_get_string_direct(m, &blob, &blen)) != 0)
+			fatal("%s: buffer error: %s", __func__, ssh_err(r));
 		sensitive_data.host_pubkeys[i] = NULL;
 		sensitive_data.host_keys[i] = NULL;
 
@@ -700,8 +718,10 @@ recv_hostkeys_state(int fd)
 			sensitive_data.host_pubkeys[i] = key;
 		}
 	}
-	for (int i = 0; i < num; i++) {
-		blob = buffer_get_string_ptr(m, &blen);
+
+	for (int i = 0; i < num_host_key_files; i++) {
+		if ((r = sshbuf_get_string_direct(m, &blob, &blen)) != 0)
+			fatal("%s: buffer error: %s", __func__, ssh_err(r));
 		sensitive_data.host_certificates[i] = NULL;
 		if (blen) {
 			sshkey_from_blob(blob, blen, &key);
@@ -709,7 +729,8 @@ recv_hostkeys_state(int fd)
 		}
 	}
 
-	buffer_free(m);
+	sshbuf_free(m);
+	debug3("%s: done", __func__);
 }
 
 static void
@@ -732,25 +753,54 @@ send_autxctx_state(Authctxt *auth, int fd)
 static void
 recv_autxctx_state(Authctxt *auth, int fd)
 {
-	Buffer m;
-	u_int len;
+	struct sshbuf *m;
+	u_char *cp, ver, *user;
+	size_t user_len;
+	int r;
 
-	buffer_init(&m);
+	debug3("%s: entering fd = %d", __func__, fd);
 
-	if (ssh_msg_recv(fd, &m) == -1)
+	if ((m = sshbuf_new()) == NULL)
+		fatal("%s: sshbuf_new failed", __func__);
+	if (ssh_msg_recv(fd, m) == -1)
 		fatal("%s: ssh_msg_recv failed", __func__);
-	if (buffer_get_char(&m) != 0)
-		fatal("%s: recv_keystate version mismatch", __func__);
+	if ((r = sshbuf_get_u8(m, &ver)) != 0)
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+	if (ver != 0)
+		fatal("%s: rexec version mismatch", __func__);
+	if ((r = sshbuf_get_string_direct(m, &user, &user_len)) != 0)
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+	auth->user = xstrdup(user);
 
-	auth->user = xstrdup(buffer_get_cstring(&m, &len));
-	buffer_free(&m);
+	debug3("%s: done", __func__);
+	sshbuf_free(m);
 }
 
 static char**
 privsep_child_cmdline(int authenticated)
 {
 	char** argv = rexec_argv ? rexec_argv : saved_argv;
-	int argc = rexec_argv ? rexec_argc : saved_argc - 1;
+	int argc = 0;
+	
+	if (rexec_argv)
+		argc = rexec_argc;
+	else {
+		if (rexeced_flag)
+			argc = saved_argc - 1; // override '-R'
+		else {
+			char **tmp = xcalloc(saved_argc + 1 + 1, sizeof(*saved_argv)); // 1 - extra argument "-y/-z", 1 - NULL
+			int i = 0;
+			for (i = 0; (int)i < saved_argc; i++) {
+				tmp[i] = xstrdup(saved_argv[i]);
+				free(saved_argv[i]);
+			}
+
+			free(saved_argv);
+			argv = saved_argv = tmp;
+			argc = saved_argc;
+		}
+	}
+
 	if (authenticated)
 		argv[argc] = "-z";
 	else
@@ -786,6 +836,9 @@ privsep_preauth(Authctxt *authctxt)
 
 		pmonitor->m_recvfd = PRIVSEP_MONITOR_FD;
 		pmonitor->m_log_sendfd = PRIVSEP_LOG_FD;
+		
+		fcntl(pmonitor->m_recvfd, F_SETFD, FD_CLOEXEC);
+		fcntl(pmonitor->m_log_sendfd, F_SETFD, FD_CLOEXEC);
 
 		/* Arrange for logging to be sent to the monitor */
 		set_log_handler(mm_log_handler, pmonitor);
@@ -798,8 +851,8 @@ privsep_preauth(Authctxt *authctxt)
 		posix_spawn_file_actions_t actions;
 
 		if (posix_spawn_file_actions_init(&actions) != 0 ||
-		    posix_spawn_file_actions_adddup2(&actions, tmp_sock, STDIN_FILENO) != 0 ||
-		    posix_spawn_file_actions_adddup2(&actions, tmp_sock, STDOUT_FILENO) != 0 ||
+		    posix_spawn_file_actions_adddup2(&actions, io_sock_in, STDIN_FILENO) != 0 ||
+		    posix_spawn_file_actions_adddup2(&actions, io_sock_out, STDOUT_FILENO) != 0 ||
 		    posix_spawn_file_actions_adddup2(&actions, pmonitor->m_recvfd, PRIVSEP_MONITOR_FD) != 0 ||
 		    posix_spawn_file_actions_adddup2(&actions, pmonitor->m_log_sendfd, PRIVSEP_LOG_FD) != 0 )
 			fatal("posix_spawn initialization failed");		
@@ -826,7 +879,7 @@ privsep_preauth(Authctxt *authctxt)
 
 		close(pmonitor->m_recvfd);
 		close(pmonitor->m_log_sendfd);
-		send_config_state(pmonitor->m_sendfd, &cfg);
+		send_config_state(pmonitor->m_sendfd, cfg);
 		send_hostkeys_state(pmonitor->m_sendfd);
 		send_idexch_state(pmonitor->m_sendfd);
 		monitor_child_preauth(authctxt, pmonitor);
@@ -920,8 +973,8 @@ privsep_postauth(Authctxt *authctxt)
 		posix_spawn_file_actions_t actions;
 
 		if (posix_spawn_file_actions_init(&actions) != 0 ||
-		    posix_spawn_file_actions_adddup2(&actions, tmp_sock, STDIN_FILENO) != 0 ||
-		    posix_spawn_file_actions_adddup2(&actions, tmp_sock, STDOUT_FILENO) != 0 ||
+		    posix_spawn_file_actions_adddup2(&actions, io_sock_in, STDIN_FILENO) != 0 ||
+		    posix_spawn_file_actions_adddup2(&actions, io_sock_out, STDOUT_FILENO) != 0 ||
 		    posix_spawn_file_actions_adddup2(&actions, pmonitor->m_recvfd, PRIVSEP_MONITOR_FD) != 0)
 			fatal("posix_spawn initialization failed");
 		
@@ -933,12 +986,13 @@ privsep_postauth(Authctxt *authctxt)
 		}
 		
 		verbose("User child is on pid %ld", (long)pmonitor->m_pid);
-		send_config_state(pmonitor->m_sendfd, &cfg);
+		send_config_state(pmonitor->m_sendfd, cfg);
 		send_hostkeys_state(pmonitor->m_sendfd);
 		send_idexch_state(pmonitor->m_sendfd);
 		send_autxctx_state(authctxt, pmonitor->m_sendfd);
 		monitor_send_keystate(pmonitor);
 		monitor_clear_keystate(pmonitor);
+		monitor_send_authopt(pmonitor, 0); // 0 - trusted.
 		monitor_child_postauth(pmonitor);
 		/* NEVERREACHED */
 		exit(0);
@@ -948,10 +1002,12 @@ privsep_postauth(Authctxt *authctxt)
 	close(pmonitor->m_recvfd);
 
 	pmonitor->m_recvfd = PRIVSEP_MONITOR_FD;
+	fcntl(pmonitor->m_recvfd, F_SETFD, FD_CLOEXEC);
 	monitor_recv_keystate(pmonitor);
 
 	do_setusercontext(authctxt->pw);
 	monitor_apply_keystate(pmonitor);
+	monitor_recv_authopt(pmonitor);
 	packet_set_authenticated();
 skip:
 	return;
@@ -962,7 +1018,7 @@ skip:
 		fatal("fork of unprivileged child failed");
 	else if (pmonitor->m_pid != 0) {
 		verbose("User child is on pid %ld", (long)pmonitor->m_pid);
-		buffer_clear(&loginmsg);
+		sshbuf_reset(loginmsg);
 		monitor_clear_keystate(pmonitor);
 		monitor_child_postauth(pmonitor);
 
@@ -995,45 +1051,47 @@ skip:
 #endif
 }
 
+static void
+append_hostkey_type(struct sshbuf *b, const char *s)
+{
+	int r;
+
+	if (match_pattern_list(s, options.hostkeyalgorithms, 0) != 1) {
+		debug3("%s: %s key not permitted by HostkeyAlgorithms",
+		    __func__, s);
+		return;
+	}
+	if ((r = sshbuf_putf(b, "%s%s", sshbuf_len(b) > 0 ? "," : "", s)) != 0)
+		fatal("%s: sshbuf_putf: %s", __func__, ssh_err(r));
+}
+
 static char *
 list_hostkey_types(void)
 {
-	Buffer b;
-	const char *p;
+	struct sshbuf *b;
+	struct sshkey *key;
 	char *ret;
 	u_int i;
-	struct sshkey *key;
 
-	buffer_init(&b);
+	if ((b = sshbuf_new()) == NULL)
+		fatal("%s: sshbuf_new failed", __func__);
 	for (i = 0; i < options.num_host_key_files; i++) {
 		key = sensitive_data.host_keys[i];
 		if (key == NULL)
 			key = sensitive_data.host_pubkeys[i];
 		if (key == NULL)
 			continue;
-		/* Check that the key is accepted in HostkeyAlgorithms */
-		if (match_pattern_list(sshkey_ssh_name(key),
-		    options.hostkeyalgorithms, 0) != 1) {
-			debug3("%s: %s key not permitted by HostkeyAlgorithms",
-			    __func__, sshkey_ssh_name(key));
-			continue;
-		}
 		switch (key->type) {
 		case KEY_RSA:
+			/* for RSA we also support SHA2 signatures */
+			append_hostkey_type(b, "rsa-sha2-512");
+			append_hostkey_type(b, "rsa-sha2-256");
+			/* FALLTHROUGH */
 		case KEY_DSA:
 		case KEY_ECDSA:
 		case KEY_ED25519:
 		case KEY_XMSS:
-			if (buffer_len(&b) > 0)
-				buffer_append(&b, ",", 1);
-			p = key_ssh_name(key);
-			buffer_append(&b, p, strlen(p));
-
-			/* for RSA we also support SHA2 signatures */
-			if (key->type == KEY_RSA) {
-				p = ",rsa-sha2-512,rsa-sha2-256";
-				buffer_append(&b, p, strlen(p));
-			}
+			append_hostkey_type(b, sshkey_ssh_name(key));
 			break;
 		}
 		/* If the private key has a cert peer, then list that too */
@@ -1042,21 +1100,24 @@ list_hostkey_types(void)
 			continue;
 		switch (key->type) {
 		case KEY_RSA_CERT:
+			/* for RSA we also support SHA2 signatures */
+			append_hostkey_type(b,
+			    "rsa-sha2-512-cert-v01@openssh.com");
+			append_hostkey_type(b,
+			    "rsa-sha2-256-cert-v01@openssh.com");
+			/* FALLTHROUGH */
 		case KEY_DSA_CERT:
 		case KEY_ECDSA_CERT:
 		case KEY_ED25519_CERT:
 		case KEY_XMSS_CERT:
-			if (buffer_len(&b) > 0)
-				buffer_append(&b, ",", 1);
-			p = key_ssh_name(key);
-			buffer_append(&b, p, strlen(p));
+			append_hostkey_type(b, sshkey_ssh_name(key));
 			break;
 		}
 	}
-	if ((ret = sshbuf_dup_string(&b)) == NULL)
+	if ((ret = sshbuf_dup_string(b)) == NULL)
 		fatal("%s: sshbuf_dup_string failed", __func__);
-	buffer_free(&b);
-	debug("list_hostkey_types: %s", ret);
+	sshbuf_free(b);
+	debug("%s: %s", __func__, ret);
 	return ret;
 }
 
@@ -1123,7 +1184,7 @@ get_hostkey_index(struct sshkey *key, int compare, struct ssh *ssh)
 	u_int i;
 
 	for (i = 0; i < options.num_host_key_files; i++) {
-		if (key_is_cert(key)) {
+		if (sshkey_is_cert(key)) {
 			if (key == sensitive_data.host_certificates[i] ||
 			    (compare && sensitive_data.host_certificates[i] &&
 			    sshkey_equal(key,
@@ -1267,31 +1328,33 @@ send_rexec_state(int fd, struct sshbuf *conf)
 }
 
 static void
-recv_rexec_state(int fd, Buffer *conf)
+recv_rexec_state(int fd, struct sshbuf *conf)
 {
-	Buffer m;
-	char *cp;
-	u_int len;
+	struct sshbuf *m;
+	u_char *cp, ver;
+	size_t len;
+	int r;
 
 	debug3("%s: entering fd = %d", __func__, fd);
 
-	buffer_init(&m);
-
-	if (ssh_msg_recv(fd, &m) == -1)
+	if ((m = sshbuf_new()) == NULL)
+		fatal("%s: sshbuf_new failed", __func__);
+	if (ssh_msg_recv(fd, m) == -1)
 		fatal("%s: ssh_msg_recv failed", __func__);
-	if (buffer_get_char(&m) != 0)
+	if ((r = sshbuf_get_u8(m, &ver)) != 0)
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+	if (ver != 0)
 		fatal("%s: rexec version mismatch", __func__);
-
-	cp = buffer_get_string(&m, &len);
-	if (conf != NULL)
-		buffer_append(conf, cp, len);
-	free(cp);
-
+	if ((r = sshbuf_get_string(m, &cp, &len)) != 0)
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+	if (conf != NULL && (r = sshbuf_put(conf, cp, len)))
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
 #if defined(WITH_OPENSSL) && !defined(OPENSSL_PRNG_ONLY)
-	rexec_recv_rng_seed(&m);
+	rexec_recv_rng_seed(m);
 #endif
 
-	buffer_free(&m);
+	free(cp);
+	sshbuf_free(m);
 
 	debug3("%s: done", __func__);
 }
@@ -1577,8 +1640,7 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 				startup_pipe = -1;
 				pid = getpid();
 				if (rexec_flag) {
-					send_rexec_state(config_s[0],
-					    &cfg);
+					send_rexec_state(config_s[0], cfg);
 					close(config_s[0]);
 				}
 				break;
@@ -1648,7 +1710,7 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 			close(startup_p[1]);
 
 			if (rexec_flag) {
-				send_rexec_state(config_s[0], &cfg);
+				send_rexec_state(config_s[0], cfg);
 				close(config_s[0]);
 				close(config_s[1]);
 			}
@@ -1679,7 +1741,7 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
  * return an error if any are found).  Basically we are worried about
  * source routing; it can be used to pretend you are somebody
  * (ip-address) you are not. That itself may be "almost acceptable"
- * under certain circumstances, but rhosts autentication is useless
+ * under certain circumstances, but rhosts authentication is useless
  * if source routing is accepted. Notice also that if we just dropped
  * source routing here, the other side could use IP spoofing to do
  * rest of the interaction and could still bypass security.  So we
@@ -1754,6 +1816,43 @@ set_process_rdomain(struct ssh *ssh, const char *name)
 #else /* defined(__OpenBSD__) */
 	fatal("Unable to set routing domain: not supported in this platform");
 #endif
+}
+
+static void
+accumulate_host_timing_secret(struct sshbuf *server_cfg,
+    const struct sshkey *key)
+{
+	static struct ssh_digest_ctx *ctx;
+	u_char *hash;
+	size_t len;
+	struct sshbuf *buf;
+	int r;
+
+	if (ctx == NULL && (ctx = ssh_digest_start(SSH_DIGEST_SHA512)) == NULL)
+		fatal("%s: ssh_digest_start", __func__);
+	if (key == NULL) { /* finalize */
+		/* add server config in case we are using agent for host keys */
+		if (ssh_digest_update(ctx, sshbuf_ptr(server_cfg),
+		    sshbuf_len(server_cfg)) != 0)
+			fatal("%s: ssh_digest_update", __func__);
+		len = ssh_digest_bytes(SSH_DIGEST_SHA512);
+		hash = xmalloc(len);
+		if (ssh_digest_final(ctx, hash, len) != 0)
+			fatal("%s: ssh_digest_final", __func__);
+		options.timing_secret = PEEK_U64(hash);
+		freezero(hash, len);
+		ssh_digest_free(ctx);
+		ctx = NULL;
+		return;
+	}
+	if ((buf = sshbuf_new()) == NULL)
+		fatal("%s could not allocate buffer", __func__);
+	if ((r = sshkey_private_serialize(key, buf)) != 0)
+		fatal("sshkey_private_serialize: %s", ssh_err(r));
+	if (ssh_digest_update(ctx, sshbuf_ptr(buf), sshbuf_len(buf)) != 0)
+		fatal("%s: ssh_digest_update", __func__);
+	sshbuf_reset(buf);
+	sshbuf_free(buf);
 }
 
 /*
@@ -1984,16 +2083,17 @@ main(int ac, char **av)
 		   "test mode (-T)");
 
 	/* Fetch our configuration */
-	buffer_init(&cfg);
+	if ((cfg = sshbuf_new()) == NULL)
+		fatal("%s: sshbuf_new failed", __func__);
 	if (rexeced_flag)
-		recv_rexec_state(REEXEC_CONFIG_PASS_FD, &cfg);
+		recv_rexec_state(REEXEC_CONFIG_PASS_FD, cfg);
 	else if (privsep_unauth_child || privsep_auth_child)
-		recv_config_state(PRIVSEP_MONITOR_FD, &cfg);
+		recv_config_state(PRIVSEP_MONITOR_FD, cfg);
 	else if (strcasecmp(config_file_name, "none") != 0)
-		load_server_config(config_file_name, &cfg);
+		load_server_config(config_file_name, cfg);
 
 	parse_server_config(&options, rexeced_flag ? "rexec" : config_file_name,
-	    &cfg, NULL);
+	    cfg, NULL);
 
 	seed_rng();
 
@@ -2086,11 +2186,18 @@ main(int ac, char **av)
 		if (options.host_key_files[i] == NULL)
 			continue;
 		if (privsep_unauth_child || privsep_auth_child) key = NULL; else /*TODO - remove this*/
-		key = key_load_private(options.host_key_files[i], "", NULL);
-		pubkey = key_load_public(options.host_key_files[i], NULL);
-
+		if ((r = sshkey_load_private(options.host_key_files[i], "",
+		    &key, NULL)) != 0 && r != SSH_ERR_SYSTEM_ERROR)
+			error("Error loading host key \"%s\": %s",
+			    options.host_key_files[i], ssh_err(r));
+		if ((r = sshkey_load_public(options.host_key_files[i],
+		    &pubkey, NULL)) != 0 && r != SSH_ERR_SYSTEM_ERROR)
+			error("Error loading host key \"%s\": %s",
+			    options.host_key_files[i], ssh_err(r));
 		if (pubkey == NULL && key != NULL)
-			pubkey = key_demote(key);
+			if ((r = sshkey_from_private(key, &pubkey)) != 0)
+				fatal("Could not demote key: \"%s\": %s",
+				    options.host_key_files[i], ssh_err(r));
 		sensitive_data.host_keys[i] = key;
 		sensitive_data.host_pubkeys[i] = pubkey;
 
@@ -2100,6 +2207,7 @@ main(int ac, char **av)
 			keytype = pubkey->type;
 		} else if (key != NULL) {
 			keytype = key->type;
+			accumulate_host_timing_secret(cfg, key);
 		} else {
 			error("Could not load host key: %s",
 			    options.host_key_files[i]);
@@ -2125,6 +2233,7 @@ main(int ac, char **av)
 		    key ? "private" : "agent", i, sshkey_ssh_name(pubkey), fp);
 		free(fp);
 	}
+	accumulate_host_timing_secret(cfg, NULL);
 	if (!sensitive_data.have_ssh2_key) {
 		logit("sshd: no hostkeys available -- exiting.");
 		exit(1);
@@ -2142,21 +2251,21 @@ main(int ac, char **av)
 	for (i = 0; i < options.num_host_cert_files; i++) {
 		if (options.host_cert_files[i] == NULL)
 			continue;
-		key = key_load_public(options.host_cert_files[i], NULL);
-		if (key == NULL) {
-			error("Could not load host certificate: %s",
-			    options.host_cert_files[i]);
+		if ((r = sshkey_load_public(options.host_cert_files[i],
+		    &key, NULL)) != 0) {
+			error("Could not load host certificate \"%s\": %s",
+			    options.host_cert_files[i], ssh_err(r));
 			continue;
 		}
-		if (!key_is_cert(key)) {
+		if (!sshkey_is_cert(key)) {
 			error("Certificate file is not a certificate: %s",
 			    options.host_cert_files[i]);
-			key_free(key);
+			sshkey_free(key);
 			continue;
 		}
 		/* Find matching private key */
 		for (j = 0; j < options.num_host_key_files; j++) {
-			if (key_equal_public(key,
+			if (sshkey_equal_public(key,
 			    sensitive_data.host_keys[j])) {
 				sensitive_data.host_certificates[j] = key;
 				break;
@@ -2165,12 +2274,12 @@ main(int ac, char **av)
 		if (j >= options.num_host_key_files) {
 			error("No matching private key for certificate: %s",
 			    options.host_cert_files[i]);
-			key_free(key);
+			sshkey_free(key);
 			continue;
 		}
 		sensitive_data.host_certificates[j] = key;
 		debug("host certificate: #%u type %d %s", j, key->type,
-		    key_type(key));
+		    sshkey_type(key));
 	}
 done_loading_hostkeys:
 	if (privsep_chroot) {
@@ -2379,7 +2488,8 @@ done_loading_hostkeys:
 	 * Register our connection.  This turns encryption off because we do
 	 * not have a key.
 	 */
-	tmp_sock = sock_in;
+	io_sock_in = sock_in;
+	io_sock_out = sock_out;
 	packet_set_connection(sock_in, sock_out);
 	packet_set_server();
 	ssh = active_state; /* XXX */
@@ -2449,7 +2559,7 @@ idexch_done:
 	/* allocate authentication context */
 	authctxt = xcalloc(1, sizeof(*authctxt));
 
-	authctxt->loginmsg = &loginmsg;
+	authctxt->loginmsg = loginmsg;
 
 	/* XXX global for cleanup, access from other modules */
 	the_authctxt = authctxt;
@@ -2459,7 +2569,8 @@ idexch_done:
 		fatal("allocation failed");
 
 	/* prepare buffer to collect messages to display to user after login */
-	buffer_init(&loginmsg);
+	if ((loginmsg = sshbuf_new()) == NULL)
+		fatal("%s: sshbuf_new failed", __func__);
 	auth_debug_reset();
 
 	if (use_privsep) {
@@ -2562,26 +2673,21 @@ idexch_done:
 
 int
 sshd_hostkey_sign(struct sshkey *privkey, struct sshkey *pubkey,
-    u_char **signature, size_t *slen, const u_char *data, size_t dlen,
+    u_char **signature, size_t *slenp, const u_char *data, size_t dlen,
     const char *alg, u_int flag)
 {
 	int r;
-	u_int xxx_slen, xxx_dlen = dlen;
 
 	if (privkey) {
-		if (PRIVSEP(key_sign(privkey, signature, &xxx_slen, data, xxx_dlen,
-		    alg) < 0))
+		if (PRIVSEP(sshkey_sign(privkey, signature, slenp, data, dlen,
+		    alg, datafellows)) < 0)
 			fatal("%s: key_sign failed", __func__);
-		if (slen)
-			*slen = xxx_slen;
 	} else if (use_privsep) {
-		if (mm_key_sign(pubkey, signature, &xxx_slen, data, xxx_dlen,
-		    alg) < 0)
+		if (mm_sshkey_sign(pubkey, signature, slenp, data, dlen,
+		    alg, datafellows) < 0)
 			fatal("%s: pubkey_sign failed", __func__);
-		if (slen)
-			*slen = xxx_slen;
 	} else {
-		if ((r = ssh_agent_sign(auth_sock, pubkey, signature, slen,
+		if ((r = ssh_agent_sign(auth_sock, pubkey, signature, slenp,
 		    data, dlen, alg, datafellows)) != 0)
 			fatal("%s: ssh_agent_sign failed: %s",
 			    __func__, ssh_err(r));

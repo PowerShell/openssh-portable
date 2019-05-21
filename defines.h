@@ -660,12 +660,6 @@ struct winsize {
 #  define krb5_get_err_text(context,code) error_message(code)
 #endif
 
-#if defined(SKEYCHALLENGE_4ARG)
-# define _compat_skeychallenge(a,b,c,d) skeychallenge(a,b,c,d)
-#else
-# define _compat_skeychallenge(a,b,c,d) skeychallenge(a,b,c)
-#endif
-
 /* Maximum number of file descriptors available */
 #ifdef HAVE_SYSCONF
 # define SSH_SYSFDMAX sysconf(_SC_OPEN_MAX)
@@ -788,11 +782,6 @@ struct winsize {
 # endif
 # define CUSTOM_SYS_AUTH_PASSWD 1
 #endif
-
-#ifdef WINDOWS
-/* Windows has custom non-BSD logic for password auth */
-# define CUSTOM_SYS_AUTH_PASSWD 1
-#endif /* WINDOWS */
 
 #if defined(HAVE_LIBIAF) && defined(HAVE_SET_ID) && !defined(HAVE_SECUREWARE)
 # define CUSTOM_SYS_AUTH_PASSWD 1

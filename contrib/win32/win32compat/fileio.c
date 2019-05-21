@@ -98,6 +98,8 @@ errno_from_Win32Error(int win32_error)
 	case ERROR_PATH_NOT_FOUND:
 	case ERROR_INVALID_NAME:
 		return ENOENT;
+	case ERROR_INVALID_FUNCTION:
+		return EOPNOTSUPP;
 	default:
 		return win32_error;
 	}
@@ -207,7 +209,7 @@ fileio_pipe(struct w32_io* pio[2], int duplex)
 
 	sec_attributes.bInheritHandle = TRUE;
 	sec_attributes.lpSecurityDescriptor = NULL;
-	sec_attributes.nLength = 0;
+	sec_attributes.nLength = sizeof(sec_attributes);
 
 	/* create named pipe */
 	write_handle = CreateNamedPipeA(pipe_name,
@@ -330,6 +332,7 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 		break;
 	case O_WRONLY:
 		cf_flags->dwDesiredAccess = GENERIC_WRITE;
+		cf_flags->dwShareMode = FILE_SHARE_WRITE;
 		break;
 	case O_RDWR:
 		cf_flags->dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
@@ -415,18 +418,18 @@ cleanup:
 
 /* returns 1 if true, 0 otherwise */
 int
-file_in_chroot_jail(HANDLE handle, const char* path_utf8) {
+file_in_chroot_jail(HANDLE handle) {
 	/* ensure final path is within chroot */
-	wchar_t path_buf[MAX_PATH], *final_path;
-	if (GetFinalPathNameByHandleW(handle, path_buf, MAX_PATH, 0) == 0) {
-		debug3("failed to get final path of file:%s error:%d", path_utf8, GetLastError());
+	wchar_t *final_path;
+	
+	final_path = get_final_path_by_handle(handle);
+	if (!final_path)
 		return 0;
-	}
-	final_path = path_buf + 4;
+
 	to_wlower_case(final_path);
 	if ((wcslen(final_path) < wcslen(chroot_pathw)) ||
-		memcmp(final_path, chroot_pathw, 2 * wcslen(chroot_pathw)) != 0 ||
-		final_path[wcslen(chroot_pathw)] != '\\') {
+	    memcmp(final_path, chroot_pathw, 2 * wcslen(chroot_pathw)) != 0 ||
+	    final_path[wcslen(chroot_pathw)] != '\\') {
 		debug3("access denied due to attempt to escape chroot jail");
 		return 0;
 	}
@@ -474,11 +477,12 @@ fileio_open(const char *path_utf8, int flags, mode_t mode)
 
 	if (handle == INVALID_HANDLE_VALUE) {
 		errno = errno_from_Win32LastError();
-		debug3("failed to open file:%s error:%d", path_utf8, GetLastError());
+		debug3("failed to open file:%S error:%d", path_utf16, GetLastError());
 		goto cleanup;
 	}
 
-	if (chroot_pathw && !nonfs_dev && !file_in_chroot_jail(handle, path_utf8)) {		
+	if (chroot_pathw && !nonfs_dev && !file_in_chroot_jail(handle)) {	
+		debug3("%s is not in chroot jail", path_utf8);
 		errno = EACCES;
 		goto cleanup;
 	}
@@ -661,7 +665,7 @@ WriteCompletionRoutine(_In_ DWORD dwErrorCode,
 	if ((dwErrorCode == 0) && (pio->write_details.remaining != dwNumberOfBytesTransfered)) {
 		error("WriteCB - ERROR: broken assumption, io:%p, wrote:%d, remaining:%d", pio,
 			dwNumberOfBytesTransfered, pio->write_details.remaining);
-		DebugBreak();
+		debug_assert_internal();
 	}
 	pio->write_details.remaining -= dwNumberOfBytesTransfered;
 	pio->write_details.pending = FALSE;
@@ -769,14 +773,24 @@ fileio_write(struct w32_io* pio, const void *buf, size_t max_bytes)
 int
 fileio_fstat(struct w32_io* pio, struct _stat64 *buf)
 {
-	int fd = _open_osfhandle((intptr_t)pio->handle, 0);
-	debug4("fstat - pio:%p", pio);
-	if (fd == -1) {
+	HANDLE dup_handle = 0;
+	if (!DuplicateHandle(GetCurrentProcess(), pio->handle, GetCurrentProcess(), &dup_handle, 0,
+		TRUE, DUPLICATE_SAME_ACCESS)) {
 		errno = EOTHER;
 		return -1;
 	}
 
-	return _fstat64(fd, buf);
+	int fd = _open_osfhandle((intptr_t)dup_handle, 0);
+	debug4("fstat - pio:%p", pio);
+	if (fd == -1) {
+		CloseHandle(dup_handle);
+		errno = EOTHER;
+		return -1;
+	}
+
+	int res = _fstat64(fd, buf);
+	_close(fd);
+	return res;
 }
 
 int
@@ -892,44 +906,48 @@ fileio_lseek(struct w32_io* pio, unsigned __int64 offset, int origin)
 	return 0;
 }
 
-/* fdopen implementation */
+/* 
+ * fdopen implementation - use with caution
+ * this implementation deviates from POSIX spec the following way
+ * - the underlying file descriptor is closed automatically
+ * hence no further POSIX io operations (read, write, close, etc) on the 
+ * underlying file descriptor are supported
+ */
 FILE*
 fileio_fdopen(struct w32_io* pio, const char *mode)
 {
-	int fd_flags = 0;
+	wchar_t *file_path, *wmode = NULL;
+	FILE* ret = NULL;
+	DWORD type = 0;
+	
 	debug4("fdopen - io:%p", pio);
 
-	/* logic below doesn't work with overlapped file HANDLES */
-	if (mode[1] == '\0') {
-		switch (*mode) {
-		case 'r':
-			fd_flags = _O_RDONLY;
-			break;
-		case 'w':
-			break;
-		case 'a':
-			fd_flags = _O_APPEND;
-			break;
-		default:
-			errno = ENOTSUP;
-			debug3("fdopen - ERROR unsupported mode %s", mode);
-			return NULL;
-		}
-	} else {
-		errno = ENOTSUP;
-		debug3("fdopen - ERROR unsupported mode %s", mode);
-		return NULL;
+	if ((wmode = utf8_to_utf16(mode)) == NULL)
+		goto cleanup;
+
+	/* for non-disk files, just return the descriptor */
+	type = GetFileType(pio->handle);
+	if (type != FILE_TYPE_DISK) {
+		return _fdopen(pio->table_index, mode);
 	}
 
-	int fd = _open_osfhandle((intptr_t)pio->handle, fd_flags);
+	file_path = get_final_path_by_handle(pio->handle);
+	if (!file_path) 
+		goto cleanup;
+	
+	/* 
+	 * close the win32 handle right away and remove entry from table
+	 * otherwise, wfopen will get an access denied due to sharing violation
+	 */
+	int w32_close(int);
+	w32_close(pio->table_index);
+	errno = _wfopen_s(&ret, file_path, wmode);
 
-	if (fd == -1) {
-		errno = EOTHER;
-		debug3("fdopen - ERROR:%d _open_osfhandle()", errno);
-		return NULL;
-	}
+cleanup:
+	if (wmode)
+		free(wmode);
 
-	return _fdopen(fd, mode);
+	return ret;
 }
 
 void
@@ -1149,22 +1167,17 @@ int
 fileio_symlink(const char *target, const char *linkpath)
 {
 	DWORD ret = -1;
+	char target_modified[PATH_MAX] = { 0 };
+	char *linkpath_resolved = NULL, *target_resolved = NULL;
 
 	if (target == NULL || linkpath == NULL) {
 		errno = EFAULT;
 		return -1;
 	}
 
-	wchar_t *target_utf16 = resolved_path_utf16(target);
-	wchar_t *linkpath_utf16 = resolved_path_utf16(linkpath);
-	wchar_t *resolved_utf16 = _wcsdup(target_utf16);
-	if (target_utf16 == NULL || linkpath_utf16 == NULL)
+	/* First resolve linkpath */
+	if (NULL == (linkpath_resolved = resolved_path_utf8(linkpath)))	
 		goto cleanup;
-
-	if (resolved_utf16 == NULL) {
-		errno = ENOMEM;
-		goto cleanup;
-	}
 
 	/* Relative targets are relative to the link and not our current directory
 	 * so attempt to calculate a resolvable path by removing the link file name
@@ -1172,22 +1185,28 @@ fileio_symlink(const char *target, const char *linkpath)
 	 * C:\Path\Link with Link->SubDir\Target to C:\Path\SubDir\Target
 	 */
 	if (!is_absolute_path(target)) {
-
-		/* allocate area to hold the total possible path */
-		free(resolved_utf16);
-		size_t resolved_len = (wcslen(target_utf16) + wcslen(linkpath_utf16) + 1);
-		resolved_utf16 = malloc(resolved_len * sizeof(wchar_t));
-		if (resolved_utf16 == NULL) {
-			errno = ENOMEM;
-			goto cleanup;
-		}
+		strcpy_s(target_modified, _countof(target_modified), linkpath_resolved);
+		convertToBackslash(target_modified);
+		char *tmp = NULL;
 
 		/* copy the relative target to the end of the link's parent */
-		wcscpy_s(resolved_utf16, resolved_len, linkpath_utf16);
-		convertToBackslashW(resolved_utf16);
-		wchar_t * ptr = wcsrchr(resolved_utf16, L'\\');
-		if (ptr == NULL) wcscpy_s(resolved_utf16, resolved_len, target_utf16);
-		else wcscpy_s(ptr + 1, resolved_len - (ptr + 1 - resolved_utf16), target_utf16);
+		if (tmp = strrchr(target_modified, '\\'))			
+			strcpy_s(tmp + 1, _countof(target_modified) - (tmp + 1 - target_modified), target);
+		else
+			strcpy_s(target_modified, _countof(target_modified), target);
+	} else {
+		/* resolve target */
+		if (NULL == (target_resolved = resolved_path_utf8(target)))
+			goto cleanup;
+
+		strcpy_s(target_modified, _countof(target_modified), target_resolved);
+	}
+
+	wchar_t *linkpath_utf16 = resolved_path_utf16(linkpath);
+	wchar_t *resolved_target_utf16 = utf8_to_utf16(target_modified);
+	if (resolved_target_utf16 == NULL || linkpath_utf16 == NULL) {
+		errno = ENOMEM;
+		goto cleanup;
 	}
 
 	/* unlike other platforms, we need to know whether the symbolic link target is
@@ -1196,7 +1215,7 @@ fileio_symlink(const char *target, const char *linkpath)
 	 * limitation of only creating symlink with valid targets
 	 */
 	WIN32_FILE_ATTRIBUTE_DATA attributes = { 0 };
-	if (GetFileAttributesExW(resolved_utf16, GetFileExInfoStandard, &attributes) == FALSE) {
+	if (GetFileAttributesExW(resolved_target_utf16, GetFileExInfoStandard, &attributes) == FALSE) {
 		errno = errno_from_Win32LastError();
 		goto cleanup;
 	}
@@ -1210,8 +1229,8 @@ fileio_symlink(const char *target, const char *linkpath)
  	 * context so we try both operations, attempting privileged version first.
 	 * note: 0x2 = SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE
 	 */
-	if (CreateSymbolicLinkW(linkpath_utf16, target_utf16, create_flags) == 0) {
-		if (CreateSymbolicLinkW(linkpath_utf16, target_utf16, create_flags | 0x2) == 0) {
+	if (CreateSymbolicLinkW(linkpath_utf16, resolved_target_utf16, create_flags) == 0) {
+		if (CreateSymbolicLinkW(linkpath_utf16, resolved_target_utf16, create_flags | 0x2) == 0) {
 			errno = errno_from_Win32LastError();
 			goto cleanup;
 		}
@@ -1220,12 +1239,18 @@ fileio_symlink(const char *target, const char *linkpath)
 	ret = 0;
 cleanup:
 
-	if (target_utf16)
-		free(target_utf16);
 	if (linkpath_utf16)
 		free(linkpath_utf16);
-	if (resolved_utf16)
-		free(resolved_utf16);
+
+	if (resolved_target_utf16)
+		free(resolved_target_utf16);
+
+	if (linkpath_resolved)
+		free(linkpath_resolved);
+
+	if (target_resolved)
+		free(target_resolved);
+
 	return ret;
 }
 

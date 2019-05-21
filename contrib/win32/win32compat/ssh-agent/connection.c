@@ -55,7 +55,7 @@ agent_connection_on_io(struct agent_connection* con, DWORD bytes, OVERLAPPED* ol
 	if ((bytes == 0) && (GetOverlappedResult(con->pipe_handle, ol, &bytes, FALSE) == FALSE))
 		ABORT_CONNECTION_RETURN(con);
 	if (con->state == DONE)
-		DebugBreak();
+		debug_assert_internal();
 
 	switch (con->state) {		
 	case LISTENING:
@@ -63,7 +63,7 @@ agent_connection_on_io(struct agent_connection* con, DWORD bytes, OVERLAPPED* ol
 		/* Writing is done, read next request */
 		/* assert on assumption that write always completes on sending all bytes*/
 		if (bytes != con->io_buf.num_bytes)
-			DebugBreak();
+			debug_assert_internal();
 		con->state = READING_HEADER;
 		ZeroMemory(&con->io_buf, sizeof(con->io_buf));
 		if (!ReadFile(con->pipe_handle, con->io_buf.buf,
@@ -105,7 +105,7 @@ agent_connection_on_io(struct agent_connection* con, DWORD bytes, OVERLAPPED* ol
 		}
 		break;
 	default:
-		DebugBreak();
+		debug_assert_internal();
 	}		
 }
 
@@ -134,6 +134,13 @@ process_request(struct agent_connection* con)
 	debug("process agent request type %d", type);
 
 	switch (type) {
+	case SSH_AGENTC_REQUEST_RSA_IDENTITIES:
+	case SSH_AGENTC_RSA_CHALLENGE:
+	case SSH_AGENTC_ADD_RSA_IDENTITY:
+	case SSH_AGENTC_REMOVE_RSA_IDENTITY:
+	case SSH_AGENTC_REMOVE_ALL_RSA_IDENTITIES:
+		r = process_unsupported_request(request, response, con);
+		break;
 	case SSH2_AGENTC_ADD_IDENTITY:
 		r =  process_add_identity(request, response, con);
 		break;
