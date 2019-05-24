@@ -14,10 +14,13 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-int	pkcs11_init(int);
-void	pkcs11_terminate(void);
-int	pkcs11_add_provider(char *, char *, struct sshkey ***);
-int	pkcs11_del_provider(char *);
+struct sshkey * lookup_key(const struct sshkey *);
+void            add_key(struct sshkey *, char *);
+void            del_all_keys();
+int             pkcs11_init(int);
+void            pkcs11_terminate(void);
+int             pkcs11_add_provider(char *, char *, struct sshkey ***);
+int             pkcs11_del_provider(char *);
 
 #if !defined(WITH_OPENSSL) && defined(ENABLE_PKCS11)
 #undef ENABLE_PKCS11
