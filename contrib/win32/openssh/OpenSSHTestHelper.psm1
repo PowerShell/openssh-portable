@@ -24,6 +24,7 @@ $Script:E2ETestResultsFile = Join-Path $TestDataPath $E2ETestResultsFileName
 $Script:UnitTestResultsFile = Join-Path $TestDataPath $UnitTestResultsFileName
 $Script:TestSetupLogFile = Join-Path $TestDataPath $TestSetupLogFileName
 $Script:E2ETestDirectory = Join-Path $repositoryRoot.FullName -ChildPath "regress\pesterTests"
+$Script:E2ETestDataDirectory = Join-Path $Script:E2ETestDirectory data
 $Script:WindowsInBox = $false
 $Script:NoLibreSSL = $false
 $Script:EnableAppVerifier = $true
@@ -118,7 +119,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     
     #copy sshd_config
     $testSshdConfig = Join-Path $testSvcConfigDir sshd_config
-    Copy-Item (Join-Path $Script:E2ETestDirectory sshd_config) $testSshdConfig -Force
+    Copy-Item (Join-Path $Script:E2ETestDataDirectory sshd_config) $testSshdConfig -Force
     $con = (Get-Content $testSshdConfig | Out-String).Replace("___TEST_SERVICE_CONFIG_DIR___", $testSvcConfigDir)
     Set-Content -Path $testSshdConfig -Value "$con" -Force            
     if($DebugMode) {
@@ -127,10 +128,10 @@ WARNING: Following changes will be made to OpenSSH configuration
     }
 
     #copy sshtest keys
-    Copy-Item "$($Script:E2ETestDirectory)\sshtest*hostkey*" $testSvcConfigDir -Force  
+    Copy-Item "$($Script:E2ETestDataDirectory)\sshtest*hostkey*" $testSvcConfigDir -Force  
        
     #copy ca pubkey to ssh config path
-    Copy-Item "$($Script:E2ETestDirectory)\sshtest_ca_userkeys.pub"  $testSvcConfigDir -Force 
+    Copy-Item "$($Script:E2ETestDataDirectory)\sshtest_ca_userkeys.pub"  $testSvcConfigDir -Force 
 
     $acl = New-Object System.Security.AccessControl.DirectorySecurity
     $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("Administrators","FullControl","Allow")
@@ -152,7 +153,7 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     #copy ca private key to test dir
     $ca_priv_key = (Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_ca_userkeys)
-    Copy-Item (Join-Path $Script:E2ETestDirectory sshtest_ca_userkeys) $ca_priv_key -Force    
+    Copy-Item (Join-Path $Script:E2ETestDataDirectory sshtest_ca_userkeys) $ca_priv_key -Force 
     Repair-UserSshConfigPermission -FilePath $ca_priv_key -confirm:$false
     $Global:OpenSSHTestInfo["CA_Private_Key"] = $ca_priv_key
 
@@ -174,23 +175,23 @@ WARNING: Following changes will be made to OpenSSH configuration
     
     $knowHostsFilePath = Join-Path $dotSshDirectoryPath known_hosts
     if (-not (Test-Path $knowHostsFilePath -PathType Leaf)) {
-        Copy-Item (Join-Path $Script:E2ETestDirectory known_hosts) $knowHostsFilePath -Force
+        Copy-Item (Join-Path $Script:E2ETestDataDirectory known_hosts) $knowHostsFilePath -Force
     }
     $con = Get-Content $knowHostsFilePath
     if (($con -eq $null) -or (-not($con.Contains("###OpenSSHE2ETests")))) {
-        Get-Content (Join-Path $Script:E2ETestDirectory known_hosts) | Add-Content $knowHostsFilePath 
+        Get-Content (Join-Path $Script:E2ETestDataDirectory known_hosts) | Add-Content $knowHostsFilePath 
     }
 
     $sshConfigFilePath = Join-Path $dotSshDirectoryPath config
     if (-not (Test-Path (Join-Path $dotSshDirectoryPath config) -PathType Leaf)) {
-        Copy-Item (Join-Path $Script:E2ETestDirectory ssh_config) $sshConfigFilePath -Force    
+        Copy-Item (Join-Path $Script:E2ETestDataDirectory ssh_config) $sshConfigFilePath -Force    
     }
     $con = Get-Content $sshConfigFilePath
     if (($con -eq $null) -or (-not($con.Contains("###OpenSSHE2ETests")))) {
-        Get-Content (Join-Path $Script:E2ETestDirectory ssh_config) | Add-Content $sshConfigFilePath 
+        Get-Content (Join-Path $Script:E2ETestDataDirectory ssh_config) | Add-Content $sshConfigFilePath 
     }
 
-    Copy-Item (Join-Path $Script:E2ETestDirectory ssh_config) $sshConfigFilePath -Force
+    Copy-Item (Join-Path $Script:E2ETestDataDirectory ssh_config) $sshConfigFilePath -Force
     Repair-UserSshConfigPermission -FilePath $sshConfigFilePath -confirm:$false
 
     # create test accounts
@@ -216,11 +217,11 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
-    $testPubKeyPath = Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519.pub
+    $testPubKeyPath = Join-Path $Script:E2ETestDataDirectory sshtest_userssokey_ed25519.pub
     Copy-Item $testPubKeyPath $authorizedKeyPath -Force -ErrorAction SilentlyContinue
     Repair-AuthorizedKeyPermission -FilePath $authorizedKeyPath -confirm:$false 
     
-    copy-item (Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519) $Global:OpenSSHTestInfo["TestDataPath"]
+    copy-item (Join-Path $Script:E2ETestDataDirectory sshtest_userssokey_ed25519) $Global:OpenSSHTestInfo["TestDataPath"]
     $testPriKeypath = Join-Path $Global:OpenSSHTestInfo["TestDataPath"] sshtest_userssokey_ed25519    
     cmd /c "ssh-add -D 2>&1 >> $Script:TestSetupLogFile"
     Repair-UserKeyPermission -FilePath $testPriKeypath -confirm:$false
@@ -545,7 +546,7 @@ function Clear-OpenSSHTestEnvironment
     }
     
     # remove registered keys    
-    cmd /c "ssh-add -d (Join-Path $Script:E2ETestDirectory sshtest_userssokey_ed25519) 2>&1 >> $Script:TestSetupLogFile"
+    cmd /c "ssh-add -d (Join-Path $Script:E2ETestDataDirectory sshtest_userssokey_ed25519) 2>&1 >> $Script:TestSetupLogFile"
 
     if($Global:OpenSSHTestInfo -ne $null)
     {
