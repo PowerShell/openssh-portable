@@ -139,7 +139,7 @@ Match User matchuser
         $skip = $ts -eq $null
         if(-not $skip)
         {
-            Stop-SSHDTestDaemon
+            Stop-SSHDTestDaemon   -Port $port
         }
         if(($platform -eq [PlatformType]::Windows) -and ([Environment]::OSVersion.Version.Major -le 6))
         {
@@ -201,7 +201,7 @@ Match User matchuser
             $sshdlog = Join-Path $testDir "$tC.$tI.$sshdLogName"
             if(-not $skip)
             {
-                Stop-SSHDTestDaemon
+                Stop-SSHDTestDaemon   -Port $port
             }
         }
 
@@ -212,12 +212,12 @@ Match User matchuser
 
         It "$tC.$tI-User with full name in the list of AllowUsers"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -p $port -E $sshdlog" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port
 
            Add-UserToLocalGroup -UserName $allowUser1 -Password $password -GroupName $allowGroup1
 
            $o = ssh  -p $port $allowUser1@$server echo 1234
-           Stop-SSHDTestDaemon
+           Stop-SSHDTestDaemon   -Port $port
            $o | Should Be "1234"
            Remove-UserFromLocalGroup -UserName $allowUser1 -GroupName $allowGroup1
 
@@ -225,12 +225,12 @@ Match User matchuser
 
         It "$tC.$tI-User with * wildcard"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -p $port -E $sshdlog" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
 
            Add-UserToLocalGroup -UserName $allowUser2 -Password $password -GroupName $allowGroup1
            
            $o = ssh  -p $port $allowUser2@$server echo 1234
-           Stop-SSHDTestDaemon
+           Stop-SSHDTestDaemon   -Port $port
            $o | Should Be "1234"
            Remove-UserFromLocalGroup -UserName $allowUser2 -GroupName $allowGroup1
 
@@ -238,11 +238,11 @@ Match User matchuser
 
         It "$tC.$tI-User with ? wildcard"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -p $port -E $sshdlog" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
            Add-UserToLocalGroup -UserName $allowUser3 -Password $password -GroupName $allowGroup1
            
            $o = ssh  -p $port $allowUser3@$server echo 1234
-           Stop-SSHDTestDaemon
+           Stop-SSHDTestDaemon   -Port $port
            $o | Should Be "1234"
            Remove-UserFromLocalGroup -UserName $allowUser3 -GroupName $allowGroup1
 
@@ -250,13 +250,13 @@ Match User matchuser
 
         It "$tC.$tI-User with full name in the list of DenyUsers"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -p $port -E $sshdlog" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
 
            Add-UserToLocalGroup -UserName $denyUser1 -Password $password -GroupName $allowGroup1
 
            ssh -p $port -E $sshlog $denyUser1@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
-           Stop-SSHDTestDaemon
+           Stop-SSHDTestDaemon   -Port $port
            $sshdlog | Should Contain "not allowed because listed in DenyUsers"
 
            Remove-UserFromLocalGroup -UserName $denyUser1 -GroupName $allowGroup1
@@ -265,13 +265,13 @@ Match User matchuser
 
         It "$tC.$tI-User with * wildcard in the list of DenyUsers"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -p $port -E $sshdlog" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
 
            Add-UserToLocalGroup -UserName $denyUser2 -Password $password -GroupName $allowGroup1
 
            ssh -p $port -E $sshlog $denyUser2@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
-           Stop-SSHDTestDaemon
+           Stop-SSHDTestDaemon   -Port $port
            $sshdlog | Should Contain "not allowed because listed in DenyUsers"
 
            Remove-UserFromLocalGroup -UserName $denyUser2 -GroupName $allowGroup1
@@ -280,13 +280,13 @@ Match User matchuser
 
         It "$tC.$tI-User with ? wildcard in the list of DenyUsers"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -p $port -E $sshdlog" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
 
            Add-UserToLocalGroup -UserName $denyUser3 -Password $password -GroupName $allowGroup1
 
            ssh -p $port -E $sshlog $denyUser3@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
-           Stop-SSHDTestDaemon
+           Stop-SSHDTestDaemon   -Port $port
            $sshdlog | Should Contain "not allowed because not listed in AllowUsers"
            
            Remove-UserFromLocalGroup -UserName $denyUser3 -GroupName $allowGroup1
@@ -295,14 +295,14 @@ Match User matchuser
 
         It "$tC.$tI-User is listed in the list of AllowUsers but also in a full name DenyGroups and AllowGroups"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -p $port -E $sshdlog" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
 
            Add-UserToLocalGroup -UserName $localuser1 -Password $password -GroupName $allowGroup1
            Add-UserToLocalGroup -UserName $localuser1 -Password $password -GroupName $denyGroup1
            
            ssh -p $port -E $sshlog $localuser1@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
-           Stop-SSHDTestDaemon
+           Stop-SSHDTestDaemon   -Port $port
            $sshdlog | Should Contain "not allowed because a group is listed in DenyGroups"
 
            Remove-UserFromLocalGroup -UserName $localuser1 -GroupName $allowGroup1
@@ -312,13 +312,13 @@ Match User matchuser
 
         It "$tC.$tI-User is listed in the list of AllowUsers but also in a wildcard * DenyGroups"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -p $port -E $sshdlog" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
 
            Add-UserToLocalGroup -UserName $localuser2 -Password $password -GroupName $denyGroup2
            
            ssh -p $port -E $sshlog $localuser2@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
-           Stop-SSHDTestDaemon
+           Stop-SSHDTestDaemon   -Port $port
            $sshdlog | Should Contain "not allowed because a group is listed in DenyGroups"
            
            Remove-UserFromLocalGroup -UserName $localuser2 -GroupName $denyGroup2
@@ -327,13 +327,13 @@ Match User matchuser
 
         It "$tC.$tI-User is listed in the list of AllowUsers but also in a wildcard ? DenyGroups"  -skip:$skip {
            #Run
-           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -p $port -E $sshdlog" 
+           Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
 
            Add-UserToLocalGroup -UserName $localuser3 -Password $password -GroupName $denyGroup3
            
            ssh -p $port -E $sshlog $localuser3@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
-           Stop-SSHDTestDaemon
+           Stop-SSHDTestDaemon   -Port $port
            $sshdlog | Should Contain "not allowed because a group is listed in DenyGroups"
            
            Remove-UserFromLocalGroup -UserName $localuser3 -GroupName $denyGroup3
@@ -341,7 +341,7 @@ Match User matchuser
         }
 
         It "$tC.$tI - Match User block with ForceCommand" -skip:$skip  {
-            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -p $port -E $sshdlog" 
+            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
             $matchuser = "matchuser"
             Add-UserToLocalGroup -UserName $matchuser -Password $password -GroupName $allowGroup1
 
@@ -350,7 +350,7 @@ Match User matchuser
             $o[0].Contains($matchuser) | Should Be $true
             $o[1].Contains("randomcommand") | Should Be $true
             
-            Stop-SSHDTestDaemon
+            Stop-SSHDTestDaemon   -Port $port
             Remove-UserFromLocalGroup -UserName $matchuser -GroupName $allowGroup1
         }
     }

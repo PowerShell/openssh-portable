@@ -66,7 +66,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Repair-AuthorizedKeyPermission -Filepath $authorizedkeyPath -confirm:$false
             if(-not $skip)
             {
-                Stop-SSHDTestDaemon
+                Stop-SSHDTestDaemon -Port $port
             }
                         
             #add wrong password so ssh does not prompt password if failed with authorized keys
@@ -92,7 +92,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             $sshdlog = Join-Path $testDir "$tC.$tI.$sshdLogName"
             if(-not $skip)
             {
-                Stop-SSHDTestDaemon
+                Stop-SSHDTestDaemon -Port $port
             }
         }       
 
@@ -101,9 +101,9 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Repair-FilePermission -Filepath $authorizedkeyPath -Owners $objUserSid -FullAccessNeeded  $adminsSid,$systemSid,$objUserSid -confirm:$false
 
             #Run
-            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -p $port -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog"
+            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
             $o = ssh -p $port $ssouser@$server echo 1234
-            Stop-SSHDTestDaemon
+            Stop-SSHDTestDaemon -Port $port
             $o | Should Be "1234"
         }
 
@@ -112,10 +112,10 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Repair-FilePermission -Filepath $authorizedkeyPath -Owner $systemSid -FullAccessNeeded  $adminsSid,$systemSid,$objUserSid -confirm:$false
 
             #Run
-            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -p $port -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog"
+            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
             
             $o = ssh -p $port $ssouser@$server  echo 1234
-            Stop-SSHDTestDaemon
+            Stop-SSHDTestDaemon -Port $port
             $o | Should Be "1234"
         }
 
@@ -124,9 +124,9 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Repair-FilePermission -Filepath $authorizedkeyPath -Owner $adminsSid -FullAccessNeeded $adminsSid,$systemSid -confirm:$false
 
             #Run
-            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -p $port -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog"
+            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
             $o = ssh -p $port $ssouser@$server  echo 1234
-            Stop-SSHDTestDaemon
+            Stop-SSHDTestDaemon -Port $port
             $o | Should Be "1234"
         }
 
@@ -135,9 +135,9 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Repair-FilePermission -Filepath $authorizedkeyPath -Owner $adminsSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
 
             #Run
-            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -p $port -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog"
+            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
             $o = ssh -p $port $ssouser@$server  echo 1234
-            Stop-SSHDTestDaemon
+            Stop-SSHDTestDaemon -Port $port
             $o | Should Be "1234"          
         }
 
@@ -146,10 +146,10 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Repair-FilePermission -Filepath $authorizedkeyPath -Owner $currentUserSid -FullAccessNeeded $adminsSid,$systemSid -confirm:$false
 
             #Run
-            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -p $port -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog"
+            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
             ssh -p $port -E $sshlog $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
-            Stop-SSHDTestDaemon                  
+            Stop-SSHDTestDaemon -Port $port                  
             $sshlog | Should Contain "Permission denied"
             $sshdlog | Should Contain "Authentication refused."            
         }
@@ -163,10 +163,10 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Set-FilePermission -FilePath $authorizedkeyPath -User $objPwdUserSid -Perm "Read"
 
             #Run
-            Start-SSHDTestDaemon -workDir $opensshbinpath -Arguments "-d -f $sshdconfig -p $port -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog"
+            Start-SSHDTestDaemon -workDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
             ssh -p $port -E $sshlog $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0            
-            Stop-SSHDTestDaemon
+            Stop-SSHDTestDaemon -Port $port
             $sshlog | Should Contain "Permission denied"
             $sshdlog | Should Contain "Authentication refused."
         }
@@ -177,10 +177,10 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objPwdUserSid -FullAccessNeeded $adminsSid,$systemSid,$objPwdUser -confirm:$false
 
             #Run
-            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -p $port -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog"
+            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
             ssh -p $port -E $sshlog $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
-            Stop-SSHDTestDaemon
+            Stop-SSHDTestDaemon -Port $port
             $sshlog | Should Contain "Permission denied"
             $sshdlog | Should Contain "Authentication refused."            
         }
