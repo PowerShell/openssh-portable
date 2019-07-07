@@ -269,6 +269,8 @@ get_passwd(const wchar_t * user_utf16, PSID sid)
 
 cleanup:
 
+	if (user_utf16_modified)
+		free(user_utf16_modified);
 	if (sid_string)
 		LocalFree(sid_string);
 	if (reg_key)
