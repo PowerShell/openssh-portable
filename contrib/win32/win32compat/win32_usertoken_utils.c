@@ -812,13 +812,13 @@ windows_password_auth(const char *username, const char* password)
 	}
 
 	if (pLogonUserExExW(unam_utf16, udom_utf16, pwd_utf16, LOGON32_LOGON_INTERACTIVE,
-		LOGON32_PROVIDER_DEFAULT, NULL, &token, NULL, NULL, NULL, NULL) == TRUE) {
+		LOGON32_PROVIDER_WINNT50, NULL, &token, NULL, NULL, NULL, NULL) == TRUE) {
 		password_auth_token = token;
 		debug("Password-based logon (interactive) succeeded for user: %ls domain: %ls",
 			unam_utf16, udom_utf16);
 	} else if (GetLastError() ==  ERROR_LOGON_TYPE_NOT_GRANTED && 
 		pLogonUserExExW(unam_utf16, udom_utf16, pwd_utf16, LOGON32_LOGON_NETWORK_CLEARTEXT,
-		LOGON32_PROVIDER_DEFAULT, NULL, &token, NULL, NULL, NULL, NULL) == TRUE) {
+		LOGON32_PROVIDER_WINNT50, NULL, &token, NULL, NULL, NULL, NULL) == TRUE) {
 		debug("Password-based logon (network) succeeded for user: %ls domain: %ls",
 			unam_utf16, udom_utf16);
 		password_auth_token = token;
