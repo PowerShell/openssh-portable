@@ -221,10 +221,23 @@ explicit_bzero(void *b, size_t len)
 	SecureZeroMemory(b, len);
 }
 
+static DWORD last_dlerror = ERROR_SUCCESS;
+
 HMODULE
 dlopen(const char *filename, int flags)
 {
-	return LoadLibraryA(filename);
+	wchar_t *wfilename = utf8_to_utf16(filename);
+	if (wfilename == NULL) {
+		last_dlerror = ERROR_INVALID_PARAMETER;
+		return NULL;
+	}
+
+	HMODULE module = LoadLibraryW(wfilename);
+	if (module == NULL)
+		last_dlerror = GetLastError();
+
+	free(wfilename);
+	return module;
 }
 
 int
@@ -234,12 +247,51 @@ dlclose(HMODULE handle)
 	return 0;
 }
 
-FARPROC 
+void *
 dlsym(HMODULE handle, const char *symbol)
 {
-	return GetProcAddress(handle, symbol);
+	void *ptr = GetProcAddress(handle, symbol);
+	if (ptr == NULL)
+		last_dlerror = GetLastError();
+	return ptr;
 }
 
+char *
+dlerror()
+{
+	static char *message = NULL;
+	if (message != NULL) {
+		free(message);
+		message = NULL;
+	}
+	if (last_dlerror == ERROR_SUCCESS)
+		return NULL;
+
+	wchar_t *wmessage = NULL;
+	DWORD length = FormatMessageW(
+		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+		NULL, last_dlerror, 0, (wchar_t *) &wmessage, 0, NULL);
+	last_dlerror = ERROR_SUCCESS;
+
+	if (length == 0)
+		goto error;
+
+	if (wmessage[length - 1] == L'\n')
+		wmessage[length - 1] = L'\0';
+	if (length > 1 && wmessage[length - 2] == L'\r')
+		wmessage[length - 2] = L'\0';
+
+	message = utf16_to_utf8(wmessage);
+	LocalFree(wmessage);
+
+	if (message == NULL)
+		goto error;
+
+	return message;
+
+error:
+	return "Failed to format error message";
+}
 
 /*fopen on Windows to mimic https://linux.die.net/man/3/fopen
 * only r, w, a are supported for now
@@ -528,6 +580,14 @@ w32_chmod(const char *pathname, mode_t mode)
 
 int
 w32_chown(const char *pathname, unsigned int owner, unsigned int group)
+{
+	/* TODO - implement this */
+	errno = EOPNOTSUPP;
+	return -1;
+}
+
+int 
+w32_fchown( int fd, unsigned int owner, unsigned int group)
 {
 	/* TODO - implement this */
 	errno = EOPNOTSUPP;
@@ -889,8 +949,10 @@ convertToForwardslash(char *str)
  *  path to produce a canonicalized absolute pathname.
  */
 char *
-realpath(const char *inputpath, char resolved[PATH_MAX])
+realpath(const char *inputpath, char * resolved)
 {
+	wchar_t* temppath_utf16 = NULL;
+	wchar_t* resolved_utf16 = NULL;
 	char path[PATH_MAX] = { 0, }, tempPath[PATH_MAX] = { 0, }, *ret = NULL;
 	int is_win_path = 1;
 
@@ -976,7 +1038,10 @@ realpath(const char *inputpath, char resolved[PATH_MAX])
 		resolved[3] = '\0';
 	}
 
-	if (_fullpath(tempPath, resolved, PATH_MAX) == NULL) {
+	/* note: _wfullpath() is required to resolve paths containing unicode characters */
+	if ((resolved_utf16 = utf8_to_utf16(resolved)) == NULL ||
+		(temppath_utf16 = _wfullpath(NULL, resolved_utf16, 0)) == NULL ||
+		WideCharToMultiByte(CP_UTF8, 0, temppath_utf16, -1, tempPath, sizeof(tempPath), NULL, NULL) == 0) {
 		errno = EINVAL;
 		goto done;
 	}
@@ -1020,6 +1085,10 @@ realpath(const char *inputpath, char resolved[PATH_MAX])
 	}
 
 done:
+	if (resolved_utf16 != NULL)
+		free(resolved_utf16);
+	if (temppath_utf16 != NULL)
+		free(temppath_utf16);
 	return ret;
 }
 
@@ -1250,8 +1319,9 @@ get_others_file_permissions(wchar_t * file_name, int isReadOnlyFile)
 		goto cleanup;
 	}
 
-	if (((is_valid_sid = IsValidSid(owner_sid)) == FALSE) || ((is_valid_acl = IsValidAcl(dacl)) == FALSE)) {
-		debug3("IsValidSid: %d; is_valid_acl: %d", is_valid_sid, is_valid_acl);
+	if (((is_valid_sid = IsValidSid(owner_sid)) == FALSE) || dacl == NULL ||
+		((is_valid_acl = IsValidAcl(dacl)) == FALSE)) {
+		debug3("IsValidSid: %d; NULL Acl: %d; IsValidAcl: %d", is_valid_sid, dacl == NULL, is_valid_acl);
 		goto cleanup;
 	}
 
@@ -1849,6 +1919,33 @@ getrrsetbyname(const char *hostname, unsigned int rdclass,
 	verbose("%s is not supported", __func__);
 	errno = ENOTSUP;
 	return -1;
+}
+
+int 
+fnmatch(const char *pattern, const char *string, int flags)
+{
+	int r = -1;
+	wchar_t *pw = NULL, *sw = NULL;
+
+	if (flags) {
+		verbose("%s is not supported with flags", __func__);
+		goto done;
+	}
+
+	pw = utf8_to_utf16(pattern);
+	sw = utf8_to_utf16(string);
+	if (!pw || !sw)
+		goto done;
+	convertToBackslashW(pw);
+	convertToBackslashW(sw);
+	if (PathMatchSpecW(sw, pw))
+		r = 0;
+done:
+	if (pw)
+		free(pw);
+	if (sw)
+		free(sw);
+	return r;
 }
 
 void

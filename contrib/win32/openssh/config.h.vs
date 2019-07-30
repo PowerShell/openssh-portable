@@ -135,7 +135,7 @@
 #define DISABLE_WTMPX 1
 
 /* Enable for PKCS#11 support */
-/* #undef ENABLE_PKCS11 */
+#define ENABLE_PKCS11 1
 
 /* File names may not contain backslash characters */
 /* #undef FILESYSTEM_NO_BACKSLASH */
@@ -166,7 +166,10 @@
 
 /* Define this if you want GSSAPI
  support in the version 2 protocol */
-/* #undef GSSAPI */
+#define GSSAPI 1
+
+/* Define when enabling GSSAPI SSPI support on Windows */
+#define GSSAPI_SSPI 1
 
 /* Define if you want to use shadow password expire field */
 /* #undef HAS_SHADOW_EXPIRE */
@@ -360,10 +363,10 @@
 /* #undef HAVE_EXIT_IN_UTMP */
 
 /* Define to 1 if you have the `fchmod' function. */
-/* #undef HAVE_FCHMOD */
+#define HAVE_FCHMOD  1
 
 /* Define to 1 if you have the `fchown' function. */
-/* #undef HAVE_FCHOWN */
+#define HAVE_FCHOWN  1
 
 /* Use F_CLOSEM fcntl for closefrom */
 /* #undef HAVE_FCNTL_CLOSEM */
@@ -501,16 +504,16 @@
 /* #undef HAVE_GSSAPI_GENERIC_H */
 
 /* Define to 1 if you have the <gssapi/gssapi_generic.h> header file. */
-#define HAVE_GSSAPI_GSSAPI_GENERIC_H 1
+/* #undef HAVE_GSSAPI_GSSAPI_GENERIC_H */
 
 /* Define to 1 if you have the <gssapi/gssapi.h> header file. */
-#define HAVE_GSSAPI_GSSAPI_H 1
+/* #undef HAVE_GSSAPI_GSSAPI_H */
 
 /* Define to 1 if you have the <gssapi/gssapi_krb5.h> header file. */
-#define HAVE_GSSAPI_GSSAPI_KRB5_H 1
+/* #undef HAVE_GSSAPI_GSSAPI_KRB5_H */
 
 /* Define to 1 if you have the <gssapi.h> header file. */
-/* #undef HAVE_GSSAPI_H */
+#define HAVE_GSSAPI_H 1
 
 /* Define to 1 if you have the <gssapi_krb5.h> header file. */
 /* #undef HAVE_GSSAPI_KRB5_H */
