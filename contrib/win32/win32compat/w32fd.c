@@ -558,6 +558,9 @@ w32_write(int fd, const void *buf, size_t max)
 	if (fd_table.w32_ios[fd]->type == SOCK_FD)
 		return socketio_send(fd_table.w32_ios[fd], buf, max, 0);
 
+	if ((fd == STDERR_FILENO || fd == STDOUT_FILENO) && fd_table.w32_ios[fd]->type == NONSOCK_FD)
+		fd_table.w32_ios[fd]->type = NONSOCK_SYNC_FD;
+
 	return fileio_write(fd_table.w32_ios[fd], buf, max);
 }
 
