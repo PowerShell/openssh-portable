@@ -29,9 +29,13 @@ int w32_write(int fd, const void *buf, size_t max);
 int w32_writev(int fd, const struct iovec *iov, int iovcnt);
 
 int w32_isatty(int fd);
+#if _MSC_VER >= 1920  // VS 2019
+#define isatty w32_isatty
+#else
 /* can't do this #define isatty w32_isatty
-* as there is a variable in code named isatty*/
+ * as there is a variable in code named isatty*/
 #define isatty(a)	w32_isatty((a))
+#endif
 
 int w32_close(int fd);
 #define close w32_close

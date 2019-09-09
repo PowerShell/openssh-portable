@@ -16,8 +16,12 @@
 int w32_fcntl(int fd, int cmd, ... /* arg */);
 #define fcntl(a,b,...)		w32_fcntl((a), (b),  __VA_ARGS__)
 
+int w32_open(const char* pathname, int flags, ... /* arg */);
+#if _MSC_VER >= 1920  // VS 2019
+#define open w32_open
+#else
 #define open(a,b,...) w32_open((a), (b),  __VA_ARGS__)
-int w32_open(const char *pathname, int flags, ... /* arg */);
+#endif
 
 void* w32_fd_to_handle(int fd);
 
