@@ -750,7 +750,8 @@ gss_get_mic(_Out_ OM_uint32 * minor_status, _In_ gss_ctx_id_t context_handle,
 
 	/* determine the max possible signature and allocate memory to support it */
 	SecPkgContext_Sizes sizes;
-	SecFunctions->QueryContextAttributesW(context_handle, SECPKG_ATTR_SIZES, &sizes);
+	if (SecFunctions->QueryContextAttributesW(context_handle, SECPKG_ATTR_SIZES, &sizes) != SEC_E_OK)
+		goto done;
 	if ((message_token->value = malloc(sizes.cbMaxSignature)) == NULL)
 		goto done;
 
