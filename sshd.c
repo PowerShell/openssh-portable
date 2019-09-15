@@ -657,7 +657,7 @@ send_autxctx_state(Authctxt *auth, int fd)
 
 	if ((m = sshbuf_new()) == NULL)
 		fatal("%s: sshbuf_new failed", __func__);
-	if ((r = sshbuf_put_cstring(m, auth->pw->pw_name)) != 0)
+	if ((r = sshbuf_put_cstring(m, auth->user)) != 0)
 		fatal("%s: buffer error: %s", __func__, ssh_err(r));
 
 	if (ssh_msg_send(fd, 0, m) == -1)
