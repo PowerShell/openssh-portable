@@ -31,10 +31,10 @@
 * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include <io.h>
 #include <fcntl.h>
 #include "inc/sys/stat.h"
 #include "inc/sys/types.h"
-#include <io.h>
 #include <errno.h>
 #include <stddef.h>
 #include <direct.h>

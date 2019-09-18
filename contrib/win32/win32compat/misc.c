@@ -45,7 +45,6 @@
 #include <security.h>
 #include <ntstatus.h>
 
-#include "inc\unistd.h"
 #include "inc\sys\stat.h"
 #include "inc\sys\statvfs.h"
 #include "inc\sys\time.h"
@@ -54,6 +53,7 @@
 #include "inc\dirent.h"
 #include "inc\sys\types.h"
 #include "inc\sys\ioctl.h"
+#include "inc\unistd.h"
 #include "inc\fcntl.h"
 #include "inc\utf.h"
 #include "signal_internal.h"
