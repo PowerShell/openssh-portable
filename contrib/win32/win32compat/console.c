@@ -103,7 +103,7 @@ ConEnterRawMode()
 	dwAttributes = stdin_dwSavedAttributes;
 	dwAttributes &= ~(ENABLE_LINE_INPUT |
 		ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT | ENABLE_MOUSE_INPUT);
-	dwAttributes |= ENABLE_WINDOW_INPUT;
+	dwAttributes |= ENABLE_WINDOW_INPUT | ENABLE_VIRTUAL_TERMINAL_INPUT;
 
 	if (!SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), dwAttributes)) { /* Windows NT */
 		dwRet = GetLastError();
