@@ -434,13 +434,6 @@ expand_authorized_keys(const char *filename, struct passwd *pw)
 	file = percent_expand(filename, "h", pw->pw_dir,
 	    "u", pw->pw_name, "U", uidstr, (char *)NULL);
 
-#ifdef WINDOWS
-	/* Return if the path is absolute. If not, prepend the '%h\\' */
-	if(is_absolute_path(file))
-		return (file);
-
-	i = snprintf(ret, sizeof(ret), "%s\\%s", pw->pw_dir, file);
-#else
 	/*
 	 * Ensure that filename starts anchored. If not, be backward
 	 * compatible and prepend the '%h/'
@@ -449,7 +442,6 @@ expand_authorized_keys(const char *filename, struct passwd *pw)
 		return (file);
 
 	i = snprintf(ret, sizeof(ret), "%s/%s", pw->pw_dir, file);
-#endif // WINDOWS
 
 	if (i < 0 || (size_t)i >= sizeof(ret))
 		fatal("expand_authorized_keys: path too long");
