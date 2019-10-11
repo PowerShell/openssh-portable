@@ -8,7 +8,7 @@ void     debug2(const char *, ...);
 void     debug3(const char *, ...);
 
 /* Enable the following for verbose logging */
-#if (0)
+#if _DEBUG
 #define debug4 debug2
 #define debug5 debug3
 #else
