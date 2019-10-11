@@ -2038,10 +2038,11 @@ process_server_config_line(ServerOptions *options, char *line,
 			    linenum);
 		len = strspn(cp, WHITESPACE);
 		if (*activep && options->authorized_keys_command == NULL) {
-			if (cp[len] != '/' && strcasecmp(cp + len, "none") != 0)
+			if (strcasecmp(cp + len, "none") != 0 && !path_absolute(cp + len))
 				fatal("%.200s line %d: AuthorizedKeysCommand "
 				    "must be an absolute path",
 				    filename, linenum);
+
 			options->authorized_keys_command = xstrdup(cp + len);
 		}
 		return 0;
@@ -2064,12 +2065,12 @@ process_server_config_line(ServerOptions *options, char *line,
 		len = strspn(cp, WHITESPACE);
 		if (*activep &&
 		    options->authorized_principals_command == NULL) {
-			if (cp[len] != '/' && strcasecmp(cp + len, "none") != 0)
+			if (strcasecmp(cp + len, "none") != 0 && !path_absolute(cp + len))
 				fatal("%.200s line %d: "
 				    "AuthorizedPrincipalsCommand must be "
 				    "an absolute path", filename, linenum);
-			options->authorized_principals_command =
-			    xstrdup(cp + len);
+
+			options->authorized_principals_command = xstrdup(cp + len);
 		}
 		return 0;
 

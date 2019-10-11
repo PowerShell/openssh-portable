@@ -164,3 +164,69 @@ cleanup:
 	return ret;
 }
 
+#ifdef WINDOWS
+char*
+get_execpath(const char **av)
+{
+	if (NULL == av) {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	char* retVal = NULL;
+	const char *prgPath = av[0];
+	char* exePath = _strdup(prgPath);
+	char* exePathPtr = exePath;
+
+	if ('/' == exePathPtr[0] || '\\' == exePathPtr[0]) {
+		++exePathPtr;
+	}
+	convertToBackslash(exePathPtr);
+
+	/*
+	* check if av[0] starts with 'C:\Program Files\PowerShell' or 'C:\Windows\System32\WindowsPowerShell'
+	* find -file argument and check secure file permission for Powershell script.
+	*/
+	char *pwsh5Path = NULL;
+	char *pwshPath = NULL;
+
+#pragma warning(suppress:4996)
+	xasprintf(&pwshPath, "%s\\PowerShell", getenv("ProgramFiles"));
+	debug5("%s: Powershell Core Path [%s]", __func__, pwshPath);
+
+#pragma warning(suppress:4996)
+	xasprintf(&pwsh5Path, "%s\\System32\\WindowsPowerShell", getenv("SystemRoot"));
+	debug5("%s: Powershell Path [%s]", __func__, pwsh5Path);
+
+	debug5("%s: Checking path for Powershell reference: %s", __func__, exePathPtr);
+	if (0 == _strnicmp(exePathPtr, pwsh5Path, strlen(pwsh5Path))
+		|| 0 == _strnicmp(exePathPtr, pwshPath, strlen(pwshPath))) {
+
+		debug5("%s: Found Powershell trying to find -f parameter", __func__);
+
+		prgPath = NULL;
+		for (const char **ptr = av; NULL != *ptr; ++ptr) {
+			if (strstr(*ptr, "-f")) {
+				prgPath = *(ptr + 1);
+				debug5("%s: Found -File Powershell parameter: %s", __func__, prgPath == NULL ? "NULL" : prgPath);
+				break;
+			}
+		}
+		if (NULL == prgPath) {
+			error("No -File parameter found for Powershell");
+			retVal = NULL;
+			errno = EINVAL;
+			goto cleanup;
+		}
+	}
+
+	retVal = _strdup(prgPath);
+
+cleanup:
+	if (NULL != pwshPath) free(pwshPath);
+	if (NULL != pwsh5Path) free(pwsh5Path);
+	if (NULL != exePath) free(exePath);
+
+	return retVal;
+}
+#endif

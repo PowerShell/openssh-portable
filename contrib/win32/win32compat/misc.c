@@ -66,6 +66,8 @@
 
 #include <wchar.h>
 
+extern int xasprintf(char **, const char *, ...);
+
 static char* s_programdir = NULL;
 
 /* Maximum reparse buffer info size. The max user defined reparse

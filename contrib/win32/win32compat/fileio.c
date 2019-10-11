@@ -43,6 +43,7 @@
 #include "inc\utf.h"
 #include "inc\fcntl.h"
 #include "inc\pwd.h"
+#include "inc\string.h"
 #include "misc_internal.h"
 #include "debug.h"
 #include <Sddl.h>
@@ -927,8 +928,24 @@ fileio_fdopen(struct w32_io* pio, const char *mode)
 
 	/* for non-disk files, just return the descriptor */
 	type = GetFileType(pio->handle);
+	debug4("fdopen - file type: %d", type);
 	if (type != FILE_TYPE_DISK) {
-		return _fdopen(pio->table_index, mode);
+		//ret = _fdopen(pio->table_index, mode);
+		int fd = _open_osfhandle((intptr_t)pio->handle, 0);
+		if (-1 == fd) {
+			error("Unable to get file descriptor from handle: %s", strerror(errno));
+		}
+		else {
+			ret = _fdopen(fd, mode);
+			if (NULL == ret) {
+				_close(fd);
+				debug4("Unable to get FILE pointer from file descriptor: %s", strerror(errno));
+			}
+			else {
+				debug4("fdopen - sucessfully opened FILE pointer: %p", ret);
+			}
+		}
+		goto cleanup;
 	}
 
 	file_path = get_final_path_by_handle(pio->handle);

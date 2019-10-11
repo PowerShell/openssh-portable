@@ -918,6 +918,21 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 		error("%s path is not absolute", tag);
 		return 0;
 	}
+
+#ifdef WINDOWS
+	char *prgPath = get_execpath(av);
+	if (NULL == prgPath) {
+		error("Failed to get program path for \"%s\": %s", av[0], strerror(errno));
+		return 0;
+	}
+	debug3("%s: Checking exec path [%s] for secure file permissions", __func__, prgPath);
+	if (0 != check_secure_file_permission(prgPath, pw)) {
+		free(prgPath);
+		error("Unsafe %s \"%s\": %s", tag, prgPath, strerror(errno));
+		return 0;
+	}
+	free(prgPath);
+#else
 	temporarily_use_uid(pw);
 	if (stat(av[0], &st) < 0) {
 		error("Could not stat %s \"%s\": %s", tag,
@@ -925,19 +940,60 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 		restore_uid();
 		return 0;
 	}
+
 	if (safe_path(av[0], &st, NULL, 0, errmsg, sizeof(errmsg)) != 0) {
 		error("Unsafe %s \"%s\": %s", tag, av[0], errmsg);
 		restore_uid();
 		return 0;
 	}
+#endif
+
 	/* Prepare to keep the child's stdout if requested */
 	if (pipe(p) != 0) {
 		error("%s: pipe: %s", tag, strerror(errno));
+#ifndef WINDOWS
 		restore_uid();
+#endif
 		return 0;
 	}
+#ifndef WINDOWS
 	restore_uid();
+#endif
 
+#if FORK_NOT_SUPPORTED
+	posix_spawn_file_actions_t actions;
+
+	pid = -1;
+	if (posix_spawn_file_actions_init(&actions) != 0 ||
+		posix_spawn_file_actions_adddup2(&actions, p[1], STDOUT_FILENO) != 0 ) {
+		error("posix_spawn initialization failed: %s", strerror(errno));
+		close(p[0]);
+		close(p[1]);
+		return 0;
+	} else {
+		// auto close the reading end of the pipe in the spawned process
+		if (-1 == fcntl(p[0], F_SETFD, FD_CLOEXEC)) {
+			error("fcntl FD_CLOEXEC failed: %s", strerror(errno));
+			close(p[0]);
+			close(p[1]);
+			return 0;
+		}
+
+		debug3("%s: Spawning process: %s", __func__, av[0]);
+#if WINDOWS_USER
+		if (0 != __posix_spawn_asuser(&pid, av[0], &actions, NULL, av, NULL, pw->pw_name)) {
+#else
+		if (0 != posix_spawn(&pid, av[0], &actions, NULL, av, NULL)) {
+#endif
+			posix_spawn_file_actions_destroy(&actions);
+			error("failed to spawn process %s, error: %s", command, strerror(errno));
+			close(p[0]);
+			close(p[1]);
+			return 0;
+		}
+		posix_spawn_file_actions_destroy(&actions);
+	}
+#else
 	switch ((pid = fork())) {
 	case -1: /* error */
 		error("%s: fork: %s", tag, strerror(errno));
@@ -1005,10 +1061,15 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 		break;
 	}
 
+#endif
+
 	close(p[1]);
 	if ((flags & SSH_SUBPROCESS_STDOUT_CAPTURE) == 0)
 		close(p[0]);
 	else if ((f = fdopen(p[0], "r")) == NULL) {
+#if WINDOWS
+		debug3("Failed to fdopen FD %d; windows error %d", p[0], GetLastError());
+#endif
 		error("%s: fdopen: %s", tag, strerror(errno));
 		close(p[0]);
 		/* Don't leave zombie child */
@@ -1021,6 +1082,7 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 	debug3("%s: %s pid %ld", __func__, tag, (long)pid);
 	if (child != NULL)
 		*child = f;
+
 	return pid;
 }
 

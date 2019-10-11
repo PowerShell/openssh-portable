@@ -26,4 +26,8 @@
 #define _SSH_FILE_PERM_H
 
 int check_secure_file_permission(const char *, struct passwd *);
+#ifdef WINDOWS
+char* get_execpath(const char **av);
+#endif
+
 #endif /* _SSH_FILE_PERM_H */
