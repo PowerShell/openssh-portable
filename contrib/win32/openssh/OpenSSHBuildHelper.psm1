@@ -357,7 +357,7 @@ function Start-OpenSSHPackage
     $payload += "FixHostFilePermissions.ps1", "FixUserFilePermissions.ps1", "OpenSSHUtils.psm1", "OpenSSHUtils.psd1"
     $payload += "openssh-events.man"
 
-    $packageName = "OpenSSH-Win64"
+    $packageName = "OpenSSH-Win64$(if ('Debug' -eq $Configuration) { "-$Configuration" })"
     if ($NativeHostArch -ieq 'x86') {
         $packageName = "OpenSSH-Win32"
     }
@@ -428,7 +428,7 @@ function Start-OpenSSHPackage
         Remove-Item ($packageDir + '.zip') -Force -ErrorAction SilentlyContinue
         if(get-command Compress-Archive -ErrorAction SilentlyContinue)
         {
-            Compress-Archive -Path $packageDir -DestinationPath ($packageDir + '.zip')
+            Compress-Archive -Path $packageDir\* -DestinationPath ($packageDir + '.zip')
             Write-BuildMsg -AsInfo -Message "Packaged Payload - '$packageDir.zip'"
         }
         else
@@ -446,7 +446,7 @@ function Start-OpenSSHPackage
         Remove-Item ($symbolsDir + '.zip') -Force -ErrorAction SilentlyContinue
         if(get-command Compress-Archive -ErrorAction SilentlyContinue)
         {
-            Compress-Archive -Path $symbolsDir -DestinationPath ($symbolsDir + '.zip')
+            Compress-Archive -Path $symbolsDir\* -DestinationPath ($symbolsDir + '.zip')
             Write-BuildMsg -AsInfo -Message "Packaged Symbols - '$symbolsDir.zip'"
         }
         else
