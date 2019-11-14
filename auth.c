@@ -948,7 +948,7 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 		if (posix_spawn_file_actions_init(&actions) != 0 ||
 			posix_spawn_file_actions_adddup2(&actions, p[1], STDOUT_FILENO) != 0)
 			fatal("posix_spawn initialization failed");
-		else if (posix_spawn((pid_t*)&pid, av[0], &actions, NULL, av, NULL) != 0)
+		else if (__posix_spawn_asuser((pid_t*)&pid, av[0], &actions, NULL, av, NULL, pw->pw_name) != 0)
 			fatal("posix_spawn: %s", strerror(errno));
 
 		posix_spawn_file_actions_destroy(&actions);
