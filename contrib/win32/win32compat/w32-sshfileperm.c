@@ -123,7 +123,7 @@ check_secure_file_permission(const char *input_path, struct passwd * pw, int rea
 		    EqualSid(current_trustee_sid, user_sid) ||
 		    (ti_sid && EqualSid(current_trustee_sid, ti_sid))) {
 			continue;
-		} else if (read_ok && (current_access_mask & FILE_GENERIC_WRITE) == 0 ) {
+		} else if (read_ok && (current_access_mask & (FILE_WRITE_DATA | FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA | FILE_APPEND_DATA)) == 0 ) {
 			/* if read is allowed, allow ACES that do not give write access*/
 			continue;
 		} else {
