@@ -12,12 +12,9 @@ Describe "E2E scenarios for AuthorizedKeysCommand" -Tags "CI" {
         }
 
         $server = $OpenSSHTestInfo["Target"]
-        $opensshbinpath = $OpenSSHTestInfo['OpenSSHBinPath']
-        $port = 47004
-
-        $server = $OpenSSHTestInfo["Target"]
         $port = 47004
         $opensshbinpath = $OpenSSHTestInfo['OpenSSHBinPath']
+        $ssouser = $OpenSSHTestInfo["SSOUser"]
         $sshdconfig = Join-Path $Global:OpenSSHTestInfo["ServiceConfigDir"] sshd_config
 
         $testDir = Join-Path $OpenSSHTestInfo["TestDataPath"] $suite
@@ -43,17 +40,17 @@ Describe "E2E scenarios for AuthorizedKeysCommand" -Tags "CI" {
         It "$tC.$tI - keys command with %k argument" {
             #override authorizedkeysfile location to an unknown location, so AuthorizedKeysCommand gets executed
             $kcOutFile = Join-Path $testDir "$tC.$tI.kcout.txt"
+            Remove-Item -Force $kcOutFile -ErrorAction SilentlyContinue
             $sshdArgs = "-dd -f $sshdconfig  -E $logFile -o `"AuthorizedKeysFile .fake/authorized_keys`""
-            $sshdArgs += " -o `"AuthorizedKeysCommand=$env:windir\system32\cmd /c echo ssh-ed25519 %k & whoami > $kcOutFile`""
-            $sshdArgs += " -o `"AuthorizedKeysCommandUser=$env:USERNAME`""
+            $sshdArgs += " -o `"AuthorizedKeysCommand=$env:windir\system32\cmd.exe /c echo ssh-ed25519 %k & whoami > $kcOutFile`""
+            $sshdArgs += " -o `"AuthorizedKeysCommandUser=$ssouser`""
             $sshdArgs += " -o PasswordAuthentication=no"
-            Write-Host $sshdArgs
             Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments $sshdArgs -Port $port
-            $o = ssh -p $port $server echo 1234
+            $o = ssh -p $port test_target echo 1234
             Stop-SSHDTestDaemon -Port $port
             $o | Should Be "1234"
-            #check the command is run us AuthorizedKeysCommandUser
-            (gc $kcOutFile).Contains($env:USERNAME) | Should Be $true
+            #check the command is run as AuthorizedKeysCommandUser
+            (gc $kcOutFile).Contains($ssouser) | Should Be $true
         }
 
     }
