@@ -906,7 +906,7 @@ fileio_lseek(struct w32_io* pio, unsigned __int64 offset, int origin)
 	return 0;
 }
 
-/* fdopen() to be used strictly on nonoverlapped IO handles */
+/* fdopen() to be used  on pipe handles */
 static FILE*
 fileio_fdopen_pipe(struct w32_io* pio, const char *mode)
 {
@@ -952,7 +952,7 @@ fileio_fdopen_pipe(struct w32_io* pio, const char *mode)
 	return ret;
 }
 
-
+/* fdopen() to be used  on file handles */
 static FILE*
 fileio_fdopen_disk(struct w32_io* pio, const char *mode)
 {
