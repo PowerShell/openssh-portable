@@ -41,7 +41,7 @@ Describe "E2E scenarios for AuthorizedKeysCommand" -Tags "CI" {
             #override authorizedkeysfile location to an unknown location, so AuthorizedKeysCommand gets executed
             $kcOutFile = Join-Path $testDir "$tC.$tI.kcout.txt"
             Remove-Item -Force $kcOutFile -ErrorAction SilentlyContinue
-            $sshdArgs = "-dd -f $sshdconfig  -E $logFile -o `"AuthorizedKeysFile .fake/authorized_keys`""
+            $sshdArgs = "-d -f $sshdconfig  -E $logFile -o `"AuthorizedKeysFile .fake/authorized_keys`""
             $sshdArgs += " -o `"AuthorizedKeysCommand=$env:windir\system32\cmd.exe /c echo ssh-ed25519 %k & whoami > $kcOutFile`""
             $sshdArgs += " -o `"AuthorizedKeysCommandUser=$ssouser`""
             $sshdArgs += " -o PasswordAuthentication=no"

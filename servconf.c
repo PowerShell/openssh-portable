@@ -2070,7 +2070,7 @@ process_server_config_line(ServerOptions *options, char *line,
 		len = strspn(cp, WHITESPACE);
 		if (*activep &&
 		    options->authorized_principals_command == NULL) {
-			if (cp[len] != '/' && strcasecmp(cp + len, "none") != 0)
+			if (!path_absolute(cp + len) && strcasecmp(cp + len, "none") != 0)
 				fatal("%.200s line %d: "
 				    "AuthorizedPrincipalsCommand must be "
 				    "an absolute path", filename, linenum);

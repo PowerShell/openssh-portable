@@ -997,7 +997,6 @@ fileio_fdopen(struct w32_io* pio, const char *mode)
 
 	debug4("fdopen - io:%p", pio);
 
-	/* for non-disk files, just return the descriptor */
 	type = GetFileType(pio->handle);
 	if (type == FILE_TYPE_DISK) {
 		return fileio_fdopen_disk(pio, mode);
