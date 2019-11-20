@@ -320,7 +320,7 @@ w32_fopen_utf8(const char *input_path, const char *mode)
 
 	/* if opening null device, point to Windows equivalent */
 	if (strncmp(input_path, NULL_DEVICE, sizeof(NULL_DEVICE)) == 0
-		&& strncmp(input_path, NULL_DEVICE_WIN, sizeof(NULL_DEVICE_WIN)) == 0) {
+		|| strncmp(input_path, NULL_DEVICE_WIN, sizeof(NULL_DEVICE_WIN)) == 0) {
 		nonfs_dev = 1;
 		wpath = utf8_to_utf16(NULL_DEVICE_WIN);
 	}
