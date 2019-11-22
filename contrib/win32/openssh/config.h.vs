@@ -1707,6 +1707,7 @@
 #define _PATH_SFTP_SERVER "sftp-server.exe"
 #define _PATH_SSH_PROGRAM "ssh.exe"
 #define _PATH_LS			"dir"
-#define FORK_NOT_SUPPORTED 1
+#define FORK_NOT_SUPPORTED
 #define HAVE_FREEZERO
 #define FILESYSTEM_NO_BACKSLASH
+#define WINDOWS_ONE_CORE_BUILD 0
