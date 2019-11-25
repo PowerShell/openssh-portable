@@ -38,7 +38,7 @@
 int
 is_conpty_supported()
 {
-	wchar_t kernel32_dll_path[PATH_MAX] = { 0, };
+	wchar_t *kernel32_dll_path = L"kernel32.dll";
 	HMODULE hm_kernel32 = NULL;
 	static int isConpty = -1;
 
@@ -46,8 +46,6 @@ is_conpty_supported()
 		return isConpty;
 
 	isConpty = 0;
-	wcscat_s(kernel32_dll_path, PATH_MAX, L"kernel32.dll");
-
 	if ((hm_kernel32 = LoadLibraryExW(kernel32_dll_path, NULL, LOAD_LIBRARY_SEARCH_SYSTEM32)) == NULL) {
 		error("failed to load %S dll", kernel32_dll_path);
 		goto done;
