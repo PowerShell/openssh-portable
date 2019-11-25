@@ -561,13 +561,6 @@ function Start-OpenSSHBuild
         $xml.Project.PropertyGroup."LibreSSL-arm64-Path" = '$(SolutionDir)\LibreSSL\bin\onecore\arm64\'
         
         $xml.Save($PathTargets)
-
-        $f = Join-Path $PSScriptRoot config.h.vs
-        if (-not (Select-String -Path $f -Pattern "#define WINDOWS_ONE_CORE_BUILD [0|1]")) {
-            Write-Error "Could find #define WINDOWS_ONE_CORE_BUILD [0|1] in $f" -ErrorAction Stop
-        }
-
-        (Get-Content $f).Replace('#define WINDOWS_ONE_CORE_BUILD 0','#define WINDOWS_ONE_CORE_BUILD 1') | Set-Content $f
     }
     
     $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
