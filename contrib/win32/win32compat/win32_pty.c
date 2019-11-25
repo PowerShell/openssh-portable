@@ -24,7 +24,6 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#include "../../../config.h"
 
 #include <Windows.h>
 #include <stdio.h>
@@ -39,10 +38,6 @@
 int
 is_conpty_supported()
 {
-#if defined(WINDOWS_ONE_CORE_BUILD) && WINDOWS_ONE_CORE_BUILD == 1
-	debug("Conpty is supported on all OneCore Windows SKUs");
-	return 1;
-#else
 	wchar_t system32_path[PATH_MAX] = { 0, };
 	wchar_t kernel32_dll_path[PATH_MAX] = { 0, };
 	HMODULE hm_kernel32 = NULL;
@@ -76,7 +71,6 @@ done:
 		debug3("This windows OS doesn't support conpty");
 
 	return isConpty;
-#endif //WINDOWS_ONE_CORE_BUILD
 }
 
 int exec_command_with_pty(int * pid, char* cmd, int in, int out, int err, unsigned int col, unsigned int row, int ttyfd)
