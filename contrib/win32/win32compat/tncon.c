@@ -150,6 +150,7 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 	char *SHIFT_CTRL_FN_KEY = NULL;
 	char *ALT_CTRL_FN_KEY = NULL;
 	char *SHIFT_ALT_CTRL_FN_KEY = NULL;
+	WCHAR utf16_surrogatepair[2] = {0,};
 
 	glob_out = destin;
 	glob_space = destinlen;
@@ -159,7 +160,7 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 			return glob_outlen;
 		ReadConsoleInputW(hInput, inputRecordArray, inputRecordArraySize, &dwInput);
 
-		for (int i=0; i < dwInput; i++) {
+		for (DWORD i=0; i < dwInput; i++) {
 			INPUT_RECORD inputRecord = inputRecordArray[i];
 
 			switch (inputRecord.EventType) {
@@ -173,17 +174,8 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 				break;
 
 			case KEY_EVENT:
-				bCapsOn = (inputRecord.Event.KeyEvent.dwControlKeyState & CAPSLOCK_ON);
-				bShift = (inputRecord.Event.KeyEvent.dwControlKeyState & SHIFT_PRESSED);
-				dwControlKeyState = inputRecord.Event.KeyEvent.dwControlKeyState &
-					~(CAPSLOCK_ON | ENHANCED_KEY | NUMLOCK_ON | SCROLLLOCK_ON);
-
-				/* ignore the AltGr flags*/
-				if ((dwControlKeyState & dwAltGrFlags) == dwAltGrFlags)
-					dwControlKeyState = dwControlKeyState & ~dwAltGrFlags;
-
-				modKey = GetModifierKey(dwControlKeyState);
-				if (inputRecord.Event.KeyEvent.bKeyDown) {
+				if ((inputRecord.Event.KeyEvent.bKeyDown && wcscmp(&inputRecord.Event.KeyEvent.uChar.UnicodeChar, L"")) ||
+				    (!inputRecord.Event.KeyEvent.bKeyDown && inputRecord.Event.KeyEvent.wVirtualKeyCode == VK_MENU)) {
 					int n = WideCharToMultiByte(
 						CP_UTF8,
 						0,
@@ -194,12 +186,47 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 						NULL,
 						NULL);
 
-					if (isConsoleVTSeqAvailable) {
-						if (strcmp((char *)octets, ""))
-							NetWriteString2(pParams->Socket, (char *)octets, n, 0);
+					if (IS_HIGH_SURROGATE(inputRecord.Event.KeyEvent.uChar.UnicodeChar)) {
+						utf16_surrogatepair[0] = inputRecord.Event.KeyEvent.uChar.UnicodeChar;
+						break; // break to read low surrogate.
+					}
+					else if (IS_LOW_SURROGATE(inputRecord.Event.KeyEvent.uChar.UnicodeChar)) {
+						utf16_surrogatepair[1] = inputRecord.Event.KeyEvent.uChar.UnicodeChar;
+					}
+
+					if (utf16_surrogatepair[0] && utf16_surrogatepair[1]) {
+						int n = WideCharToMultiByte(
+							CP_UTF8,
+							0,
+							utf16_surrogatepair,
+							2,
+							(LPSTR)octets,
+							20,
+							NULL,
+							NULL);
+
+						NetWriteString2(pParams->Socket, (char *)octets, n, 0);
+						utf16_surrogatepair[0] = utf16_surrogatepair[1] = L'\0';
 
 						break;
 					}
+
+					if (isConsoleVTSeqAvailable) {
+						NetWriteString2(pParams->Socket, (char *)octets, n, 0);
+						break;
+					}
+
+
+					bCapsOn = (inputRecord.Event.KeyEvent.dwControlKeyState & CAPSLOCK_ON);
+					bShift = (inputRecord.Event.KeyEvent.dwControlKeyState & SHIFT_PRESSED);
+					dwControlKeyState = inputRecord.Event.KeyEvent.dwControlKeyState &
+						~(CAPSLOCK_ON | ENHANCED_KEY | NUMLOCK_ON | SCROLLLOCK_ON);
+
+					/* ignore the AltGr flags*/
+					if ((dwControlKeyState & dwAltGrFlags) == dwAltGrFlags)
+						dwControlKeyState = dwControlKeyState & ~dwAltGrFlags;
+
+					modKey = GetModifierKey(dwControlKeyState);
 
 					if (pParams->fLocalEcho)
 						ConWriteString((char *)octets, n);
@@ -779,16 +806,14 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 								NetWriteString2(pParams->Socket, (char *)SHIFT_CTRL_PF12_KEY, strlen(SHIFT_CTRL_PF12_KEY), 0);
 							break;
 						default:
-							if (strcmp((char *) octets, "")) {
-								if ((dwControlKeyState & LEFT_ALT_PRESSED) || (dwControlKeyState & RIGHT_ALT_PRESSED)) {
-									memset(tmp_buf, 0, sizeof(tmp_buf));
-									tmp_buf[0] = '\x1b';
-									memcpy(tmp_buf + 1, (char *)octets, n);
-									NetWriteString2(pParams->Socket, tmp_buf, n + 1, 0);
-								}
-								else
-									NetWriteString2(pParams->Socket, (char *)octets, n, 0);
+							if ((dwControlKeyState & LEFT_ALT_PRESSED) || (dwControlKeyState & RIGHT_ALT_PRESSED)) {
+								memset(tmp_buf, 0, sizeof(tmp_buf));
+								tmp_buf[0] = '\x1b';
+								memcpy(tmp_buf + 1, (char *)octets, n);
+								NetWriteString2(pParams->Socket, tmp_buf, n + 1, 0);
 							}
+							else
+								NetWriteString2(pParams->Socket, (char *)octets, n, 0);
 							break;
 						}
 					}
