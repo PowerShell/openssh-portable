@@ -174,8 +174,8 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 				break;
 
 			case KEY_EVENT:
-				if ((inputRecord.Event.KeyEvent.bKeyDown && wcscmp(&inputRecord.Event.KeyEvent.uChar.UnicodeChar, L"")) ||
-				    (!inputRecord.Event.KeyEvent.bKeyDown && inputRecord.Event.KeyEvent.wVirtualKeyCode == VK_MENU)) {
+				if (((inputRecord.Event.KeyEvent.bKeyDown) || (!inputRecord.Event.KeyEvent.bKeyDown && inputRecord.Event.KeyEvent.wVirtualKeyCode == VK_MENU)) &&
+				    (inputRecord.Event.KeyEvent.uChar.UnicodeChar != L'\0')) {
 					int n = WideCharToMultiByte(
 						CP_UTF8,
 						0,
