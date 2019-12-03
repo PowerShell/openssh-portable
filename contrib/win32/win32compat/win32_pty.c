@@ -131,7 +131,7 @@ int exec_command_with_pty(int * pid, char* cmd, int in, int out, int err, unsign
 	}
 
 	debug3("pty commandline: %ls", pty_cmdline);
-	if (CreateProcessW(NULL, pty_cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+	if (CreateProcessW(NULL, pty_cmdline, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
 		if (register_child(pi.hProcess, pi.dwProcessId) == -1) {
 			TerminateProcess(pi.hProcess, 0);
 			CloseHandle(pi.hProcess);
