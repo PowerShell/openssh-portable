@@ -160,8 +160,8 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 				break;
 
 			case KEY_EVENT:
-				if (((inputRecord.Event.KeyEvent.bKeyDown) || (!inputRecord.Event.KeyEvent.bKeyDown && inputRecord.Event.KeyEvent.wVirtualKeyCode == VK_MENU)) &&
-				    (inputRecord.Event.KeyEvent.uChar.UnicodeChar != L'\0')) {
+				if ((inputRecord.Event.KeyEvent.bKeyDown) ||
+				    (!inputRecord.Event.KeyEvent.bKeyDown && inputRecord.Event.KeyEvent.wVirtualKeyCode == VK_MENU)) {
 					if (IS_HIGH_SURROGATE(inputRecord.Event.KeyEvent.uChar.UnicodeChar)) {
 						utf16_surrogatepair[0] = inputRecord.Event.KeyEvent.uChar.UnicodeChar;
 						break; // break to read low surrogate.
@@ -188,17 +188,19 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 					}
 
 					if (isConsoleVTSeqAvailable) {
-						n = WideCharToMultiByte(
-							CP_UTF8,
-							0,
-							&(inputRecord.Event.KeyEvent.uChar.UnicodeChar),
-							1,
-							(LPSTR)octets,
-							20,
-							NULL,
-							NULL);
+						if (inputRecord.Event.KeyEvent.uChar.UnicodeChar != L'\0') {
+							n = WideCharToMultiByte(
+								CP_UTF8,
+								0,
+								&(inputRecord.Event.KeyEvent.uChar.UnicodeChar),
+								1,
+								(LPSTR)octets,
+								20,
+								NULL,
+								NULL);
 
-						WriteToBuffer((char *)octets, n);
+							WriteToBuffer((char *)octets, n);
+						}
 					} else {
 						GetVTSeqFromKeyStroke(inputRecord);
 					}
@@ -829,15 +831,17 @@ GetVTSeqFromKeyStroke(INPUT_RECORD inputRecord)
 				WriteToBuffer((char *)SHIFT_CTRL_PF12_KEY, strlen(SHIFT_CTRL_PF12_KEY));
 			break;
 		default:
-			if ((dwControlKeyState & LEFT_ALT_PRESSED) || (dwControlKeyState & RIGHT_ALT_PRESSED)) {
-				memset(tmp_buf, 0, sizeof(tmp_buf));
-				tmp_buf[0] = '\x1b';
-				memcpy(tmp_buf + 1, (char *)octets, n);
-				WriteToBuffer(tmp_buf, n + 1);
+			if (inputRecord.Event.KeyEvent.uChar.UnicodeChar != L'\0') {
+				if ((dwControlKeyState & LEFT_ALT_PRESSED) || (dwControlKeyState & RIGHT_ALT_PRESSED)) {
+					memset(tmp_buf, 0, sizeof(tmp_buf));
+					tmp_buf[0] = '\x1b';
+					memcpy(tmp_buf + 1, (char *)octets, n);
+					WriteToBuffer(tmp_buf, n + 1);
+				}
+				else
+					WriteToBuffer((char *)octets, n);
+				break;
 			}
-			else
-				WriteToBuffer((char *)octets, n);
-			break;
 		}
 	}
 }
