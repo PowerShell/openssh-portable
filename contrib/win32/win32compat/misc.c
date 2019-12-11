@@ -418,7 +418,7 @@ char*
 				goto cleanup;
 			}
 			
-			if((actual_read + strlen(str_tmp)) >= n)
+			if((actual_read + (int)strlen(str_tmp)) >= n)
 				break;
 			if ((r = memcpy_s(cp, n - actual_read, str_tmp, strlen(str_tmp))) != 0) {
 				debug3("memcpy_s failed with error: %d.", r);
@@ -556,7 +556,7 @@ strmode(mode_t mode, char *p)
 		*p++ = '-';
 
 	const char *permissions = "****** ";	
-	for(int i = 0; i < strlen(permissions); i++)
+	for(int i = 0; i < (int)strlen(permissions); i++)
 		*p++ = permissions[i];
 	
 	*p = '\0';
@@ -833,7 +833,7 @@ w32_getcwd(char *buffer, int maxlen)
 		return NULL;
 	}
 
-	if (strlen(putf8) >= maxlen) {
+	if ((int)strlen(putf8) >= maxlen) {
 		errno = ERANGE;
 		free(putf8);
 		return NULL;
@@ -848,7 +848,7 @@ w32_getcwd(char *buffer, int maxlen)
 	if (chroot_path) {
 		/* ensure we are within chroot jail */
 		char c = buffer[chroot_path_len];
-		if ( strlen(buffer) < chroot_path_len ||
+		if ((int)strlen(buffer) < chroot_path_len ||
 		    memcmp(chroot_path, buffer, chroot_path_len) != 0 ||
 		    (c != '\0' && c!= '\\') ) {
 			errno = EOTHER;
@@ -1219,7 +1219,7 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags)
 	_cputws(wtmp);
 	free(wtmp);
 
-	while (current_index < outBufLen - 1) {
+	while (current_index < (int)outBufLen - 1) {
 		ch = _getch();
 		
 		if (ch == '\r') {
@@ -1392,7 +1392,7 @@ is_absolute_path(const char *path)
 	if(*path == '\"' || *path == '\'') /* skip double quote if path is "c:\abc" */
 		path++;
 
-	if (*path == '/' || *path == '\\' || (*path != '\0' && isalpha(*path) && path[1] == ':') ||
+	if (*path == '/' || *path == '\\' || (*path != '\0' && __isascii(*path) && isalpha(*path) && path[1] == ':') ||
 	    ((strlen(path) >= strlen(PROGRAM_DATA)) && (memcmp(path, PROGRAM_DATA, strlen(PROGRAM_DATA)) == 0)))
 		retVal = 1;
 
@@ -1711,10 +1711,10 @@ build_exec_command(const char * command)
 }
 
 /*
- * cmd is internally decoarated with a set of '"'
- * to account for any spaces within the commandline
- * the double quotes and backslash is escaped if needed 
- * this decoration is done only when additional arguments are passed in argv
+* cmd is internally decoarated with a set of '"'
+* to account for any spaces within the commandline
+* the double quotes and backslash is escaped if needed
+* this decoration is done only when additional arguments are passed in argv
 */
 char *
 build_commandline_string(const char* cmd, char *const argv[], BOOLEAN prepend_module_path)
@@ -1739,6 +1739,7 @@ build_commandline_string(const char* cmd, char *const argv[], BOOLEAN prepend_mo
 	if (is_bash_test_env()) {
 		memset(path, 0, path_len + 1);
 		bash_to_win_path(cmd, path, path_len + 1);
+		path_len = (DWORD)strlen(path);
 	}
 
 	if (!is_absolute_path(path) && prepend_module_path)
@@ -1788,7 +1789,9 @@ build_commandline_string(const char* cmd, char *const argv[], BOOLEAN prepend_mo
 		errno = ENOMEM;
 		goto cleanup;
 	}
+
 	t = cmdline;
+
 	*t++ = '\"';
 	if (add_module_path) {
 		/* add current module path to start if needed */
@@ -1796,10 +1799,27 @@ build_commandline_string(const char* cmd, char *const argv[], BOOLEAN prepend_mo
 		t += strlen(__progdir);
 		*t++ = '\\';
 	}
+
 	if (path[0] != '\"') {
-		memcpy(t, path, path_len);
-		t += path_len;
-		*t++ = '\"';
+		/* If path is <executable_path> <arg> then we should add double quotes after <executable_path> i.e., "<executable_path>" <arg> should be passed to CreateProcess().
+		* Example - If path is C:\cygwin64\bin\bash.exe /cygdrive/e/openssh-portable-latestw_all/openssh-portable/regress/scp-ssh-wrapper.sh then
+		*           we should pass "C:\cygwin64\bin\bash.exe" /cygdrive/e/openssh-portable-latestw_all/openssh-portable/regress/scp-ssh-wrapper.sh
+		*           to the CreateProcess() otherwise CreateProcess() will fail with error code 2.
+		*/
+		if (strstr(path, ".exe") && (tmp = strstr(strstr(path, ".exe"), " ")))
+		{
+			size_t tmp_pos = tmp - path;
+			memcpy(t, path, tmp_pos);
+			t += tmp_pos;
+			*t++ = '\"';
+			memcpy(t, tmp, strlen(path) - tmp_pos);
+			t += (strlen(path) - tmp_pos);
+		}
+		else {
+			memcpy(t, path, path_len);
+			t += path_len;
+			*t++ = '\"';
+		}
 	}
 	else {
 		/*path already contains "*/
@@ -1870,6 +1890,7 @@ cleanup:
 		free(cmdline);
 	return ret;
 }
+
 BOOL
 is_bash_test_env()
 {
@@ -1994,4 +2015,15 @@ cleanup:
 		free(command_w);
 
 	return ret;
+}
+
+char *
+strrstr(const char *inStr, const char *pattern)
+{
+	char *tmp = NULL, *last = NULL;
+	tmp = (char *) inStr;
+	while(tmp = strstr(tmp, pattern))
+		last = tmp++;
+
+	return last;
 }
