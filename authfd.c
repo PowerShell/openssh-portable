@@ -1,4 +1,4 @@
-/* $OpenBSD: authfd.c,v 1.108 2018/02/23 15:58:37 markus Exp $ */
+/* $OpenBSD: authfd.c,v 1.117 2019/09/03 08:29:15 djm Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -94,19 +94,19 @@ ssh_get_authentication_socket(int *fdp)
 		*fdp = -1;
 
 	authsocket = getenv(SSH_AUTHSOCKET_ENV_NAME);
-	if (!authsocket)
+	if (authsocket == NULL || *authsocket == '\0')
 		return SSH_ERR_AGENT_NOT_PRESENT;
 
 	memset(&sunaddr, 0, sizeof(sunaddr));
 	sunaddr.sun_family = AF_UNIX;
 	strlcpy(sunaddr.sun_path, authsocket, sizeof(sunaddr.sun_path));
 
-	if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
+	if ((sock = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
 		return SSH_ERR_SYSTEM_ERROR;
 
 	/* close on exec */
 	if (fcntl(sock, F_SETFD, FD_CLOEXEC) == -1 ||
-	    connect(sock, (struct sockaddr *)&sunaddr, sizeof(sunaddr)) < 0) {
+	    connect(sock, (struct sockaddr *)&sunaddr, sizeof(sunaddr)) == -1) {
 		oerrno = errno;
 		close(sock);
 		errno = oerrno;
@@ -133,7 +133,7 @@ ssh_request_reply(int sock, struct sshbuf *request, struct sshbuf *reply)
 
 	/* Send the length and then the packet to the agent. */
 	if (atomicio(vwrite, sock, buf, 4) != 4 ||
-	    atomicio(vwrite, sock, (u_char *)sshbuf_ptr(request),
+	    atomicio(vwrite, sock, sshbuf_mutable_ptr(request),
 	    sshbuf_len(request)) != sshbuf_len(request))
 		return SSH_ERR_AGENT_COMMUNICATION;
 	/*
@@ -312,7 +312,35 @@ ssh_free_identitylist(struct ssh_identitylist *idl)
 		if (idl->comments != NULL)
 			free(idl->comments[i]);
 	}
+	free(idl->keys);
+	free(idl->comments);
 	free(idl);
+}
+
+/*
+ * Check if the ssh agent has a given key.
+ * Returns 0 if found, or a negative SSH_ERR_* error code on failure.
+ */
+int
+ssh_agent_has_key(int sock, struct sshkey *key)
+{
+	int r, ret = SSH_ERR_KEY_NOT_FOUND;
+	size_t i;
+	struct ssh_identitylist *idlist = NULL;
+
+	if ((r = ssh_fetch_identitylist(sock, &idlist)) < 0) {
+		return r;
+	}
+
+	for (i = 0; i < idlist->nkeys; i++) {
+		if (sshkey_equal_public(idlist->keys[i], key)) {
+			ret = 0;
+			break;
+		}
+	}
+
+	ssh_free_identitylist(idlist);
+	return ret;
 }
 
 /*
@@ -323,14 +351,16 @@ ssh_free_identitylist(struct ssh_identitylist *idl)
  */
 
 
-/* encode signature algoritm in flag bits, so we can keep the msg format */
+/* encode signature algorithm in flag bits, so we can keep the msg format */
 static u_int
 agent_encode_alg(const struct sshkey *key, const char *alg)
 {
-	if (alg != NULL && key->type == KEY_RSA) {
-		if (strcmp(alg, "rsa-sha2-256") == 0)
+	if (alg != NULL && sshkey_type_plain(key->type) == KEY_RSA) {
+		if (strcmp(alg, "rsa-sha2-256") == 0 ||
+		    strcmp(alg, "rsa-sha2-256-cert-v01@openssh.com") == 0)
 			return SSH_AGENT_RSA_SHA2_256;
-		else if (strcmp(alg, "rsa-sha2-512") == 0)
+		if (strcmp(alg, "rsa-sha2-512") == 0 ||
+		    strcmp(alg, "rsa-sha2-512-cert-v01@openssh.com") == 0)
 			return SSH_AGENT_RSA_SHA2_512;
 	}
 	return 0;
@@ -343,8 +373,8 @@ ssh_agent_sign(int sock, const struct sshkey *key,
     const u_char *data, size_t datalen, const char *alg, u_int compat)
 {
 	struct sshbuf *msg;
-	u_char *blob = NULL, type;
-	size_t blen = 0, len = 0;
+	u_char *sig = NULL, type = 0;
+	size_t len = 0;
 	u_int flags = 0;
 	int r = SSH_ERR_INTERNAL_ERROR;
 
@@ -355,11 +385,9 @@ ssh_agent_sign(int sock, const struct sshkey *key,
 		return SSH_ERR_INVALID_ARGUMENT;
 	if ((msg = sshbuf_new()) == NULL)
 		return SSH_ERR_ALLOC_FAIL;
-	if ((r = sshkey_to_blob(key, &blob, &blen)) != 0)
-		goto out;
 	flags |= agent_encode_alg(key, alg);
 	if ((r = sshbuf_put_u8(msg, SSH2_AGENTC_SIGN_REQUEST)) != 0 ||
-	    (r = sshbuf_put_string(msg, blob, blen)) != 0 ||
+	    (r = sshkey_puts(key, msg)) != 0 ||
 	    (r = sshbuf_put_string(msg, data, datalen)) != 0 ||
 	    (r = sshbuf_put_u32(msg, flags)) != 0)
 		goto out;
@@ -374,15 +402,19 @@ ssh_agent_sign(int sock, const struct sshkey *key,
 		r = SSH_ERR_INVALID_FORMAT;
 		goto out;
 	}
-	if ((r = sshbuf_get_string(msg, sigp, &len)) != 0)
+	if ((r = sshbuf_get_string(msg, &sig, &len)) != 0)
 		goto out;
+	/* Check what we actually got back from the agent. */
+	if ((r = sshkey_check_sigtype(sig, len, alg)) != 0)
+		goto out;
+	/* success */
+	*sigp = sig;
 	*lenp = len;
+	sig = NULL;
+	len = 0;
 	r = 0;
  out:
-	if (blob != NULL) {
-		explicit_bzero(blob, blen);
-		free(blob);
-	}
+	freezero(sig, len);
 	sshbuf_free(msg);
 	return r;
 }
@@ -419,7 +451,7 @@ encode_constraints(struct sshbuf *m, u_int life, u_int confirm, u_int maxsign)
  * This call is intended only for use by ssh-add(1) and like applications.
  */
 int
-ssh_add_identity_constrained(int sock, const struct sshkey *key,
+ssh_add_identity_constrained(int sock, struct sshkey *key,
     const char *comment, u_int life, u_int confirm, u_int maxsign)
 {
 	struct sshbuf *msg;

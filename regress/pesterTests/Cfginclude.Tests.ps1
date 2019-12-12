@@ -58,7 +58,8 @@ Describe "Tests for ssh config" -Tags "CI" {
 
             $userConfigFile = Join-Path $home ".ssh\config"
             if( -not (Test-path $userConfigFile) ) {
-                Copy-item "$PSScriptRoot\testdata\ssh_config" $userConfigFile -force
+                #prep sample config
+                Add-Content "PubkeyAcceptedKeyTypes ssh-ed25519*" $userConfigFile 
             }
             Enable-Privilege SeRestorePrivilege | out-null
             $oldACL = Get-ACL $userConfigFile
@@ -126,7 +127,7 @@ Describe "Tests for ssh config" -Tags "CI" {
 
         It "$tC.$tI-User SSHConfig-ReadConfig negative (others has permission)" {
             #setup
-            Repair-FilePermission -Filepath $userConfigFile -Owners $currentUserSid -FullAccessNeeded $adminsSid,$systemSid,$currentUserSid -ReadAccessNeeded $objUserSid -confirm:$false
+            Repair-FilePermission -Filepath $userConfigFile -Owners $currentUserSid -FullAccessNeeded $adminsSid,$systemSid,$currentUserSid,$objUserSid -confirm:$false
 
             #Run
             cmd /c "ssh test_target echo 1234 2> $logPath"

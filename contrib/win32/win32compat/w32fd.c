@@ -33,6 +33,7 @@
 #include "inc\sys\select.h"
 #include "inc\sys\uio.h"
 #include "inc\sys\types.h"
+#include "inc\sys\stat.h"
 #include "inc\unistd.h"
 #include "inc\fcntl.h"
 #include "inc\sys\un.h"
@@ -72,6 +73,14 @@ void fd_decode_state(char*);
 
 /* __progname */
 char* __progname = "";
+
+/* __progdir */
+char* __progdir = "";
+wchar_t* __wprogdir = L"";
+
+/* __progdata */
+char* __progdata = "";
+wchar_t* __wprogdata = L"";
 
 /* initializes mapping table*/
 static int
@@ -124,7 +133,7 @@ fd_table_initialize()
 		if (chroot_pathw != NULL) {
 			if ((chroot_path = utf16_to_utf8(chroot_pathw)) == NULL)
 				return -1;
-			chroot_path_len = strlen(chroot_path);
+			chroot_path_len = (int) strlen(chroot_path);
 		}
 	}
 
@@ -176,42 +185,53 @@ fd_table_clear(int index)
 	FD_CLR(index, &(fd_table.occupied));
 }
 
-/* TODO - consolidate w32_programdir logic in here */
-static int 
+void 
 init_prog_paths()
 {
 	wchar_t* wpgmptr;
-	char* pgmptr;
+	static int processed = 0;
 
-	if (_get_wpgmptr(&wpgmptr) != 0) {
-		errno = EOTHER;
-		return -1;
-	}
+	if (processed)
+		return;
 
-	if ((pgmptr = utf16_to_utf8(wpgmptr)) == NULL) {
-		errno = ENOMEM;
-		return -1;
-	}
+	if (_get_wpgmptr(&wpgmptr) != 0)
+		fatal("unable to retrieve wpgmptr");
 
-	__progname = strrchr(pgmptr, '\\') + 1;
-	*(__progname - 1) = '\0';
+	if ((__wprogdir = _wcsdup(wpgmptr)) == NULL ||
+	    (__progdir = utf16_to_utf8(__wprogdir)) == NULL)
+		fatal("%s out of memory", __func__);
+
+	__progname = strrchr(__progdir, '\\') + 1;
+	/* TODO: retain trailing \ at the end of progdir* variants ? */
+	*(strrchr(__progdir, '\\')) = '\0';
+	*(wcsrchr(__wprogdir, L'\\')) = L'\0';
 
 	/* strip .exe off __progname */
 	*(__progname + strlen(__progname) - 4) = '\0';
 
-	return 0;
+	/* get %programdata% value */
+	size_t len = 0;
+	_dupenv_s(&__progdata, &len, "ProgramData");
+
+	if (!__progdata)
+		fatal("couldn't find ProgramData environment variable");
+
+	if(!(__wprogdata = utf8_to_utf16(__progdata)))
+		fatal("%s out of memory", __func__, __LINE__);
+
+	processed = 1;
 }
 
 void
 w32posix_initialize()
 {
+	init_prog_paths();
 	if ((fd_table_initialize() != 0) || (socketio_initialize() != 0))
-		DebugBreak();
+		debug_assert_internal();
 	main_thread = OpenThread(THREAD_SET_CONTEXT | SYNCHRONIZE, FALSE, GetCurrentThreadId());
 	if (main_thread == NULL || 
-	    sw_initialize() != 0 || 
-	    init_prog_paths() != 0 ) {
-		DebugBreak();
+	    sw_initialize() != 0 ) {
+		debug_assert_internal();
 		fatal("failed to initialize w32posix wrapper");
 	}
 }
@@ -307,6 +327,12 @@ w32_accept(int fd, struct sockaddr* addr, int* addrlen)
 	if (min_index == -1)
 		return -1;
 
+	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
+		errno = ENOTSUP;
+		verbose("Unix domain server sockets are not supported");
+		return -1;
+	}
+
 	pio = socketio_accept(fd_table.w32_ios[fd], addr, addrlen);
 	if (!pio)
 		return -1;
@@ -353,6 +379,12 @@ int
 w32_listen(int fd, int backlog)
 {
 	CHECK_FD(fd);
+	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
+		errno = ENOTSUP;
+		verbose("Unix domain server sockets are not supported");
+		return -1;
+	}
+
 	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
 	return socketio_listen(fd_table.w32_ios[fd], backlog);
 }
@@ -361,6 +393,12 @@ int
 w32_bind(int fd, const struct sockaddr *name, int namelen)
 {
 	CHECK_FD(fd);
+	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
+		errno = ENOTSUP;
+		verbose("Unix domain server sockets are not supported");
+		return -1;
+	}
+
 	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
 	return socketio_bind(fd_table.w32_ios[fd], name, namelen);
 }
@@ -962,6 +1000,28 @@ w32_ftruncate(int fd, off_t length)
 	return 0;
 }
 
+int w32_fchmod(int fd, mode_t mode)
+{
+	wchar_t *file_path;
+	char *file_path_utf8 = NULL;
+	int ret = -1;
+	CHECK_FD(fd);
+
+	file_path = get_final_path_by_handle(fd_table.w32_ios[fd]->handle);
+	if (!file_path)
+		goto cleanup;
+
+	if ((file_path_utf8 = utf16_to_utf8(file_path)) == NULL)
+		goto cleanup;
+
+	ret = w32_chmod(file_path_utf8, mode);
+cleanup:
+	if (file_path_utf8)
+		free(file_path_utf8);
+
+	return ret;
+}
+
 int
 w32_fsync(int fd)
 {
@@ -971,92 +1031,31 @@ w32_fsync(int fd)
 
 int fork() 
 { 
-	error("fork is not supported"); 
+	verbose("fork is not supported"); 
 	return -1;
 }
+char * build_commandline_string(const char* cmd, char *const argv[], BOOLEAN prepend_module_path);
 
 /*
 * spawn a child process
 * - specified by cmd with agruments argv
 * - with std handles set to in, out, err
 * - flags are passed to CreateProcess call
-*
-* cmd will be internally decoarated with a set of '"'
-* to account for any spaces within the commandline
-* this decoration is done only when additional arguments are passed in argv
-*
 * spawned child will run as as_user if its not NULL
 */
-
 static int
-spawn_child_internal(char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDLE err, unsigned long flags, HANDLE* as_user)
+spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDLE err, unsigned long flags, HANDLE* as_user, BOOLEAN prepend_module_path)
 {
 	PROCESS_INFORMATION pi;
 	STARTUPINFOW si;
 	BOOL b;
-	char *cmdline, *t;
-	char * const *t1;
-	DWORD cmdline_len = 0;
+	char *cmdline;
 	wchar_t * cmdline_utf16 = NULL;
-	int add_module_path = 0, ret = -1;
-
-	/* should module path be added */
-	if (!cmd) {
-		error("%s invalid argument cmd:%s", __func__, cmd);
-		return -1;
-	}
-
-	t = cmd;
-	if (!is_absolute_path(t))
-		add_module_path = 1;
-
-	/* compute total cmdline len*/
-	if (add_module_path)
-		cmdline_len += (DWORD)strlen(w32_programdir()) + 1 + (DWORD)strlen(cmd) + 1 + 2;
-	else
-		cmdline_len += (DWORD)strlen(cmd) + 1 + 2;
-
-	if (argv) {
-		t1 = argv;
-		while (*t1)
-			cmdline_len += (DWORD)strlen(*t1++) + 1 + 2;
-	}
-
-	if ((cmdline = malloc(cmdline_len)) == NULL) {
+	int ret = -1;
+	if ((cmdline = build_commandline_string(cmd, argv, prepend_module_path)) == NULL) {
 		errno = ENOMEM;
 		goto cleanup;
 	}
-
-	/* add current module path to start if needed */
-	t = cmdline;
-	if (argv && argv[0])
-		*t++ = '\"';
-	if (add_module_path) {
-		memcpy(t, w32_programdir(), strlen(w32_programdir()));
-		t += strlen(w32_programdir());
-		*t++ = '\\';
-	}
-
-	memcpy(t, cmd, strlen(cmd));
-	t += strlen(cmd);
-
-	if (argv && argv[0])
-		*t++ = '\"';
-
-	if (argv) {
-		t1 = argv;
-		while (*t1) {
-			*t++ = ' ';
-			*t++ = '\"';
-			memcpy(t, *t1, strlen(*t1));
-			t += strlen(*t1);
-			*t++ = '\"';
-			t1++;
-		}
-	}
-
-	*t = '\0';
-
 	if ((cmdline_utf16 = utf8_to_utf16(cmdline)) == NULL) {
 		errno = ENOMEM;
 		goto cleanup;
@@ -1068,13 +1067,24 @@ spawn_child_internal(char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDL
 	si.hStdOutput = out;
 	si.hStdError = err;
 	si.dwFlags = STARTF_USESTDHANDLES;
-
-	debug3("spawning %ls", cmdline_utf16);
+	flags |= CREATE_NO_WINDOW;
 	
-	if (as_user)
-		b = CreateProcessAsUserW(as_user, NULL, cmdline_utf16, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
-	else
-		b = CreateProcessW(NULL, cmdline_utf16, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
+	if (strstr(cmd, "sshd.exe")) {
+		flags |= DETACHED_PROCESS;
+	}
+	
+	wchar_t * t = cmdline_utf16;
+	do {
+		debug3("spawning %ls", t);
+		if (as_user)
+			b = CreateProcessAsUserW(as_user, NULL, t, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
+		else
+			b = CreateProcessW(NULL, t, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
+		if(b || GetLastError() != ERROR_FILE_NOT_FOUND || (argv != NULL && *argv != NULL) || cmd[0] == '\"')
+			break;
+		t++;
+		*(cmdline_utf16 + wcslen(cmdline_utf16) - 1) = L'\0';
+	} while (t == (cmdline_utf16 + 1));
 
 	if (b) {
 		if (register_child(pi.hProcess, pi.dwProcessId) == -1) {
@@ -1083,14 +1093,13 @@ spawn_child_internal(char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDL
 			goto cleanup;
 		}
 		CloseHandle(pi.hThread);
+		ret = pi.dwProcessId;
 	}
 	else {
 		errno = GetLastError();
-		error("%s failed error:%d", (as_user?"CreateProcessAsUserW":"CreateProcessW"), GetLastError());
-		goto cleanup;
+		error("%s failed error:%d", (as_user ? "CreateProcessAsUserW" : "CreateProcessW"), GetLastError());
 	}
 
-	ret = pi.dwProcessId;
 cleanup:
 	if (cmdline)
 		free(cmdline);
@@ -1217,7 +1226,7 @@ fd_decode_state(char* enc_buf)
 }
 
 int
-posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], HANDLE user_token)
+posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], HANDLE user_token, BOOLEAN prepend_module_path)
 {
 	int i, ret = -1;
 	int sc_flags = 0;
@@ -1244,7 +1253,7 @@ posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actio
 	for (i = 0; i < file_actions->num_aux_fds; i++) {
 		aux_handles[i] = dup_handle(file_actions->aux_fds_info.parent_fd[i]);
 		if (aux_handles[i] == NULL) 
-			goto cleanup;		
+			goto cleanup;
 	}
 
 	/* set fd info */
@@ -1253,7 +1262,7 @@ posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actio
 
 	if (_putenv_s(POSIX_FD_STATE, fd_info) != 0)
 		goto cleanup;
-	i = spawn_child_internal(argv[0], argv + 1, stdio_handles[STDIN_FILENO], stdio_handles[STDOUT_FILENO], stdio_handles[STDERR_FILENO], sc_flags, user_token);
+	i = spawn_child_internal(path, argv + 1, stdio_handles[STDIN_FILENO], stdio_handles[STDOUT_FILENO], stdio_handles[STDERR_FILENO], sc_flags, user_token, prepend_module_path);
 	if (i == -1)
 		goto cleanup;
 	if (pidp)
@@ -1286,5 +1295,11 @@ cleanup:
 int
 posix_spawn(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[])
 {
-	return posix_spawn_internal(pidp, path, file_actions, attrp, argv, envp, NULL);
+	return posix_spawn_internal(pidp, path, file_actions, attrp, argv, envp, NULL, TRUE);
+}
+
+int
+posix_spawnp(pid_t *pidp, const char *file, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[])
+{
+	return posix_spawn_internal(pidp, file, file_actions, attrp, argv, envp, NULL, FALSE);
 }

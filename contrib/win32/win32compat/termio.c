@@ -90,13 +90,14 @@ ReadThread(_In_ LPVOID lpParameter)
 				isFirstTime = false;
 
 				DWORD dwAttributes;
-				if (!GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &dwAttributes))
-					error("GetConsoleMode on STD_INPUT_HANDLE failed with %d\n", GetLastError());
-				
-				dwAttributes |= (ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT);
+				/* open(dev/null) is showing up as FILE_TYPE_CHAR but is not a valid console handle */
+				if (GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &dwAttributes)) {
+					dwAttributes |= (ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT);
+					if (!SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), dwAttributes))
+						debug2("SetConsoleMode on STD_INPUT_HANDLE failed with %d", GetLastError());
+				} else if (GetLastError() != ERROR_INVALID_HANDLE)
+					debug2("GetConsoleMode on STD_INPUT_HANDLE failed with %d", GetLastError());
 
-				if (!SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), dwAttributes))
-					error("SetConsoleMode on STD_INPUT_HANDLE failed with %d\n", GetLastError());
 			}
 
 			if (!ReadFile(WINHANDLE(pio), pio->read_details.buf,
@@ -115,8 +116,7 @@ ReadThread(_In_ LPVOID lpParameter)
 
 				if (p) {
 					*p = '\0';
-					pio->read_details.buf_size = (DWORD)strlen(pio->read_details.buf);
-					pio->sync_read_status.transferred = pio->read_details.buf_size;
+					pio->sync_read_status.transferred = (DWORD)strlen(pio->read_details.buf);
 				}
 			}
 		}
@@ -127,13 +127,18 @@ ReadThread(_In_ LPVOID lpParameter)
 			pio->sync_read_status.error = GetLastError();
 			goto done;
 		}
+
+		/* If there is no data to be read then set the error to ERROR_HANDLE_EOF */
+		if (!pio->sync_read_status.transferred) {
+			pio->sync_read_status.error = ERROR_HANDLE_EOF;
+		}
 	}
 
 done:
 	if (0 == QueueUserAPC(ReadAPCProc, main_thread, (ULONG_PTR)pio)) {		
 		pio->read_details.pending = FALSE;
 		pio->read_details.error = GetLastError();
-		DebugBreak();
+		debug_assert_internal();
 	}
 
 	return 0;
@@ -218,7 +223,7 @@ WriteThread(_In_ LPVOID lpParameter)
 		error("WriteThread thread - ERROR QueueUserAPC failed %d, io:%p", GetLastError(), pio);
 		pio->write_details.pending = FALSE;
 		pio->write_details.error = GetLastError();
-		DebugBreak();
+		debug_assert_internal();
 	}
 
 	return 0;
@@ -244,6 +249,12 @@ syncio_initiate_write(struct w32_io* pio, DWORD num_bytes)
 	return 0;
 }
 
+static VOID CALLBACK
+InterruptThread(_In_ ULONG_PTR dwParam)
+{
+	_endthreadex(0);
+}
+
 /* close */
 int 
 syncio_close(struct w32_io* pio)
@@ -258,16 +269,20 @@ syncio_close(struct w32_io* pio)
 		1. For console - the read thread is blocked by the while loop on raw mode
 		2. Function ReadFile on Win7 machine dees not return when no content to read in non-interactive mode.
 		*/
-		if (FILETYPE(pio) == FILE_TYPE_CHAR && (IsWin7OrLess() || in_raw_mode))
-			TerminateThread(pio->read_overlapped.hEvent, 0);
-		else
-			WaitForSingleObject(pio->read_overlapped.hEvent, INFINITE);
+		if (FILETYPE(pio) == FILE_TYPE_CHAR && (IsWin7OrLess() || in_raw_mode)) {
+			QueueUserAPC(InterruptThread, pio->read_overlapped.hEvent, (ULONG_PTR)NULL);
+			CancelSynchronousIo(pio->read_overlapped.hEvent);
+		}
+
+		WaitForSingleObject(pio->read_overlapped.hEvent, INFINITE);
 	}
 	if (pio->write_details.pending)
 		WaitForSingleObject(pio->write_overlapped.hEvent, INFINITE);
 	/* drain queued APCs */
 	SleepEx(0, TRUE);
-	CloseHandle(WINHANDLE(pio));
+	/* TODO - fix this, closing Console handles is interfering with TTY/PTY rendering */
+	if (FILETYPE(pio) != FILE_TYPE_CHAR)
+		CloseHandle(WINHANDLE(pio));
 	if (pio->read_details.buf)
 		free(pio->read_details.buf);
 	if (pio->write_details.buf)

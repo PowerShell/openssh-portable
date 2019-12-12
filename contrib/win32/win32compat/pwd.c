@@ -50,6 +50,7 @@
 static struct passwd pw;
 static char* pw_shellpath = NULL;
 char* shell_command_option = NULL;
+BOOLEAN arg_escape = TRUE;
 
 /* returns 0 on success, and -1 with errno set on failure */
 static int
@@ -76,8 +77,12 @@ set_defaultshell()
 	    (path_buf[0] != L'\0')) {
 		/* fetched default shell path from registry */
 		tmp_len = _countof(option_buf);
+		DWORD size = sizeof(DWORD);
+		DWORD escape_option = 1;
 		if (RegQueryValueExW(reg_key, L"DefaultShellCommandOption", 0, NULL, (LPBYTE)option_buf, &tmp_len) != ERROR_SUCCESS)
 			option_buf[0] = L'\0';
+		if (RegQueryValueExW(reg_key, L"DefaultShellEscapeArguments", 0, NULL, (LPBYTE)&escape_option, &size) == ERROR_SUCCESS)
+			arg_escape = (escape_option != 0) ? TRUE : FALSE;
 	} else {
 		if (!GetSystemDirectoryW(path_buf, _countof(path_buf))) {
 			errno = GetLastError();
@@ -94,6 +99,8 @@ set_defaultshell()
 		if ((command_option_local = utf16_to_utf8(option_buf)) == NULL)
 			goto cleanup;
 
+	convertToBackslash(pw_shellpath_local);
+	to_lower_case(pw_shellpath_local);
 	pw_shellpath = pw_shellpath_local;
 	pw_shellpath_local = NULL;
 	shell_command_option = command_option_local;
@@ -155,7 +162,7 @@ get_passwd(const wchar_t * user_utf16, PSID sid)
 {
 	wchar_t user_resolved[DNLEN + 1 + UNLEN + 1];
 	struct passwd *ret = NULL;
-	wchar_t *sid_string = NULL;
+	wchar_t *sid_string = NULL, *tmp = NULL, *user_utf16_modified = NULL;
 	wchar_t reg_path[PATH_MAX], profile_home[PATH_MAX], profile_home_exp[PATH_MAX];
 	DWORD reg_path_len = PATH_MAX;
 	HKEY reg_key = 0;	
@@ -169,13 +176,29 @@ get_passwd(const wchar_t * user_utf16, PSID sid)
 	errno = 0;
 	if (reset_pw() != 0)
 		return NULL;
+	
+	/*
+	 * We support both "domain\user" and "domain/user" formats.
+	 * But win32 APIs only accept domain\user format so convert it.
+	 */
+	if (user_utf16) {
+		user_utf16_modified = _wcsdup(user_utf16);
+		if (!user_utf16_modified) {
+			errno = ENOMEM;
+			error("%s failed to duplicate %s", __func__, user_utf16);
+			goto cleanup;
+		}
+
+		if (tmp = wcsstr(user_utf16_modified, L"/"))
+			*tmp = L'\\';
+	}
 
 	/* skip forward lookup on name if sid was passed in */
 	if (sid != NULL)
 		CopySid(sizeof(binary_sid), binary_sid, sid);
 	/* else attempt to lookup the account; this will verify the account is valid and
 	 * is will return its sid and the realm that owns it */
-	else if(LookupAccountNameW(NULL, user_utf16, binary_sid, &sid_size,
+	else if(LookupAccountNameW(NULL, user_utf16_modified, binary_sid, &sid_size,
 	    domain_name, &domain_name_size, &account_type) == 0) {
 		errno = ENOENT;
 		debug("%s: LookupAccountName() failed: %d.", __FUNCTION__, GetLastError());
@@ -213,8 +236,8 @@ get_passwd(const wchar_t * user_utf16, PSID sid)
 		goto cleanup;
 	}
 
-	/* if standard local user name, just use name without decoration */
-	if (_wcsicmp(domain_name, computer_name) == 0) 
+	/* If standard local user name, just use name without decoration */
+	if ((_wcsicmp(domain_name, computer_name) == 0))
 		wcscpy_s(user_resolved, ARRAYSIZE(user_resolved), user_name);
 
 	/* put any other format in sam compatible format */
@@ -265,7 +288,7 @@ getpwnam_placeholder(const char* user) {
 		errno = EOTHER;
 		goto cleanup;
 	}
-	pw_name = strdup(user);
+	pw_name = _strdup(user);
 	pw_dir = utf16_to_utf8(tmp_home);
 
 	if (!pw_name || !pw_dir) {
@@ -292,7 +315,9 @@ struct passwd*
 w32_getpwnam(const char *user_utf8)
 {
 	struct passwd* ret = NULL;
-	wchar_t * user_utf16 = utf8_to_utf16(user_utf8);
+	wchar_t * user_utf16 = NULL;
+
+	user_utf16 = utf8_to_utf16(user_utf8);
 	if (user_utf16 == NULL) {
 		errno = ENOMEM;
 		return NULL;
@@ -300,21 +325,21 @@ w32_getpwnam(const char *user_utf8)
 
 	ret = get_passwd(user_utf16, NULL);
 	if (ret != NULL)
-		return ret;
+		goto done;
+
+	/* for unpriviliged user account, create placeholder and return*/
+	if (_stricmp(user_utf8, "sshd") == 0) {
+		ret = getpwnam_placeholder(user_utf8);
+		goto done;
+	}
 
 	/* check if custom passwd auth is enabled */
-	{
-		int lsa_auth_pkg_len = 0;
-		HKEY reg_key = 0;
+	if (get_custom_lsa_package())
+		ret = getpwnam_placeholder(user_utf8);
 
-		REGSAM mask = STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY;
-		if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\OpenSSH", 0, mask, &reg_key) == ERROR_SUCCESS) &&
-		    (RegQueryValueExW(reg_key, L"LSAAuthenticationPackage", 0, NULL, NULL, &lsa_auth_pkg_len) == ERROR_SUCCESS))
-			ret = getpwnam_placeholder(user_utf8);
-
-		if (reg_key)
-			RegCloseKey(reg_key);
-	}
+done:
+	if (user_utf16)
+		free(user_utf16);
 	return ret;
 }
 
@@ -324,7 +349,7 @@ w32_getpwuid(uid_t uid)
 	struct passwd* ret = NULL;
 	PSID cur_user_sid = NULL;
 	
-	if ((cur_user_sid = get_user_sid(NULL)) == NULL)
+	if ((cur_user_sid = get_sid(NULL)) == NULL)
 		goto cleanup;
 
 	ret = get_passwd(NULL, cur_user_sid);
@@ -396,7 +421,17 @@ setegid(gid_t gid)
 	return 0;
 }
 
-void 
+struct passwd *getpwent(void)
+{
+	return NULL;
+}
+
+void setpwent(void)
+{
+	return;
+}
+
+void
 endpwent(void)
 {
 	return;

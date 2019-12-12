@@ -1,9 +1,17 @@
-#	$OpenBSD: keygen-convert.sh,v 1.1 2009/11/09 04:20:04 dtucker Exp $
+#	$OpenBSD: keygen-convert.sh,v 1.2 2019/07/23 07:55:29 dtucker Exp $
 #	Placed in the Public Domain.
 
 tid="convert keys"
 
-for t in rsa dsa; do
+types=""
+for i in ${SSH_KEYTYPES}; do
+	case "$i" in
+		ssh-dss)	types="$types dsa" ;;
+		ssh-rsa)	types="$types rsa" ;;
+	esac
+done
+
+for t in $types; do
 	# generate user key for agent
 	trace "generating $t key"
 	rm -f $OBJ/$t-key
@@ -25,9 +33,14 @@ for t in rsa dsa; do
 	    fail "$t import rfc4716 public"
 
 	cut -f1,2 -d " " $OBJ/$t-key.pub >$OBJ/$t-key-nocomment.pub
-	cmp $OBJ/$t-key-nocomment.pub $OBJ/$t-rfc-imported || \
-	    fail "$t imported differs from original"
-
+	if [ "$os" == "windows" ]; then
+		# Ignore CR (carriage return) while comparing files
+		diff --strip-trailing-cr $OBJ/$t-key-nocomment.pub $OBJ/$t-rfc-imported || \
+		fail "$t imported differs from original"
+	else
+		cmp $OBJ/$t-key-nocomment.pub $OBJ/$t-rfc-imported || \
+		fail "$t imported differs from original"
+	fi
 	rm -f $OBJ/$t-key $OBJ/$t-key.pub $OBJ/$t-key-rfc $OBJ/$t-key-rfc.pub \
 	    $OBJ/$t-rfc-imported $OBJ/$t-key-nocomment.pub
 done

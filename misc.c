@@ -1,4 +1,4 @@
-/* $OpenBSD: misc.c,v 1.127 2018/03/12 00:52:01 djm Exp $ */
+/* $OpenBSD: misc.c,v 1.142 2019/09/03 08:32:11 djm Exp $ */
 /*
  * Copyright (c) 2000 Markus Friedl.  All rights reserved.
  * Copyright (c) 2005,2006 Damien Miller.  All rights reserved.
@@ -38,6 +38,7 @@
 #ifdef HAVE_LIBGEN_H
 # include <libgen.h>
 #endif
+#include <poll.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -50,6 +51,7 @@
 #include <netinet/in_systm.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
+#include <arpa/inet.h>
 
 #include <ctype.h>
 #include <errno.h>
@@ -69,7 +71,6 @@
 #include "ssh.h"
 #include "sshbuf.h"
 #include "ssherr.h"
-#include "uidswap.h"
 #include "platform.h"
 
 /* remove newline at end of string */
@@ -95,7 +96,7 @@ set_nonblock(int fd)
 	int val;
 
 	val = fcntl(fd, F_GETFL);
-	if (val < 0) {
+	if (val == -1) {
 		error("fcntl(%d, F_GETFL): %s", fd, strerror(errno));
 		return (-1);
 	}
@@ -119,7 +120,7 @@ unset_nonblock(int fd)
 	int val;
 
 	val = fcntl(fd, F_GETFL);
-	if (val < 0) {
+	if (val == -1) {
 		error("fcntl(%d, F_GETFL): %s", fd, strerror(errno));
 		return (-1);
 	}
@@ -234,13 +235,87 @@ set_rdomain(int fd, const char *name)
 #endif
 }
 
+/*
+ * Wait up to *timeoutp milliseconds for fd to be readable. Updates
+ * *timeoutp with time remaining.
+ * Returns 0 if fd ready or -1 on timeout or error (see errno).
+ */
+int
+waitrfd(int fd, int *timeoutp)
+{
+	struct pollfd pfd;
+	struct timeval t_start;
+	int oerrno, r;
+
+	monotime_tv(&t_start);
+	pfd.fd = fd;
+	pfd.events = POLLIN;
+	for (; *timeoutp >= 0;) {
+		r = poll(&pfd, 1, *timeoutp);
+		oerrno = errno;
+		ms_subtract_diff(&t_start, timeoutp);
+		errno = oerrno;
+		if (r > 0)
+			return 0;
+		else if (r == -1 && errno != EAGAIN)
+			return -1;
+		else if (r == 0)
+			break;
+	}
+	/* timeout */
+	errno = ETIMEDOUT;
+	return -1;
+}
+
+/*
+ * Attempt a non-blocking connect(2) to the specified address, waiting up to
+ * *timeoutp milliseconds for the connection to complete. If the timeout is
+ * <=0, then wait indefinitely.
+ *
+ * Returns 0 on success or -1 on failure.
+ */
+int
+timeout_connect(int sockfd, const struct sockaddr *serv_addr,
+    socklen_t addrlen, int *timeoutp)
+{
+	int optval = 0;
+	socklen_t optlen = sizeof(optval);
+
+	/* No timeout: just do a blocking connect() */
+	if (timeoutp == NULL || *timeoutp <= 0)
+		return connect(sockfd, serv_addr, addrlen);
+
+	set_nonblock(sockfd);
+	if (connect(sockfd, serv_addr, addrlen) == 0) {
+		/* Succeeded already? */
+		unset_nonblock(sockfd);
+		return 0;
+	} else if (errno != EINPROGRESS)
+		return -1;
+
+	if (waitrfd(sockfd, timeoutp) == -1)
+		return -1;
+
+	/* Completed or failed */
+	if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &optval, &optlen) == -1) {
+		debug("getsockopt: %s", strerror(errno));
+		return -1;
+	}
+	if (optval != 0) {
+		errno = optval;
+		return -1;
+	}
+	unset_nonblock(sockfd);
+	return 0;
+}
+
 /* Characters considered whitespace in strsep calls. */
 #define WHITESPACE " \t\r\n"
 #define QUOTE	"\""
 
 /* return next token in configuration line */
-char *
-strdelim(char **s)
+static char *
+strdelim_internal(char **s, int split_equals)
 {
 	char *old;
 	int wspace = 0;
@@ -250,7 +325,8 @@ strdelim(char **s)
 
 	old = *s;
 
-	*s = strpbrk(*s, WHITESPACE QUOTE "=");
+	*s = strpbrk(*s,
+	    split_equals ? WHITESPACE QUOTE "=" : WHITESPACE QUOTE);
 	if (*s == NULL)
 		return (old);
 
@@ -267,16 +343,35 @@ strdelim(char **s)
 	}
 
 	/* Allow only one '=' to be skipped */
-	if (*s[0] == '=')
+	if (split_equals && *s[0] == '=')
 		wspace = 1;
 	*s[0] = '\0';
 
 	/* Skip any extra whitespace after first token */
 	*s += strspn(*s + 1, WHITESPACE) + 1;
-	if (*s[0] == '=' && !wspace)
+	if (split_equals && *s[0] == '=' && !wspace)
 		*s += strspn(*s + 1, WHITESPACE) + 1;
 
 	return (old);
+}
+
+/*
+ * Return next token in configuration line; splts on whitespace or a
+ * single '=' character.
+ */
+char *
+strdelim(char **s)
+{
+	return strdelim_internal(s, 1);
+}
+
+/*
+ * Return next token in configuration line; splts on whitespace only.
+ */
+char *
+strdelimw(char **s)
+{
+	return strdelim_internal(s, 0);
 }
 
 struct passwd *
@@ -314,13 +409,16 @@ pwcopy(struct passwd *pw)
 int
 a2port(const char *s)
 {
+	struct servent *se;
 	long long port;
 	const char *errstr;
 
 	port = strtonum(s, 0, 65535, &errstr);
-	if (errstr != NULL)
-		return -1;
-	return (int)port;
+	if (errstr == NULL)
+		return (int)port;
+	if ((se = getservbyname(s, "tcp")) != NULL)
+		return ntohs(se->s_port);
+	return -1;
 }
 
 int
@@ -453,7 +551,7 @@ put_host_port(const char *host, u_short port)
 
 	if (port == 0 || port == SSH_DEFAULT_PORT)
 		return(xstrdup(host));
-	if (asprintf(&hoststr, "[%s]:%d", host, (int)port) < 0)
+	if (asprintf(&hoststr, "[%s]:%d", host, (int)port) == -1)
 		fatal("put_host_port: asprintf: %s", strerror(errno));
 	debug3("put_host_port: %s", hoststr);
 	return hoststr;
@@ -467,7 +565,7 @@ put_host_port(const char *host, u_short port)
  * The delimiter char, if present, is stored in delim.
  * If this is the last field, *cp is set to NULL.
  */
-static char *
+char *
 hpdelim2(char **cp, char *delim)
 {
 	char *s, *old;
@@ -784,6 +882,16 @@ parse_uri(const char *scheme, const char *uri, char **userp, char **hostp,
 	if ((cp = strchr(tmp, '@')) != NULL) {
 		char *delim;
 
+#ifdef WINDOWS
+		/* TODO - This looks to be a core bug in unix code as user can be in UPN format
+		 *  The above line should be strrchr() instead of strchr.
+		 *  For time being, special handling when username is in User@domain format
+		 */
+
+		char *cp_1 = cp;
+		if ((cp_1 = strchr(cp + 1, '@')) != NULL)
+			cp = cp_1;
+#endif
 		*cp = '\0';
 		/* Extract username and connection params */
 		if ((delim = strchr(tmp, ';')) != NULL) {
@@ -963,13 +1071,18 @@ char *
 percent_expand(const char *string, ...)
 {
 #define EXPAND_MAX_KEYS	16
-	u_int num_keys, i, j;
+	u_int num_keys, i;
 	struct {
 		const char *key;
 		const char *repl;
 	} keys[EXPAND_MAX_KEYS];
-	char buf[4096];
+	struct sshbuf *buf;
 	va_list ap;
+	int r;
+	char *ret;
+
+	if ((buf = sshbuf_new()) == NULL)
+		fatal("%s: sshbuf_new failed", __func__);
 
 	/* Gather keys */
 	va_start(ap, string);
@@ -986,14 +1099,13 @@ percent_expand(const char *string, ...)
 	va_end(ap);
 
 	/* Expand string */
-	*buf = '\0';
 	for (i = 0; *string != '\0'; string++) {
 		if (*string != '%') {
  append:
-			buf[i++] = *string;
-			if (i >= sizeof(buf))
-				fatal("%s: string too long", __func__);
-			buf[i] = '\0';
+			if ((r = sshbuf_put_u8(buf, *string)) != 0) {
+				fatal("%s: sshbuf_put_u8: %s",
+				    __func__, ssh_err(r));
+			}
 			continue;
 		}
 		string++;
@@ -1002,44 +1114,24 @@ percent_expand(const char *string, ...)
 			goto append;
 		if (*string == '\0')
 			fatal("%s: invalid format", __func__);
-		for (j = 0; j < num_keys; j++) {
-			if (strchr(keys[j].key, *string) != NULL) {
-				i = strlcat(buf, keys[j].repl, sizeof(buf));
-				if (i >= sizeof(buf))
-					fatal("%s: string too long", __func__);
+		for (i = 0; i < num_keys; i++) {
+			if (strchr(keys[i].key, *string) != NULL) {
+				if ((r = sshbuf_put(buf, keys[i].repl,
+				    strlen(keys[i].repl))) != 0) {
+					fatal("%s: sshbuf_put: %s",
+					    __func__, ssh_err(r));
+				}
 				break;
 			}
 		}
-		if (j >= num_keys)
+		if (i >= num_keys)
 			fatal("%s: unknown key %%%c", __func__, *string);
 	}
-	return (xstrdup(buf));
+	if ((ret = sshbuf_dup_string(buf)) == NULL)
+		fatal("%s: sshbuf_dup_string failed", __func__);
+	sshbuf_free(buf);
+	return ret;
 #undef EXPAND_MAX_KEYS
-}
-
-/*
- * Read an entire line from a public key file into a static buffer, discarding
- * lines that exceed the buffer size.  Returns 0 on success, -1 on failure.
- */
-int
-read_keyfile_line(FILE *f, const char *filename, char *buf, size_t bufsz,
-   u_long *lineno)
-{
-	while (fgets(buf, bufsz, f) != NULL) {
-		if (buf[0] == '\0')
-			continue;
-		(*lineno)++;
-		if (buf[strlen(buf) - 1] == '\n' || feof(f)) {
-			return 0;
-		} else {
-			debug("%s: %s line %lu exceeds size limit", __func__,
-			    filename, *lineno);
-			/* discard remainder of line */
-			while (fgetc(f) != '\n' && !feof(f))
-				;	/* nothing */
-		}
-	}
-	return -1;
 }
 
 int
@@ -1075,7 +1167,7 @@ tun_open(int tun, int mode, char **ifname)
 		return -1;
 	}
 
-	if (fd < 0) {
+	if (fd == -1) {
 		debug("%s: %s open: %s", __func__, name, strerror(errno));
 		return -1;
 	}
@@ -1349,11 +1441,11 @@ bandwidth_limit_init(struct bwlimit *bw, u_int64_t kbps, size_t buflen)
 {
 	bw->buflen = buflen;
 	bw->rate = kbps;
-	bw->thresh = bw->rate;
+	bw->thresh = buflen;
 	bw->lamt = 0;
 	timerclear(&bw->bwstart);
 	timerclear(&bw->bwend);
-}	
+}
 
 /* Callback from read/write loop to insert bandwidth-limiting delays */
 void
@@ -1362,12 +1454,11 @@ bandwidth_limit(struct bwlimit *bw, size_t read_len)
 	u_int64_t waitlen;
 	struct timespec ts, rm;
 
+	bw->lamt += read_len;
 	if (!timerisset(&bw->bwstart)) {
 		monotime_tv(&bw->bwstart);
 		return;
 	}
-
-	bw->lamt += read_len;
 	if (bw->lamt < bw->thresh)
 		return;
 
@@ -1515,7 +1606,7 @@ unix_listener(const char *path, int backlog, int unlink_first)
 	}
 
 	sock = socket(PF_UNIX, SOCK_STREAM, 0);
-	if (sock < 0) {
+	if (sock == -1) {
 		saved_errno = errno;
 		error("%s: socket: %.100s", __func__, strerror(errno));
 		errno = saved_errno;
@@ -1525,7 +1616,7 @@ unix_listener(const char *path, int backlog, int unlink_first)
 		if (unlink(path) != 0 && errno != ENOENT)
 			error("unlink(%s): %.100s", path, strerror(errno));
 	}
-	if (bind(sock, (struct sockaddr *)&sunaddr, sizeof(sunaddr)) < 0) {
+	if (bind(sock, (struct sockaddr *)&sunaddr, sizeof(sunaddr)) == -1) {
 		saved_errno = errno;
 		error("%s: cannot bind to path %s: %s",
 		    __func__, path, strerror(errno));
@@ -1533,7 +1624,7 @@ unix_listener(const char *path, int backlog, int unlink_first)
 		errno = saved_errno;
 		return -1;
 	}
-	if (listen(sock, backlog) < 0) {
+	if (listen(sock, backlog) == -1) {
 		saved_errno = errno;
 		error("%s: cannot listen on path %s: %s",
 		    __func__, path, strerror(errno));
@@ -1591,15 +1682,6 @@ forward_equals(const struct Forward *a, const struct Forward *b)
 	if (strcmp_maybe_null(a->connect_path, b->connect_path) == 0)
 		return 0;
 	/* allocated_port and handle are not checked */
-	return 1;
-}
-
-/* returns 1 if bind to specified port by specified user is permitted */
-int
-bind_permitted(int port, uid_t uid)
-{
-	if (port < IPPORT_RESERVED && uid != 0)
-		return 0;
 	return 1;
 }
 
@@ -1832,7 +1914,7 @@ safe_path(const char *name, struct stat *stp, const char *pw_dir,
 		}
 		strlcpy(buf, cp, sizeof(buf));
 
-		if (stat(buf, &st) < 0 ||
+		if (stat(buf, &st) == -1 ||
 		    (!platform_sys_dir_uid(st.st_uid) && st.st_uid != uid) ||
 		    (st.st_mode & 022) != 0) {
 			snprintf(err, errlen,
@@ -1867,7 +1949,7 @@ safe_path_fd(int fd, const char *file, struct passwd *pw,
 	struct stat st;
 
 	/* check the open file to avoid races */
-	if (fstat(fd, &st) < 0) {
+	if (fstat(fd, &st) == -1) {
 		snprintf(err, errlen, "cannot stat file %s: %s",
 		    file, strerror(errno));
 		return -1;
@@ -1983,6 +2065,25 @@ bad:
 	return 0;
 }
 
+/*
+ * Verify that a environment variable name (not including initial '$') is
+ * valid; consisting of one or more alphanumeric or underscore characters only.
+ * Returns 1 on valid, 0 otherwise.
+ */
+int
+valid_env_name(const char *name)
+{
+	const char *cp;
+
+	if (name[0] == '\0')
+		return 0;
+	for (cp = name; *cp != '\0'; cp++) {
+		if (!isalnum((u_char)*cp) && *cp != '_')
+			return 0;
+	}
+	return 1;
+}
+
 const char *
 atoi_err(const char *nptr, int *val)
 {
@@ -2049,3 +2150,96 @@ format_absolute_time(uint64_t t, char *buf, size_t len)
 	localtime_r(&tt, &tm);
 	strftime(buf, len, "%Y-%m-%dT%H:%M:%S", &tm);
 }
+
+/* check if path is absolute */
+int
+path_absolute(const char *path)
+{
+#ifdef WINDOWS        
+	return is_absolute_path(path);
+#else
+	return (*path == '/') ? 1 : 0;
+#endif
+}
+
+void
+skip_space(char **cpp)
+{
+	char *cp;
+
+	for (cp = *cpp; *cp == ' ' || *cp == '\t'; cp++)
+		;
+	*cpp = cp;
+}
+
+/* authorized_key-style options parsing helpers */
+
+/*
+ * Match flag 'opt' in *optsp, and if allow_negate is set then also match
+ * 'no-opt'. Returns -1 if option not matched, 1 if option matches or 0
+ * if negated option matches.
+ * If the option or negated option matches, then *optsp is updated to
+ * point to the first character after the option.
+ */
+int
+opt_flag(const char *opt, int allow_negate, const char **optsp)
+{
+	size_t opt_len = strlen(opt);
+	const char *opts = *optsp;
+	int negate = 0;
+
+	if (allow_negate && strncasecmp(opts, "no-", 3) == 0) {
+		opts += 3;
+		negate = 1;
+	}
+	if (strncasecmp(opts, opt, opt_len) == 0) {
+		*optsp = opts + opt_len;
+		return negate ? 0 : 1;
+	}
+	return -1;
+}
+
+char *
+opt_dequote(const char **sp, const char **errstrp)
+{
+	const char *s = *sp;
+	char *ret;
+	size_t i;
+
+	*errstrp = NULL;
+	if (*s != '"') {
+		*errstrp = "missing start quote";
+		return NULL;
+	}
+	s++;
+	if ((ret = malloc(strlen((s)) + 1)) == NULL) {
+		*errstrp = "memory allocation failed";
+		return NULL;
+	}
+	for (i = 0; *s != '\0' && *s != '"';) {
+		if (s[0] == '\\' && s[1] == '"')
+			s++;
+		ret[i++] = *s++;
+	}
+	if (*s == '\0') {
+		*errstrp = "missing end quote";
+		free(ret);
+		return NULL;
+	}
+	ret[i] = '\0';
+	s++;
+	*sp = s;
+	return ret;
+}
+
+int
+opt_match(const char **opts, const char *term)
+{
+	if (strncasecmp((*opts), term, strlen(term)) == 0 &&
+	    (*opts)[strlen(term)] == '=') {
+		*opts += strlen(term) + 1;
+		return 1;
+	}
+	return 0;
+}
+

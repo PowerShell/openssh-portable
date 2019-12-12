@@ -97,7 +97,9 @@ function Add-PasswordSetting
     $platform = Get-Platform
     if ($platform -eq [PlatformType]::Windows) {
         if (-not($env:DISPLAY)) {$env:DISPLAY = 1}
-        $env:SSH_ASKPASS="$($env:ComSpec) /c echo $pass"
+        $askpass_util = Join-Path $PSScriptRoot "utilities\askpass_util\askpass_util.exe"
+        $env:SSH_ASKPASS=$askpass_util
+        $env:ASKPASS_PASSWORD=$pass
     }
 }
 
@@ -105,6 +107,7 @@ function Remove-PasswordSetting
 {
     if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
     Remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
+    Remove-item "env:ASKPASS_PASSWORD" -ErrorAction SilentlyContinue
 }
 
 $Taskfolder = "\OpenSSHTestTasks\"
@@ -114,15 +117,16 @@ function Start-SSHDTestDaemon
 {
     param(
     [string] $Arguments,
-    [string] $Workdir)    
+    [string] $Workdir,
+    [string] $Port)    
 
+    $Arguments += " -p $Port"
     $ac = New-ScheduledTaskAction -Execute (join-path $workdir "sshd") -WorkingDirectory $workdir -Argument $Arguments
     $task = Register-ScheduledTask -TaskName $Taskname -User system -Action $ac -TaskPath $Taskfolder -Force    
     Start-ScheduledTask -TaskPath $Taskfolder -TaskName $Taskname
-    $svcpid = ((tasklist /svc | select-string -Pattern ".+sshd").ToString() -split "\s+")[1]
     #sleep for 1 seconds for process to ready to listener
     $num = 0
-    while((Get-Process sshd | Where-Object {$_.Id -ne $svcpid}) -eq $null)
+    while ((netstat -anop TCP | select-string -Pattern "0.0.0.0:$Port") -eq $null)
     {
         start-sleep 1
         $num++
@@ -132,6 +136,9 @@ function Start-SSHDTestDaemon
 
 function Stop-SSHDTestDaemon
 {
+    param(
+    [string] $Port) 
+
     $task = Get-ScheduledTask -TaskPath $Taskfolder -TaskName $Taskname -ErrorAction SilentlyContinue
     if($task)
     {
@@ -141,16 +148,24 @@ function Stop-SSHDTestDaemon
         }        
         Unregister-ScheduledTask -TaskPath $Taskfolder -TaskName $Taskname -Confirm:$false
     }
-    #if still running, wait a little while for task to complete
-    #stop-scheduledTask does not wait for worker process to end. Kill it if still running. Logic below assume sshd service is running
-    $svcpid = ((tasklist /svc | select-string -Pattern ".+sshd").ToString() -split "\s+")[1]
-    Get-Process sshd -ErrorAction SilentlyContinue | Where-Object {$_.Id -ne $svcpid} | Stop-Process -Force -ErrorAction SilentlyContinue
-    $num = 0
-    while((Get-Process sshd | Where-Object {$_.Id -ne $svcpid}))
+
+    #kill process listening on $Port
+    $p = netstat -anop TCP | select-string -Pattern "0.0.0.0:$Port"
+    if (-not($p -eq $null)) 
     {
-        # sshd process is still running; wait 1 more seconds"
-        start-sleep 1
-        $num++
-        if($num -gt 30) { break }
+        foreach ($ps in $p) {
+            $pss =$ps.ToString() -split "\s+"; 
+            $pid = $pss[$pss.length -1] 
+            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+        }
+        #if still running, wait a little while for task to complete
+        $num = 0
+        while (-not((netstat -anop TCP | select-string -Pattern "0.0.0.0:$Port") -eq $null))
+        {
+            start-sleep 1
+            $num++
+            if($num -gt 30) { break }
+        }
     }
+
 }

@@ -1,4 +1,4 @@
-.\" $OpenBSD: sftp.1,v 1.114 2018/02/23 07:38:09 jmc Exp $
+.\" $OpenBSD: sftp.1,v 1.127 2019/06/19 20:12:44 jmc Exp $
 .\"
 .\" Copyright (c) 2001 Damien Miller.  All rights reserved.
 .\"
@@ -22,7 +22,7 @@
 .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd $Mdocdate: February 23 2018 $
+.Dd $Mdocdate: June 19 2019 $
 .Dt SFTP 1
 .Os
 .Sh NAME
@@ -37,6 +37,7 @@
 .Op Fl D Ar sftp_server_path
 .Op Fl F Ar ssh_config
 .Op Fl i Ar identity_file
+.Op Fl J Ar destination
 .Op Fl l Ar limit
 .Op Fl o Ar ssh_option
 .Op Fl P Ar port
@@ -127,6 +128,7 @@ at connection time (see
 and
 .Xr ssh-keygen 1
 for details).
+.Pp
 A
 .Ar batchfile
 of
@@ -135,17 +137,23 @@ may be used to indicate standard input.
 .Nm
 will abort if any of the following
 commands fail:
-.Ic get , put , reget , reput, rename , ln ,
+.Ic get , put , reget , reput , rename , ln ,
 .Ic rm , mkdir , chdir , ls ,
 .Ic lchdir , chmod , chown ,
 .Ic chgrp , lpwd , df , symlink ,
 and
 .Ic lmkdir .
+.Pp
 Termination on error can be suppressed on a command by command basis by
 prefixing the command with a
 .Sq \-
 character (for example,
 .Ic -rm /tmp/blah* ) .
+Echo of the command may be suppressed by prefixing the command with a
+.Sq @
+character.
+These two prefixes may be combined in any order, for example
+.Ic -@ls /bsd .
 .It Fl C
 Enables compression (via ssh's
 .Fl C
@@ -174,6 +182,19 @@ Selects the file from which the identity (private key) for public key
 authentication is read.
 This option is directly passed to
 .Xr ssh 1 .
+.It Fl J Ar destination
+Connect to the target host by first making an
+.Nm
+connection to the jump host described by
+.Ar destination
+and then establishing a TCP forwarding to the ultimate destination from
+there.
+Multiple jump hops may be specified separated by comma characters.
+This is a shortcut to specify a
+.Cm ProxyJump
+configuration directive.
+This option is directly passed to
+.Xr ssh 1 .
 .It Fl l Ar limit
 Limits the used bandwidth, specified in Kbit/s.
 .It Fl o Ar ssh_option
@@ -200,6 +221,7 @@ For full details of the options listed below, and their possible values, see
 .It CanonicalizeHostname
 .It CanonicalizeMaxDots
 .It CanonicalizePermittedCNAMEs
+.It CASignatureAlgorithms
 .It CertificateFile
 .It ChallengeResponseAuthentication
 .It CheckHostIP
@@ -219,7 +241,7 @@ For full details of the options listed below, and their possible values, see
 .It HostbasedKeyTypes
 .It HostKeyAlgorithms
 .It HostKeyAlias
-.It HostName
+.It Hostname
 .It IdentitiesOnly
 .It IdentityAgent
 .It IdentityFile
@@ -243,10 +265,10 @@ For full details of the options listed below, and their possible values, see
 .It SendEnv
 .It ServerAliveInterval
 .It ServerAliveCountMax
+.It SetEnv
 .It StrictHostKeyChecking
 .It TCPKeepAlive
 .It UpdateHostKeys
-.It UsePrivilegedPort
 .It User
 .It UserKnownHostsFile
 .It VerifyHostKeyDNS
@@ -308,34 +330,55 @@ Change remote directory to
 If
 .Ar path
 is not specified, then change directory to the one the session started in.
-.It Ic chgrp Ar grp Ar path
+.It Xo Ic chgrp
+.Op Fl h
+.Ar grp
+.Ar path
+.Xc
 Change group of file
 .Ar path
 to
 .Ar grp .
+If the
+.Fl h
+flag is specified, then symlinks will not be followed.
 .Ar path
 may contain
-.Xr glob 3
+.Xr glob 7
 characters and may match multiple files.
 .Ar grp
 must be a numeric GID.
-.It Ic chmod Ar mode Ar path
+.It Xo Ic chmod
+.Op Fl h
+.Ar mode
+.Ar path
+.Xc
 Change permissions of file
 .Ar path
 to
 .Ar mode .
+If the
+.Fl h
+flag is specified, then symlinks will not be followed.
 .Ar path
 may contain
-.Xr glob 3
+.Xr glob 7
 characters and may match multiple files.
-.It Ic chown Ar own Ar path
+.It Xo Ic chown
+.Op Fl h
+.Ar own
+.Ar path
+.Xc
 Change owner of file
 .Ar path
 to
 .Ar own .
+If the
+.Fl h
+flag is specified, then symlinks will not be followed.
 .Ar path
 may contain
-.Xr glob 3
+.Xr glob 7
 characters and may match multiple files.
 .Ar own
 must be a numeric UID.
@@ -361,7 +404,7 @@ extension.
 Quit
 .Nm sftp .
 .It Xo Ic get
-.Op Fl afPpr
+.Op Fl afpR
 .Ar remote-path
 .Op Ar local-path
 .Xc
@@ -373,7 +416,7 @@ path name is not specified, it is given the same name it has on the
 remote machine.
 .Ar remote-path
 may contain
-.Xr glob 3
+.Xr glob 7
 characters and may match multiple files.
 If it does and
 .Ar local-path
@@ -396,15 +439,19 @@ flag is specified, then
 will be called after the file transfer has completed to flush the file
 to disk.
 .Pp
-If either the
-.Fl P
-or
+If the
 .Fl p
+.\" undocumented redundant alias
+.\" or
+.\" .Fl P
 flag is specified, then full file permissions and access times are
 copied too.
 .Pp
 If the
-.Fl r
+.Fl R
+.\" undocumented redundant alias
+.\" or
+.\" .Fl r
 flag is specified then directories will be copied recursively.
 Note that
 .Nm
@@ -429,7 +476,7 @@ may contain any flags supported by the local system's
 command.
 .Ar path
 may contain
-.Xr glob 3
+.Xr glob 7
 characters and may match multiple files.
 .It Ic lmkdir Ar path
 Create local directory specified by
@@ -460,7 +507,7 @@ or the current directory if
 is not specified.
 .Ar path
 may contain
-.Xr glob 3
+.Xr glob 7
 characters and may match multiple files.
 .Pp
 The following flags are recognized and alter the behaviour of
@@ -502,7 +549,7 @@ Create remote directory specified by
 .It Ic progress
 Toggle display of progress meter.
 .It Xo Ic put
-.Op Fl afPpr
+.Op Fl afpR
 .Ar local-path
 .Op Ar remote-path
 .Xc
@@ -513,7 +560,7 @@ If the remote path name is not specified, it is given the same name it has
 on the local machine.
 .Ar local-path
 may contain
-.Xr glob 3
+.Xr glob 7
 characters and may match multiple files.
 If it does and
 .Ar remote-path
@@ -538,15 +585,19 @@ after the file has been transferred.
 Note that this is only supported by servers that implement
 the "fsync@openssh.com" extension.
 .Pp
-If either the
-.Fl P
-or
+If the
 .Fl p
+.\" undocumented redundant alias
+.\" or
+.\" .Fl P
 flag is specified, then full file permissions and access times are
 copied too.
 .Pp
 If the
-.Fl r
+.Fl R
+.\" undocumented redundant alias
+.\" or
+.\" .Fl r
 flag is specified then directories will be copied recursively.
 Note that
 .Nm
@@ -557,7 +608,7 @@ Display remote working directory.
 Quit
 .Nm sftp .
 .It Xo Ic reget
-.Op Fl Ppr
+.Op Fl fpR
 .Ar remote-path
 .Op Ar local-path
 .Xc
@@ -569,12 +620,12 @@ with the
 .Fl a
 flag set.
 .It Xo Ic reput
-.Op Fl Ppr
-.Op Ar local-path
-.Ar remote-path
+.Op Fl fpR
+.Ar local-path
+.Op Ar remote-path
 .Xc
 Resume upload of
-.Op Ar local-path .
+.Ar local-path .
 Equivalent to
 .Ic put
 with the
@@ -616,8 +667,8 @@ Synonym for help.
 .Xr ssh 1 ,
 .Xr ssh-add 1 ,
 .Xr ssh-keygen 1 ,
-.Xr glob 3 ,
 .Xr ssh_config 5 ,
+.Xr glob 7 ,
 .Xr sftp-server 8 ,
 .Xr sshd 8
 .Rs

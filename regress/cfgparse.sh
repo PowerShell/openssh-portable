@@ -1,4 +1,4 @@
-#	$OpenBSD: cfgparse.sh,v 1.6 2016/06/03 03:47:59 dtucker Exp $
+#	$OpenBSD: cfgparse.sh,v 1.7 2018/05/11 03:51:06 dtucker Exp $
 #	Placed in the Public Domain.
 
 tid="sshd config parse"
@@ -10,8 +10,8 @@ fi
 
 # We need to use the keys generated for the regression test because sshd -T
 # will fail if we're not running with SUDO (no permissions for real keys) or
-# if we are # running tests on a system that has never had sshd installed
-# (keys won't exist).
+# if we are running tests on a system that has never had sshd installed
+# because the keys won't exist.
 
 grep "HostKey " $OBJ/sshd_config > $OBJ/sshd_config_minimal
 SSHD_KEYS="`cat $OBJ/sshd_config_minimal`"
@@ -49,11 +49,18 @@ EOD
 [ X${SKIP_IPV6} = Xyes ] || cat >> $OBJ/sshd_config.1 <<EOD
 listenaddress ::1
 EOD
-
-($SUDO ${SSHD} -T -f $OBJ/sshd_config.1 | \
- grep 'listenaddress ' >$OBJ/sshd_config.2 &&
- diff $OBJ/sshd_config.0 $OBJ/sshd_config.2) || \
- fail "listenaddress order 1"
+if [ "$os" == "windows" ]; then
+	# Ignore the CR (carriage return) during diff
+	($SUDO ${SSHD} -T -f $OBJ/sshd_config.1 | \
+	 grep 'listenaddress ' >$OBJ/sshd_config.2 &&
+	 diff --strip-trailing-cr $OBJ/sshd_config.0 $OBJ/sshd_config.2) || \
+	 fail "listenaddress order 1"
+else
+	($SUDO ${SSHD} -T -f $OBJ/sshd_config.1 | \
+	 grep 'listenaddress ' >$OBJ/sshd_config.2 &&
+	 diff $OBJ/sshd_config.0 $OBJ/sshd_config.2) || \
+	 fail "listenaddress order 1"
+fi
 # test 2: listenaddress first
 cat > $OBJ/sshd_config.1 <<EOD
 ${SSHD_KEYS}
@@ -65,11 +72,18 @@ EOD
 [ X${SKIP_IPV6} = Xyes ] || cat >> $OBJ/sshd_config.1 <<EOD
 listenaddress ::1
 EOD
-
-($SUDO ${SSHD} -T -f $OBJ/sshd_config.1 | \
- grep 'listenaddress ' >$OBJ/sshd_config.2 &&
- diff $OBJ/sshd_config.0 $OBJ/sshd_config.2) || \
- fail "listenaddress order 2"
+if [ "$os" == "windows" ]; then
+	# Ignore the CR (carriage return) during diff
+	($SUDO ${SSHD} -T -f $OBJ/sshd_config.1 | \
+	 grep 'listenaddress ' >$OBJ/sshd_config.2 &&
+	 diff --strip-trailing-cr $OBJ/sshd_config.0 $OBJ/sshd_config.2) || \
+	 fail "listenaddress order 2"
+else
+	($SUDO ${SSHD} -T -f $OBJ/sshd_config.1 | \
+	 grep 'listenaddress ' >$OBJ/sshd_config.2 &&
+	 diff $OBJ/sshd_config.0 $OBJ/sshd_config.2) || \
+	 fail "listenaddress order 2"
+fi
 
 # cleanup
 rm -f $OBJ/sshd_config.[012]

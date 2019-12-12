@@ -1,4 +1,4 @@
-#	$OpenBSD: keygen-knownhosts.sh,v 1.3 2015/07/17 03:34:27 djm Exp $
+#	$OpenBSD: keygen-knownhosts.sh,v 1.4 2018/06/01 03:52:37 djm Exp $
 #	Placed in the Public Domain.
 
 tid="ssh-keygen known_hosts"
@@ -55,10 +55,21 @@ expect_key() {
 check_find() {
 	_host=$1
 	_name=$2
-	_keygenopt=$3
-	${SSHKEYGEN} $_keygenopt -f $OBJ/kh.invalid -F $_host > $OBJ/kh.result
+	shift; shift
+	${SSHKEYGEN} "$@" -f $OBJ/kh.invalid -F $_host > $OBJ/kh.result
 	if ! diff -w $OBJ/kh.expect $OBJ/kh.result ; then
 		fail "didn't find $_name"
+	fi
+}
+
+check_find_exit_code() {
+	_host=$1
+	_name=$2
+	_keygenopt=$3
+	_exp_exit_code=$4
+	${SSHKEYGEN} $_keygenopt -f $OBJ/kh.invalid -F $_host > /dev/null
+	if [ "$?" != "$_exp_exit_code" ] ; then
+	    fail "Unexpected exit code $_name"
 	fi
 }
 
@@ -88,6 +99,18 @@ rm -f $OBJ/kh.expect
 expect_key host-h "host-f,host-g,host-h " host-f 17
 check_find host-h "find multiple hosts"
 
+# Check exit code, known host
+check_find_exit_code host-a "known host" "-q" "0"
+
+# Check exit code, unknown host
+check_find_exit_code host-aa "unknown host" "-q" "1"
+
+# Check exit code, the hash mode, known host
+check_find_exit_code host-a "known host" "-q -H" "0"
+
+# Check exit code, the hash mode, unknown host
+check_find_exit_code host-aa "unknown host" "-q -H" "1"
+
 check_hashed_find() {
 	_host=$1
 	_name=$2
@@ -110,19 +133,19 @@ check_hashed_find host-a "find simple and hash"
 rm -f $OBJ/kh.expect
 expect_key host-c host-c host-c "" CA
 # CA key output is not hashed.
-check_find host-c "find simple and hash" -H
+check_find host-c "find simple and hash" -Hq
 
 # Find revoked key and hash
 rm -f $OBJ/kh.expect
 expect_key host-d host-d host-d "" REVOKED
 # Revoked key output is not hashed.
-check_find host-d "find simple and hash" -H
+check_find host-d "find simple and hash" -Hq
 
 # find key with wildcard and hash
 rm -f $OBJ/kh.expect
 expect_key host-e "host-e*" host-e ""
 # Key with wildcard hostname should not be hashed.
-check_find host-e "find wildcard key" -H
+check_find host-e "find wildcard key" -Hq
 
 # find key among multiple hosts
 rm -f $OBJ/kh.expect
@@ -135,47 +158,87 @@ check_hashed_find host-h "find multiple hosts"
 # Attempt remove key on invalid file.
 cp $OBJ/kh.invalid.orig $OBJ/kh.invalid
 ${SSHKEYGEN} -qf $OBJ/kh.invalid -R host-a 2>/dev/null
-diff $OBJ/kh.invalid $OBJ/kh.invalid.orig || fail "remove on invalid succeeded"
+if [ "$os" == "windows" ]; then
+	# Ignore CR (carriage return) while comparing files
+	diff --strip-trailing-cr $OBJ/kh.invalid $OBJ/kh.invalid.orig || fail "remove on invalid succeeded"
+else
+	diff $OBJ/kh.invalid $OBJ/kh.invalid.orig || fail "remove on invalid succeeded"
+fi
 
 # Remove key
 cp $OBJ/kh.hosts.orig $OBJ/kh.hosts
 ${SSHKEYGEN} -qf $OBJ/kh.hosts -R host-a 2>/dev/null
 grep -v "^host-a " $OBJ/kh.hosts.orig > $OBJ/kh.expect
-diff $OBJ/kh.hosts $OBJ/kh.expect || fail "remove simple"
+if [ "$os" == "windows" ]; then
+	# Ignore CR (carriage return) while comparing files
+	diff --strip-trailing-cr $OBJ/kh.hosts $OBJ/kh.expect || fail "remove simple"
+else
+	diff $OBJ/kh.hosts $OBJ/kh.expect || fail "remove simple"
+fi
 
 # Remove CA key
 cp $OBJ/kh.hosts.orig $OBJ/kh.hosts
 ${SSHKEYGEN} -qf $OBJ/kh.hosts -R host-c 2>/dev/null
 # CA key should not be removed.
-diff $OBJ/kh.hosts $OBJ/kh.hosts.orig || fail "remove CA"
+if [ "$os" == "windows" ]; then
+	# Ignore CR (carriage return) while comparing files
+	diff --strip-trailing-cr $OBJ/kh.hosts $OBJ/kh.hosts.orig || fail "remove CA"
+else
+	diff $OBJ/kh.hosts $OBJ/kh.hosts.orig || fail "remove CA"
+fi
 
 # Remove revoked key
 cp $OBJ/kh.hosts.orig $OBJ/kh.hosts
 ${SSHKEYGEN} -qf $OBJ/kh.hosts -R host-d 2>/dev/null
 # revoked key should not be removed.
-diff $OBJ/kh.hosts $OBJ/kh.hosts.orig || fail "remove revoked"
+if [ "$os" == "windows" ]; then
+	# Ignore CR (carriage return) while comparing files
+	diff --strip-trailing-cr $OBJ/kh.hosts $OBJ/kh.hosts.orig || fail "remove revoked"
+else
+	diff $OBJ/kh.hosts $OBJ/kh.hosts.orig || fail "remove revoked"
+fi
 
 # Remove wildcard
 cp $OBJ/kh.hosts.orig $OBJ/kh.hosts
 ${SSHKEYGEN} -qf $OBJ/kh.hosts -R host-e.blahblah 2>/dev/null
 grep -v "^host-e[*] " $OBJ/kh.hosts.orig > $OBJ/kh.expect
-diff $OBJ/kh.hosts $OBJ/kh.expect || fail "remove wildcard"
+if [ "$os" == "windows" ]; then
+	# Ignore CR (carriage return) while comparing files
+	diff --strip-trailing-cr $OBJ/kh.hosts $OBJ/kh.expect || fail "remove wildcard"
+else
+	diff $OBJ/kh.hosts $OBJ/kh.expect || fail "remove wildcard"
+fi
 
 # Remove multiple
 cp $OBJ/kh.hosts.orig $OBJ/kh.hosts
 ${SSHKEYGEN} -qf $OBJ/kh.hosts -R host-h 2>/dev/null
 grep -v "^host-f," $OBJ/kh.hosts.orig > $OBJ/kh.expect
-diff $OBJ/kh.hosts $OBJ/kh.expect || fail "remove wildcard"
+if [ "$os" == "windows" ]; then
+	# Ignore CR (carriage return) while comparing files
+	diff --strip-trailing-cr $OBJ/kh.hosts $OBJ/kh.expect || fail "remove wildcard"
+else
+	diff $OBJ/kh.hosts $OBJ/kh.expect || fail "remove wildcard"
+fi
 
 # Attempt hash on invalid file
 cp $OBJ/kh.invalid.orig $OBJ/kh.invalid
 ${SSHKEYGEN} -qf $OBJ/kh.invalid -H 2>/dev/null && fail "hash invalid succeeded"
-diff $OBJ/kh.invalid $OBJ/kh.invalid.orig || fail "invalid file modified"
+if [ "$os" == "windows" ]; then
+	# Ignore CR (carriage return) while comparing files
+	diff --strip-trailing-cr $OBJ/kh.invalid $OBJ/kh.invalid.orig || fail "invalid file modified"
+else
+	diff $OBJ/kh.invalid $OBJ/kh.invalid.orig || fail "invalid file modified"
+fi
 
 # Hash valid file
 cp $OBJ/kh.hosts.orig $OBJ/kh.hosts
 ${SSHKEYGEN} -qf $OBJ/kh.hosts -H 2>/dev/null || fail "hash failed"
-diff $OBJ/kh.hosts.old $OBJ/kh.hosts.orig || fail "backup differs"
+if [ "$os" == "windows" ]; then
+	# Ignore CR (carriage return) while comparing files
+	diff --strip-trailing-cr $OBJ/kh.hosts.old $OBJ/kh.hosts.orig || fail "backup differs"
+else
+	diff $OBJ/kh.hosts.old $OBJ/kh.hosts.orig || fail "backup differs"
+fi
 grep "^host-[abfgh]" $OBJ/kh.hosts && fail "original hostnames persist"
 
 cp $OBJ/kh.hosts $OBJ/kh.hashed.orig

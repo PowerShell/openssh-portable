@@ -64,6 +64,9 @@ int w32_symlink(const char *target, const char *linkpath);
 int w32_chown(const char *pathname, unsigned int owner, unsigned int group);
 #define chown w32_chown
 
+int w32_fchown(int fd, unsigned int owner, unsigned int group);
+#define fchown w32_fchown
+
 int w32_unlink(const char *path);
 #define unlink w32_unlink
 
@@ -81,6 +84,8 @@ int w32_readlink(const char *path, char *link, int linklen);
 
 int w32_link(const char *oldpath, const char *newpath);
 #define link w32_link
+
+int getpeereid(int, uid_t*, gid_t*);
 
 int daemon(int nochdir, int noclose);
 char *crypt(const char *key, const char *salt);

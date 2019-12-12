@@ -25,9 +25,11 @@
 # include <sys/time.h>
 #endif
 
+#include <fcntl.h>
 #include <string.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -113,6 +115,106 @@ int utimes(char *filename, struct timeval *tvp)
 	ub.modtime = tvp[1].tv_sec;
 
 	return (utime(filename, &ub));
+}
+#endif
+
+#ifndef HAVE_UTIMENSAT
+/*
+ * A limited implementation of utimensat() that only implements the
+ * functionality used by OpenSSH, currently only AT_FDCWD and
+ * AT_SYMLINK_NOFOLLOW.
+ */
+int
+utimensat(int fd, const char *path, const struct timespec times[2],
+    int flag)
+{
+	struct timeval tv[2];
+	int ret, oflags = O_WRONLY;
+
+	tv[0].tv_sec = times[0].tv_sec;
+	tv[0].tv_usec = times[0].tv_nsec / 1000;
+	tv[1].tv_sec = times[1].tv_sec;
+	tv[1].tv_usec = times[1].tv_nsec / 1000;
+
+	if (fd != AT_FDCWD) {
+		errno = ENOSYS;
+		return -1;
+	}
+# ifndef HAVE_FUTIMES
+	return utimes(path, tv);
+# else
+#  ifdef O_NOFOLLOW
+	if (flag & AT_SYMLINK_NOFOLLOW)
+		oflags |= O_NOFOLLOW;
+#  endif /* O_NOFOLLOW */
+	if ((fd = open(path, oflags)) == -1)
+		return -1;
+	ret = futimes(fd, tv);
+	close(fd);
+	return ret;
+# endif
+}
+#endif
+
+#ifndef HAVE_FCHOWNAT
+/*
+ * A limited implementation of fchownat() that only implements the
+ * functionality used by OpenSSH, currently only AT_FDCWD and
+ * AT_SYMLINK_NOFOLLOW.
+ */
+int
+fchownat(int fd, const char *path, uid_t owner, gid_t group, int flag)
+{
+	int ret, oflags = O_WRONLY;
+
+	if (fd != AT_FDCWD) {
+		errno = ENOSYS;
+		return -1;
+	}
+# ifndef HAVE_FCHOWN
+	return chown(path, owner, group);
+# else
+#  ifdef O_NOFOLLOW
+	if (flag & AT_SYMLINK_NOFOLLOW)
+		oflags |= O_NOFOLLOW;
+#  endif /* O_NOFOLLOW */
+	if ((fd = open(path, oflags)) == -1)
+		return -1;
+	ret = fchown(fd, owner, group);
+	close(fd);
+	return ret;
+# endif
+}
+#endif
+
+#ifndef HAVE_FCHMODAT
+/*
+ * A limited implementation of fchmodat() that only implements the
+ * functionality used by OpenSSH, currently only AT_FDCWD and
+ * AT_SYMLINK_NOFOLLOW.
+ */
+int
+fchmodat(int fd, const char *path, mode_t mode, int flag)
+{
+	int ret, oflags = O_WRONLY;
+
+	if (fd != AT_FDCWD) {
+		errno = ENOSYS;
+		return -1;
+	}
+# ifndef HAVE_FCHMOD
+	return chmod(path, mode);
+# else
+#  ifdef O_NOFOLLOW
+	if (flag & AT_SYMLINK_NOFOLLOW)
+		oflags |= O_NOFOLLOW;
+#  endif /* O_NOFOLLOW */
+	if ((fd = open(path, oflags)) == -1)
+		return -1;
+	ret = fchmod(fd, mode);
+	close(fd);
+	return ret;
+# endif
 }
 #endif
 
@@ -312,12 +414,12 @@ getsid(pid_t pid)
 #undef fflush
 int _ssh_compat_fflush(FILE *f)
 {
-	int r1, r2, r3;
+	int r1, r2;
 
 	if (f == NULL) {
-		r2 = fflush(stdout);
-		r3 = fflush(stderr);
-		if (r1 == -1 || r2 == -1 || r3 == -1)
+		r1 = fflush(stdout);
+		r2 = fflush(stderr);
+		if (r1 == -1 || r2 == -1)
 			return -1;
 		return 0;
 	}

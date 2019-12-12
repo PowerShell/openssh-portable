@@ -292,39 +292,6 @@ function Start-OpenSSHBootstrap
     }
 }
 
-function Copy-LibreSSLSDK
-{
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor `
-                                                  [Net.SecurityProtocolType]::Tls11 -bor `
-                                                  [Net.SecurityProtocolType]::Tls
-
-    $url = 'https://github.com/PowerShell/libressl/releases/latest/'
-    $request = [System.Net.WebRequest]::Create($url)
-    $request.AllowAutoRedirect = $false
-    $request.Timeout = 30000; #30 sec
-    $response=$request.GetResponse()
-    $libressl_release_url=$([String]$response.GetResponseHeader("Location")).Replace('tag','download') + '/LibreSSL.zip'
-    $libressl_zip_path=Join-Path $script:gitRoot "libressl.zip"
-
-    #download libressl latest release binaries
-    Remove-Item $libressl_zip_path -Force -ErrorAction SilentlyContinue
-    (New-Object System.Net.WebClient).DownloadFile($libressl_release_url, $libressl_zip_path)
-    if(-not (Test-Path $libressl_zip_path))
-    {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "Unable to download $libressl_release_url to $libressl_zip_path."
-    }
-    
-    #copy libressl
-    $openssh_libressl_path=Join-Path $script:OpenSSHRoot "contrib\win32\openssh"
-    Expand-Archive -Path $libressl_zip_path -DestinationPath $openssh_libressl_path -Force -ErrorAction SilentlyContinue -ErrorVariable e
-    if($e -ne $null)
-    {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "Unable to extract LibreSSL from $libressl_zip_path to $openssh_libressl_path failed."
-    }
-    
-    Remove-Item $libressl_zip_path -Force -ErrorAction SilentlyContinue
-}
-
 function Start-OpenSSHPackage
 {
     [CmdletBinding(SupportsShouldProcess=$false)]    
@@ -457,6 +424,57 @@ function Start-OpenSSHPackage
     Remove-Item $symbolsDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+function Copy-OpenSSHUnitTests
+{
+    [CmdletBinding(SupportsShouldProcess=$false)]    
+    param
+    (        
+        [ValidateSet('x86', 'x64', 'arm64', 'arm')]
+        [string]$NativeHostArch = "x64",
+
+        [ValidateSet('Debug', 'Release')]
+        [string]$Configuration = "Release",
+
+        # Copy unittests to DestinationPath
+        [string]$DestinationPath = ""
+    )
+
+    [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
+    $repositoryRoot = Get-Item -Path $repositoryRoot.FullName
+    $folderName = $NativeHostArch
+    if($NativeHostArch -ieq 'x86')
+    {
+        $folderName = "Win32"
+    }
+    $buildDir = Join-Path $repositoryRoot ("bin\" + $folderName + "\" + $Configuration)
+    $unittestsDir = Join-Path $buildDir "unittests"
+    $unitTestFolders = Get-ChildItem -Directory $buildDir\unittest-*    
+    
+    if ($DestinationPath -ne "") {
+        if (-not (Test-Path $DestinationPath -PathType Container)) {
+            New-Item -ItemType Directory $DestinationPath -Force | Out-Null
+        }
+        foreach ($folder in $unitTestFolders) {
+            Copy-Item $folder.FullName $DestinationPath\$($folder.Name) -Recurse -Force
+            Write-BuildMsg -AsInfo -Message "Copied $($folder.FullName) to $DestinationPath\$($folder.Name)."
+        }        
+    }
+    else {        
+        if(Test-Path ($unittestsDir + '.zip') -PathType Leaf) {
+            Remove-Item ($unittestsDir + '.zip') -Force -ErrorAction SilentlyContinue
+        }
+        if(get-command Compress-Archive -ErrorAction SilentlyContinue)
+        {
+            Compress-Archive -Path $unitTestFolders.FullName -DestinationPath ($unittestsDir + '.zip')
+            Write-BuildMsg -AsInfo -Message "Packaged unittests - '$unittestsDir.zip'"
+        }
+        else
+        {
+            Write-BuildMsg -AsInfo -Message "Packaged unittests not compressed."
+        }
+    }
+}
+
 function Start-OpenSSHBuild
 {
     [CmdletBinding(SupportsShouldProcess=$false)]    
@@ -493,14 +511,6 @@ function Start-OpenSSHBuild
     }
 
     Start-OpenSSHBootstrap -OneCore:$OneCore
-
-    # Download the LibreSSL
-    if (-not (Test-Path (Join-Path $PSScriptRoot "LibreSSL")))
-    {
-        Write-BuildMsg -AsInfo -Message "Download, Copy LibreSSL"
-        Copy-LibreSSLSDK
-        Write-BuildMsg -AsInfo -Message "LibreSSL copied successfully"
-    }
 
     $PathTargets = Join-Path $PSScriptRoot paths.targets
     if ($NoOpenSSL) 
@@ -541,7 +551,7 @@ function Start-OpenSSHBuild
         $win10SDKVer = Get-Windows10SDKVersion
         [XML]$xml = Get-Content $PathTargets
         $xml.Project.PropertyGroup.WindowsSDKVersion = $win10SDKVer.ToString()
-        $xml.Project.PropertyGroup.AdditionalDependentLibs = 'onecore.lib'
+        $xml.Project.PropertyGroup.AdditionalDependentLibs = 'onecore.lib;shlwapi.lib'
         $xml.Project.PropertyGroup.MinimalCoreWin = 'true'
         
         #Use onecore libcrypto binaries
@@ -573,7 +583,7 @@ function Start-OpenSSHBuild
 
     if ($errorCode -ne 0)
     {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "Build failed for OpenSSH.`nExitCode: $error."
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "Build failed for OpenSSH.`nExitCode: $errorCode."
     }    
 
     Write-BuildMsg -AsInfo -Message "SSH build successful."
@@ -639,9 +649,13 @@ function Get-BuildLogFile
                 
         [ValidateSet('Debug', 'Release')]
         [string]$Configuration = "Release"
-        
-    )    
-    return Join-Path -Path $root -ChildPath "contrib\win32\openssh\OpenSSH$($Configuration)$($NativeHostArch).log"
+    )
+    if ($root.FullName -ieq $PSScriptRoot)
+    {
+        return Join-Path -Path $PSScriptRoot -ChildPath "OpenSSH$($Configuration)$($NativeHostArch).log"
+    } else {
+        return Join-Path -Path $root -ChildPath "contrib\win32\openssh\OpenSSH$($Configuration)$($NativeHostArch).log"
+    }
 }
 
 function Get-SolutionFile
@@ -650,11 +664,16 @@ function Get-SolutionFile
     (
         [Parameter(Mandatory=$true)]
         [ValidateNotNull()]
-        [System.IO.DirectoryInfo] $root        
+        [System.IO.DirectoryInfo] $root
     )    
-    return Join-Path -Path $root -ChildPath "contrib\win32\openssh\Win32-OpenSSH.sln"    
+    if ($root.FullName -ieq $PSScriptRoot)
+    {
+        return Join-Path -Path $PSScriptRoot -ChildPath "Win32-OpenSSH.sln"
+    } else {
+        return Join-Path -Path $root -ChildPath "contrib\win32\openssh\Win32-OpenSSH.sln"
+    }
 }
 
 
 
-Export-ModuleMember -Function Start-OpenSSHBuild, Get-BuildLogFile, Start-OpenSSHPackage
+Export-ModuleMember -Function Start-OpenSSHBuild, Get-BuildLogFile, Start-OpenSSHPackage, Copy-OpenSSHUnitTests

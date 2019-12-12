@@ -40,11 +40,13 @@
 #include "debug.h"
 #include "console.h"
 #include "ansiprsr.h"
+#include "misc_internal.h"
 
-HANDLE	hOutputConsole = NULL;
 DWORD	stdin_dwSavedAttributes = 0;
 DWORD	stdout_dwSavedAttributes = 0;
 WORD	wStartingAttributes = 0;
+unsigned int console_out_cp_saved = 0;
+unsigned int console_in_cp_saved = 0;
 
 int ScreenX;
 int ScreenY;
@@ -53,6 +55,9 @@ int ScrollBottom;
 int LastCursorX;
 int LastCursorY;
 BOOL isAnsiParsingRequired = FALSE;
+BOOL isConsoleVTSeqAvailable = FALSE;
+/* 1 - We track the viewport (visible window) and restore it back because console renders badly when user scroll up/down */
+int track_view_port = 0; 
 char *pSavedScreen = NULL;
 static COORD ZeroCoord = { 0,0 };
 COORD SavedScreenSize = { 0,0 };
@@ -72,6 +77,53 @@ PSCREEN_RECORD pSavedScreenRec = NULL;
 int in_raw_mode = 0;
 char *consoleTitle = "OpenSSH SSH client";
 
+
+HANDLE
+GetConsoleOutputHandle()
+{
+	SECURITY_ATTRIBUTES sa;
+	static HANDLE	s_hOutputConsole = INVALID_HANDLE_VALUE;
+
+	if (s_hOutputConsole != INVALID_HANDLE_VALUE)
+		return s_hOutputConsole;
+
+	sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+	sa.lpSecurityDescriptor = NULL;
+	sa.bInheritHandle = TRUE;
+
+	s_hOutputConsole = CreateFile(TEXT("CONOUT$"), GENERIC_READ | GENERIC_WRITE,
+			FILE_SHARE_WRITE | FILE_SHARE_READ,
+			&sa, OPEN_EXISTING, 0, NULL);
+
+	if (s_hOutputConsole == INVALID_HANDLE_VALUE)
+		debug("Unable to open console output handle, I am probably not attached to a console");
+
+	return s_hOutputConsole;
+}
+
+HANDLE
+GetConsoleInputHandle()
+{
+	SECURITY_ATTRIBUTES sa;
+	static HANDLE	s_hInputConsole = INVALID_HANDLE_VALUE;
+
+	if (s_hInputConsole != INVALID_HANDLE_VALUE)
+		return s_hInputConsole;
+
+	sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+	sa.lpSecurityDescriptor = NULL;
+	sa.bInheritHandle = TRUE;
+
+	s_hInputConsole = CreateFile(TEXT("CONIN$"), GENERIC_READ | GENERIC_WRITE,
+			FILE_SHARE_WRITE | FILE_SHARE_READ,
+			&sa, OPEN_EXISTING, 0, NULL);
+
+	if (s_hInputConsole == INVALID_HANDLE_VALUE)
+		debug("Unable to open console input handle, I am probably not attached to a console");
+
+	return s_hInputConsole;
+}
+
 /* Used to enter the raw mode */
 void 
 ConEnterRawMode()
@@ -82,16 +134,9 @@ ConEnterRawMode()
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
 	static bool bFirstConInit = true;
 
-	hOutputConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-	if (hOutputConsole == INVALID_HANDLE_VALUE) {
+	if (!GetConsoleMode(GetConsoleInputHandle(), &stdin_dwSavedAttributes)) {
 		dwRet = GetLastError();
-		error("GetStdHandle on OutputHandle failed with %d\n", dwRet);
-		return;
-	}
-
-	if (!GetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), &stdin_dwSavedAttributes)) {
-		dwRet = GetLastError();
-		error("GetConsoleMode on STD_INPUT_HANDLE failed with %d\n", dwRet);
+		error("GetConsoleMode on console input handle failed with %d", dwRet);
 		return;
 	}
 
@@ -102,15 +147,21 @@ ConEnterRawMode()
 		ENABLE_ECHO_INPUT | ENABLE_PROCESSED_INPUT | ENABLE_MOUSE_INPUT);
 	dwAttributes |= ENABLE_WINDOW_INPUT;
 
-	if (!SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), dwAttributes)) { /* Windows NT */
+	if (!SetConsoleMode(GetConsoleInputHandle(), dwAttributes)) { /* Windows NT */
 		dwRet = GetLastError();
-		error("SetConsoleMode on STD_INPUT_HANDLE failed with %d\n", dwRet);
+		error("SetConsoleMode on STD_INPUT_HANDLE failed with %d", dwRet);
 		return;
 	}
 
-	if (!GetConsoleMode(hOutputConsole, &stdout_dwSavedAttributes)) {
+	dwAttributes |= ENABLE_VIRTUAL_TERMINAL_INPUT;
+	if (SetConsoleMode(GetConsoleInputHandle(), dwAttributes)) {
+		debug("ENABLE_VIRTUAL_TERMINAL_INPUT is supported. Reading the VTSequence from console");
+		isConsoleVTSeqAvailable = TRUE;
+	}
+
+	if (!GetConsoleMode(GetConsoleOutputHandle(), &stdout_dwSavedAttributes)) {
 		dwRet = GetLastError();
-		error("GetConsoleMode on hOutputConsole failed with %d\n", dwRet);
+		error("GetConsoleMode on GetConsoleOutputHandle() failed with %d", dwRet);
 		return;
 	}
 
@@ -130,11 +181,15 @@ ConEnterRawMode()
 	 * a) User sets the environment variable "SSH_TERM_CONHOST_PARSER" to 0
 	 * b) or when the console doesn't have the inbuilt capability to parse the ANSI/Xterm raw buffer.
 	 */	 
-	if (FALSE == isConHostParserEnabled || !SetConsoleMode(hOutputConsole, dwAttributes)) /* Windows NT */
+	if (FALSE == isConHostParserEnabled || !SetConsoleMode(GetConsoleOutputHandle(), dwAttributes)) /* Windows NT */
 		isAnsiParsingRequired = TRUE;
 			
-	GetConsoleScreenBufferInfo(hOutputConsole, &csbi);
+	GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &csbi);
 	
+	/* We track the view port, if conpty is not supported */
+	if (!is_conpty_supported())
+		track_view_port = 1;
+
 	/* if we are passing rawbuffer to console then we need to move the cursor to top 
 	 *  so that the clearscreen will not erase any lines.
 	 */
@@ -142,14 +197,28 @@ ConEnterRawMode()
 		SavedViewRect = csbi.srWindow;
 		debug("console doesn't support the ansi parsing");
 	} else {
-		ConSaveViewRect();
-		debug("console supports the ansi parsing");
-	}		
+		debug("ENABLE_VIRTUAL_TERMINAL_PROCESSING is supported. Console supports the ansi parsing");
+		console_out_cp_saved = GetConsoleOutputCP();
+		console_in_cp_saved = GetConsoleCP();
+		if (SetConsoleOutputCP(CP_UTF8))
+			debug3("Successfully set console output code page from:%d to %d", console_out_cp_saved, CP_UTF8);
+		else
+			error("Failed to set console output code page from:%d to %d error:%d", console_out_cp_saved, CP_UTF8, GetLastError());
+
+		if (SetConsoleCP(CP_UTF8))
+			debug3("Successfully set console input code page from:%d to %d", console_in_cp_saved, CP_UTF8);
+		else
+			error("Failed to set console input code page from:%d to %d error:%d", console_in_cp_saved, CP_UTF8, GetLastError());
+
+		if (track_view_port) {
+			ConSaveViewRect();
+		}
+	}
 
 	ConSetScreenX();
 	ConSetScreenY();
 	ScrollTop = 0;
-	ScrollBottom = ConVisibleWindowHeight();		
+	ScrollBottom = ConVisibleWindowHeight();
 	
 	in_raw_mode = 1;
 }
@@ -160,6 +229,22 @@ ConExitRawMode()
 {
 	SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), stdin_dwSavedAttributes);
 	SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE), stdout_dwSavedAttributes);
+
+	if (FALSE == isAnsiParsingRequired) {
+		if (console_out_cp_saved) {
+			if(SetConsoleOutputCP(console_out_cp_saved))
+				debug3("Successfully set console output code page from %d to %d", CP_UTF8, console_out_cp_saved);
+			else
+				error("Failed to set console output code page from %d to %d error:%d", CP_UTF8, console_out_cp_saved, GetLastError());
+		}
+
+		if (console_in_cp_saved) {
+			if (SetConsoleCP(console_in_cp_saved))
+				debug3("Successfully set console input code page from %d to %d", CP_UTF8, console_in_cp_saved);
+			else
+				error("Failed to set console input code page from %d to %d error:%d", CP_UTF8, console_in_cp_saved, GetLastError());
+		}
+	}
 }
 
 /* Used to exit the raw mode */
@@ -170,10 +255,10 @@ ConUnInitWithRestore()
 	COORD Coord;
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (hOutputConsole == NULL)
+	if (GetConsoleOutputHandle() == NULL)
 		return;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	SetConsoleMode(GetStdHandle(STD_INPUT_HANDLE), stdin_dwSavedAttributes);
@@ -181,9 +266,9 @@ ConUnInitWithRestore()
 	Coord = consoleInfo.dwCursorPosition;
 	Coord.X = 0;
 	DWORD dwNumChar = (consoleInfo.dwSize.Y - consoleInfo.dwCursorPosition.Y) * consoleInfo.dwSize.X;
-	FillConsoleOutputCharacter(hOutputConsole, ' ', dwNumChar, Coord, &dwWritten);
-	FillConsoleOutputAttribute(hOutputConsole, wStartingAttributes, dwNumChar, Coord, &dwWritten);
-	SetConsoleTextAttribute(hOutputConsole, wStartingAttributes);
+	FillConsoleOutputCharacter(GetConsoleOutputHandle(), ' ', dwNumChar, Coord, &dwWritten);
+	FillConsoleOutputAttribute(GetConsoleOutputHandle(), wStartingAttributes, dwNumChar, Coord, &dwWritten);
+	SetConsoleTextAttribute(GetConsoleOutputHandle(), wStartingAttributes);
 }
 
 BOOL 
@@ -194,12 +279,12 @@ ConSetScreenRect(int xSize, int ySize)
 	SMALL_RECT srWindowRect; /* hold the new console size */
 	COORD coordScreen;
 
-	bSuccess = GetConsoleScreenBufferInfo(hOutputConsole, &csbi);
+	bSuccess = GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &csbi);
 	if (!bSuccess)
 		return bSuccess;
 
 	/* get the largest size we can size the console window to */
-	coordScreen = GetLargestConsoleWindowSize(hOutputConsole);
+	coordScreen = GetLargestConsoleWindowSize(GetConsoleOutputHandle());
 
 	/* define the new console window size and scroll position */
 	srWindowRect.Top = csbi.srWindow.Top;
@@ -214,16 +299,16 @@ ConSetScreenRect(int xSize, int ySize)
 	/* if the current buffer is larger than what we want, resize the */
 	/* console window first, then the buffer */
 	if (csbi.dwSize.X < coordScreen.X || csbi.dwSize.Y < coordScreen.Y) {
-		bSuccess = SetConsoleScreenBufferSize(hOutputConsole, coordScreen);
+		bSuccess = SetConsoleScreenBufferSize(GetConsoleOutputHandle(), coordScreen);
 		if (bSuccess)
-			bSuccess = SetConsoleWindowInfo(hOutputConsole, TRUE, &srWindowRect);
+			bSuccess = SetConsoleWindowInfo(GetConsoleOutputHandle(), TRUE, &srWindowRect);
 	} else {
-		bSuccess = SetConsoleWindowInfo(hOutputConsole, TRUE, &srWindowRect);
+		bSuccess = SetConsoleWindowInfo(GetConsoleOutputHandle(), TRUE, &srWindowRect);
 		if (bSuccess)
-			bSuccess = SetConsoleScreenBufferSize(hOutputConsole, coordScreen);
+			bSuccess = SetConsoleScreenBufferSize(GetConsoleOutputHandle(), coordScreen);
 	}
 
-	if (bSuccess)
+	if (bSuccess && track_view_port)
 		ConSaveViewRect();
 
 	/* if the current buffer *is* the size we want, don't do anything! */
@@ -238,12 +323,12 @@ ConSetScreenSize(int xSize, int ySize)
 	SMALL_RECT srWindowRect; /* hold the new console size */
 	COORD coordScreen;
 
-	bSuccess = GetConsoleScreenBufferInfo(hOutputConsole, &csbi);
+	bSuccess = GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &csbi);
 	if (!bSuccess)
 		return bSuccess;
 
 	/* get the largest size we can size the console window to */
-	coordScreen = GetLargestConsoleWindowSize(hOutputConsole);
+	coordScreen = GetLargestConsoleWindowSize(GetConsoleOutputHandle());
 
 	/* define the new console window size and scroll position */
 	srWindowRect.Right = (SHORT)(min(xSize, coordScreen.X) - 1);
@@ -257,20 +342,20 @@ ConSetScreenSize(int xSize, int ySize)
 	/* if the current buffer is larger than what we want, resize the */
 	/* console window first, then the buffer */
 	if ((DWORD)csbi.dwSize.X * csbi.dwSize.Y > (DWORD)xSize * ySize) {
-		bSuccess = SetConsoleWindowInfo(hOutputConsole, TRUE, &srWindowRect);
+		bSuccess = SetConsoleWindowInfo(GetConsoleOutputHandle(), TRUE, &srWindowRect);
 		if (bSuccess)
-			bSuccess = SetConsoleScreenBufferSize(hOutputConsole, coordScreen);
+			bSuccess = SetConsoleScreenBufferSize(GetConsoleOutputHandle(), coordScreen);
 	}
 
 	/* if the current buffer is smaller than what we want, resize the */
 	/* buffer first, then the console window */
 	if ((DWORD)csbi.dwSize.X * csbi.dwSize.Y < (DWORD)xSize * ySize) {
-		bSuccess = SetConsoleScreenBufferSize(hOutputConsole, coordScreen);
+		bSuccess = SetConsoleScreenBufferSize(GetConsoleOutputHandle(), coordScreen);
 		if (bSuccess)
-			bSuccess = SetConsoleWindowInfo(hOutputConsole, TRUE, &srWindowRect);
+			bSuccess = SetConsoleWindowInfo(GetConsoleOutputHandle(), TRUE, &srWindowRect);
 	}
 
-	if (bSuccess)
+	if (bSuccess && track_view_port)
 		ConSaveViewRect();
 
 	/* if the current buffer *is* the size we want, don't do anything! */
@@ -292,7 +377,7 @@ ConSetAttribute(int *iParam, int iParamCount)
 		iAttr = iAttr & ~COMMON_LVB_UNDERSCORE;
 		iAttr = iAttr & ~COMMON_LVB_REVERSE_VIDEO;
 
-		SetConsoleTextAttribute(hOutputConsole, (WORD)iAttr);
+		SetConsoleTextAttribute(GetConsoleOutputHandle(), (WORD)iAttr);
 	} else {
 		for (i = 0; i < iParamCount; i++) {
 			switch (iParam[i]) {
@@ -419,7 +504,7 @@ ConSetAttribute(int *iParam, int iParamCount)
 		}
 
 		if (iAttr)
-			bRet = SetConsoleTextAttribute(hOutputConsole, (WORD)iAttr);
+			bRet = SetConsoleTextAttribute(GetConsoleOutputHandle(), (WORD)iAttr);
 	}
 }
 
@@ -429,7 +514,7 @@ ConScreenSizeX()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return (-1);
 
 	return (consoleInfo.dwSize.X);
@@ -441,7 +526,7 @@ ConSetScreenX()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return (-1);
 
 	ScreenX = (consoleInfo.dwSize.X);
@@ -454,7 +539,7 @@ ConScreenSizeY()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return (-1);
 
 	return (consoleInfo.srWindow.Bottom - consoleInfo.srWindow.Top + 1);
@@ -466,7 +551,7 @@ ConVisibleWindowWidth()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return (-1);
 
 	return (consoleInfo.srWindow.Right - consoleInfo.srWindow.Left + 1);
@@ -478,7 +563,7 @@ ConVisibleWindowHeight()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return (-1);
 
 	return (consoleInfo.srWindow.Bottom - consoleInfo.srWindow.Top + 1);
@@ -489,7 +574,7 @@ ConSetScreenY()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return (-1);
 
 	ScreenY = consoleInfo.dwSize.Y - 1;
@@ -504,7 +589,7 @@ ConFillToEndOfLine()
 
 	int size = ConScreenSizeX();
 	for (int i = ConGetCursorX(); i < size; i++)
-		WriteConsole(hOutputConsole, (char *)" ", 1, &rc, 0);
+		WriteConsole(GetConsoleOutputHandle(), (char *)" ", 1, &rc, 0);
 }
 
 int 
@@ -523,8 +608,8 @@ ConWriteString(char* pszString, int cbString)
 	    (cnt = MultiByteToWideChar(CP_UTF8, 0, pszString, cbString, utf16, needed)) == 0) {
 		Result = (DWORD)printf_s(pszString);
 	} else {
-		if (hOutputConsole)
-			WriteConsoleW(hOutputConsole, utf16, cnt, &Result, 0);
+		if (GetConsoleOutputHandle())
+			WriteConsoleW(GetConsoleOutputHandle(), utf16, cnt, &Result, 0);
 		else
 			Result = (DWORD)wprintf_s(utf16);
 	}
@@ -543,8 +628,8 @@ ConTranslateAndWriteString(char* pszString, int cbString)
 	if (pszString == NULL)
 		return 0;
 
-	if (hOutputConsole)
-		WriteConsole(hOutputConsole, pszString, cbString, &Result, 0);
+	if (GetConsoleOutputHandle())
+		WriteConsole(GetConsoleOutputHandle(), pszString, cbString, &Result, 0);
 	else
 		Result = (DWORD)printf_s(pszString);
 
@@ -564,11 +649,11 @@ ConWriteChar(CHAR ch)
 	case 0x8: /* BackSpace */
 		if (X == 0) {
 			ConSetCursorPosition(ScreenX - 1, --Y);
-			WriteConsole(hOutputConsole, " ", 1, (LPDWORD)&Result, 0);
+			WriteConsole(GetConsoleOutputHandle(), " ", 1, (LPDWORD)&Result, 0);
 			ConSetCursorPosition(ScreenX - 1, Y);
 		} else {
 			ConSetCursorPosition(X - 1, Y);
-			WriteConsole(hOutputConsole, " ", 1, (LPDWORD)&Result, 0);
+			WriteConsole(GetConsoleOutputHandle(), " ", 1, (LPDWORD)&Result, 0);
 			ConSetCursorPosition(X - 1, Y);
 		}
 
@@ -586,7 +671,7 @@ ConWriteChar(CHAR ch)
 			ConSetCursorPosition(0, Y);
 		break;
 	default:
-		fOkay = (BOOL)WriteConsole(hOutputConsole, &ch, 1, (LPDWORD)&Result, 0);
+		fOkay = (BOOL)WriteConsole(GetConsoleOutputHandle(), &ch, 1, (LPDWORD)&Result, 0);
 
 		/* last coord */
 		if (X >= ScreenX - 1) {
@@ -615,11 +700,11 @@ ConWriteCharW(WCHAR ch)
 	case 0x8: /* BackSpace */
 		if (X == 0) {
 			ConSetCursorPosition(ScreenX - 1, --Y);
-			WriteConsole(hOutputConsole, " ", 1, (LPDWORD)&Result, 0);
+			WriteConsole(GetConsoleOutputHandle(), " ", 1, (LPDWORD)&Result, 0);
 			ConSetCursorPosition(ScreenX - 1, Y);
 		} else {
 			ConSetCursorPosition(X - 1, Y);
-			WriteConsole(hOutputConsole, " ", 1, (LPDWORD)&Result, 0);
+			WriteConsole(GetConsoleOutputHandle(), " ", 1, (LPDWORD)&Result, 0);
 			ConSetCursorPosition(X - 1, Y);
 		}
 		break;
@@ -638,7 +723,7 @@ ConWriteCharW(WCHAR ch)
 		break;
 
 	default:
-		fOkay = (BOOL)WriteConsoleW(hOutputConsole, &ch, 1, (LPDWORD)&Result, 0);
+		fOkay = (BOOL)WriteConsoleW(GetConsoleOutputHandle(), &ch, 1, (LPDWORD)&Result, 0);
 
 		if (X >= ScreenX - 1) { /* last coord */
 			if (Y >= ScrollBottom - 1) { /* last coord */
@@ -677,7 +762,7 @@ ConWriteConsole(char *pData, int NumChars)
 
 		case 8:
 			ConMoveCursorPosition(-1, 0);
-			WriteConsole(hOutputConsole, " ", 1, (LPDWORD)&Result, 0);
+			WriteConsole(GetConsoleOutputHandle(), " ", 1, (LPDWORD)&Result, 0);
 			ConMoveCursorPosition(-1, 0);
 			break;
 
@@ -686,7 +771,7 @@ ConWriteConsole(char *pData, int NumChars)
 			int i, MoveRight = TAB_LENGTH - (ConGetCursorX() % TAB_LENGTH);
 
 			for (i = 0; i < MoveRight; i++)
-				WriteConsole(hOutputConsole, " ", 1, (LPDWORD)&Result, 0);
+				WriteConsole(GetConsoleOutputHandle(), " ", 1, (LPDWORD)&Result, 0);
 		}
 		break;
 
@@ -717,7 +802,7 @@ ConWriteConsole(char *pData, int NumChars)
 			CurrentY = ConGetCursorY();
 			CurrentX = ConGetCursorX();
 
-			WriteConsole(hOutputConsole, &pData[X], 1, (LPDWORD)&Result, 0);
+			WriteConsole(GetConsoleOutputHandle(), &pData[X], 1, (LPDWORD)&Result, 0);
 
 			if (CurrentX >= ScreenX - 1) { /* last coord */
 				if (CurrentY >= ScrollBottom - 1) { /* last coord */
@@ -767,7 +852,7 @@ ConWriteLine(char* pData)
 			distance = ConWriteConsole(pCurrent, (int)distance); /* Special routine for handling TABS */
 
 		} else
-			WriteConsole(hOutputConsole, pCurrent, (DWORD)distance, &Result, 0);
+			WriteConsole(GetConsoleOutputHandle(), pCurrent, (DWORD)distance, &Result, 0);
 
 		ConSetCursorPosition(0, ConGetCursorY() + 1);
 
@@ -776,7 +861,7 @@ ConWriteLine(char* pData)
 		distance = strlen(pCurrent);
 		if (distance > (size_t)ScreenX)
 			distance = (size_t)ScreenX;
-		WriteConsole(hOutputConsole, pCurrent, (DWORD)distance, &Result, 0);
+		WriteConsole(GetConsoleOutputHandle(), pCurrent, (DWORD)distance, &Result, 0);
 		pCurrent += distance;
 	}
 
@@ -810,7 +895,7 @@ ConDisplayData(char* pData, int NumLines)
 				if ((distance > (size_t)ScreenX) || ((pTab != NULL) && (pTab < pNext)))
 					ConWriteConsole(pCurrent, (int)distance); /* Special routine for handling TABS */
 				else
-					WriteConsole(hOutputConsole, pCurrent, (DWORD)distance, &Result, 0);
+					WriteConsole(GetConsoleOutputHandle(), pCurrent, (DWORD)distance, &Result, 0);
 			}
 			ConMoveCursorPosition(-ConGetCursorX(), 1);
 			pCurrent += (distance + add);  /* Add one to always skip last char printed */
@@ -820,7 +905,7 @@ ConDisplayData(char* pData, int NumLines)
 			if (distance > (size_t)ScreenX)
 				distance = ScreenX;
 			if (linecnt < NumLines)
-				WriteConsole(hOutputConsole, pCurrent, (DWORD)distance, &Result, 0);
+				WriteConsole(GetConsoleOutputHandle(), pCurrent, (DWORD)distance, &Result, 0);
 			return pCurrent + distance;
 		}
 	}
@@ -852,9 +937,9 @@ ConDisplayCursor(BOOL bVisible)
 {
 	CONSOLE_CURSOR_INFO ConsoleCursorInfo;
 
-	if (GetConsoleCursorInfo(hOutputConsole, &ConsoleCursorInfo)) {
+	if (GetConsoleCursorInfo(GetConsoleOutputHandle(), &ConsoleCursorInfo)) {
 		ConsoleCursorInfo.bVisible = bVisible;
-		return SetConsoleCursorInfo(hOutputConsole, &ConsoleCursorInfo);
+		return SetConsoleCursorInfo(GetConsoleOutputHandle(), &ConsoleCursorInfo);
 	}
 
 	return FALSE;
@@ -868,15 +953,15 @@ ConClearScreen()
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 	SMALL_RECT srcWindow;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	Coord.X = 0;
 	Coord.Y = 0;
 
 	DWORD dwNumChar = (consoleInfo.dwSize.Y) * (consoleInfo.dwSize.X);
-	FillConsoleOutputCharacter(hOutputConsole, ' ', dwNumChar, Coord, &dwWritten);
-	FillConsoleOutputAttribute(hOutputConsole, consoleInfo.wAttributes, dwNumChar, Coord, &dwWritten);
+	FillConsoleOutputCharacter(GetConsoleOutputHandle(), ' ', dwNumChar, Coord, &dwWritten);
+	FillConsoleOutputAttribute(GetConsoleOutputHandle(), consoleInfo.wAttributes, dwNumChar, Coord, &dwWritten);
 	srcWindow = consoleInfo.srWindow;
 	ConSetCursorPosition(0, 0);
 }
@@ -887,15 +972,15 @@ ConClearScrollRegion()
 	DWORD dwWritten;
 	COORD Coord;
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	Coord.X = 0;
 	Coord.Y = ScrollTop + consoleInfo.srWindow.Top;
-	FillConsoleOutputCharacter(hOutputConsole, ' ', (DWORD)consoleInfo.dwSize.X * (DWORD)ScrollBottom,
+	FillConsoleOutputCharacter(GetConsoleOutputHandle(), ' ', (DWORD)consoleInfo.dwSize.X * (DWORD)ScrollBottom,
 		Coord, &dwWritten);
 
-	FillConsoleOutputAttribute(hOutputConsole, consoleInfo.wAttributes,
+	FillConsoleOutputAttribute(GetConsoleOutputHandle(), consoleInfo.wAttributes,
 		(DWORD)consoleInfo.dwSize.X * (DWORD)ScrollBottom, Coord, &dwWritten);
 
 	ConSetCursorPosition(0, ScrollTop);
@@ -908,16 +993,16 @@ ConClearEOScreen()
 	COORD Coord;
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	Coord.X = 0;
 	Coord.Y = (short)(ConGetCursorY() + 1) + consoleInfo.srWindow.Top;
-	FillConsoleOutputCharacter(hOutputConsole, ' ',
+	FillConsoleOutputCharacter(GetConsoleOutputHandle(), ' ',
 		(DWORD)(consoleInfo.dwSize.X)*
 		(DWORD)(consoleInfo.srWindow.Bottom - Coord.Y + 1),
 		Coord, &dwWritten);
-	FillConsoleOutputAttribute(hOutputConsole, consoleInfo.wAttributes,
+	FillConsoleOutputAttribute(GetConsoleOutputHandle(), consoleInfo.wAttributes,
 		(DWORD)(consoleInfo.dwSize.X)*
 		(DWORD)(consoleInfo.srWindow.Bottom - Coord.Y + 1),
 		Coord, &dwWritten);
@@ -931,16 +1016,16 @@ ConClearBOScreen()
 	DWORD dwWritten;
 	COORD Coord;
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	Coord.X = 0;
 	Coord.Y = 0;
-	FillConsoleOutputCharacter(hOutputConsole, ' ',
+	FillConsoleOutputCharacter(GetConsoleOutputHandle(), ' ',
 		(DWORD)(consoleInfo.dwSize.X)*
 		(DWORD)(consoleInfo.dwSize.Y - ConGetCursorY() - 1),
 		Coord, &dwWritten);
-	FillConsoleOutputAttribute(hOutputConsole, consoleInfo.wAttributes,
+	FillConsoleOutputAttribute(GetConsoleOutputHandle(), consoleInfo.wAttributes,
 		(DWORD)(consoleInfo.dwSize.X)*
 		(DWORD)(consoleInfo.dwSize.Y - ConGetCursorY() - 1),
 		Coord, &dwWritten);
@@ -954,13 +1039,13 @@ ConClearLine()
 	DWORD dwWritten;
 	COORD Coord;
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	Coord.X = 0;
 	Coord.Y = ConGetCursorY();
-	FillConsoleOutputAttribute(hOutputConsole, consoleInfo.wAttributes, ScreenX, Coord, &dwWritten);
-	FillConsoleOutputCharacter(hOutputConsole, ' ', ScreenX, Coord, &dwWritten);
+	FillConsoleOutputAttribute(GetConsoleOutputHandle(), consoleInfo.wAttributes, ScreenX, Coord, &dwWritten);
+	FillConsoleOutputCharacter(GetConsoleOutputHandle(), ' ', ScreenX, Coord, &dwWritten);
 }
 
 void 
@@ -970,16 +1055,16 @@ ConClearEOLine()
 	COORD Coord;
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;;
 
 	Coord.X = ConGetCursorX() + consoleInfo.srWindow.Left;
 	Coord.Y = ConGetCursorY() + consoleInfo.srWindow.Top;
 
-	FillConsoleOutputCharacter(hOutputConsole, ' ',
+	FillConsoleOutputCharacter(GetConsoleOutputHandle(), ' ',
 		(DWORD)(ScreenX - ConGetCursorX()),
 		Coord, &dwWritten);
-	FillConsoleOutputAttribute(hOutputConsole, consoleInfo.wAttributes,
+	FillConsoleOutputAttribute(GetConsoleOutputHandle(), consoleInfo.wAttributes,
 		(DWORD)(ScreenX - ConGetCursorX()),
 		Coord, &dwWritten);
 }
@@ -990,13 +1075,13 @@ ConClearNFromCursorRight(int n)
 	DWORD dwWritten;
 	COORD Coord;
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	Coord.X = ConGetCursorX() + consoleInfo.srWindow.Left;
 	Coord.Y = ConGetCursorY() + consoleInfo.srWindow.Top;
-	FillConsoleOutputCharacter(hOutputConsole, ' ', (DWORD)n, Coord, &dwWritten);
-	FillConsoleOutputAttribute(hOutputConsole, consoleInfo.wAttributes, (DWORD)n, Coord, &dwWritten);
+	FillConsoleOutputCharacter(GetConsoleOutputHandle(), ' ', (DWORD)n, Coord, &dwWritten);
+	FillConsoleOutputAttribute(GetConsoleOutputHandle(), consoleInfo.wAttributes, (DWORD)n, Coord, &dwWritten);
 }
 
 void 
@@ -1006,13 +1091,13 @@ ConClearNFromCursorLeft(int n)
 	COORD Coord;
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	Coord.X = ConGetCursorX() + consoleInfo.srWindow.Left - n;
 	Coord.Y = ConGetCursorY() + consoleInfo.srWindow.Top;
-	FillConsoleOutputCharacter(hOutputConsole, ' ', (DWORD)n, Coord, &dwWritten);
-	FillConsoleOutputAttribute(hOutputConsole, consoleInfo.wAttributes, (DWORD)n, Coord, &dwWritten);
+	FillConsoleOutputCharacter(GetConsoleOutputHandle(), ' ', (DWORD)n, Coord, &dwWritten);
+	FillConsoleOutputAttribute(GetConsoleOutputHandle(), consoleInfo.wAttributes, (DWORD)n, Coord, &dwWritten);
 }
 
 void 
@@ -1020,7 +1105,7 @@ ConScrollDownEntireBuffer()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 	ConScrollDown(0, consoleInfo.dwSize.Y - 1);
 	return;
@@ -1031,7 +1116,7 @@ ConScrollUpEntireBuffer()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 	ConScrollUp(0, consoleInfo.dwSize.Y - 1);
 	return;
@@ -1046,7 +1131,7 @@ ConScrollUp(int topline, int botline)
 	CHAR_INFO Fill;
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	if ((botline - topline) == consoleInfo.dwSize.Y - 1) { /* scrolling whole buffer */
@@ -1071,7 +1156,7 @@ ConScrollUp(int topline, int botline)
 	Fill.Attributes = consoleInfo.wAttributes;
 	Fill.Char.AsciiChar = ' ';
 
-	BOOL bRet = ScrollConsoleScreenBuffer(hOutputConsole,
+	BOOL bRet = ScrollConsoleScreenBuffer(GetConsoleOutputHandle(),
 		&ScrollRect,
 		&ClipRect,
 		destination,
@@ -1087,7 +1172,7 @@ ConMoveVisibleWindow(int offset)
 	errno_t r = 0;
 
 	memset(&visibleWindowRect, 0, sizeof(SMALL_RECT));
-	if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo)) {
+	if (GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo)) {
 		/* Check if applying the offset results in console buffer overflow.
 		* if yes, then scrolldown the console buffer.
 		*/
@@ -1095,7 +1180,7 @@ ConMoveVisibleWindow(int offset)
 			for (int i = 0; i < offset; i++)
 				ConScrollDown(0, consoleInfo.dwSize.Y - 1);
 
-			if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo) == FALSE) {
+			if (GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo) == FALSE) {
 				error("GetConsoleScreenBufferInfo failed with %d", GetLastError());
 				return;
 			}
@@ -1112,7 +1197,7 @@ ConMoveVisibleWindow(int offset)
 			visibleWindowRect.Bottom += offset;
 		}
 
-		SetConsoleWindowInfo(hOutputConsole, TRUE, &visibleWindowRect);
+		SetConsoleWindowInfo(GetConsoleOutputHandle(), TRUE, &visibleWindowRect);
 	}
 }
 
@@ -1124,7 +1209,7 @@ ConScrollDown(int topline, int botline)
 	CHAR_INFO Fill;
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	if ((botline - topline) == consoleInfo.dwSize.Y - 1) { /* scrolling whole buffer */
@@ -1144,7 +1229,7 @@ ConScrollDown(int topline, int botline)
 	Fill.Attributes = consoleInfo.wAttributes;
 	Fill.Char.AsciiChar = ' ';
 
-	BOOL bRet = ScrollConsoleScreenBuffer(hOutputConsole,
+	BOOL bRet = ScrollConsoleScreenBuffer(GetConsoleOutputHandle(),
 		&ScrollRect,
 		NULL,
 		destination,
@@ -1159,15 +1244,15 @@ ConClearBOLine()
 	COORD Coord;
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	Coord.X = 0;
 	Coord.Y = (short)(ConGetCursorY());
-	FillConsoleOutputAttribute(hOutputConsole, consoleInfo.wAttributes,
+	FillConsoleOutputAttribute(GetConsoleOutputHandle(), consoleInfo.wAttributes,
 		(DWORD)(ConGetCursorX()),
 		Coord, &dwWritten);
-	FillConsoleOutputCharacter(hOutputConsole, ' ',
+	FillConsoleOutputCharacter(GetConsoleOutputHandle(), ' ',
 		(DWORD)(ConGetCursorX()),
 		Coord, &dwWritten);
 }
@@ -1179,7 +1264,7 @@ ConSetCursorPosition(int x, int y)
 	COORD Coord;
 	int rc;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	Coord.X = (short)(x);
@@ -1194,7 +1279,7 @@ ConSetCursorPosition(int x, int y)
 		Coord.Y = consoleInfo.dwSize.Y - 1;
 	}
 
-	if (!SetConsoleCursorPosition(hOutputConsole, Coord))
+	if (!SetConsoleCursorPosition(GetConsoleOutputHandle(), Coord))
 		rc = GetLastError();
 
 	LastCursorX = x;
@@ -1204,7 +1289,7 @@ ConSetCursorPosition(int x, int y)
 BOOL 
 ConChangeCursor(CONSOLE_CURSOR_INFO *pCursorInfo)
 {
-	return SetConsoleCursorInfo(hOutputConsole, pCursorInfo);
+	return SetConsoleCursorInfo(GetConsoleOutputHandle(), pCursorInfo);
 }
 
 void
@@ -1212,7 +1297,7 @@ ConGetCursorPosition(int *x, int *y)
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo)) {
+	if (GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo)) {
 		*x = consoleInfo.dwCursorPosition.X;
 		*y = consoleInfo.dwCursorPosition.Y;
 	}
@@ -1223,7 +1308,7 @@ ConGetCursorX()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return 0;
 
 	return consoleInfo.dwCursorPosition.X;
@@ -1235,7 +1320,7 @@ is_cursor_at_lastline_of_visible_window()
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 	int return_val = 0;
 
-	if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo)) {
+	if (GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo)) {
 		int cursor_linenum_in_visible_window = consoleInfo.dwCursorPosition.Y - consoleInfo.srWindow.Top;
 		if (cursor_linenum_in_visible_window >= ConVisibleWindowHeight() - 1)
 			return_val = 1;
@@ -1249,7 +1334,7 @@ ConGetCursorY()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return 0;
 
 	return (consoleInfo.dwCursorPosition.Y - consoleInfo.srWindow.Top);
@@ -1260,7 +1345,7 @@ ConGetBufferHeight()
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return 0;
 
 	return (consoleInfo.dwSize.Y - 1);
@@ -1272,13 +1357,13 @@ ConMoveCursorPosition(int x, int y)
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 	COORD Coord;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	Coord.X = (short)(consoleInfo.dwCursorPosition.X + x);
 	Coord.Y = (short)(consoleInfo.dwCursorPosition.Y + y);
 
-	SetConsoleCursorPosition(hOutputConsole, Coord);
+	SetConsoleCursorPosition(GetConsoleOutputHandle(), Coord);
 }
 
 void 
@@ -1286,7 +1371,7 @@ ConGetRelativeCursorPosition(int *x, int *y)
 {
 	CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	*x -= consoleInfo.srWindow.Left;
@@ -1303,7 +1388,7 @@ ConDeleteChars(int n)
 	COORD temp;
 	int result;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return;
 
 	coord.X = (short)(consoleInfo.dwCursorPosition.X);
@@ -1316,7 +1401,7 @@ ConDeleteChars(int n)
 
 	temp.X = 256;
 	temp.Y = 1;
-	result = ReadConsoleOutput(hOutputConsole,		/* console screen buffer handle */
+	result = ReadConsoleOutput(GetConsoleOutputHandle(),		/* console screen buffer handle */
 				   (PCHAR_INFO)chiBuffer,	/* address of buffer that receives data */
 				   temp,			/* column-row size of destination buffer */
 				   ZeroCoord,			/* upper-left cell to write to */
@@ -1329,7 +1414,7 @@ ConDeleteChars(int n)
 	temp.Y = 1;
 
 	sr.Right -= n;
-	result = WriteConsoleOutput(hOutputConsole, (PCHAR_INFO)chiBuffer, temp, ZeroCoord, &sr);
+	result = WriteConsoleOutput(GetConsoleOutputHandle(), (PCHAR_INFO)chiBuffer, temp, ZeroCoord, &sr);
 }
 
 
@@ -1340,10 +1425,10 @@ ConSaveScreenHandle(SCREEN_HANDLE hScreen)
 	PSCREEN_RECORD pScreenRec = (PSCREEN_RECORD)hScreen;
 	int result, width, height;
 
-	if (hOutputConsole == NULL)
+	if (GetConsoleOutputHandle() == NULL)
 		return NULL;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return (NULL);
 
 	if (pScreenRec == NULL) {
@@ -1372,7 +1457,7 @@ ConSaveScreenHandle(SCREEN_HANDLE hScreen)
 		return NULL;
 	}
 
-	result = ReadConsoleOutput(hOutputConsole,			/* console screen buffer handle */
+	result = ReadConsoleOutput(GetConsoleOutputHandle(),			/* console screen buffer handle */
 				   (PCHAR_INFO)(pScreenRec->pScreenBuf),/* address of buffer that receives data */ 
 				   pScreenRec->ScreenSize,		/* column-row size of destination buffer */
 				   ZeroCoord,				/* upper-left cell to write to */
@@ -1393,10 +1478,10 @@ ConRestoreScreenHandle(SCREEN_HANDLE hScreen)
 	PSCREEN_RECORD pScreenRec = (PSCREEN_RECORD)hScreen;
 	int  width, height;
 
-	if (hOutputConsole == NULL)
+	if (GetConsoleOutputHandle() == NULL)
 		return FALSE;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return (FALSE);
 
 	width = consoleInfo.srWindow.Right - consoleInfo.srWindow.Left + 1;
@@ -1404,23 +1489,23 @@ ConRestoreScreenHandle(SCREEN_HANDLE hScreen)
 
 	beginOfScreen.X = consoleInfo.srWindow.Left;
 	beginOfScreen.Y = consoleInfo.srWindow.Top;
-	FillConsoleOutputCharacter(hOutputConsole, ' ', (DWORD)width*height, beginOfScreen, &dwWritten);
+	FillConsoleOutputCharacter(GetConsoleOutputHandle(), ' ', (DWORD)width*height, beginOfScreen, &dwWritten);
 
 	pSavedCharInfo = (PCHAR_INFO)(pScreenRec->pScreenBuf);
-	SetConsoleTextAttribute(hOutputConsole, pSavedCharInfo->Attributes);
+	SetConsoleTextAttribute(GetConsoleOutputHandle(), pSavedCharInfo->Attributes);
 
-	FillConsoleOutputAttribute(hOutputConsole, pSavedCharInfo->Attributes,
+	FillConsoleOutputAttribute(GetConsoleOutputHandle(), pSavedCharInfo->Attributes,
 		(DWORD)width*height,
 		beginOfScreen, &dwWritten);
 
-	fOkay = WriteConsoleOutput(hOutputConsole,			/* handle to a console screen buffer */
+	fOkay = WriteConsoleOutput(GetConsoleOutputHandle(),			/* handle to a console screen buffer */
 				  (PCHAR_INFO)(pScreenRec->pScreenBuf),	/* pointer to buffer with data to write  */
 				  pScreenRec->ScreenSize,		/* column-row size of source buffer */
 				  ZeroCoord,				/* upper-left cell to write from */
 				  &consoleInfo.srWindow			/* pointer to rectangle to write to */
 	);
 	
-	SetConsoleWindowInfo(hOutputConsole, TRUE, &pScreenRec->srWindowRect);
+	SetConsoleWindowInfo(GetConsoleOutputHandle(), TRUE, &pScreenRec->srWindowRect);
 	ConSetCursorPosition(pScreenRec->ScreenCursor.X, pScreenRec->ScreenCursor.Y);
 	
 	return fOkay;
@@ -1437,26 +1522,26 @@ ConRestoreScreenColors()
 	DWORD dwWritten;
 	PSCREEN_RECORD pScreenRec = (PSCREEN_RECORD)hScreen;
 
-	if (hOutputConsole == NULL)
+	if (GetConsoleOutputHandle() == NULL)
 		return FALSE;
 
 	if (pSavedScreen == NULL)
 		return FALSE;
 
-	if (!GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo))
+	if (!GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo))
 		return (FALSE);
 
 	beginOfScreen.X = consoleInfo.srWindow.Left;
 	beginOfScreen.Y = consoleInfo.srWindow.Top;
 
-	FillConsoleOutputCharacter(hOutputConsole, ' ',
+	FillConsoleOutputCharacter(GetConsoleOutputHandle(), ' ',
 		(DWORD)pScreenRec->ScreenSize.X*pScreenRec->ScreenSize.Y,
 		beginOfScreen, &dwWritten);
 
 	pSavedCharInfo = (PCHAR_INFO)(pScreenRec->pScreenBuf);
-	SetConsoleTextAttribute(hOutputConsole, pSavedCharInfo->Attributes);
+	SetConsoleTextAttribute(GetConsoleOutputHandle(), pSavedCharInfo->Attributes);
 
-	FillConsoleOutputAttribute(hOutputConsole, pSavedCharInfo->Attributes,
+	FillConsoleOutputAttribute(GetConsoleOutputHandle(), pSavedCharInfo->Attributes,
 		(DWORD)pScreenRec->ScreenSize.X*pScreenRec->ScreenSize.Y,
 		beginOfScreen, &dwWritten);
 
@@ -1490,8 +1575,7 @@ void
 ConSaveViewRect()
 {
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
-
-	if (GetConsoleScreenBufferInfo(hOutputConsole, &csbi))
+	if (GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &csbi))
 		SavedViewRect = csbi.srWindow;
 }
 
@@ -1505,7 +1589,7 @@ ConRestoreViewRect()
 	wp.length = sizeof(WINDOWPLACEMENT);
 	GetWindowPlacement(hwnd, &wp);
 
-	if (GetConsoleScreenBufferInfo(hOutputConsole, &consoleInfo) &&
+	if (GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &consoleInfo) &&
 	    ((consoleInfo.srWindow.Top != SavedViewRect.Top ||
 	      consoleInfo.srWindow.Bottom != SavedViewRect.Bottom))) {
 		if ((SavedViewRect.Right - SavedViewRect.Left > consoleInfo.dwSize.X) ||
@@ -1513,59 +1597,14 @@ ConRestoreViewRect()
 			COORD coordScreen;
 			coordScreen.X = SavedViewRect.Right - SavedViewRect.Left;
 			coordScreen.Y = consoleInfo.dwSize.Y;
-			SetConsoleScreenBufferSize(hOutputConsole, coordScreen);
+			SetConsoleScreenBufferSize(GetConsoleOutputHandle(), coordScreen);
 			
 			ShowWindow(hwnd, SW_SHOWMAXIMIZED);
 		} else
 			ShowWindow(hwnd, SW_RESTORE);
 
-		SetConsoleWindowInfo(hOutputConsole, TRUE, &SavedViewRect);
+		SetConsoleWindowInfo(GetConsoleOutputHandle(), TRUE, &SavedViewRect);
 	}
-}
-
-BOOL
-ConIsRedirected(HANDLE hInput)
-{
-	DWORD dwMode;
-	return !GetConsoleMode(hInput, &dwMode);
-}
-
-HANDLE
-GetConsoleOutputHandle()
-{
-	SECURITY_ATTRIBUTES sa;
-
-	sa.nLength = sizeof(SECURITY_ATTRIBUTES);
-	sa.lpSecurityDescriptor = NULL;
-	sa.bInheritHandle = TRUE;
-
-	HANDLE hTemp = GetStdHandle(STD_OUTPUT_HANDLE);
-
-	if (ConIsRedirected(hTemp))
-		hTemp = CreateFile(TEXT("CONOUT$"), GENERIC_READ | GENERIC_WRITE,
-				   FILE_SHARE_WRITE | FILE_SHARE_READ,
-				   &sa, OPEN_EXISTING, 0, NULL);
-
-	return hTemp;
-}
-
-HANDLE
-GetConsoleInputHandle()
-{
-	SECURITY_ATTRIBUTES sa;
-
-	sa.nLength = sizeof(SECURITY_ATTRIBUTES);
-	sa.lpSecurityDescriptor = NULL;
-	sa.bInheritHandle = TRUE;
-
-	HANDLE hTemp = GetStdHandle(STD_INPUT_HANDLE);
-
-	if (ConIsRedirected(hTemp))
-		hTemp = CreateFile(TEXT("CONIN$"), GENERIC_READ | GENERIC_WRITE,
-			FILE_SHARE_WRITE | FILE_SHARE_READ,
-			&sa, OPEN_EXISTING, 0, NULL);
-
-	return hTemp;
 }
 
 void
@@ -1574,7 +1613,7 @@ ConSaveWindowsState()
 	CONSOLE_SCREEN_BUFFER_INFOEX csbiex;
 	csbiex.cbSize = sizeof(CONSOLE_SCREEN_BUFFER_INFOEX);
 
-	if (!GetConsoleScreenBufferInfoEx(hOutputConsole, &csbiex))
+	if (!GetConsoleScreenBufferInfoEx(GetConsoleOutputHandle(), &csbiex))
 		return;
 
 	SavedWindowState = csbiex;
@@ -1586,11 +1625,12 @@ ConMoveCursorTopOfVisibleWindow()
 	CONSOLE_SCREEN_BUFFER_INFO csbi;
 	int offset;
 
-	if (GetConsoleScreenBufferInfo(hOutputConsole, &csbi)) {
+	if (GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &csbi)) {
 		offset = csbi.dwCursorPosition.Y - csbi.srWindow.Top;
 		ConMoveVisibleWindow(offset);
 
-		ConSaveViewRect();
+		if(track_view_port)
+			ConSaveViewRect();
 	}
 }
 

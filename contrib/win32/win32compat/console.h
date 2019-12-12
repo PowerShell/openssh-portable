@@ -83,6 +83,10 @@
 #define ENABLE_VIRTUAL_TERMINAL_PROCESSING  0x4
 #endif
 
+#ifndef ENABLE_VIRTUAL_TERMINAL_INPUT
+#define ENABLE_VIRTUAL_TERMINAL_INPUT 0x0200
+#endif
+
 #ifndef DISABLE_NEWLINE_AUTO_RETURN
 #define DISABLE_NEWLINE_AUTO_RETURN 0x8
 #endif
@@ -92,9 +96,7 @@ typedef void *  SCREEN_HANDLE;
 void ConEnterRawMode();
 void ConUnInitWithRestore();
 void ConExitRawMode();
-BOOL ConIsRedirected(HANDLE hInput);
-HANDLE GetConsoleOutputHandle();
-HANDLE GetConsoleInputHandle();
+
 BOOL ConSetScreenRect(int xSize, int ySize);
 BOOL ConSetScreenSize(int X, int Y);
 BOOL ConRestoreScreen();

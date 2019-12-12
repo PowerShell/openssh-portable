@@ -81,8 +81,8 @@ static VOID WINAPI service_handler(DWORD dwControl)
 	case SERVICE_CONTROL_STOP: {
 		ReportSvcStatus(SERVICE_STOP_PENDING, NO_ERROR, 500);
 		ReportSvcStatus(SERVICE_STOPPED, NO_ERROR, 0);
-		/* TOTO - GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0); doesn't seem to be invoking 
-		 * signal handler (native_sig_handler) when sshd runs as service 
+		/* TODO - GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0); doesn't seem to be invoking
+		 * signal handler (native_sig_handler) when sshd runs as service
 		 * So calling the signal handler directly to interrupt the deamon's main thread
 		 * This is being called after reporting SERVICE_STOPPED because main thread does a exit()
 		 * as part of handling Crtl+c
@@ -100,34 +100,14 @@ static VOID WINAPI service_handler(DWORD dwControl)
 }
 
 #define SSH_HOSTKEY_GEN_CMDLINE L"ssh-keygen -A"
-static void 
+static void
 generate_host_keys()
 {
-	DWORD dwError = 0;
-	UUID uuid;
-	RPC_CWSTR rpc_str;
-	USER_INFO_1 ui;
-	NET_API_STATUS nStatus;
 	STARTUPINFOW si;
 	PROCESS_INFORMATION pi;
 	wchar_t cmdline[MAX_PATH];
 
-
 	if (am_system()) {
-		/* create sshd account if it does not exist */
-		UuidCreate(&uuid);
-		UuidToStringW(&uuid, (RPC_WSTR*)&rpc_str);
-		ui.usri1_name = L"sshd";
-		ui.usri1_password = (LPWSTR)rpc_str;
-		ui.usri1_priv = USER_PRIV_USER;
-		ui.usri1_home_dir = NULL;
-		ui.usri1_comment = NULL;
-		ui.usri1_flags = UF_SCRIPT | UF_DONT_EXPIRE_PASSWD;
-		ui.usri1_script_path = NULL;
-
-		NetUserAdd(NULL, 1, (LPBYTE)&ui, &dwError);
-		RpcStringFreeW((RPC_WSTR*)&rpc_str);
-
 		/* create host keys if they dont already exist */
 		ZeroMemory(&si, sizeof(si));
 		si.cb = sizeof(STARTUPINFOW);
@@ -146,12 +126,12 @@ generate_host_keys()
 * 2) Create %programdata%\ssh\logs - Administrator group(F), system(F)
 * 3) copy <binary_location>\sshd_config_default to %programdata%\ssh\sshd_config
 */
-static void 
+static void
 create_prgdata_ssh_folder()
 {
 	/* create ssh cfg folder */
 	wchar_t ssh_cfg_dir[PATH_MAX] = { 0, };
-	wcscpy_s(ssh_cfg_dir, _countof(ssh_cfg_dir), get_program_data_path());
+	wcscpy_s(ssh_cfg_dir, _countof(ssh_cfg_dir), __wprogdata);
 	wcscat_s(ssh_cfg_dir, _countof(ssh_cfg_dir), L"\\ssh");
 	if (create_directory_withsddl(ssh_cfg_dir, L"O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;AU)") < 0) {
 		printf("failed to create %s", ssh_cfg_dir);
@@ -173,7 +153,7 @@ create_prgdata_ssh_folder()
 	wcscat_s(sshd_config_path, _countof(sshd_config_path), L"\\sshd_config");
 	if (GetFileAttributesW(sshd_config_path) == INVALID_FILE_ATTRIBUTES) {
 		wchar_t sshd_config_default_path[PATH_MAX] = { 0, };
-		swprintf_s(sshd_config_default_path, PATH_MAX, L"%S\\%s", w32_programdir(), L"sshd_config_default");
+		swprintf_s(sshd_config_default_path, PATH_MAX, L"%S\\%s", __progdir, L"sshd_config_default");
 
 		if (CopyFileW(sshd_config_default_path, sshd_config_path, TRUE) == 0) {
 			printf("Failed to copy %s to %s, error:%d", sshd_config_default_path, sshd_config_path, GetLastError());
@@ -212,7 +192,7 @@ create_openssh_registry_key()
 
 static void
 prereq_setup()
-{	
+{
 	create_prgdata_ssh_folder();
 	generate_host_keys();
 	create_openssh_registry_key();
@@ -235,7 +215,7 @@ int sshd_main(int argc, wchar_t **wargv) {
 
 	w32posix_initialize();
 
-	r =  main(argc, argv);
+	r = main(argc, argv);
 	w32posix_done();
 	return r;
 }
@@ -244,15 +224,47 @@ int argc_original = 0;
 wchar_t **wargv_original = NULL;
 
 int wmain(int argc, wchar_t **wargv) {
-	wchar_t* path_utf16;
+	wchar_t *path_value = NULL, *path_new_value;
+	errno_t result = 0;
+	size_t path_new_len = 0, len;
 	argc_original = argc;
 	wargv_original = wargv;
-	
+
+	init_prog_paths();
 	/* change current directory to sshd.exe root */
-	if ( (path_utf16 = utf8_to_utf16(w32_programdir())) == NULL) 
-		return -1;
-	_wchdir(path_utf16);
-	free(path_utf16);
+	_wchdir(__wprogdir);
+
+	/*
+	* we want to launch scp and sftp executables from the binary directory
+	* that sshd is hosted in. This will facilitate hosting and evaluating
+	* multiple versions of OpenSSH at the same time.
+	* it does not work well for powershell, cygwin, etc if program path is
+	* prepended to executable directory. 
+	* To achive above, PATH is set to process environment
+	*/
+	_wdupenv_s(&path_value, &len, L"PATH");
+	if (!path_value || (wcsstr(path_value, __wprogdir)) == NULL) {
+		path_new_len = wcslen(__wprogdir) + wcslen(path_value) + 2;
+		if ((path_new_value = (wchar_t *) malloc(path_new_len * sizeof(wchar_t))) == NULL) {
+			errno = ENOMEM;
+			error("failed to allocation memory");
+			return -1;
+		}
+		swprintf_s(path_new_value, path_new_len, L"%s%s%s", __wprogdir, path_value ? L";" : L"",  path_value);
+		if (result = _wputenv_s(L"PATH", path_new_value)) {
+			error("failed to set PATH environment variable: to value:%s, error:%d", path_new_value, result);
+			errno = result;
+			if (path_new_value)
+				free(path_new_value);
+			if(path_value)
+				free(path_value);
+			return -1;
+		}
+		if (path_new_value)
+			free(path_new_value);
+		if(path_value)
+			free(path_value);
+	}
 
 	if (!StartServiceCtrlDispatcherW(dispatch_table)) {
 		if (GetLastError() == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT)
@@ -273,5 +285,3 @@ int scm_start_service(DWORD num, LPWSTR* args) {
 	ReportSvcStatus(SERVICE_RUNNING, NO_ERROR, 0);
 	return sshd_main(argc_original, wargv_original);
 }
-
-

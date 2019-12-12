@@ -1,4 +1,4 @@
-#	$OpenBSD: rekey.sh,v 1.17 2016/01/29 05:18:15 dtucker Exp $
+#	$OpenBSD: rekey.sh,v 1.18 2018/04/10 00:14:10 djm Exp $
 #	Placed in the Public Domain.
 
 tid="rekey"
@@ -21,7 +21,11 @@ ssh_data_rekeying()
 	fi
 	rm -f ${COPY} ${LOG}
 	_opts="$_opts -oCompression=no"
-	${SSH} <${DATA} $_opts -v -F $OBJ/ssh_proxy somehost "cat > ${COPY}"
+	if [ "$os" == "windows" ]; then
+		cat ${DATA} | ${SSH} $_opts -v -F $OBJ/ssh_proxy somehost "cat > ${COPY}"
+	else
+		${SSH} <${DATA} $_opts -v -F $OBJ/ssh_proxy somehost "cat > ${COPY}"
+	fi
 	if [ $? -ne 0 ]; then
 		fail "ssh failed ($@)"
 	fi
@@ -30,7 +34,7 @@ ssh_data_rekeying()
 	n=`expr $n - 1`
 	trace "$n rekeying(s)"
 	if [ $n -lt 1 ]; then
-		fail "no rekeying occured ($@)"
+		fail "no rekeying occurred ($@)"
 	fi
 }
 
@@ -70,8 +74,13 @@ done
 for s in 5 10; do
 	verbose "client rekeylimit default ${s}"
 	rm -f ${COPY} ${LOG}
-	${SSH} < ${DATA} -oCompression=no -oRekeyLimit="default $s" -F \
-		$OBJ/ssh_proxy somehost "cat >${COPY};sleep $s;sleep 3"
+	if [ "$os" == "windows" ]; then
+		cat ${DATA} | ${SSH} -oCompression=no -oRekeyLimit="default $s" -F \
+			$OBJ/ssh_proxy somehost "cat >${COPY};sleep $s;sleep 3"
+	else
+		${SSH} < ${DATA} -oCompression=no -oRekeyLimit="default $s" -F \
+			$OBJ/ssh_proxy somehost "cat >${COPY};sleep $s;sleep 3"
+	fi
 	if [ $? -ne 0 ]; then
 		fail "ssh failed"
 	fi
@@ -80,7 +89,7 @@ for s in 5 10; do
 	n=`expr $n - 1`
 	trace "$n rekeying(s)"
 	if [ $n -lt 1 ]; then
-		fail "no rekeying occured"
+		fail "no rekeying occurred"
 	fi
 done
 
@@ -96,7 +105,7 @@ for s in 5 10; do
 	n=`expr $n - 1`
 	trace "$n rekeying(s)"
 	if [ $n -lt 1 ]; then
-		fail "no rekeying occured"
+		fail "no rekeying occurred"
 	fi
 done
 
@@ -115,7 +124,7 @@ for s in 16 1k 128k 256k; do
 	n=`expr $n - 1`
 	trace "$n rekeying(s)"
 	if [ $n -lt 1 ]; then
-		fail "no rekeying occured"
+		fail "no rekeying occurred"
 	fi
 done
 
@@ -132,7 +141,7 @@ for s in 5 10; do
 	n=`expr $n - 1`
 	trace "$n rekeying(s)"
 	if [ $n -lt 1 ]; then
-		fail "no rekeying occured"
+		fail "no rekeying occurred"
 	fi
 done
 
@@ -159,7 +168,9 @@ for size in 16 1k 1K 1m 1M 1g 1G 4G 8G; do
 	    awk '/rekeylimit/{print $2}'`
 	s=`$SUDO ${SSHD} -T -o "rekeylimit $size $time" -f $OBJ/sshd_proxy | \
 	    awk '/rekeylimit/{print $3}'`
-
+	if [ "$os" == "windows" ]; then
+		s=${s/$'\r'/} # Remove CR (carriage return)
+	fi
 	if [ "$bytes" != "$b" ]; then
 		fatal "rekeylimit size: expected $bytes bytes got $b"
 	fi

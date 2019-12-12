@@ -36,7 +36,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <limits.h>
 
 #include "atomicio.h"
 #include "log.h"
@@ -59,6 +58,7 @@ static const struct sandbox_policy preauth_policy[] = {
 	{ SYS_getpgid, SYSTR_POLICY_PERMIT },
 	{ SYS_clock_gettime, SYSTR_POLICY_PERMIT },
 	{ SYS_gettimeofday, SYSTR_POLICY_PERMIT },
+	{ SYS_nanosleep, SYSTR_POLICY_PERMIT },
 	{ SYS_sigprocmask, SYSTR_POLICY_PERMIT },
 
 #ifdef SYS_getentropy

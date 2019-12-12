@@ -1,4 +1,4 @@
-/* $OpenBSD: auth-passwd.c,v 1.46 2018/03/03 03:15:51 djm Exp $ */
+/* $OpenBSD: auth-passwd.c,v 1.47 2018/07/09 21:26:02 markus Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -46,22 +46,18 @@
 #include <stdarg.h>
 
 #include "packet.h"
-#include "buffer.h"
+#include "sshbuf.h"
+#include "ssherr.h"
 #include "log.h"
 #include "misc.h"
 #include "servconf.h"
-#include "key.h"
+#include "sshkey.h"
 #include "hostfile.h"
 #include "auth.h"
 #include "auth-options.h"
-#include "authfd.h"
 
-#ifdef WINDOWS
-#include "w32api_proxies.h"
-#include "misc_internal.h"
-#endif
 
-extern Buffer loginmsg;
+extern struct sshbuf *loginmsg;
 extern ServerOptions options;
 
 #ifdef HAVE_LOGIN_CAP
@@ -116,6 +112,14 @@ auth_password(struct ssh *ssh, const char *password)
 		return ok;
 	}
 #endif
+#ifdef WINDOWS
+	{
+		int windows_password_auth(const char *, const char *);
+		if (windows_password_auth(pw->pw_name, password) == 0)
+			return 0;
+		return ok;
+	}
+#endif
 #ifdef USE_PAM
 	if (options.use_pam)
 		return (sshpam_auth_passwd(authctxt, password) && ok);
@@ -137,7 +141,7 @@ auth_password(struct ssh *ssh, const char *password)
 static void
 warn_expiry(Authctxt *authctxt, auth_session_t *as)
 {
-	char buf[256];
+	int r;
 	quad_t pwtimeleft, actimeleft, daysleft, pwwarntime, acwarntime;
 
 	pwwarntime = acwarntime = TWO_WEEKS;
@@ -154,17 +158,17 @@ warn_expiry(Authctxt *authctxt, auth_session_t *as)
 #endif
 	if (pwtimeleft != 0 && pwtimeleft < pwwarntime) {
 		daysleft = pwtimeleft / DAY + 1;
-		snprintf(buf, sizeof(buf),
+		if ((r = sshbuf_putf(loginmsg,
 		    "Your password will expire in %lld day%s.\n",
-		    daysleft, daysleft == 1 ? "" : "s");
-		buffer_append(&loginmsg, buf, strlen(buf));
+		    daysleft, daysleft == 1 ? "" : "s")) != 0)
+			fatal("%s: buffer error: %s", __func__, ssh_err(r));
 	}
 	if (actimeleft != 0 && actimeleft < acwarntime) {
 		daysleft = actimeleft / DAY + 1;
-		snprintf(buf, sizeof(buf),
+		if ((r = sshbuf_putf(loginmsg,
 		    "Your account will expire in %lld day%s.\n",
-		    daysleft, daysleft == 1 ? "" : "s");
-		buffer_append(&loginmsg, buf, strlen(buf));
+		    daysleft, daysleft == 1 ? "" : "s")) != 0)
+			fatal("%s: buffer error: %s", __func__, ssh_err(r));
 	}
 }
 
@@ -203,6 +207,9 @@ sys_auth_passwd(struct ssh *ssh, const char *password)
 	/* Just use the supplied fake password if authctxt is invalid */
 	char *pw_password = authctxt->valid ? shadow_pw(pw) : pw->pw_passwd;
 
+	if (pw_password == NULL)
+		return 0;
+
 	/* Check for users with no password. */
 	if (strcmp(pw_password, "") == 0 && strcmp(password, "") == 0)
 		return (1);
@@ -223,118 +230,4 @@ sys_auth_passwd(struct ssh *ssh, const char *password)
 	    strcmp(encrypted_password, pw_password) == 0;
 }
 
-#elif defined(WINDOWS)
-HANDLE password_auth_token = NULL;
-HANDLE process_custom_lsa_auth(const char*, const char*, const char*);
-
-void 
-sys_auth_passwd_lsa(Authctxt *authctxt, const char *password)
-{
-	char  *lsa_auth_pkg = NULL;
-	wchar_t *lsa_auth_pkg_w = NULL;
-	int domain_len = 0, lsa_auth_pkg_len = 0;	
-	HKEY reg_key = 0;
-	REGSAM mask = STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY;
-		
-	if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\OpenSSH", 0, mask, &reg_key) == ERROR_SUCCESS) &&
-		(RegQueryValueExW(reg_key, L"LSAAuthenticationPackage", 0, NULL, NULL, &lsa_auth_pkg_len) == ERROR_SUCCESS)) {
-		lsa_auth_pkg_w = (wchar_t *) malloc(lsa_auth_pkg_len); // lsa_auth_pkg_len includes the null terminating character.
-		if (!lsa_auth_pkg_w)
-			fatal("%s: out of memory", __func__);
-
-		memset(lsa_auth_pkg_w, 0, lsa_auth_pkg_len);
-		if (RegQueryValueExW(reg_key, L"LSAAuthenticationPackage", 0, NULL, (LPBYTE)lsa_auth_pkg_w, &lsa_auth_pkg_len) == ERROR_SUCCESS) {
-			lsa_auth_pkg = utf16_to_utf8(lsa_auth_pkg_w);
-			if (!lsa_auth_pkg)
-				fatal("utf16_to_utf8 failed to convert lsa_auth_pkg_w:%ls", lsa_auth_pkg_w);
-			
-			password_auth_token = process_custom_lsa_auth(authctxt->pw->pw_name, password, lsa_auth_pkg);
-		}
-	}
-
-done:
-	if (lsa_auth_pkg_w)
-		free(lsa_auth_pkg_w);
-
-	if (lsa_auth_pkg)
-		free(lsa_auth_pkg);
-
-	if (reg_key)
-		RegCloseKey(reg_key);
-}
-
-/*
-* Authenticate on Windows 
-* - Call LogonUser and retrieve user token
-* - If LogonUser fails, then try the LSA (Local Security Authority) authentication.
-*/
-int 
-sys_auth_passwd(struct ssh *ssh, const char *password)
-{
-	wchar_t *user_utf16 = NULL, *pwd_utf16 = NULL, *unam_utf16 = NULL, *udom_utf16 = L".";
-	Authctxt *authctxt = ssh->authctxt;
-	HANDLE token = NULL;
-	WCHAR domain_upn[MAX_UPN_LEN + 1];
-	ULONG domain_upn_len = ARRAYSIZE(domain_upn);
-
-	user_utf16 = utf8_to_utf16(authctxt->pw->pw_name);
-	pwd_utf16 = utf8_to_utf16(password);
-	if (user_utf16 == NULL || pwd_utf16 == NULL) {
-		debug("out of memory");
-		goto done;
-	}
-	
-	/* the format for the user will be constrained to the output of get_passwd()
-	 * so only the only two formats are NetBiosDomain\SamAccountName which is 
-	 * a domain account or just SamAccountName in which is a local account */
-	
-	/* default assumption - local user */
-	unam_utf16 = user_utf16;
-
-	/* translate to domain user if format contains a backslash */
-	wchar_t * backslash = wcschr(user_utf16, L'\\');
-	if (backslash != NULL) {
-		/* attempt to format into upn format as this is preferred for login */
-		if (pTranslateNameW(user_utf16, NameSamCompatible, NameUserPrincipal, domain_upn, &domain_upn_len) != 0) {
-			unam_utf16 = domain_upn;
-			udom_utf16 = NULL;
-		}
-
-		/* user likely does not have upn so just use SamCompatibleName */
-		else {
-			debug3("%s: Unable to discover upn for user '%s': %d",
-				__FUNCTION__, user_utf16, GetLastError());
-			*backslash = '\0';
-			unam_utf16 = backslash + 1;
-			udom_utf16 = user_utf16;
-		}
-	}
-
-	if (pLogonUserExExW(unam_utf16, udom_utf16, pwd_utf16, LOGON32_LOGON_NETWORK_CLEARTEXT,
-	    LOGON32_PROVIDER_DEFAULT, NULL, &token, NULL, NULL, NULL, NULL) == TRUE)
-		password_auth_token = token;
-	else {
-		if (GetLastError() == ERROR_PASSWORD_MUST_CHANGE)
-			/*
-			* TODO - need to add support to force password change
-			* by sending back SSH_MSG_USERAUTH_PASSWD_CHANGEREQ
-			*/
-			error("password for user %s has expired", authctxt->pw->pw_name);
-		else {
-			debug("Windows authentication failed for user: %ls domain: %ls error:%d", unam_utf16, udom_utf16, GetLastError());
-
-			/* If LSA authentication package is configured then it will return the auth_token */
-			sys_auth_passwd_lsa(authctxt, password);
-		}
-	}
-	
-done:
-
-	if (user_utf16)
-		free(user_utf16);
-	if (pwd_utf16)
-		SecureZeroMemory(pwd_utf16, sizeof(wchar_t) * wcslen(pwd_utf16));
-
-	return (password_auth_token) ? 1 : 0;
-}
-#endif   /* WINDOWS */
+#endif

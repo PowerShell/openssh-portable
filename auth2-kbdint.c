@@ -1,4 +1,4 @@
-/* $OpenBSD: auth2-kbdint.c,v 1.8 2017/05/30 14:29:59 markus Exp $ */
+/* $OpenBSD: auth2-kbdint.c,v 1.10 2019/09/06 04:53:27 djm Exp $ */
 /*
  * Copyright (c) 2000 Markus Friedl.  All rights reserved.
  *
@@ -29,15 +29,17 @@
 
 #include <stdarg.h>
 
+#include <stdlib.h>
+#include <stdio.h>
+
 #include "xmalloc.h"
 #include "packet.h"
-#include "key.h"
 #include "hostfile.h"
 #include "auth.h"
 #include "log.h"
-#include "buffer.h"
 #include "misc.h"
 #include "servconf.h"
+#include "ssherr.h"
 
 /* import */
 extern ServerOptions options;
@@ -45,12 +47,13 @@ extern ServerOptions options;
 static int
 userauth_kbdint(struct ssh *ssh)
 {
-	int authenticated = 0;
+	int r, authenticated = 0;
 	char *lang, *devs;
 
-	lang = packet_get_string(NULL);
-	devs = packet_get_string(NULL);
-	packet_check_eom();
+	if ((r = sshpkt_get_cstring(ssh, &lang, NULL)) != 0 ||
+	    (r = sshpkt_get_cstring(ssh, &devs, NULL)) != 0 ||
+	    (r = sshpkt_get_end(ssh)) != 0)
+		fatal("%s: %s", __func__, ssh_err(r));
 
 	debug("keyboard-interactive devs %s", devs);
 

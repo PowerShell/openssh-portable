@@ -1,4 +1,4 @@
-/* $OpenBSD: hostfile.c,v 1.71 2017/05/31 09:15:42 deraadt Exp $ */
+/* $OpenBSD: hostfile.c,v 1.76 2019/07/07 01:05:00 dtucker Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -49,7 +49,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
 #include <unistd.h>
 
 #include "xmalloc.h"
@@ -163,13 +162,12 @@ int
 hostfile_read_key(char **cpp, u_int *bitsp, struct sshkey *ret)
 {
 	char *cp;
-	int r;
 
 	/* Skip leading whitespace. */
 	for (cp = *cpp; *cp == ' ' || *cp == '\t'; cp++)
 		;
 
-	if ((r = sshkey_read(ret, &cp)) != 0)
+	if (sshkey_read(ret, &cp) != 0)
 		return 0;
 
 	/* Skip trailing whitespace. */
@@ -524,11 +522,6 @@ int
 hostfile_replace_entries(const char *filename, const char *host, const char *ip,
     struct sshkey **keys, size_t nkeys, int store_hash, int quiet, int hash_alg)
 {
-#ifdef WINDOWS
-	error("replacing host file entries is not supported in Windows yet");
-	errno = ENOTSUP;
-	return -1;
-#else /* !WINDOWS */
 	int r, fd, oerrno = 0;
 	int loglevel = quiet ? SYSLOG_LEVEL_DEBUG1 : SYSLOG_LEVEL_VERBOSE;
 	struct host_delete_ctx ctx;
@@ -550,8 +543,8 @@ hostfile_replace_entries(const char *filename, const char *host, const char *ip,
 	/*
 	 * Prepare temporary file for in-place deletion.
 	 */
-	if ((r = asprintf(&temp, "%s.XXXXXXXXXXX", filename)) < 0 ||
-	    (r = asprintf(&back, "%s.old", filename)) < 0) {
+	if ((r = asprintf(&temp, "%s.XXXXXXXXXXX", filename)) == -1 ||
+	    (r = asprintf(&back, "%s.old", filename)) == -1) {
 		r = SSH_ERR_ALLOC_FAIL;
 		goto fail;
 	}
@@ -643,7 +636,6 @@ hostfile_replace_entries(const char *filename, const char *host, const char *ip,
 	if (r == SSH_ERR_SYSTEM_ERROR)
 		errno = oerrno;
 	return r;
-#endif /* !WINDOWS */
 }
 
 static int
@@ -669,14 +661,14 @@ hostkeys_foreach(const char *path, hostkeys_foreach_fn *callback, void *ctx,
     const char *host, const char *ip, u_int options)
 {
 	FILE *f;
-	char line[8192], oline[8192], ktype[128];
+	char *line = NULL, ktype[128];
 	u_long linenum = 0;
 	char *cp, *cp2;
 	u_int kbits;
 	int hashed;
 	int s, r = 0;
 	struct hostkey_foreach_line lineinfo;
-	size_t l;
+	size_t linesize = 0, l;
 
 	memset(&lineinfo, 0, sizeof(lineinfo));
 	if (host == NULL && (options & HKF_WANT_MATCH) != 0)
@@ -685,15 +677,16 @@ hostkeys_foreach(const char *path, hostkeys_foreach_fn *callback, void *ctx,
 		return SSH_ERR_SYSTEM_ERROR;
 
 	debug3("%s: reading file \"%s\"", __func__, path);
-	while (read_keyfile_line(f, path, line, sizeof(line), &linenum) == 0) {
+	while (getline(&line, &linesize, f) != -1) {
+		linenum++;
 		line[strcspn(line, "\n")] = '\0';
-		strlcpy(oline, line, sizeof(oline));
 
+		free(lineinfo.line);
 		sshkey_free(lineinfo.key);
 		memset(&lineinfo, 0, sizeof(lineinfo));
 		lineinfo.path = path;
 		lineinfo.linenum = linenum;
-		lineinfo.line = oline;
+		lineinfo.line = xstrdup(line);
 		lineinfo.marker = MRK_NONE;
 		lineinfo.status = HKF_STATUS_OK;
 		lineinfo.keytype = KEY_UNSPEC;
@@ -832,6 +825,8 @@ hostkeys_foreach(const char *path, hostkeys_foreach_fn *callback, void *ctx,
 			break;
 	}
 	sshkey_free(lineinfo.key);
+	free(lineinfo.line);
+	free(line);
 	fclose(f);
 	return r;
 }

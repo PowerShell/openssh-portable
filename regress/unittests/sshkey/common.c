@@ -1,4 +1,4 @@
-/* 	$OpenBSD: common.c,v 1.2 2015/01/08 13:10:58 djm Exp $ */
+/* 	$OpenBSD: common.c,v 1.3 2018/09/13 09:03:20 djm Exp $ */
 /*
  * Helpers for key API tests
  *
@@ -19,13 +19,17 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef WITH_OPENSSL
 #include <openssl/bn.h>
 #include <openssl/rsa.h>
 #include <openssl/dsa.h>
 #include <openssl/objects.h>
 #ifdef OPENSSL_HAS_NISTP256
 # include <openssl/ec.h>
-#endif
+#endif /* OPENSSL_HAS_NISTP256 */
+#endif /* WITH_OPENSSL */
+
+#include "openbsd-compat/openssl-compat.h"
 
 #include "../test_helper/test_helper.h"
 
@@ -70,6 +74,7 @@ load_text_file(const char *name)
 	return ret;
 }
 
+#ifdef WITH_OPENSSL
 BIGNUM *
 load_bignum(const char *name)
 {
@@ -81,4 +86,82 @@ load_bignum(const char *name)
 	sshbuf_free(buf);
 	return ret;
 }
+
+const BIGNUM *
+rsa_n(struct sshkey *k)
+{
+	const BIGNUM *n = NULL;
+
+	ASSERT_PTR_NE(k, NULL);
+	ASSERT_PTR_NE(k->rsa, NULL);
+	RSA_get0_key(k->rsa, &n, NULL, NULL);
+	return n;
+}
+
+const BIGNUM *
+rsa_e(struct sshkey *k)
+{
+	const BIGNUM *e = NULL;
+
+	ASSERT_PTR_NE(k, NULL);
+	ASSERT_PTR_NE(k->rsa, NULL);
+	RSA_get0_key(k->rsa, NULL, &e, NULL);
+	return e;
+}
+
+const BIGNUM *
+rsa_p(struct sshkey *k)
+{
+	const BIGNUM *p = NULL;
+
+	ASSERT_PTR_NE(k, NULL);
+	ASSERT_PTR_NE(k->rsa, NULL);
+	RSA_get0_factors(k->rsa, &p, NULL);
+	return p;
+}
+
+const BIGNUM *
+rsa_q(struct sshkey *k)
+{
+	const BIGNUM *q = NULL;
+
+	ASSERT_PTR_NE(k, NULL);
+	ASSERT_PTR_NE(k->rsa, NULL);
+	RSA_get0_factors(k->rsa, NULL, &q);
+	return q;
+}
+
+const BIGNUM *
+dsa_g(struct sshkey *k)
+{
+	const BIGNUM *g = NULL;
+
+	ASSERT_PTR_NE(k, NULL);
+	ASSERT_PTR_NE(k->dsa, NULL);
+	DSA_get0_pqg(k->dsa, NULL, NULL, &g);
+	return g;
+}
+
+const BIGNUM *
+dsa_pub_key(struct sshkey *k)
+{
+	const BIGNUM *pub_key = NULL;
+
+	ASSERT_PTR_NE(k, NULL);
+	ASSERT_PTR_NE(k->dsa, NULL);
+	DSA_get0_key(k->dsa, &pub_key, NULL);
+	return pub_key;
+}
+
+const BIGNUM *
+dsa_priv_key(struct sshkey *k)
+{
+	const BIGNUM *priv_key = NULL;
+
+	ASSERT_PTR_NE(k, NULL);
+	ASSERT_PTR_NE(k->dsa, NULL);
+	DSA_get0_key(k->dsa, NULL, &priv_key);
+	return priv_key;
+}
+#endif /* WITH_OPENSSL */
 
