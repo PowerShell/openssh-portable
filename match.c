@@ -1,4 +1,4 @@
-/* $OpenBSD: match.c,v 1.39 2019/03/06 22:14:23 dtucker Exp $ */
+/* $OpenBSD: match.c,v 1.40 2019/10/04 04:13:39 djm Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -177,8 +177,14 @@ match_usergroup_pattern_list(const char *string, const char *pattern)
 #ifdef HAVE_CYGWIN
 	/* Windows usernames may be Unicode and are not case sensitive */
 	return cygwin_ug_match_pattern_list(string, pattern);
-#elseif WINDOWS
-	if (match_pattern_list(ci->user, arg, 1) != 1)
+#elif WINDOWS
+	/* We support both domain/username and domain\\username format	*/
+	char *tmp = NULL;
+	if (tmp = strstr(pattern, "/"))
+		*tmp = '\\';
+
+	/* Windows usernames are case insensitive */
+	return match_pattern_list(string, pattern, 1);
 #else
 	/* Case insensitive match */
 	return match_pattern_list(string, pattern, 0);
@@ -248,7 +254,7 @@ match_user(const char *user, const char *host, const char *ipaddr,
 		return 0;
 	}
 
-	if ((p = strchr(pattern,'@')) == NULL)
+	if ((p = strchr(pattern, '@')) == NULL)
 		return match_pattern(user, pattern);
 
 	pat = xstrdup(pattern);

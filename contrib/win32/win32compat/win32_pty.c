@@ -38,30 +38,21 @@
 int
 is_conpty_supported()
 {
-	wchar_t system32_path[PATH_MAX] = { 0, };
-	wchar_t kernel32_dll_path[PATH_MAX] = { 0, };
-	HMODULE hm_kernelbase = NULL;
+	wchar_t *kernel32_dll_path = L"kernel32.dll";
+	HMODULE hm_kernel32 = NULL;
 	static int isConpty = -1;
 
 	if (isConpty != -1)
 		return isConpty;
 
 	isConpty = 0;
-	if (!GetSystemDirectoryW(system32_path, PATH_MAX)) {
-		error("failed to get system directory");
+	if ((hm_kernel32 = LoadLibraryExW(kernel32_dll_path, NULL, LOAD_LIBRARY_SEARCH_SYSTEM32)) == NULL) {
+		error("failed to load %S dll", kernel32_dll_path);
 		goto done;
 	}
 
-	wcscat_s(kernel32_dll_path, PATH_MAX, system32_path);
-	wcscat_s(kernel32_dll_path, PATH_MAX, L"\\Kernel32.dll");
-
-	if ((hm_kernelbase = LoadLibraryW(kernel32_dll_path)) == NULL) {
-		error("failed to load kernerlbase dll:%s", kernel32_dll_path);
-		goto done;
-	}
-
-	if (GetProcAddress(hm_kernelbase, "CreatePseudoConsole") == NULL) {
-		debug3("couldn't find CreatePseudoConsole() in kernerlbase dll");
+	if (GetProcAddress(hm_kernel32, "CreatePseudoConsole") == NULL) {
+		debug3("couldn't find CreatePseudoConsole() in %S dll", kernel32_dll_path);
 		goto done;
 	}
 
@@ -82,6 +73,7 @@ int exec_command_with_pty(int * pid, char* cmd, int in, int out, int err, unsign
 	int ret = -1;
 	HANDLE ttyh = (HANDLE)w32_fd_to_handle(ttyfd);
 	wchar_t * cmd_w = NULL;
+	unsigned long flags = 0;
 
 	if ((cmd_w = utf8_to_utf16(cmd)) == NULL) {
 		errno = ENOMEM;
@@ -130,8 +122,9 @@ int exec_command_with_pty(int * pid, char* cmd, int in, int out, int err, unsign
 		si.hStdError = ttyh;
 	}
 
+	flags = CREATE_NO_WINDOW;
 	debug3("pty commandline: %ls", pty_cmdline);
-	if (CreateProcessW(NULL, pty_cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+	if (CreateProcessW(NULL, pty_cmdline, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi)) {
 		if (register_child(pi.hProcess, pi.dwProcessId) == -1) {
 			TerminateProcess(pi.hProcess, 0);
 			CloseHandle(pi.hProcess);

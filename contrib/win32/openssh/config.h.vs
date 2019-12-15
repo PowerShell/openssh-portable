@@ -359,6 +359,12 @@
 /* Define to 1 if you have the `EVP_sha256' function. */
 #define HAVE_EVP_SHA256 1
 
+/* Define to 1 if you have the `EVP_sha384' function. */
+#define HAVE_EVP_SHA384 1
+
+/* Define to 1 if you have the `EVP_sha512' function. */
+#define HAVE_EVP_SHA512 1
+
 /* Define if you have ut_exit in utmp.h */
 /* #undef HAVE_EXIT_IN_UTMP */
 
@@ -1701,6 +1707,7 @@
 #define _PATH_SFTP_SERVER "sftp-server.exe"
 #define _PATH_SSH_PROGRAM "ssh.exe"
 #define _PATH_LS			"dir"
-#define FORK_NOT_SUPPORTED 1
+#define _PATH_DEVNULL "NUL"
+#define FORK_NOT_SUPPORTED
 #define HAVE_FREEZERO
 #define FILESYSTEM_NO_BACKSLASH

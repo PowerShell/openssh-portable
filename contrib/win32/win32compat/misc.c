@@ -319,7 +319,8 @@ w32_fopen_utf8(const char *input_path, const char *mode)
 	}
 
 	/* if opening null device, point to Windows equivalent */
-	if (strncmp(input_path, NULL_DEVICE, sizeof(NULL_DEVICE)) == 0) {
+	if (strncmp(input_path, NULL_DEVICE, sizeof(NULL_DEVICE)) == 0
+		|| strncmp(input_path, NULL_DEVICE_WIN, sizeof(NULL_DEVICE_WIN)) == 0) {
 		nonfs_dev = 1;
 		wpath = utf8_to_utf16(NULL_DEVICE_WIN);
 	}
@@ -417,7 +418,7 @@ char*
 				goto cleanup;
 			}
 			
-			if((actual_read + strlen(str_tmp)) >= n)
+			if((actual_read + (int)strlen(str_tmp)) >= n)
 				break;
 			if ((r = memcpy_s(cp, n - actual_read, str_tmp, strlen(str_tmp))) != 0) {
 				debug3("memcpy_s failed with error: %d.", r);
@@ -555,7 +556,7 @@ strmode(mode_t mode, char *p)
 		*p++ = '-';
 
 	const char *permissions = "****** ";	
-	for(int i = 0; i < strlen(permissions); i++)
+	for(int i = 0; i < (int)strlen(permissions); i++)
 		*p++ = permissions[i];
 	
 	*p = '\0';
@@ -832,7 +833,7 @@ w32_getcwd(char *buffer, int maxlen)
 		return NULL;
 	}
 
-	if (strlen(putf8) >= maxlen) {
+	if ((int)strlen(putf8) >= maxlen) {
 		errno = ERANGE;
 		free(putf8);
 		return NULL;
@@ -847,7 +848,7 @@ w32_getcwd(char *buffer, int maxlen)
 	if (chroot_path) {
 		/* ensure we are within chroot jail */
 		char c = buffer[chroot_path_len];
-		if ( strlen(buffer) < chroot_path_len ||
+		if ((int)strlen(buffer) < chroot_path_len ||
 		    memcmp(chroot_path, buffer, chroot_path_len) != 0 ||
 		    (c != '\0' && c!= '\\') ) {
 			errno = EOTHER;
@@ -1201,7 +1202,9 @@ char *
 readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags)
 {
 	int current_index = 0;
-	char ch;
+	int utf8_read = 0;
+	char utf8_char[4];
+	wchar_t ch;
 	wchar_t* wtmp = NULL;
 
 	if (outBufLen == 0) {
@@ -1209,7 +1212,7 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags)
 		return NULL;
 	}
 
-	while (_kbhit()) _getch();
+	while (_kbhit()) _getwch();
 
 	wtmp = utf8_to_utf16(prompt);
 	if (wtmp == NULL)
@@ -1218,37 +1221,52 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags)
 	_cputws(wtmp);
 	free(wtmp);
 
-	while (current_index < outBufLen - 1) {
-		ch = _getch();
+	while (current_index < (int)outBufLen - 1) {
+		ch = _getwch();
 		
-		if (ch == '\r') {
-			if (_kbhit()) _getch(); /* read linefeed if its there */
+		if (ch == L'\r') {
+			if (_kbhit()) _getwch(); /* read linefeed if its there */
 			break;
-		} else if (ch == '\n') {
+		} else if (ch == L'\n') {
 			break;
-		} else if (ch == '\b') { /* backspace */
+		} else if (ch == L'\b') { /* backspace */
 			if (current_index > 0) {
 				if (flags & RPP_ECHO_ON)
-					printf_s("%c \b", ch);
+					wprintf_s(L"%c \b", ch);
 
-				current_index--; /* overwrite last character */
+				/* overwrite last character - remove any utf8 extended chars */
+				while (current_index > 0 && (outBuf[current_index - 1] & 0xC0) == 0x80)
+					current_index--;
+
+				/* overwrite last character - remove first utf8 byte */
+				if (current_index > 0)
+					current_index--;
 			}
-		} else if (ch == '\003') { /* exit on Ctrl+C */
+		} else if (ch == L'\003') { /* exit on Ctrl+C */
 			fatal("");
 		} else {
 			if (flags & RPP_SEVENBIT)
 				ch &= 0x7f;
 
-			if (isalpha((unsigned char)ch)) {
+			if (iswalpha(ch)) {
 				if(flags & RPP_FORCELOWER)
-					ch = tolower((unsigned char)ch);
+					ch = towlower(ch);
 				if(flags & RPP_FORCEUPPER)
-					ch = toupper((unsigned char)ch);
+					ch = towupper(ch);
 			}
 
-			outBuf[current_index++] = ch;
+			/* convert unicode to utf8 characters */
+			int utf8_char_size = sizeof(utf8_char);
+			if ((utf8_read = WideCharToMultiByte(CP_UTF8, 0, &ch, 1, utf8_char, sizeof(utf8_char), NULL, NULL)) == 0)
+				fatal("character conversion failed");
+
+			/* append to output buffer if the characters fit */
+			if (current_index + utf8_read >= outBufLen - 1) break;
+			memcpy(&outBuf[current_index], utf8_char, utf8_read);
+			current_index += utf8_read;
+
 			if(flags & RPP_ECHO_ON)
-				printf_s("%c", ch);
+				wprintf_s(L"%c", ch);
 		}
 	}
 
@@ -1391,7 +1409,7 @@ is_absolute_path(const char *path)
 	if(*path == '\"' || *path == '\'') /* skip double quote if path is "c:\abc" */
 		path++;
 
-	if (*path == '/' || *path == '\\' || (*path != '\0' && isalpha(*path) && path[1] == ':') ||
+	if (*path == '/' || *path == '\\' || (*path != '\0' && __isascii(*path) && isalpha(*path) && path[1] == ':') ||
 	    ((strlen(path) >= strlen(PROGRAM_DATA)) && (memcmp(path, PROGRAM_DATA, strlen(PROGRAM_DATA)) == 0)))
 		retVal = 1;
 
@@ -1710,10 +1728,10 @@ build_exec_command(const char * command)
 }
 
 /*
- * cmd is internally decoarated with a set of '"'
- * to account for any spaces within the commandline
- * the double quotes and backslash is escaped if needed 
- * this decoration is done only when additional arguments are passed in argv
+* cmd is internally decoarated with a set of '"'
+* to account for any spaces within the commandline
+* the double quotes and backslash is escaped if needed
+* this decoration is done only when additional arguments are passed in argv
 */
 char *
 build_commandline_string(const char* cmd, char *const argv[], BOOLEAN prepend_module_path)
@@ -1738,6 +1756,7 @@ build_commandline_string(const char* cmd, char *const argv[], BOOLEAN prepend_mo
 	if (is_bash_test_env()) {
 		memset(path, 0, path_len + 1);
 		bash_to_win_path(cmd, path, path_len + 1);
+		path_len = (DWORD)strlen(path);
 	}
 
 	if (!is_absolute_path(path) && prepend_module_path)
@@ -1787,7 +1806,9 @@ build_commandline_string(const char* cmd, char *const argv[], BOOLEAN prepend_mo
 		errno = ENOMEM;
 		goto cleanup;
 	}
+
 	t = cmdline;
+
 	*t++ = '\"';
 	if (add_module_path) {
 		/* add current module path to start if needed */
@@ -1795,10 +1816,27 @@ build_commandline_string(const char* cmd, char *const argv[], BOOLEAN prepend_mo
 		t += strlen(__progdir);
 		*t++ = '\\';
 	}
+
 	if (path[0] != '\"') {
-		memcpy(t, path, path_len);
-		t += path_len;
-		*t++ = '\"';
+		/* If path is <executable_path> <arg> then we should add double quotes after <executable_path> i.e., "<executable_path>" <arg> should be passed to CreateProcess().
+		* Example - If path is C:\cygwin64\bin\bash.exe /cygdrive/e/openssh-portable-latestw_all/openssh-portable/regress/scp-ssh-wrapper.sh then
+		*           we should pass "C:\cygwin64\bin\bash.exe" /cygdrive/e/openssh-portable-latestw_all/openssh-portable/regress/scp-ssh-wrapper.sh
+		*           to the CreateProcess() otherwise CreateProcess() will fail with error code 2.
+		*/
+		if (strstr(path, ".exe") && (tmp = strstr(strstr(path, ".exe"), " ")))
+		{
+			size_t tmp_pos = tmp - path;
+			memcpy(t, path, tmp_pos);
+			t += tmp_pos;
+			*t++ = '\"';
+			memcpy(t, tmp, strlen(path) - tmp_pos);
+			t += (strlen(path) - tmp_pos);
+		}
+		else {
+			memcpy(t, path, path_len);
+			t += path_len;
+			*t++ = '\"';
+		}
 	}
 	else {
 		/*path already contains "*/
@@ -1869,6 +1907,7 @@ cleanup:
 		free(cmdline);
 	return ret;
 }
+
 BOOL
 is_bash_test_env()
 {
@@ -1993,4 +2032,15 @@ cleanup:
 		free(command_w);
 
 	return ret;
+}
+
+char *
+strrstr(const char *inStr, const char *pattern)
+{
+	char *tmp = NULL, *last = NULL;
+	tmp = (char *) inStr;
+	while(tmp = strstr(tmp, pattern))
+		last = tmp++;
+
+	return last;
 }

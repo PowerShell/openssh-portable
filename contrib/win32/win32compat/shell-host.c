@@ -591,7 +591,7 @@ SendSetCursor(HANDLE hInput, int X, int Y)
 	int out = 0;
 	char formatted_output[255];
 
-	out = _snprintf_s(formatted_output, sizeof(formatted_output), _TRUNCATE, "\033[%d;%dH", Y, X);
+	out = _snprintf_s(formatted_output, sizeof(formatted_output), _TRUNCATE, "\033[%d;%dH", Y - ViewPortY, X);
 	if (out > 0 && bUseAnsiEmulation)
 		WriteFile(hInput, formatted_output, out, &wr, NULL);
 }
@@ -1486,7 +1486,7 @@ wmain(int ac, wchar_t **av)
 	while (*exec_command != L'\0' && *exec_command == L' ')
 		exec_command++;
 
-	if (exec_command == L'\0')
+	if (*exec_command == L'\0')
 		goto usage;
 
 	if (with_pty)
