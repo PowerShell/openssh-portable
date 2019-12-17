@@ -290,6 +290,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		errno = ENOMEM;
 		goto cleanup;
 	}
+
 	sprintf_s(shell, shell_len, "\"%s\"", s->pw->pw_shell);
 	debug3("shell: %s", shell);
 
