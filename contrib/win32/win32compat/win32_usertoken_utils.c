@@ -742,6 +742,17 @@ int lookup_principal_name(const wchar_t * sam_account_name, wchar_t * user_princ
 	if (seperator == NULL)
 		return -1;
 
+	wchar_t computer_name[CNLEN + 1];
+	DWORD computer_name_size = ARRAYSIZE(computer_name);
+	if (GetComputerNameW(computer_name, &computer_name_size) == 0) {
+		return -1;
+	}
+
+	/* do not try to resolve for standard local user name */
+	if (_wcsicmp(seperator + 1, computer_name) == 0) {
+		return -1;
+	}
+
 	/* try explicit lookup */
 	if (pTranslateNameW(sam_account_name, NameSamCompatible, NameUserPrincipal, domain_upn, &domain_upn_len) != 0) {
 		wcscpy_s(user_principal_name, MAX_UPN_LEN + 1, domain_upn);
