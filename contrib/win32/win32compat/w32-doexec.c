@@ -375,7 +375,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 					shell, shell_option, exec_command);
 			} else {
 				sprintf_s(posix_cmd_input, posix_cmd_input_len, "%s",
-					shell);
+					shell); 
 			}
 
 			spawn_argv[0] = posix_cmd_input;
