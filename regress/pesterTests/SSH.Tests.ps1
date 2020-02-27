@@ -360,15 +360,13 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         }
 
         It "$tC.$tI - ProxyCommand with file name only" {
-            & cmd /c "ssh -v -o ProxyCommand=`"cmd.exe /c echo test string for invalid proxy 1>&2`" abc 2>$stderrFile"
-            sleep 3
+            iex "cmd /c `"ssh -v -o ProxyCommand=`"`"cmd.exe /c echo test string for invalid proxy 1>&2`"`" abc 2>$stderrFile`""
             $stderrFile | Should Contain "test string for invalid proxy"
             $stderrFile | Should Contain "Connection closed by remote host"
         }
 
         It "$tC.$tI - ProxyCommand with absolute path to the file" {
-            & cmd /c "ssh -v -o ProxyCommand=`"$($env:ComSpec) /c echo test string for invalid proxy 1>&2`" abc 2>$stderrFile"
-            sleep 3
+            iex "cmd /c `"ssh -v -o ProxyCommand=`"`"$($env:ComSpec) /c echo test string for invalid proxy 1>&2`"`" abc 2>$stderrFile`""
             $stderrFile | Should Contain "test string for invalid proxy"
             $stderrFile | Should Contain "Connection closed by remote host"
         }
