@@ -1100,7 +1100,8 @@ fileio_close(struct w32_io* pio)
 	if (pio->type == NONSOCK_SYNC_FD || FILETYPE(pio) == FILE_TYPE_CHAR)
 		return syncio_close(pio);
 
-	if (pio->internal.state == SOCK_LISTENING) {
+	if ((pio->internal.state == SOCK_LISTENING) ||
+		(pio->internal.state == SOCK_READY)) {
 		DisconnectNamedPipe(WINHANDLE(pio));
 		if (pio->read_overlapped.hEvent)
 			CloseHandle(pio->read_overlapped.hEvent);
@@ -1454,8 +1455,8 @@ fileio_bind(struct w32_io* pio, const struct sockaddr *name, int namelen)
 		PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
 		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
 		LISTEN_BACKLOG,
-		4096,
-		4096,
+		READ_BUFFER_SIZE,
+		WRITE_BUFFER_SIZE,
 		0,
 		NULL);
 	if (pipe == INVALID_HANDLE_VALUE) {
