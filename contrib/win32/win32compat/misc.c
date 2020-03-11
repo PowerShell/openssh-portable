@@ -782,7 +782,7 @@ int
 w32_unlink(const char *path)
 {
 	/* ignore pipe path */
-	if (strlen(path) >= 2 && memcmp(path, "//", 2) == 0) {
+	if (path != NULL && strlen(path) >= 2 && memcmp(path, "//", 2) == 0) {
 		return 0;
 	}
 
