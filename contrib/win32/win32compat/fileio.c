@@ -43,6 +43,7 @@
 #include "inc\utf.h"
 #include "inc\fcntl.h"
 #include "inc\pwd.h"
+#include "inc\sys\un.h"
 #include "misc_internal.h"
 #include "debug.h"
 #include <Sddl.h>
@@ -68,6 +69,10 @@
 /*MAX length attribute string looks like 0xffffffff*/
 #define MAX_ATTRIBUTE_LENGTH 10
 
+/* Listen backlog for forwarding sockets */
+#define LISTEN_BACKLOG 128
+
+#define errno_from_PipeLastError() errno_from_PipeError(GetLastError())
 #define errno_from_Win32LastError() errno_from_Win32Error(GetLastError())
 
 struct createFile_flags {
@@ -81,6 +86,22 @@ struct createFile_flags {
 int syncio_initiate_read(struct w32_io* pio);
 int syncio_initiate_write(struct w32_io* pio, DWORD num_bytes);
 int syncio_close(struct w32_io* pio);
+
+/* maps PipeError to errno */
+int
+errno_from_PipeError(int pipe_error)
+{
+	switch (pipe_error) {
+	case ERROR_PIPE_LISTENING:
+		return EWOULDBLOCK;
+	case ERROR_BROKEN_PIPE:
+		return ECONNABORTED;
+	case ERROR_PIPE_NOT_CONNECTED:
+		return ENOTCONN;
+	default:
+		return pipe_error;
+	}
+}
 
 /* maps Win32 error to errno */
 int
@@ -136,16 +157,16 @@ fileio_connect(struct w32_io* pio, char* name)
 		errno = ENOMEM;
 		return -1;
 	}
-	
+
 	do {
 		h = CreateFileW(name_w, GENERIC_READ | GENERIC_WRITE, 0,
 			NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, NULL);
-	
+
 		if (h != INVALID_HANDLE_VALUE)
 			break;
 		if (GetLastError() != ERROR_PIPE_BUSY)
 			break;
-	
+
 		debug4("waiting for agent connection, retrying after 1 sec");
 		if ((ret = wait_for_any_event(NULL, 0, 1000) != 0) != 0)
 			goto cleanup;
@@ -165,7 +186,7 @@ fileio_connect(struct w32_io* pio, char* name)
 		ret = -1;
 		goto cleanup;
 	}
-	
+
 	pio->handle = h;
 	h = INVALID_HANDLE_VALUE;
 
@@ -288,7 +309,7 @@ st_mode_to_file_att(int mode, wchar_t * attributes)
 		if ((mode & S_IXOTH) != 0)
 			att |= FILE_GENERIC_EXECUTE;
 		swprintf_s(attributes, MAX_ATTRIBUTE_LENGTH, L"%#lx", att);
-		break;		
+		break;
 	}
 	return 0;
 }
@@ -337,7 +358,7 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 	case O_RDWR:
 		cf_flags->dwDesiredAccess = GENERIC_READ | GENERIC_WRITE;
 		break;
-	}	
+	}
 	cf_flags->dwCreationDisposition = OPEN_EXISTING;
 	if (c_s_flags & O_TRUNC)
 		cf_flags->dwCreationDisposition = TRUNCATE_EXISTING;
@@ -412,7 +433,7 @@ cleanup:
 
 	if (sid_utf16)
 		LocalFree(sid_utf16);
-		
+
 	return ret;
 }
 
@@ -421,7 +442,7 @@ int
 file_in_chroot_jail(HANDLE handle) {
 	/* ensure final path is within chroot */
 	wchar_t *final_path;
-	
+
 	final_path = get_final_path_by_handle(handle);
 	if (!final_path)
 		return 0;
@@ -470,11 +491,11 @@ fileio_open(const char *path_utf8, int flags, mode_t mode)
 	if (createFile_flags_setup(flags, mode, &cf_flags) == -1) {
 		debug3("createFile_flags_setup() failed.");
 		goto cleanup;
-	}	
+	}
 
 	handle = CreateFileW(path_utf16, cf_flags.dwDesiredAccess, cf_flags.dwShareMode,
 		&cf_flags.securityAttributes, cf_flags.dwCreationDisposition,
-		cf_flags.dwFlagsAndAttributes, NULL);	
+		cf_flags.dwFlagsAndAttributes, NULL);
 
 	if (handle == INVALID_HANDLE_VALUE) {
 		errno = errno_from_Win32LastError();
@@ -482,12 +503,12 @@ fileio_open(const char *path_utf8, int flags, mode_t mode)
 		goto cleanup;
 	}
 
-	if (chroot_pathw && !nonfs_dev && !file_in_chroot_jail(handle)) {	
+	if (chroot_pathw && !nonfs_dev && !file_in_chroot_jail(handle)) {
 		debug3("%s is not in chroot jail", path_utf8);
 		errno = EACCES;
 		goto cleanup;
 	}
-	
+
 	pio = (struct w32_io*)malloc(sizeof(struct w32_io));
 	if (pio == NULL) {
 		CloseHandle(handle);
@@ -552,7 +573,7 @@ fileio_ReadFileEx(struct w32_io* pio, unsigned int bytes_requested)
 	if (ReadFileEx(WINHANDLE(pio), pio->read_details.buf, pio->read_details.buf_size,
 		&pio->read_overlapped, &ReadCompletionRoutine))
 		pio->read_details.pending = TRUE;
-	else {
+	else if (errno_from_Win32LastError() != ERROR_PIPE_LISTENING) {
 		errno = errno_from_Win32LastError();
 		debug3("ReadFileEx() ERROR:%d, io:%p", GetLastError(), pio);
 		return -1;
@@ -565,7 +586,6 @@ fileio_ReadFileEx(struct w32_io* pio, unsigned int bytes_requested)
 int
 fileio_read(struct w32_io* pio, void *dst, size_t max_bytes)
 {
-	int bytes_copied;
 	errno_t r = 0;
 
 	debug5("read - io:%p remaining:%d", pio, pio->read_details.remaining);
@@ -584,46 +604,79 @@ fileio_read(struct w32_io* pio, void *dst, size_t max_bytes)
 		return -1;
 	}
 
-	if (fileio_is_io_available(pio, TRUE) == FALSE) {
-		if (pio->type == NONSOCK_SYNC_FD || FILETYPE(pio) == FILE_TYPE_CHAR) {
-			if (-1 == syncio_initiate_read(pio))
-				return -1;
-		} else {
-			if (-1 == fileio_ReadFileEx(pio, (int)max_bytes)) {
-				if ((FILETYPE(pio) == FILE_TYPE_PIPE)
-					&& (errno == ERROR_BROKEN_PIPE)) {
-					/* write end of the pipe closed */
-					debug3("read - no more data, io:%p", pio);
-					errno = 0;
-					return 0;
-				}
-				/* on W2012, ReadFileEx on file throws a synchronous EOF error*/
-				else if ((FILETYPE(pio) == FILE_TYPE_DISK)
-					&& (errno == ERROR_HANDLE_EOF)) {
-					debug3("read - no more data, io:%p", pio);
-					errno = 0;
-					return 0;
-				}
-				return -1;
-			}
+	/* if we have some buffer copy it and return #bytes copied */
+	if (pio->read_details.remaining) {
+		int bytes_copied = min((DWORD)max_bytes, pio->read_details.remaining);
+		if ((r = memcpy_s(dst, max_bytes, pio->read_details.buf + pio->read_details.completed, bytes_copied)) != 0) {
+			debug3("memcpy_s failed with error: %d.", r);
+			return -1;
 		}
+		pio->read_details.remaining -= bytes_copied;
+		pio->read_details.completed += bytes_copied;
+		debug4("read - io:%p read: %d remaining: %d", pio, bytes_copied,
+			pio->read_details.remaining);
+		return bytes_copied;
+	}
 
-		/* pick up APC if IO has completed */
-		SleepEx(0, TRUE);
-
-		if (w32_io_is_blocking(pio)) {
-			while (fileio_is_io_available(pio, TRUE) == FALSE) {
-				if (-1 == wait_for_any_event(NULL, 0, INFINITE))
-					return -1;
-			}
+	/* if there was an error on async call, return */
+	if (pio->read_details.error) {
+		errno = errno_from_Win32Error(pio->read_details.error);
+		/*write end of the pipe is closed or pipe broken or eof reached*/
+		if ((pio->read_details.error == ERROR_BROKEN_PIPE) ||
+			(pio->read_details.error == ERROR_HANDLE_EOF) ||
+			(pio->read_details.error == ERROR_OPERATION_ABORTED)) {
+			debug4("read - (2) no more data, io:%p", pio);
+			errno = 0;
+			pio->read_details.error = 0;
+			return 0;
 		}
-		else if (pio->read_details.pending) {
-			errno = EAGAIN;
-			debug4("read - IO is pending, io:%p", pio);
+		debug3("read - ERROR from cb :%d, io:%p", errno, pio);
+		pio->read_details.error = 0;
+		return -1;
+	}
+
+	if (pio->type == NONSOCK_SYNC_FD || FILETYPE(pio) == FILE_TYPE_CHAR) {
+		if (-1 == syncio_initiate_read(pio))
+			return -1;
+	} else {
+		if (-1 == fileio_ReadFileEx(pio, (int)max_bytes)) {
+			if ((FILETYPE(pio) == FILE_TYPE_PIPE) &&
+				((errno == ERROR_BROKEN_PIPE) ||
+				(errno == ERROR_PIPE_NOT_CONNECTED))) {
+				/* write end of the pipe closed */
+				debug3("read - no more data, io:%p", pio);
+				errno = 0;
+				return 0;
+			}
+			/* on W2012, ReadFileEx on file throws a synchronous EOF error*/
+			else if ((FILETYPE(pio) == FILE_TYPE_DISK)
+				&& (errno == ERROR_HANDLE_EOF)) {
+				debug3("read - no more data, io:%p", pio);
+				errno = 0;
+				return 0;
+			}
 			return -1;
 		}
 	}
 
+	/* pick up APC if IO has completed */
+	SleepEx(0, TRUE);
+
+	if (w32_io_is_blocking(pio)) {
+		while (fileio_is_io_available(pio, TRUE) == FALSE) {
+			if (-1 == wait_for_any_event(NULL, 0, INFINITE))
+				return -1;
+		}
+	} else if (pio->read_details.pending) {
+		errno = EAGAIN;
+		debug4("read - IO is pending, io:%p", pio);
+		return -1;
+	}
+
+	/*
+	 * by this time we should have some bytes in internal buffer
+	 * or an error from callback
+	 */
 	if (pio->read_details.error) {
 		errno = errno_from_Win32Error(pio->read_details.error);
 		/*write end of the pipe is closed or pipe broken or eof reached*/
@@ -639,16 +692,23 @@ fileio_read(struct w32_io* pio, void *dst, size_t max_bytes)
 		return -1;
 	}
 
-	bytes_copied = min((DWORD)max_bytes, pio->read_details.remaining);
-	if ((r = memcpy_s(dst, max_bytes, pio->read_details.buf + pio->read_details.completed, bytes_copied)) != 0) {
-		debug3("memcpy_s failed with error: %d.", r);
+	if (pio->read_details.remaining) {
+		int bytes_copied = min((DWORD)max_bytes, pio->read_details.remaining);
+		if ((r = memcpy_s(dst, max_bytes, pio->read_details.buf + pio->read_details.completed, bytes_copied)) != 0) {
+			debug3("memcpy_s failed with error: %d.", r);
+			return -1;
+		}
+		pio->read_details.remaining -= bytes_copied;
+		pio->read_details.completed += bytes_copied;
+		debug4("read - io:%p read: %d remaining: %d", pio, bytes_copied,
+			pio->read_details.remaining);
+		return bytes_copied;
+	} else {
+		/* this should not happen */
+		errno = EOTHER;
+		debug3("recv - (2) ERROR:Unexpected IO state, io:%p", pio);
 		return -1;
 	}
-	pio->read_details.remaining -= bytes_copied;
-	pio->read_details.completed += bytes_copied;
-	debug4("read - io:%p read: %d remaining: %d", pio, bytes_copied,
-		pio->read_details.remaining);
-	return bytes_copied;
 }
 
 VOID CALLBACK 
@@ -959,7 +1019,7 @@ fileio_fdopen_disk(struct w32_io* pio, const char *mode)
 {
 	wchar_t *file_path, *wmode = NULL;
 	FILE* ret = NULL;
-	
+
 	debug4("fdopen - io:%p", pio);
 
 	if ((wmode = utf8_to_utf16(mode)) == NULL)
@@ -968,7 +1028,7 @@ fileio_fdopen_disk(struct w32_io* pio, const char *mode)
 	file_path = get_final_path_by_handle(pio->handle);
 	if (!file_path) 
 		goto cleanup;
-	
+
 	/* 
 	 * close the win32 handle right away and remove entry from table
 	 * otherwise, wfopen will get an access denied due to sharing violation
@@ -1040,6 +1100,12 @@ fileio_close(struct w32_io* pio)
 	if (pio->type == NONSOCK_SYNC_FD || FILETYPE(pio) == FILE_TYPE_CHAR)
 		return syncio_close(pio);
 
+	if (pio->internal.state == SOCK_LISTENING) {
+		DisconnectNamedPipe(WINHANDLE(pio));
+		if (pio->read_overlapped.hEvent)
+			CloseHandle(pio->read_overlapped.hEvent);
+	}
+
 	/* handle can be null on AF_UNIX sockets that are not yet connected */
 	if (WINHANDLE(pio) == 0 || WINHANDLE(pio) == INVALID_HANDLE_VALUE) {
 		free(pio);
@@ -1066,6 +1132,8 @@ fileio_close(struct w32_io* pio)
 	/* let queued APCs (if any) drain */
 	SleepEx(0, TRUE);
 	CloseHandle(WINHANDLE(pio));
+	if (pio->internal.context)
+		free(pio->internal.context);
 	if (pio->read_details.buf)
 		free(pio->read_details.buf);
 	if (pio->write_details.buf)
@@ -1078,7 +1146,26 @@ fileio_close(struct w32_io* pio)
 BOOL
 fileio_is_io_available(struct w32_io* pio, BOOL rd)
 {
-	if (rd) {
+	if (pio->internal.state == SOCK_LISTENING) {
+		DWORD numBytes = 0;
+
+		if (pio->read_details.pending) {
+			/* if there is an error to be picked up */
+			if (pio->read_details.error)
+				return TRUE;
+			else
+				return FALSE;
+		}
+
+		if (GetOverlappedResult(WINHANDLE(pio), &pio->read_overlapped, &numBytes, FALSE)) {
+			return TRUE;
+		} else if (GetLastError() != ERROR_IO_INCOMPLETE) {
+			pio->read_details.error = WSAGetLastError();
+			return TRUE;
+		}
+
+		return FALSE;
+	} else if (rd) {
 		if (pio->read_details.remaining || pio->read_details.error)
 			return TRUE;
 		else
@@ -1235,7 +1322,7 @@ fileio_symlink(const char *target, const char *linkpath)
 	}
 
 	/* First resolve linkpath */
-	if (NULL == (linkpath_resolved = resolved_path_utf8(linkpath)))	
+	if (NULL == (linkpath_resolved = resolved_path_utf8(linkpath)))
 		goto cleanup;
 
 	/* Relative targets are relative to the link and not our current directory
@@ -1249,7 +1336,7 @@ fileio_symlink(const char *target, const char *linkpath)
 		char *tmp = NULL;
 
 		/* copy the relative target to the end of the link's parent */
-		if (tmp = strrchr(target_modified, '\\'))			
+		if (tmp = strrchr(target_modified, '\\'))
 			strcpy_s(tmp + 1, _countof(target_modified) - (tmp + 1 - target_modified), target);
 		else
 			strcpy_s(target_modified, _countof(target_modified), target);
@@ -1294,7 +1381,7 @@ fileio_symlink(const char *target, const char *linkpath)
 			goto cleanup;
 		}
 	}
-	
+
 	ret = 0;
 cleanup:
 
@@ -1343,4 +1430,140 @@ cleanup:
 		free(newpath_utf16);
 
 	return ret;
+}
+
+int
+fileio_shutdown(struct w32_io* pio, int how)
+{
+	if (CancelIo(WINHANDLE(pio)) == 0) {
+		error("CancelIo failed, WSALastError: %d", WSAGetLastError());
+		return -1;
+	}
+
+	return 0;
+}
+
+int
+fileio_bind(struct w32_io* pio, const struct sockaddr *name, int namelen)
+{
+	HANDLE pipe = INVALID_HANDLE_VALUE;
+	struct sockaddr_un* addr = (struct sockaddr_un*)name;
+	size_t size = strlen(addr->sun_path)+1;
+
+	pipe = CreateNamedPipeA(addr->sun_path,
+		PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+		LISTEN_BACKLOG,
+		4096,
+		4096,
+		0,
+		NULL);
+	if (pipe == INVALID_HANDLE_VALUE) {
+		errno = errno_from_Win32LastError();
+		debug3("bind - CreateNamedPipe() ERROR:%d", errno);
+		return -1;
+	}
+
+	pio->handle = pipe;
+	pio->internal.context = malloc(size);
+	strlcpy(pio->internal.context, addr->sun_path, size);
+	return 0;
+}
+
+int
+fileio_listen(struct w32_io* pio, int backlog)
+{
+	pio->read_overlapped.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	if ((pio->read_overlapped.hEvent) == NULL) {
+		errno = ENOMEM;
+		debug3("listen - CreateEvent() ERROR:%d, io:%p", errno, pio);
+		return -1;
+	}
+
+	if (ConnectNamedPipe(WINHANDLE(pio), &(pio->read_overlapped)) != FALSE) {
+		errno = errno_from_Win32LastError();
+		debug3("listen - ConnectNamedPipe() ERROR:%d", errno);
+		return -1;
+	}
+
+	switch (GetLastError()) {
+	case ERROR_IO_PENDING: // The overlapped connection in progress.
+		break;
+	case ERROR_PIPE_CONNECTED: // Client is already connected, so signal an event.
+		pio->read_details.pending = TRUE;
+		break;
+	default: // If an error occurs during the connect operation...
+		debug3("ConnectNamedPipe failed with %d.\n", GetLastError());
+		return -1;
+	}
+
+	pio->internal.state = SOCK_LISTENING;
+	return 0;
+}
+
+struct w32_io*
+fileio_accept(struct w32_io* pio, struct sockaddr* addr, int* addrlen)
+{
+	struct sockaddr_un listen_addr;
+	struct w32_io *fork_io = NULL;
+
+	if (w32_io_is_blocking(pio)) {
+		/* block until accept io is complete */
+		while (FALSE == fileio_is_io_available(pio, TRUE))
+			if (-1 == wait_for_any_event(&pio->read_overlapped.hEvent,
+				1, INFINITE))
+				return NULL;
+	} else {
+		/* if i/o is not ready */
+		if (FALSE == fileio_is_io_available(pio, TRUE)) {
+			errno = EAGAIN;
+			return NULL;
+		}
+	}
+
+	pio->read_details.pending = FALSE;
+	ResetEvent(pio->read_overlapped.hEvent);
+
+	if (pio->read_details.error) {
+		errno = errno_from_PipeError(pio->read_details.error);
+		debug3("accept - ERROR: async io completed with error: %d, io:%p", pio->read_details.error, pio);
+		pio->read_details.error = 0;
+		return NULL;
+	}
+
+	fork_io = fileio_afunix_socket();
+	if (fork_io == NULL) {
+		errno = ENOMEM;
+		debug3("accept - fork ERROR:%d, io:%p", errno, pio);
+		return NULL;
+	}
+
+	strcpy(listen_addr.sun_path, pio->internal.context);
+	if (fileio_bind(fork_io, &listen_addr, sizeof(listen_addr)) == -1) {
+		free(fork_io);
+		debug3("accept - bind ERROR:%d, io:%p", errno, pio);
+		return NULL;
+	}
+
+	if (fileio_listen(fork_io, LISTEN_BACKLOG) == -1) {
+		free(fork_io);
+		debug3("accept - listen ERROR:%d, io:%p", errno, pio);
+		return NULL;
+	}
+
+	pio->internal.state = SOCK_READY;
+	CloseHandle(pio->read_overlapped.hEvent);
+	return fork_io;
+}
+
+int
+fileio_getsockname(struct w32_io* pio, struct sockaddr* name, int* namelen) {
+	if (name == NULL || namelen == NULL) {
+		return 0;
+	}
+
+	struct sockaddr_un* addr = (struct sockaddr_un*)name;
+	addr->sun_family = AF_UNIX;
+	strcpy(addr->sun_path, pio->internal.context);
+	return 0;
 }

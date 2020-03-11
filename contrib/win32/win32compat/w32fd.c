@@ -298,9 +298,9 @@ w32_socket(int domain, int type, int protocol)
 	errno = 0;
 	if (min_index == -1)
 		return -1;
-	
+
 	if (domain == AF_UNIX && type == SOCK_STREAM) {
-		pio = fileio_afunix_socket();		
+		pio = fileio_afunix_socket();
 		if (pio == NULL)
 			return -1;
 		pio->type = NONSOCK_FD;
@@ -309,7 +309,7 @@ w32_socket(int domain, int type, int protocol)
 		if (pio == NULL)
 			return -1;
 		pio->type = SOCK_FD;
-	}	
+	}
 
 	fd_table_set(pio, min_index);
 	debug4("socket:%d, socktype:%d, io:%p, fd:%d ", pio->sock, type, pio, min_index);
@@ -320,7 +320,6 @@ int
 w32_accept(int fd, struct sockaddr* addr, int* addrlen)
 {
 	CHECK_FD(fd);
-	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
 	int min_index = fd_table_get_min_index();
 	struct w32_io* pio = NULL;
 
@@ -328,16 +327,20 @@ w32_accept(int fd, struct sockaddr* addr, int* addrlen)
 		return -1;
 
 	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
-		errno = ENOTSUP;
-		verbose("Unix domain server sockets are not supported");
-		return -1;
+		struct w32_io* fork_pio = fileio_accept(fd_table.w32_ios[fd], addr, addrlen);
+		if (fork_pio == NULL)
+			return -1;
+		fork_pio->type = NONSOCK_FD;
+		pio = fd_table.w32_ios[fd];
+		fd_table.w32_ios[fd] = fork_pio;
+	} else {
+		CHECK_SOCK_IO(fd_table.w32_ios[fd]);
+		pio = socketio_accept(fd_table.w32_ios[fd], addr, addrlen);
+		if (pio == NULL)
+			return -1;
+		pio->type = SOCK_FD;
 	}
 
-	pio = socketio_accept(fd_table.w32_ios[fd], addr, addrlen);
-	if (!pio)
-		return -1;
-
-	pio->type = SOCK_FD;
 	fd_table_set(pio, min_index);
 	debug4("socket:%d, io:%p, fd:%d ", pio->sock, pio, min_index);
 	return min_index;
@@ -355,6 +358,13 @@ int
 w32_getsockopt(int fd, int level, int optname, void* optval, int* optlen)
 {
 	CHECK_FD(fd);
+
+	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
+		if (level == SOL_SOCKET && optname == SO_ERROR) {
+			return 0;
+		}
+	}
+
 	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
 	return socketio_getsockopt(fd_table.w32_ios[fd], level, optname, (char*)optval, optlen);
 }
@@ -363,6 +373,11 @@ int
 w32_getsockname(int fd, struct sockaddr* name, int* namelen)
 {
 	CHECK_FD(fd);
+
+	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
+		return fileio_getsockname(fd_table.w32_ios[fd], name, namelen);
+	}
+
 	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
 	return socketio_getsockname(fd_table.w32_ios[fd], name, namelen);
 }
@@ -371,6 +386,12 @@ int
 w32_getpeername(int fd, struct sockaddr* name, int* namelen)
 {
 	CHECK_FD(fd);
+
+	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
+		name->sa_family = AF_UNIX;
+		return 0;
+	}
+
 	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
 	return socketio_getpeername(fd_table.w32_ios[fd], name, namelen);
 }
@@ -379,10 +400,9 @@ int
 w32_listen(int fd, int backlog)
 {
 	CHECK_FD(fd);
+
 	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
-		errno = ENOTSUP;
-		verbose("Unix domain server sockets are not supported");
-		return -1;
+		return fileio_listen(fd_table.w32_ios[fd], backlog);
 	}
 
 	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
@@ -393,10 +413,9 @@ int
 w32_bind(int fd, const struct sockaddr *name, int namelen)
 {
 	CHECK_FD(fd);
+
 	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
-		errno = ENOTSUP;
-		verbose("Unix domain server sockets are not supported");
-		return -1;
+		return fileio_bind(fd_table.w32_ios[fd], name, namelen);
 	}
 
 	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
@@ -440,8 +459,13 @@ w32_shutdown(int fd, int how)
 {
 	debug4("shutdown - fd:%d how:%d", fd, how);
 	CHECK_FD(fd);
-	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
-	return socketio_shutdown(fd_table.w32_ios[fd], how);
+
+	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
+		return fileio_shutdown(fd_table.w32_ios[fd], how);
+	} else {
+		CHECK_SOCK_IO(fd_table.w32_ios[fd]);
+		return socketio_shutdown(fd_table.w32_ios[fd], how);
+	}
 }
 
 int
@@ -507,7 +531,7 @@ w32_pipe(int *pfds)
 	pfds[1] = write_index;
 	debug4("pipe - r-h:%d,io:%p,fd:%d  w-h:%d,io:%p,fd:%d",
 		pio[0]->handle, pio[0], read_index, pio[1]->handle, pio[1], write_index);
-	
+
 	return 0;
 }
 
@@ -529,7 +553,7 @@ w32_open(const char *pathname, int flags, ... /* arg */)
 	}
 
 	pio = fileio_open(pathname, flags, mode);
-	
+
 	if (pio == NULL)
 		return -1;
 
@@ -635,11 +659,12 @@ w32_close(int fd)
 
 	debug4("close - io:%p, type:%d, fd:%d, table_index:%d", pio, pio->type, fd,
 		pio->table_index);
-	
-	if (pio->type == SOCK_FD)
+
+	if (pio->type == SOCK_FD) {
 		r = socketio_close(pio);
-	else
-		r = fileio_close(pio);		
+	} else {
+		r = fileio_close(pio);
+	}
 
 	fd_table_clear(fd);
 	return r;
@@ -658,7 +683,7 @@ w32_io_process_fd_flags(struct w32_io* pio, int flags)
 	shi_flags = (flags & FD_CLOEXEC) ? 0 : HANDLE_FLAG_INHERIT;
 
 	HANDLE h = WINHANDLE(pio);
-	
+
 	/*
 	* Ignore if handle is not valid yet. It will not be valid for
 	* UF_UNIX sockets that are not connected yet
@@ -776,8 +801,7 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 	for (int i = 0; i < fds; i++) {
 		if (readfds && FD_ISSET(i, readfds)) {
 			w32_io_on_select(fd_table.w32_ios[i], TRUE);
-			if ((fd_table.w32_ios[i]->type == SOCK_FD) &&
-			    (fd_table.w32_ios[i]->internal.state == SOCK_LISTENING)) {
+			if (fd_table.w32_ios[i]->internal.state == SOCK_LISTENING) {
 				if (num_events == SELECT_EVENT_LIMIT) {
 					debug3("select - ERROR: max #events breach");
 					errno = ENOMEM;
@@ -1067,11 +1091,11 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 	si.hStdOutput = out;
 	si.hStdError = err;
 	si.dwFlags = STARTF_USESTDHANDLES;
-	
+
 	if (strstr(cmd, "sshd.exe")) {
 		flags |= DETACHED_PROCESS;
 	}
-	
+
 	wchar_t * t = cmdline_utf16;
 	do {
 		debug3("spawning %ls", t);
@@ -1248,7 +1272,7 @@ posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actio
 	stdio_handles[STDERR_FILENO] = dup_handle(file_actions->stdio_redirect[STDERR_FILENO]);
 	if (!stdio_handles[STDIN_FILENO] || !stdio_handles[STDOUT_FILENO] || !stdio_handles[STDERR_FILENO]) 
 		goto cleanup;
-	
+
 	for (i = 0; i < file_actions->num_aux_fds; i++) {
 		aux_handles[i] = dup_handle(file_actions->aux_fds_info.parent_fd[i]);
 		if (aux_handles[i] == NULL) 
@@ -1287,7 +1311,7 @@ cleanup:
 	}
 	if (fd_info)
 		free(fd_info);
-	
+
 	return ret;
 }
 

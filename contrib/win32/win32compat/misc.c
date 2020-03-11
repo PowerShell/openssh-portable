@@ -203,7 +203,7 @@ gettimeofday(struct timeval *tv, void *tz)
 	unsigned long long us;
 
 	/* Fetch time since Jan 1, 1601 in 100ns increments */
-	GetSystemTimeAsFileTime(&timehelper.ft);	
+	GetSystemTimeAsFileTime(&timehelper.ft);
 
 	/* Remove the epoch difference & convert 100ns to us */
 	us = (timehelper.ns - EPOCH_DELTA) / 10;
@@ -326,7 +326,7 @@ w32_fopen_utf8(const char *input_path, const char *mode)
 	}
 	else
 		wpath = resolved_path_utf16(input_path);
-	
+
 	wmode = utf8_to_utf16(mode);
 	if (wpath == NULL || wmode == NULL)
 		goto cleanup;
@@ -334,7 +334,7 @@ w32_fopen_utf8(const char *input_path, const char *mode)
 	if ((_wfopen_s(&f, wpath, wmode) != 0) || (f == NULL)) {
 		debug3("Failed to open file:%S error:%d", wpath, errno);
 		goto cleanup;
-	}	
+	}
 
 	if (chroot_pathw && !nonfs_dev) {
 		/* ensure final path is within chroot */
@@ -409,7 +409,7 @@ char*
 		*/
 		do {
 			if (str_tmp)
-				free(str_tmp);			
+				free(str_tmp);		
 			if (fgetws(str_w, 2, stream) == NULL)
 				goto cleanup;
 			if ((str_tmp = utf16_to_utf8(str_w)) == NULL) {
@@ -417,7 +417,7 @@ char*
 				errno = ENOMEM;
 				goto cleanup;
 			}
-			
+		
 			if((actual_read + (int)strlen(str_tmp)) >= n)
 				break;
 			if ((r = memcpy_s(cp, n - actual_read, str_tmp, strlen(str_tmp))) != 0) {
@@ -426,7 +426,7 @@ char*
 			}
 			actual_read += (int)strlen(str_tmp);
 			cp += strlen(str_tmp);
-			
+		
 		} while ((actual_read < n - 1) && *str_tmp != '\n');
 		*cp = '\0';
 
@@ -435,7 +435,7 @@ char*
 			debug3("actual_read %d exceeds the limit:%d", actual_read, n-1);
 			errno = EINVAL;
 			goto cleanup;
-		}		
+		}	
 		ret = str;
 	}
 	else
@@ -451,10 +451,10 @@ cleanup:
 /* Account for differences between Unix's and Windows versions of setvbuf */
 int 
 w32_setvbuf(FILE *stream, char *buffer, int mode, size_t size) {
-	
+
 	/* BUG: setvbuf on console stream interferes with Unicode I/O	*/
 	HANDLE h = (HANDLE)_get_osfhandle(_fileno(stream));
-	
+
 	if (h != NULL && h != INVALID_HANDLE_VALUE
 	    && GetFileType(h) == FILE_TYPE_CHAR)
 		return 0;
@@ -525,7 +525,7 @@ strmode(mode_t mode, char *p)
 		break;
 	case S_IFLNK:			/* symbolic link */
 		*p++ = 'l';
-		break;			
+		break;		
 #ifdef S_IFSOCK
 	case S_IFSOCK:			/* socket */
 		*p++ = 's';
@@ -555,10 +555,10 @@ strmode(mode_t mode, char *p)
 	else
 		*p++ = '-';
 
-	const char *permissions = "****** ";	
+	const char *permissions = "****** ";
 	for(int i = 0; i < (int)strlen(permissions); i++)
 		*p++ = permissions[i];
-	
+
 	*p = '\0';
 }
 
@@ -568,7 +568,7 @@ w32_chmod(const char *pathname, mode_t mode)
 	/* TODO - 
 	 * _wchmod() doesn't behave like unix "chmod" command.
 	 * _wchmod() only toggles the read-only bit and it doesn't touch ACL.
-	 */	
+	 */
 	int ret;
 	wchar_t *resolvedPathName_utf16 = resolved_path_utf16(pathname);
 	if (resolvedPathName_utf16 == NULL) 
@@ -669,7 +669,7 @@ file_attr_to_st_mode(wchar_t * path, DWORD attributes)
 		isReadOnlyFile = TRUE;
 
 	// We don't populate the group permissions as its not applicable to windows OS.
-	// propagate owner read/write/execute bits to other fields.	
+	// propagate owner read/write/execute bits to other fields.
 	mode |= get_others_file_permissions(path, isReadOnlyFile);
 
 	return mode;
@@ -744,7 +744,7 @@ w32_rename(const char *old_name, const char *new_name)
 
 	if (NULL == resolvedOldPathName_utf16 || NULL == resolvedNewPathName_utf16) 
 		return -1;
-	
+
 	/*
 	 * To be consistent with POSIX rename(),
 	 * 1) if the new_name is file, then delete it so that _wrename will succeed.
@@ -781,6 +781,11 @@ w32_rename(const char *old_name, const char *new_name)
 int
 w32_unlink(const char *path)
 {
+	/* ignore pipe path */
+	if (strlen(path) >= 2 && memcmp(path, "//", 2) == 0) {
+		return 0;
+	}
+
 	wchar_t *resolvedPathName_utf16 = resolved_path_utf16(path);
 	if (NULL == resolvedPathName_utf16) 
 		return -1;
@@ -959,7 +964,7 @@ realpath(const char *inputpath, char * resolved)
 
 	if (!inputpath || !resolved)
 		return NULL;
-	
+
 	size_t path_len = strlen(inputpath);
 	resolved[0] = '\0';
 
@@ -1058,7 +1063,7 @@ realpath(const char *inputpath, char * resolved)
 		}
 
 		resolved[0] = '\0';
-		
+	
 		if (strlen(tempPath) == strlen(chroot_path))
 			/* realpath is the same as chroot_path */
 			strcat_s(resolved, PATH_MAX, "\\");
@@ -1193,7 +1198,7 @@ w32_strerror(int errnum)
 {
 	if (errnum >= EADDRINUSE  && errnum <= EWOULDBLOCK)
 		return _sys_errlist_ext[errnum - EADDRINUSE];
-	
+
 	strerror_s(errorBuf, ERROR_MSG_MAXLEN, errnum);
 	return errorBuf;
 }
@@ -1223,7 +1228,7 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags)
 
 	while (current_index < (int)outBufLen - 1) {
 		ch = _getwch();
-		
+	
 		if (ch == L'\r') {
 			if (_kbhit()) _getwch(); /* read linefeed if its there */
 			break;
@@ -1278,7 +1283,7 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags)
 
 void 
 invalid_parameter_handler(const wchar_t* expression, const wchar_t* function, const wchar_t* file, unsigned int line, uintptr_t pReserved)
-{	
+{
 	debug3("Invalid parameter in function: %ls. File: %ls Line: %d.", function, file, line);
 	debug3("Expression: %s", expression);
 }
@@ -1299,13 +1304,13 @@ to_wlower_case(wchar_t *s)
 
 static int
 get_final_mode(int allow_mode, int deny_mode)
-{	
+{
 	// If deny permissions are not specified then return allow permissions.
 	if (!deny_mode) return allow_mode;
 
 	// If allow permissions are not specified then return allow permissions (0).
 	if (!allow_mode) return allow_mode;
-	
+
 	if(deny_mode & S_IROTH)
 		allow_mode = allow_mode & ~S_IROTH;
 
@@ -1364,11 +1369,11 @@ get_others_file_permissions(wchar_t * file_name, int isReadOnlyFile)
 			current_trustee_sid = &(pDeniedAce->SidStart);
 			current_access_mask = pDeniedAce->Mask;
 		} else continue;
-		
+	
 		if (!(IsWellKnownSid(current_trustee_sid, WinWorldSid) || 
 		    IsWellKnownSid(current_trustee_sid, WinAuthenticatedUserSid)))
 			continue;
-		
+	
 		if ((current_access_mask & READ_PERMISSIONS) == READ_PERMISSIONS)
 			mode_tmp |= S_IROTH;
 
@@ -1390,7 +1395,7 @@ get_others_file_permissions(wchar_t * file_name, int isReadOnlyFile)
 				deny_mode_auth_users |= mode_tmp;
 		}
 	}
-	
+
 	allow_mode_world = get_final_mode(allow_mode_world, deny_mode_world);
 	allow_mode_auth_users = get_final_mode(allow_mode_auth_users, deny_mode_auth_users);
 
