@@ -1553,7 +1553,6 @@ fileio_accept(struct w32_io* pio, struct sockaddr* addr, int* addrlen)
 	}
 
 	pio->internal.state = SOCK_READY;
-	CloseHandle(pio->read_overlapped.hEvent);
 	return fork_io;
 }
 
