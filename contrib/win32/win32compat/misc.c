@@ -750,8 +750,8 @@ w32_rename(const char *old_name, const char *new_name)
 	struct _stat64 st_old;
 	if ((fileio_stat(new_name, &st_new) != -1) &&
 	    (fileio_stat(old_name, &st_old) != -1) &&
-		((st_old.st_mode & _S_IFMT) == _S_IFDIR) &&
-		((st_new.st_mode & _S_IFMT) == _S_IFDIR)) {
+	    ((st_old.st_mode & _S_IFMT) == _S_IFDIR) &&
+	    ((st_new.st_mode & _S_IFMT) == _S_IFDIR)) {
 			DIR *dirp = opendir(new_name);
 			if (NULL != dirp) {
 				struct dirent *dp = readdir(dirp);
@@ -763,10 +763,17 @@ w32_rename(const char *old_name, const char *new_name)
 	}
 
 	const int returnStatus = MoveFileExW(resolvedOldPathName_utf16, resolvedNewPathName_utf16, MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED);
+
 	free(resolvedOldPathName_utf16);
 	free(resolvedNewPathName_utf16);
+
+	/* Adjust errors and return codes to be consistent with rename() syscall */
+	if (returnStatus == 0) {
+		errno = errno_from_Win32LastError();
+		return -1;
+	}
 	
-	return (returnStatus == 0) ? (errno_from_Win32LastError()) : 0;
+	return 0;
 }
 
 int
