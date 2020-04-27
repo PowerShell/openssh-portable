@@ -1506,7 +1506,15 @@ mktemp_proto(char *s, size_t len)
 	const char *tmpdir;
 	int r;
 
-	if ((tmpdir = getenv("TMPDIR")) != NULL) {
+	tmpdir = getenv("TMPDIR");
+
+#ifdef WINDOWS
+	if (tmpdir == NULL) {
+		tmpdir = getenv("TEMP");
+	}
+#endif
+
+	if (tmpdir != NULL) {
 		r = snprintf(s, len, "%s/ssh-XXXXXXXXXXXX", tmpdir);
 		if (r > 0 && (size_t)r < len)
 			return;
