@@ -456,8 +456,12 @@ struct winsize {
 #define _PATH_UNIX_X X_UNIX_PATH
 
 #ifndef _PATH_TTY
-# define _PATH_TTY "/dev/tty"
-#endif
+#  ifdef _WIN32
+#    define _PATH_TTY "conin$"
+#  else
+#    define _PATH_TTY "/dev/tty"
+#  endif /* _WIN32 */
+#endif /* _PATH_TTY */
 
 /* Macros */
 
