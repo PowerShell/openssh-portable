@@ -1,4 +1,6 @@
-﻿# @manojampalam - authored initial script
+﻿#requires -runasadministrator
+
+# @manojampalam - authored initial script
 # @friism - Fixed issue with invalid SDDL on Set-Acl
 # @manojampalam - removed ntrights.exe dependency
 # @bingbing8 - removed secedit.exe dependency
@@ -14,13 +16,13 @@ if (-not (Test-Path $sshdpath)) {
     throw "sshd.exe is not present in script path"
 }
 
-if (Get-Service sshd -ErrorAction SilentlyContinue) 
+if (Get-Service sshd -ErrorAction SilentlyContinue)
 {
    Stop-Service sshd
    sc.exe delete sshd 1>$null
 }
 
-if (Get-Service ssh-agent -ErrorAction SilentlyContinue) 
+if (Get-Service ssh-agent -ErrorAction SilentlyContinue)
 {
    Stop-Service ssh-agent
    sc.exe delete ssh-agent 1>$null
@@ -38,7 +40,7 @@ $streamWriter = $null
 $xmlWriter = $null
 try {
     $streamWriter = new-object System.IO.StreamWriter($etwman)
-    $xmlWriter = [System.Xml.XmlWriter]::Create($streamWriter)    
+    $xmlWriter = [System.Xml.XmlWriter]::Create($streamWriter)
     $xml.Save($xmlWriter)
 }
 finally {
