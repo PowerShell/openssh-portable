@@ -1686,6 +1686,8 @@ bad:			run_err("%s: %s", np, strerror(errno));
 			run_err("%s: truncate: %s", np, strerror(errno));
 			wrerr = DISPLAYED;
 		}
+#ifndef WINDOWS
+		// Windows can't do *NIX modes
 		if (pflag) {
 			if (exists || omode != mode)
 #ifdef HAVE_FCHMOD
@@ -1709,6 +1711,7 @@ bad:			run_err("%s: %s", np, strerror(errno));
 					wrerr = DISPLAYED;
 				}
 		}
+#endif // !WINDOWS
 		if (close(ofd) == -1) {
 			wrerr = YES;
 			wrerrno = errno;
