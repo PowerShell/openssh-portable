@@ -198,9 +198,7 @@ get_passwd(const wchar_t * user_utf16, PSID sid)
 		CopySid(sizeof(binary_sid), binary_sid, sid);
 	/* else attempt to lookup the account; this will verify the account is valid and
 	 * is will return its sid and the realm that owns it */
-	else if(LookupAccountNameW(NULL, user_utf16_modified, binary_sid, &sid_size,
-	    domain_name, &domain_name_size, &account_type) == 0) {
-		errno = ENOENT;
+	else if (lookup_sid(user_utf16_modified, binary_sid, &sid_size) == NULL) {
 		debug("%s: LookupAccountName() failed: %d.", __FUNCTION__, GetLastError());
 		goto cleanup;
 	}
