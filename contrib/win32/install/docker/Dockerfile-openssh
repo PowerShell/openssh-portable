@@ -13,7 +13,7 @@ SHELL ["cmd", "/S", "/C"]
 ARG REPO_URL='https://github.com/PowerShell/openssh-portable'
 ARG REPO_DIRECTORY='C:\openssh-portable'
 ARG BUILD_BRANCH='latestw_all'
-ARG BUILD_TAG='latest'
+ARG BUILD_TAG='head'
 ARG PLATFORM='x64'
 ARG CONFIGURATION='Release'
 ARG InstallDirectory='C:\openssh-portable\contrib\win32\install'

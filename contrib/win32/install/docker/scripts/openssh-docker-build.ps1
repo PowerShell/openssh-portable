@@ -96,7 +96,7 @@ Write-Host -ForegroundColor White @"
       if (Test-Path -Path ${REPO_DIRECTORY}) {
         Write-Host -ForegroundColor White "Repository already checked out to ${REPO_DIRECTORY} => skipping git clone ..."
       } else {
-        git clone --branch=${BUILD_BRANCH} ${REPO_URL} ${REPO_DIRECTORY}
+        git clone ${REPO_URL} ${REPO_DIRECTORY}
         if (0 -ne $LASTEXITCODE) {
           throw "Failed to clone OpenSSH repository. Error: $LASTEXITCODE"
         }
@@ -107,6 +107,10 @@ Write-Host -ForegroundColor White @"
     Name        = "Detect build tag"
     ScriptBlock = {
       Push-Location -LiteralPath ${REPO_DIRECTORY}
+      git checkout ${BUILD_BRANCH}
+      if (0 -ne $LASTEXITCODE) {
+        throw "Failed to checkout branch [${BUILD_BRANCH}]. Error: $LASTEXITCODE"
+      }
       git fetch --quiet --tags
       if (0 -ne $LASTEXITCODE) {
         throw "Failed to load all tags. Error: $LASTEXITCODE"
