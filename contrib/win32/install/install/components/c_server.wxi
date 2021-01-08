@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include xmlns:util="http://schemas.microsoft.com/wix/UtilExtension" xmlns:fw="http://schemas.microsoft.com/wix/FirewallExtension">
+  <Component Id="C_SERVER" Guid="ad878e18-85a7-472d-ab52-ea6580d6d825">
+    <File Id="sftpserver.exe" Source="$(var.SOURCEDIR)/sftp-server.exe" Name="sftp-server.exe" />
+    <File Id="sshshellhost.exe" Source="$(var.SOURCEDIR)/ssh-shellhost.exe" Name="ssh-shellhost.exe" />
+    <File Id="opensshevents.man" Source="$(var.SOURCEDIR)/openssh-events.man" Name="openssh-events.man">
+      <util:EventManifest />
+    </File>
+    <util:XmlFile
+      Id="xmlSetResourceFileName"
+      Sequence="1"
+      File="[#opensshevents.man]"
+      Action="setValue"
+      ElementPath="//*[\[]local-name() = 'provider'[\]]"
+      Name="resourceFileName"
+      Value="[#sshagent.exe]"
+      SelectionLanguage="XPath" />
+    <util:XmlFile
+      Id="xmlSetMessageFileName"
+      Sequence="2"
+      File="[#opensshevents.man]"
+      Action="setValue"
+      ElementPath="//*[\[]local-name() = 'provider'[\]]"
+      Name="messageFileName"
+      Value="[#sshagent.exe]"
+      SelectionLanguage="XPath" />
+  </Component>
+  <Component Id="C_SERVER_SSHAGENTSERVICE" Guid="dd45dc2d-cc8a-4eaa-906e-9967e37a3e44">
+    <File Id="sshagent.exe" Source="$(var.SOURCEDIR)/ssh-agent.exe" Name="ssh-agent.exe" KeyPath="yes" />
+    <ServiceInstall
+      Id="SVC_SSHAGENT"
+      Description="Agent to hold private keys used for public key authentication."
+      DisplayName="OpenSSH Authentication Agent"
+      ErrorControl="critical"
+      Interactive="no"
+      Name="ssh-agent"
+      Start="auto"
+      Type="ownProcess"
+      Vital="yes">
+      <util:ServiceConfig
+        ResetPeriodInDays="1"
+        FirstFailureActionType="restart"
+        SecondFailureActionType="restart"
+        ThirdFailureActionType="restart" />
+      <PermissionEx Sddl="D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)(A;;RP;;;AU)" />
+    </ServiceInstall>
+    <ServiceControl
+      Id="SC_SSHAGENT_UNINSTALL"
+      Name="ssh-agent"
+      Stop="uninstall"
+      Remove="uninstall"
+      Wait="no" />
+  </Component>
+  <Component Id="C_SERVER_SSHAGENT_CONTROL" Guid="adebc907-2e8b-4b49-b343-0de71f342a9e" KeyPath="yes">
+    <Condition>
+      <![CDATA[NOT(DONT_START_SSHAGENT OR DONT_START_SERVICES)]]>
+    </Condition>
+    <ServiceControl
+      Id="SC_SSHAGENT_INSTALL"
+      Name="ssh-agent"
+      Start="install"
+      Wait="no" />
+  </Component>
+  <Component Id="C_SERVER_SSHDSERVICE" Guid="6545df79-4f04-4ac3-8c5d-5baa678c94fc">
+    <File Id="sshd.exe" Source="$(var.SOURCEDIR)/sshd.exe" Name="sshd.exe" KeyPath="yes"/>
+    <ServiceInstall
+      Id="SVC_SSHD"
+      Description="SSH protocol based service to provide secure encrypted communications between two untrusted hosts over an insecure network."
+      DisplayName="OpenSSH SSH Server"
+      ErrorControl="critical"
+      Interactive="no"
+      Name="sshd"
+      Start="auto"
+      Type="ownProcess"
+      Vital="yes">
+      <util:ServiceConfig
+        ResetPeriodInDays="1"
+        FirstFailureActionType="restart"
+        SecondFailureActionType="restart"
+        ThirdFailureActionType="restart" />
+    </ServiceInstall>
+    <ServiceControl
+      Id="SC_SSHD_UNINSTALL"
+      Name="sshd"
+      Stop="uninstall"
+      Remove="uninstall"
+      Wait="no" />
+    <fw:FirewallException
+        Id="FW_IN_ALLOW_SSH"
+        Description="Allow SSH incoming traffic"
+        IgnoreFailure="no"
+        Name="SSH Service (TCP In)"
+        Port="22"
+        Profile="all"
+        Program="[#sshd.exe]"
+        Protocol="tcp"
+        Scope="any" />
+    <File Id="sshd_config_default" Source="$(var.SOURCEDIR)/sshd_config_default" Name="sshd_config_default" />
+  </Component>
+  <Component Id="C_SERVER_SSHD_CONTROL" Guid="89b79298-b59d-4359-ae28-9190615d327a" KeyPath="yes">
+    <Condition>
+      <![CDATA[NOT(DONT_START_SSHD OR DONT_START_SERVICES)]]>
+    </Condition>
+    <ServiceControl
+    Id="SC_SSHD_INSTALL"
+    Name="sshd"
+    Start="install"
+    Wait="no" />
+  </Component>
+</Include>

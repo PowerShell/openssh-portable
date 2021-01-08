@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+  <Component Id="C_MAIN_SYMBOLS" Guid="633ff90a-a1ff-49a6-a675-83a3f0d80bbe">
+    <File Id="libcrypto.pdb" Source="$(var.SOURCEDIR)/libcrypto.pdb" Name="libcrypto.pdb" />
+    <File Id="sshkeygen.pdb" Source="$(var.SOURCEDIR)/ssh-keygen.pdb" Name="ssh-keygen.pdb" />
+  </Component>
+</Include>

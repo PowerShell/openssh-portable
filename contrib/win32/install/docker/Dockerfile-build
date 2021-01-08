@@ -1,0 +1,65 @@
+
+# escape=`
+
+# Copyright (C) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT license. See LICENSE.txt in the project root for license information.
+
+ARG FROM_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2019
+FROM ${FROM_IMAGE}
+
+# Reset the shell.
+SHELL ["cmd", "/S", "/C"]
+
+RUN Dism /online /Enable-Feature /FeatureName:NetFx4 /All
+
+RUN MKDIR c:\\Temp
+
+# Set up environment to collect install errors.
+ADD https://aka.ms/vscollect.exe C:\\TEMP\\collect.exe
+COPY scripts/Install.cmd C:\\Temp
+
+# Install Node.js LTS
+ARG NODEJS_VERSION=14.9.0
+ADD https://nodejs.org/dist/v${NODEJS_VERSION}/node-v${NODEJS_VERSION}-x64.msi C:\\TEMP\\node-install.msi
+RUN start /wait msiexec.exe /i C:\\TEMP\\node-install.msi /l*vx "%TEMP%\\MSI-node-install.log" /qn ADDLOCAL=ALL
+
+# Download channel for fixed install.
+ARG VS_VERSION=15
+ARG CHANNEL_URL=https://aka.ms/vs/${VS_VERSION}/release/channel
+ADD ${CHANNEL_URL} C:\\TEMP\\VisualStudio.chman
+
+# Download and install Build Tools for Visual Studio 2017 for native desktop workload.
+ADD https://aka.ms/vs/${VS_VERSION}/release/vs_buildtools.exe C:\\TEMP\\vs_buildtools.exe
+RUN C:\\TEMP\\Install.cmd C:\\TEMP\\vs_buildtools.exe \
+    --quiet \
+    --wait \
+    --norestart \
+    --nocache \
+    --channelUri C:\\TEMP\\VisualStudio.chman \
+    --installChannelUri C:\\TEMP\\VisualStudio.chman \
+    --add Microsoft.VisualStudio.Workload.VCTools \
+    --add microsoft.visualstudio.componentgroup.nativedesktop.win81 \
+    --add microsoft.visualstudio.component.vc.cli.support \
+    --add microsoft.visualstudio.component.vc.modules.x86.x64 \
+    --add microsoft.visualstudio.component.vc.140 \
+    --installPath C:\\BuildTools
+
+# Download an install Git for Windows
+ADD https://github.com/git-for-windows/git/releases/download/v2.30.0.windows.1/Git-2.30.0-64-bit.exe c:\\Temp\\git.setup.exe
+RUN start /wait c:\\Temp\\git.setup.exe /VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS
+
+# Install .NET Fx 3.5
+RUN curl -fSLo microsoft-windows-netfx3.zip https://dotnetbinaries.blob.core.windows.net/dockerassets/microsoft-windows-netfx3-1809.zip \
+    && tar -zxf microsoft-windows-netfx3.zip \
+    && del /F /Q microsoft-windows-netfx3.zip \
+    && DISM /Online /Quiet /Add-Package /PackagePath:.\microsoft-windows-netfx3-ondemand-package~31bf3856ad364e35~amd64~~.cab \
+    && del microsoft-windows-netfx3-ondemand-package~31bf3856ad364e35~amd64~~.cab \
+    && powershell Remove-Item -Force -Recurse ${Env:TEMP}\*
+
+# Download an install Wix-Toolset
+ADD https://github.com/wixtoolset/wix3/releases/download/wix3112rtm/wix311.exe c:\\Temp\\wix.setup.exe
+RUN start /wait c:\\Temp\\wix.setup.exe /install /quiet /norestart
+
+# Use developer command prompt and start PowerShell if no other command specified.
+#ENTRYPOINT C:\\BuildTools\\Common7\\Tools\\VsDevCmd.bat
+#CMD ["powershell.exe", "-NoLogo", "-ExecutionPolicy", "Bypass"]

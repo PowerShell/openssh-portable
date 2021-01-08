@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+  <Component Id="C_SCRIPTS" Guid="da981a2b-9381-40a6-91ac-9763aecaf289">
+    <File Id="FixHostFilePermissions.ps1" Source="$(var.SOURCEDIR)/FixHostFilePermissions.ps1" Name="FixHostFilePermissions.ps1" />
+    <File Id="FixUserFilePermissions.ps1" Source="$(var.SOURCEDIR)/FixUserFilePermissions.ps1" Name="FixUserFilePermissions.ps1" />
+    <File Id="OpenSSHUtils.psd1" Source="$(var.SOURCEDIR)/OpenSSHUtils.psd1" Name="OpenSSHUtils.psd1" />
+    <File Id="OpenSSHUtils.psm1" Source="$(var.SOURCEDIR)/OpenSSHUtils.psm1" Name="OpenSSHUtils.psm1" />
+  </Component>
+</Include>

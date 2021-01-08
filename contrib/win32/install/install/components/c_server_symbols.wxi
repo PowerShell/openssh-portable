@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+  <Component Id="C_SERVER_SYMBOLS" Guid="898f137a-54ec-4e54-acda-11cae6b9d171">
+    <File Id="sftpserver.pdb" Source="$(var.SOURCEDIR)/sftp-server.pdb" Name="sftp-server.pdb" />
+    <File Id="sshshellhost.pdb" Source="$(var.SOURCEDIR)/ssh-shellhost.pdb" Name="ssh-shellhost.pdb" />
+    <File Id="sshagent.pdb" Source="$(var.SOURCEDIR)/ssh-agent.pdb" Name="ssh-agent.pdb" />
+    <File Id="sshd.pdb" Source="$(var.SOURCEDIR)/sshd.pdb" Name="sshd.pdb" />
+  </Component>
+</Include>

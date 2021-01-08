@@ -1,0 +1,37 @@
+
+# escape=`
+
+# Copyright (C) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT license. See LICENSE.txt in the project root for license information.
+
+ARG FROM_IMAGE=vs-build:ltsc2019
+FROM ${FROM_IMAGE}
+
+# Reset the shell.
+SHELL ["cmd", "/S", "/C"]
+
+ARG REPO_URL='https://github.com/PowerShell/openssh-portable'
+ARG REPO_DIRECTORY='C:\openssh-portable'
+ARG BUILD_BRANCH='latestw_all'
+ARG BUILD_TAG='latest'
+ARG PLATFORM='x64'
+ARG CONFIGURATION='Release'
+ARG InstallDirectory='C:\openssh-portable\contrib\win32\install'
+ARG BinariesDirectory='C:\Projects\openssh-dist'
+ENV BuildMsi=true
+ENV BuildOpenSSH=true
+
+ENV REPO_URL=${REPO_URL}
+ENV REPO_DIRECTORY=${REPO_DIRECTORY}
+ENV BUILD_BRANCH=${BUILD_BRANCH}
+ENV BUILD_TAG=${BUILD_TAG}
+ENV PLATFORM=${PLATFORM}
+ENV CONFIGURATION=${CONFIGURATION}
+ENV InstallDirectory=${InstallDirectory}
+ENV BinariesDirectory=${BinariesDirectory}
+ENV BuildMsi=${BuildMsi}
+ENV BuildOpenSSH=${BuildOpenSSH}
+
+COPY scripts/openssh-docker-build.ps1 c:\\
+
+CMD ["powershell.exe", "-nop", "-nol", "-ExecutionPolicy", "Bypass", "-File", "c:/openssh-docker-build.ps1"]

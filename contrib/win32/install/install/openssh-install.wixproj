@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" InitialTargets="EnsureWixToolsetInstalled" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <DefineSolutionProperties>false</DefineSolutionProperties>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
+    <ProductVersion>3.10</ProductVersion>
+    <ProjectGuid>9607b2ee-4071-4e93-b0a5-a316c3b1ad44</ProjectGuid>
+    <SchemaVersion>2.0</SchemaVersion>
+    <OutputType>Package</OutputType>
+    <Version Condition=" '$(Version)' == '' ">0.0.0.0</Version>
+    <BaseName Condition=" '$(BaseName)' == '' ">openssh-$(Version)-win</BaseName>
+    <OutputName Condition=" '$(Configuration)' == 'Debug' ">$(BaseName)-debug-$(Platform)</OutputName>
+    <OutputName Condition=" '$(Configuration)' == 'Release' ">$(BaseName)-$(Platform)</OutputName>
+    <OutputPath Condition=" '$(OutputPath)' == '' ">bin\$(Platform)\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
+    <Manfacturer Condition=" '$(Manfacturer)' == '' ">Microsoft Corporation</Manfacturer>
+    <DefineConstants>Debug;CONFIGURATION=$(Configuration);MANUFACTURER=$(Manfacturer);VERSION=$(Version);SOURCEDIR=$(SourceDir);PRODUCTID=$(ProductId)</DefineConstants>
+    <SuppressIces>ICE61</SuppressIces>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <LinkerAdditionalOptions />
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <LinkerAdditionalOptions />
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
+    <LinkerAdditionalOptions />
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+    <LinkerAdditionalOptions />
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="product.wxs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="components" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="components\c_main_symbols.wxi" />
+    <Content Include="components\c_server_symbols.wxi" />
+    <Content Include="components\c_client.wxi" />
+    <Content Include="components\c_main.wxi" />
+    <Content Include="components\c_client_symbols.wxi" />
+    <Content Include="components\c_scripts.wxi" />
+    <Content Include="components\c_server.wxi" />
+    <Content Include="components\c_sshdconfig.wxi" />
+  </ItemGroup>
+  <ItemGroup>
+    <WixExtension Include="WixFirewallExtension">
+      <HintPath>$(WixExtDir)\WixFirewallExtension.dll</HintPath>
+      <Name>WixFirewallExtension</Name>
+    </WixExtension>
+    <WixExtension Include="WixUtilExtension">
+      <HintPath>$(WixExtDir)\WixUtilExtension.dll</HintPath>
+      <Name>WixUtilExtension</Name>
+    </WixExtension>
+    <WixExtension Include="WixUIExtension">
+      <HintPath>$(WixExtDir)\WixUIExtension.dll</HintPath>
+      <Name>WixUIExtension</Name>
+    </WixExtension>
+  </ItemGroup>
+  <Import Project="$(WixTargetsPath)" Condition=" '$(WixTargetsPath)' != '' " />
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets" Condition=" '$(WixTargetsPath)' == '' AND Exists('$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets') " />
+  <Target Name="EnsureWixToolsetInstalled" Condition=" '$(WixTargetsImported)' != 'true' ">
+    <Error Text="The WiX Toolset v3.11 (or newer) build tools must be installed to build this project. To download the WiX Toolset, see http://wixtoolset.org/releases/" />
+  </Target>
+</Project>
