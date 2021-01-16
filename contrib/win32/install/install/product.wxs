@@ -93,10 +93,10 @@
     <Feature Id="ProductFeature" Title="OpenSSH" Level="1" Display="expand" AllowAdvertise="no">
 			<ComponentGroupRef Id="CG_Main" />
       <ComponentGroupRef Id="CG_Main_Symbols"/>
-      <Feature Id="F_Client" Title="Client programs" Level="1" Absent="allow" AllowAdvertise="yes">
+      <Feature Id="F_Client" Title="Client programs" Level="1" Absent="allow" AllowAdvertise="no">
         <Condition Level="10000">DISABLE_CLIENT</Condition>
         <ComponentGroupRef Id="CG_Client" />
-        <Feature Id="F_Client_Symbols" Title="Client programs synbols" Level="10000" Absent="allow" AllowAdvertise="yes">
+        <Feature Id="F_Client_Symbols" Title="Client programs synbols" Level="10000" Absent="allow" AllowAdvertise="no">
           <Condition Level="1">ENABLE_CLIENTSYMBOLS</Condition>
           <ComponentGroupRef Id="CG_Client_Symbols"/>
         </Feature>
@@ -114,7 +114,7 @@
           <ComponentGroupRef Id="CG_Server_Symbols"/>
         </Feature>
       </Feature>
-      <Feature Id="F_Scripts" Title="Management scripts" Level="10000" Absent="allow" AllowAdvertise="yes">
+      <Feature Id="F_Scripts" Title="Management scripts" Level="10000" Absent="allow" AllowAdvertise="no">
         <Condition Level="1">ENABLE_SCRIPTS</Condition>
         <ComponentGroupRef Id="CG_Scripts" />
       </Feature>
