@@ -8,7 +8,7 @@ Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -Force
 [bool] $script:Verbose = $false
 [string] $script:BuildLogFile = $null
 <#
-    Called by Write-BuildMsg to write to the build log, if it exists. 
+    Called by Write-BuildMsg to write to the build log, if it exists.
 #>
 function Write-Log
 {
@@ -22,7 +22,7 @@ function Write-Log
     if (-not ([string]::IsNullOrEmpty($script:BuildLogFile)))
     {
         Add-Content -Path $script:BuildLogFile -Value $Message
-    }  
+    }
 }
 
 <#
@@ -94,7 +94,7 @@ function Write-BuildMsg
         return
     }
 
-    if($PSBoundParameters.ContainsKey("AsInfo"))    
+    if($PSBoundParameters.ContainsKey("AsInfo"))
     {
         Write-Log -Message "INFO: $message"
         if (-not $Silent)
@@ -151,7 +151,7 @@ function Start-OpenSSHBootstrap
     Write-BuildMsg -AsInfo -Message "Checking tools and dependencies" -Silent:$silent
 
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
-    $newMachineEnvironmentPath = $machinePath   
+    $newMachineEnvironmentPath = $machinePath
 
     # Install chocolatey
     $chocolateyPath = "$env:AllUsersProfile\chocolatey\bin"
@@ -202,10 +202,10 @@ function Start-OpenSSHBootstrap
     if ($newMachineEnvironmentPath -ne $machinePath)
     {
         [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
-    }    
+    }
 
     $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
-    $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"    
+    $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"
     #use vs2017 build tool if exists
     if($VS2017Path -ne $null)
     {
@@ -218,7 +218,7 @@ function Start-OpenSSHBootstrap
 
         if(-not (Test-Path $VcVars))
         {
-            Write-BuildMsg -AsError -ErrorAction Stop -Message "VC++ 2015.3 v140 toolset are not installed."   
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "VC++ 2015.3 v140 toolset are not installed."
         }
     }
     elseIf (($VS2015Path -eq $null) -or (-not (Test-Path $VcVars)) -or (-not (Test-Path $sdkPath))) {
@@ -260,7 +260,7 @@ function Start-OpenSSHBootstrap
 
     if($NativeHostArch.ToLower().Startswith('arm') -and ($VS2017Path -eq $null))
     {
-        
+
         #todo, install vs 2017 build tools
         Write-BuildMsg -AsError -ErrorAction Stop -Message "The required msbuild 15.0 is not installed on the machine."
     }
@@ -288,15 +288,15 @@ function Start-OpenSSHBootstrap
     Write-BuildMsg -AsVerbose -Message "vcPath: $script:vcPath" -Silent:$silent
     if ((Test-Path -Path "$script:vcPath\vcvarsall.bat") -eq $false)
     {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "Could not find Visual Studio vcvarsall.bat at $script:vcPath, which means some required develop kits are missing on the machine." 
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "Could not find Visual Studio vcvarsall.bat at $script:vcPath, which means some required develop kits are missing on the machine."
     }
 }
 
 function Start-OpenSSHPackage
 {
-    [CmdletBinding(SupportsShouldProcess=$false)]    
+    [CmdletBinding(SupportsShouldProcess=$false)]
     param
-    (        
+    (
         [ValidateSet('x86', 'x64', 'arm64', 'arm')]
         [string]$NativeHostArch = "x64",
 
@@ -315,11 +315,11 @@ function Start-OpenSSHPackage
     if($NativeHostArch -ieq 'x86')
     {
         $folderName = "Win32"
-    }    
+    }
 
     $buildDir = Join-Path $repositoryRoot ("bin\" + $folderName + "\" + $Configuration)
     $payload =  "sshd.exe", "ssh.exe", "ssh-agent.exe", "ssh-add.exe", "sftp.exe"
-    $payload += "sftp-server.exe", "scp.exe", "ssh-shellhost.exe", "ssh-keygen.exe", "ssh-keyscan.exe" 
+    $payload += "sftp-server.exe", "scp.exe", "ssh-shellhost.exe", "ssh-keygen.exe", "ssh-keyscan.exe"
     $payload += "sshd_config_default", "install-sshd.ps1", "uninstall-sshd.ps1"
     $payload += "FixHostFilePermissions.ps1", "FixUserFilePermissions.ps1", "OpenSSHUtils.psm1", "OpenSSHUtils.psd1"
     $payload += "openssh-events.man", "moduli"
@@ -336,39 +336,39 @@ function Start-OpenSSHPackage
     }
 
     while((($service = Get-Service ssh-agent -ErrorAction SilentlyContinue) -ne $null) -and ($service.Status -ine 'Stopped'))
-    {        
-        Stop-Service ssh-agent -Force
-        #sleep to wait the servicelog file write        
+    {
+        Stop-Service ssh-agent -Force -ErrorAction:Stop
+        #sleep to wait the servicelog file write
         Start-Sleep 5
     }
 
     $packageDir = Join-Path $buildDir $packageName
     Remove-Item $packageDir -Recurse -Force -ErrorAction SilentlyContinue
-    New-Item $packageDir -Type Directory | Out-Null
-    
+    $null = New-Item $packageDir -Type Directory
+
     $symbolsDir = Join-Path $buildDir ($packageName + '_Symbols')
     Remove-Item $symbolsDir -Recurse -Force -ErrorAction SilentlyContinue
-    New-Item $symbolsDir -Type Directory | Out-Null
-       
+    $null = New-Item $symbolsDir -Type Directory
+
     foreach ($file in $payload) {
         if ((-not(Test-Path (Join-Path $buildDir $file)))) {
             Throw "Cannot find $file under $buildDir. Did you run Build-OpenSSH?"
         }
-        Copy-Item (Join-Path $buildDir $file) $packageDir -Force
+        Copy-Item (Join-Path $buildDir $file) $packageDir -Force -ErrorAction:Stop
         if ($file.EndsWith(".exe")) {
             $pdb = $file.Replace(".exe", ".pdb")
-            Copy-Item (Join-Path $buildDir $pdb) $symbolsDir -Force
+            Copy-Item (Join-Path $buildDir $pdb) $symbolsDir -Force -ErrorAction:Stop
         }
         if ($file.EndsWith(".dll")) {
             $pdb = $file.Replace(".dll", ".pdb")
-            Copy-Item (Join-Path $buildDir $pdb) $symbolsDir -Force
+            Copy-Item (Join-Path $buildDir $pdb) $symbolsDir -Force -ErrorAction:Stop
         }
     }
 
     #copy libcrypto dll
     $libreSSLPath = Join-Path $PSScriptRoot "LibreSSL"
     if (-not $NoOpenSSL.IsPresent)
-    {        
+    {
         if($OneCore)
         {
             Copy-Item -Path $(Join-Path $libreSSLPath "bin\onecore\$NativeHostArch\libcrypto.dll") -Destination $packageDir -Force -ErrorAction Stop
@@ -379,16 +379,16 @@ function Start-OpenSSHPackage
             Copy-Item -Path $(Join-Path $libreSSLPath "bin\desktop\$NativeHostArch\libcrypto.dll") -Destination $packageDir -Force -ErrorAction Stop
             Copy-Item -Path $(Join-Path $libreSSLPath "bin\desktop\$NativeHostArch\libcrypto.pdb") -Destination $symbolsDir -Force -ErrorAction Stop
         }
-    }    
+    }
 
     if ($DestinationPath -ne "") {
-        if (Test-Path $DestinationPath) {            
+        if (Test-Path $DestinationPath) {
             Remove-Item $DestinationPath\* -Force -Recurse -ErrorAction SilentlyContinue
         }
         else {
-            New-Item -ItemType Directory $DestinationPath -Force | Out-Null
+            $null = New-Item -ItemType Directory $DestinationPath -Force
         }
-        Copy-Item -Path $packageDir\* -Destination $DestinationPath -Force -Recurse
+        Copy-Item -Path $packageDir\* -Destination $DestinationPath -Force -Recurse -ErrorAction:Stop
         Write-BuildMsg -AsInfo -Message "Copied payload to $DestinationPath."
     }
     else {
@@ -404,16 +404,16 @@ function Start-OpenSSHPackage
         }
     }
     Remove-Item $packageDir -Recurse -Force -ErrorAction SilentlyContinue
-    
+
     if ($DestinationPath -ne "") {
-        Copy-Item -Path $symbolsDir\* -Destination $DestinationPath -Force -Recurse
+        Copy-Item -Path $symbolsDir\* -Destination $DestinationPath -Force -Recurse -ErrorAction:Stop
         Write-BuildMsg -AsInfo -Message "Copied symbols to $DestinationPath"
     }
     else {
         Remove-Item ($symbolsDir + '.zip') -Force -ErrorAction SilentlyContinue
         if(get-command Compress-Archive -ErrorAction SilentlyContinue)
         {
-            Compress-Archive -Path $symbolsDir -DestinationPath ($symbolsDir + '.zip')
+            Compress-Archive -Path $symbolsDir -DestinationPath ($symbolsDir + '.zip') -ErrorAction:Stop
             Write-BuildMsg -AsInfo -Message "Packaged Symbols - '$symbolsDir.zip'"
         }
         else
@@ -426,9 +426,9 @@ function Start-OpenSSHPackage
 
 function Copy-OpenSSHUnitTests
 {
-    [CmdletBinding(SupportsShouldProcess=$false)]    
+    [CmdletBinding(SupportsShouldProcess=$false)]
     param
-    (        
+    (
         [ValidateSet('x86', 'x64', 'arm64', 'arm')]
         [string]$NativeHostArch = "x64",
 
@@ -448,8 +448,8 @@ function Copy-OpenSSHUnitTests
     }
     $buildDir = Join-Path $repositoryRoot ("bin\" + $folderName + "\" + $Configuration)
     $unittestsDir = Join-Path $buildDir "unittests"
-    $unitTestFolders = Get-ChildItem -Directory $buildDir\unittest-*    
-    
+    $unitTestFolders = Get-ChildItem -Directory $buildDir\unittest-*
+
     if ($DestinationPath -ne "") {
         if (-not (Test-Path $DestinationPath -PathType Container)) {
             New-Item -ItemType Directory $DestinationPath -Force | Out-Null
@@ -457,9 +457,9 @@ function Copy-OpenSSHUnitTests
         foreach ($folder in $unitTestFolders) {
             Copy-Item $folder.FullName $DestinationPath\$($folder.Name) -Recurse -Force
             Write-BuildMsg -AsInfo -Message "Copied $($folder.FullName) to $DestinationPath\$($folder.Name)."
-        }        
+        }
     }
-    else {        
+    else {
         if(Test-Path ($unittestsDir + '.zip') -PathType Leaf) {
             Remove-Item ($unittestsDir + '.zip') -Force -ErrorAction SilentlyContinue
         }
@@ -477,9 +477,9 @@ function Copy-OpenSSHUnitTests
 
 function Start-OpenSSHBuild
 {
-    [CmdletBinding(SupportsShouldProcess=$false)]    
+    [CmdletBinding(SupportsShouldProcess=$false)]
     param
-    (        
+    (
         [ValidateSet('x86', 'x64', 'arm64', 'arm')]
         [string]$NativeHostArch = "x64",
 
@@ -489,7 +489,7 @@ function Start-OpenSSHBuild
         [switch]$NoOpenSSL,
 
         [switch]$OneCore
-    )    
+    )
     $script:BuildLogFile = $null
 
     [System.IO.DirectoryInfo] $repositoryRoot = Get-RepositoryRoot
@@ -513,8 +513,8 @@ function Start-OpenSSHBuild
     Start-OpenSSHBootstrap -OneCore:$OneCore
 
     $PathTargets = Join-Path $PSScriptRoot paths.targets
-    if ($NoOpenSSL) 
-    {        
+    if ($NoOpenSSL)
+    {
         [XML]$xml = Get-Content $PathTargets
         $xml.Project.PropertyGroup.UseOpenSSL = 'false'
         $xml.Project.PropertyGroup.SSLLib = [string]::Empty
@@ -524,7 +524,7 @@ function Start-OpenSSHBuild
         (Get-Content $f).Replace('#define OPENSSL_HAS_ECC 1','') | Set-Content $f
         (Get-Content $f).Replace('#define OPENSSL_HAS_NISTP521 1','') | Set-Content $f
     }
-    
+
     if($NativeHostArch.ToLower().Startswith('arm'))
     {
         $win10SDKVer = Get-Windows10SDKVersion
@@ -538,7 +538,7 @@ function Start-OpenSSHBuild
             $newElement =$xml.CreateElement($nodeName, $xml.Project.xmlns)
             $newNode = $xml.Project.PropertyGroup.AppendChild($newElement)
             $null = $newNode.AppendChild($xml.CreateTextNode("true"))
-        } 
+        }
         else
         {
             $node.InnerText = "true"
@@ -553,29 +553,29 @@ function Start-OpenSSHBuild
         $xml.Project.PropertyGroup.WindowsSDKVersion = $win10SDKVer.ToString()
         $xml.Project.PropertyGroup.AdditionalDependentLibs = 'onecore.lib;shlwapi.lib'
         $xml.Project.PropertyGroup.MinimalCoreWin = 'true'
-        
+
         #Use onecore libcrypto binaries
         $xml.Project.PropertyGroup."LibreSSL-x86-Path" = '$(SolutionDir)\LibreSSL\bin\onecore\x86\'
         $xml.Project.PropertyGroup."LibreSSL-x64-Path" = '$(SolutionDir)\LibreSSL\bin\onecore\x64\'
         $xml.Project.PropertyGroup."LibreSSL-arm-Path" = '$(SolutionDir)\LibreSSL\bin\onecore\arm\'
         $xml.Project.PropertyGroup."LibreSSL-arm64-Path" = '$(SolutionDir)\LibreSSL\bin\onecore\arm64\'
-        
+
         $xml.Save($PathTargets)
     }
-    
+
     $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
-    $cmdMsg = @("${solutionFile}", "/t:Rebuild", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/m", "/nologo", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")    
+    $cmdMsg = @("${solutionFile}", "/t:Rebuild", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/m", "/nologo", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
     if($silent)
     {
         $cmdMsg += "/noconlog"
     }
-    
+
     $msbuildCmd = Get-VS2017BuildToolPath
     if($msbuildCmd -eq $null)
     {
         $msbuildCmd = Get-VS2015BuildToolPath
     }
-    
+
     Write-BuildMsg -AsInfo -Message "Starting Open SSH build; Build Log: $($script:BuildLogFile)."
 
     & "$msbuildCmd" $cmdMsg
@@ -584,7 +584,7 @@ function Start-OpenSSHBuild
     if ($errorCode -ne 0)
     {
         Write-BuildMsg -AsError -ErrorAction Stop -Message "Build failed for OpenSSH.`nExitCode: $errorCode."
-    }    
+    }
 
     Write-BuildMsg -AsInfo -Message "SSH build successful."
 }
@@ -622,7 +622,7 @@ function Get-VS2015BuildToolPath
 }
 
 function Get-Windows10SDKVersion
-{   
+{
    ## Search for latest windows sdk available on the machine
    $windowsSDKPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Lib"
    $minSDKVersion = [version]"10.0.14393.0"
@@ -648,7 +648,7 @@ function Get-BuildLogFile
 
         [ValidateSet('x86', 'x64', 'arm64', 'arm')]
         [string]$NativeHostArch = "x64",
-                
+
         [ValidateSet('Debug', 'Release')]
         [string]$Configuration = "Release"
     )
@@ -667,7 +667,7 @@ function Get-SolutionFile
         [Parameter(Mandatory=$true)]
         [ValidateNotNull()]
         [System.IO.DirectoryInfo] $root
-    )    
+    )
     if ($root.FullName -ieq $PSScriptRoot)
     {
         return Join-Path -Path $PSScriptRoot -ChildPath "Win32-OpenSSH.sln"
