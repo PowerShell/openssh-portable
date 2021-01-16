@@ -117,14 +117,8 @@ try {
     }
     $null = Start-OpenSSHPackage @argv
     if ($DestinationPath) {
-        ####
-        # The OpenSSH Visual Studio solution has a bug in copying the file moduli to the output directory
-        Copy-Item -Path moduli -Destination $DestinationPath
-        ####
-
         $DestinationPath
     } else {
-        Write-Warning -Message "Due to a bug in the Visual Studio solution of OpenSSH the file moduli will be missing from the created ZIP archives"
         Get-ChildItem -Path ".\bin\$Platform\$Configuration\OpenSSH*.zip"
     }
 
