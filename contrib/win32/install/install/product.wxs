@@ -5,8 +5,6 @@
 
 <?if $(var.SOURCEDIR) = "" ?>
   <?error Variable SOURCEDIR not set?>
-<?else?>
-  <?warning SourceDir => $(var.SOURCEDIR)?>
 <?endif?>
 
 <?if $(var.VERSION) = "" ?>
