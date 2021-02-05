@@ -954,7 +954,7 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 
 		if (posix_spawn_file_actions_init(&actions) != 0 ||
 			posix_spawn_file_actions_adddup2(&actions, p[1], STDOUT_FILENO) != 0)
-			fatal("posix_spawn initialization failed");  
+			fatal("posix_spawn initialization failed");
 		else {
 			if (strcmp(pw->pw_name, "system") == 0 && am_system()) {
 				debug("starting subprocess using posix_spawnp");
