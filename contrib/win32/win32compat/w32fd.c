@@ -1074,7 +1074,6 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 	
 	wchar_t * t = cmdline_utf16;
 	do {
-		//debug3("spawning %ls", t);
 		if (as_user) {
 			debug3("spawning %ls as user", t);
 			b = CreateProcessAsUserW(as_user, NULL, t, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
