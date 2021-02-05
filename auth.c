@@ -956,9 +956,7 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 			posix_spawn_file_actions_adddup2(&actions, p[1], STDOUT_FILENO) != 0)
 			fatal("posix_spawn initialization failed");  
 		else {
-			//debug("GCE pw_name=%s", pw->pw_name);
-			//TODO (bxk): Remove hardcoded "system". Update logic so that when authorizedkeyscommanduser is not specified in the config, posix_spawnp is used instead of __posix_spawn_asuser
-			if (strcmp(pw->pw_name, "system") == 0) {
+			if (strcmp(pw->pw_name, "system") == 0 && am_system()) {
 				debug("starting subprocess using posix_spawnp");
 				if (posix_spawnp((pid_t*)&pid, av[0], &actions, NULL, av, NULL) != 0)
 					fatal("posix_spawnp: %s", strerror(errno));
