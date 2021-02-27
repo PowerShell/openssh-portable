@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <ComponentGroup Id="CG_Client" Directory="INSTALLFOLDER">
+      <Component Id="cmp_scp.exe">
+        <File Id="scp.exe" KeyPath="yes" Source="$(var.SOURCEDIR)/scp.exe" Name="scp.exe" />
+      </Component>
+      <Component Id="cmp_ssh.exe">
+        <File Id="ssh.exe" KeyPath="yes" Source="$(var.SOURCEDIR)/ssh.exe" Name="ssh.exe" />
+      </Component>
+      <Component Id="cmp_sftp.exe">
+        <File Id="sftp.exe" KeyPath="yes" Source="$(var.SOURCEDIR)/sftp.exe" Name="sftp.exe" />
+      </Component>
+      <Component Id="cmp_sshadd.exe">
+        <File Id="sshadd.exe" KeyPath="yes" Source="$(var.SOURCEDIR)/ssh-add.exe" Name="ssh-add.exe" />
+      </Component>
+      <Component Id="cmp_sshkeyscan.exe">
+        <File Id="sshkeyscan.exe" KeyPath="yes" Source="$(var.SOURCEDIR)/ssh-keyscan.exe" Name="ssh-keyscan.exe" />
+      </Component>
+      <Component Id="cmd_sshclient_env" KeyPath="yes" Guid="d71ba15b-3489-4b44-a89f-76b147c574a6">
+        <Environment Id="PATH" Name="PATH" Value="[INSTALLFOLDER]" Permanent="no" Part="first" Action="set" System="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

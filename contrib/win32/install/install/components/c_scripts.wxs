@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <ComponentGroup Id="CG_Scripts" Directory="INSTALLFOLDER">
+      <Component Id="cmp_FixHostFilePermissions.ps1">
+        <File Id="FixHostFilePermissions.ps1" KeyPath="yes" Source="$(var.SOURCEDIR)/FixHostFilePermissions.ps1" Name="FixHostFilePermissions.ps1" />
+      </Component>
+      <Component Id="cmp_FixUserFilePermissions.ps1">
+        <File Id="FixUserFilePermissions.ps1" KeyPath="yes" Source="$(var.SOURCEDIR)/FixUserFilePermissions.ps1" Name="FixUserFilePermissions.ps1" />
+      </Component>
+      <Component Id="cmp_OpenSSHUtils.psd1">
+        <File Id="OpenSSHUtils.psd1" KeyPath="yes" Source="$(var.SOURCEDIR)/OpenSSHUtils.psd1" Name="OpenSSHUtils.psd1" />
+      </Component>
+      <Component Id="cmp_OpenSSHUtils.psm1">
+        <File Id="OpenSSHUtils.psm1" KeyPath="yes" Source="$(var.SOURCEDIR)/OpenSSHUtils.psm1" Name="OpenSSHUtils.psm1" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

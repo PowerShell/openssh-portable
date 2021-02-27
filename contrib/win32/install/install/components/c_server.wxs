@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix
+  xmlns="http://schemas.microsoft.com/wix/2006/wi"
+  xmlns:fw="http://schemas.microsoft.com/wix/FirewallExtension"
+  xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+  <Fragment>
+    <ComponentGroup Id="CG_SERVER_FILES" Directory="INSTALLFOLDER">
+      <Component Id="cmp_sftpserver.exe">
+        <File Id="sftpserver.exe" KeyPath="yes" Source="$(var.SOURCEDIR)/sftp-server.exe" Name="sftp-server.exe" />
+      </Component>
+      <Component Id="cmp_sshshellhost.exe">
+        <File Id="sshshellhost.exe" KeyPath="yes" Source="$(var.SOURCEDIR)/ssh-shellhost.exe" Name="ssh-shellhost.exe" />
+      </Component>
+      <Component Id="cmp_opensshevents.man">
+        <File Id="opensshevents.man" KeyPath="yes" Source="$(var.SOURCEDIR)/openssh-events.man" Name="openssh-events.man">
+          <util:EventManifest />
+        </File>
+        <util:XmlFile
+          Id="xmlSetResourceFileName"
+          Sequence="1"
+          File="[#opensshevents.man]"
+          Action="setValue"
+          ElementPath="//*[\[]local-name() = 'provider'[\]]"
+          Name="resourceFileName"
+          Value="[#sshagent.exe]"
+          SelectionLanguage="XPath" />
+        <util:XmlFile
+          Id="xmlSetMessageFileName"
+          Sequence="2"
+          File="[#opensshevents.man]"
+          Action="setValue"
+          ElementPath="//*[\[]local-name() = 'provider'[\]]"
+          Name="messageFileName"
+          Value="[#sshagent.exe]"
+          SelectionLanguage="XPath" />
+      </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="CG_SERVER_SSHAGENTSERVICE" Directory="INSTALLFOLDER">
+      <Component Id="cmp_sshagent.exe">
+        <File Id="sshagent.exe" Source="$(var.SOURCEDIR)/ssh-agent.exe" Name="ssh-agent.exe" KeyPath="yes" />
+        <ServiceInstall
+          Id="SVC_SSHAGENT"
+          Description="Agent to hold private keys used for public key authentication."
+          DisplayName="OpenSSH Authentication Agent"
+          ErrorControl="critical"
+          Interactive="no"
+          Name="ssh-agent"
+          Start="auto"
+          Type="ownProcess"
+          Vital="yes">
+          <util:ServiceConfig
+            ResetPeriodInDays="1"
+            FirstFailureActionType="restart"
+            SecondFailureActionType="restart"
+            ThirdFailureActionType="restart" />
+          <PermissionEx Sddl="D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)(A;;RP;;;AU)" />
+        </ServiceInstall>
+        <ServiceControl
+          Id="SC_SSHAGENT_UNINSTALL"
+          Name="ssh-agent"
+          Stop="uninstall"
+          Remove="uninstall"
+          Wait="no" />
+      </Component>
+      <Component Id="cmp_server_sshagent_control" KeyPath="yes" Guid="5f300a9e-8896-4b3e-8b17-8ab1360b3ef1">
+        <Condition>
+          <![CDATA[NOT(DONT_START_SSHAGENT OR DONT_START_SERVICES)]]>
+        </Condition>
+        <ServiceControl
+          Id="SC_SSHAGENT_INSTALL"
+          Name="ssh-agent"
+          Start="install"
+          Wait="no" />
+      </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="CG_SERVER_SSHDSERVICE" Directory="INSTALLFOLDER">
+      <Component Id="cmp_sshd.exe">
+        <File Id="sshd.exe" KeyPath="yes" Source="$(var.SOURCEDIR)/sshd.exe" Name="sshd.exe" />
+        <ServiceInstall
+          Id="SVC_SSHD"
+          Description="SSH protocol based service to provide secure encrypted communications between two untrusted hosts over an insecure network."
+          DisplayName="OpenSSH SSH Server"
+          ErrorControl="critical"
+          Interactive="no"
+          Name="sshd"
+          Start="auto"
+          Type="ownProcess"
+          Vital="yes">
+          <util:ServiceConfig
+            ResetPeriodInDays="1"
+            FirstFailureActionType="restart"
+            SecondFailureActionType="restart"
+            ThirdFailureActionType="restart" />
+        </ServiceInstall>
+        <ServiceControl
+          Id="SC_SSHD_UNINSTALL"
+          Name="sshd"
+          Stop="uninstall"
+          Remove="uninstall"
+          Wait="no" />
+      </Component>
+      <Component Id="cmp_sshd_config_default">
+        <File Id="sshd_config_default" KeyPath="yes" Source="$(var.SOURCEDIR)/sshd_config_default" Name="sshd_config_default">
+          <PermissionEx Sddl="O:BAG:SYD:PAI(A;;FA;;;SY)(A;;FA;;;BA)" />
+        </File>
+      </Component>
+      <Component Id="cmp_server_sshd_control" KeyPath="yes" Guid="da9208e4-fbaf-40df-a8b6-ff71526300cd">
+        <Condition>
+          <![CDATA[NOT(DONT_START_SSHD OR DONT_START_SERVICES)]]>
+        </Condition>
+        <ServiceControl
+          Id="SC_SSHD_INSTALL"
+          Name="sshd"
+          Start="install"
+          Wait="no" />
+      </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="CG_Server_Firewall" Directory="INSTALLFOLDER">
+      <Component Id="cmp_firewall_exception" KeyPath="yes" Guid="58d9e9b2-1f39-48cc-af01-3908dc14595a">
+        <fw:FirewallException
+            Id="FW_IN_ALLOW_SSH"
+            Description="Allow SSH incoming traffic"
+            IgnoreFailure="no"
+            Name="SSH Service (TCP In)"
+            Port="22"
+            Profile="all"
+            Program="[#sshd.exe]"
+            Protocol="tcp"
+            Scope="any" />
+      </Component>
+    </ComponentGroup>
+    <ComponentGroup Id="CG_Server">
+      <ComponentGroupRef Id="CG_SERVER_FILES" />
+      <ComponentGroupRef Id="CG_SERVER_SSHAGENTSERVICE" />
+      <ComponentGroupRef Id="CG_SERVER_SSHDSERVICE" />
+    </ComponentGroup>
+  </Fragment>
+</Wix>

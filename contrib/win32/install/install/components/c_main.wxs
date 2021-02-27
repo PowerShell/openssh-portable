@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <ComponentGroup Id="CG_Main" Directory="INSTALLFOLDER">
+      <Component Id="cmp_libcrypto.dll">
+        <File Id="libcrypto.dll" KeyPath="yes" Source="$(var.SOURCEDIR)/libcrypto.dll" Name="libcrypto.dll" />
+      </Component>
+      <Component Id="cmp_moduli">
+        <File Id="moduli" KeyPath="yes" Source="$(var.SOURCEDIR)/moduli" Name="moduli" />
+      </Component>
+      <Component Id="cmp_sshkeygen.exe">
+        <File Id="sshkeygen.exe" KeyPath="yes" Source="$(var.SOURCEDIR)/ssh-keygen.exe" Name="ssh-keygen.exe" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

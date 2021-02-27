@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <ComponentGroup Id="CG_Server_Symbols" Directory="INSTALLFOLDER">
+      <Component Id="cmp_sftpserver.pdb">
+        <File Id="sftpserver.pdb" KeyPath="yes" Source="$(var.SOURCEDIR)/sftp-server.pdb" Name="sftp-server.pdb" />
+      </Component>
+      <Component Id="cmp_sshshellhost.pdb">
+        <File Id="sshshellhost.pdb" KeyPath="yes" Source="$(var.SOURCEDIR)/ssh-shellhost.pdb" Name="ssh-shellhost.pdb" />
+      </Component>
+      <Component Id="cmp_sshagent.pdb">
+        <File Id="sshagent.pdb" KeyPath="yes" Source="$(var.SOURCEDIR)/ssh-agent.pdb" Name="ssh-agent.pdb" />
+      </Component>
+      <Component Id="cmp_sshd.pdb">
+        <File Id="sshd.pdb" KeyPath="yes" Source="$(var.SOURCEDIR)/sshd.pdb" Name="sshd.pdb" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

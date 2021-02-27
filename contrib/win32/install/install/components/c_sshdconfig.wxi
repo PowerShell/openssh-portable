@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Include>
-  <Component Id="C_SSHDCONFIG" Guid="a6bddf35-3b12-42b4-86cc-696e4e632fa7">
-    <File Id="sshd_config" Source="$(var.SOURCEDIR)/sshd_config_default" Name="sshd_config">
-      <PermissionEx Sddl="O:BAG:SYD:PAI(A;;FA;;;SY)(A;;FA;;;BA)" />
-    </File>
-  </Component>
-</Include>

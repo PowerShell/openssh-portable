@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <ComponentGroup Id="CG_Main_Symbols" Directory="INSTALLFOLDER">
+      <Component Id="cmp_libcrypto.pdb">
+        <File Id="libcrypto.pdb" KeyPath="yes" Source="$(var.SOURCEDIR)/libcrypto.pdb" Name="libcrypto.pdb" />
+      </Component>
+      <Component Id="cmp_sshkeygen.pdb">
+        <File Id="sshkeygen.pdb" KeyPath="yes" Source="$(var.SOURCEDIR)/ssh-keygen.pdb" Name="ssh-keygen.pdb" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

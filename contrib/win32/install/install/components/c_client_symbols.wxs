@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <ComponentGroup Id="CG_Client_Symbols" Directory="INSTALLFOLDER">
+      <Component Id="cmp_scp.pdb">
+        <File Id="scp.pdb" KeyPath="yes" Source="$(var.SOURCEDIR)/scp.pdb" Name="scp.pdb" />
+      </Component>
+      <Component Id="cmp_sftp.pdb">
+        <File Id="sftp.pdb" KeyPath="yes" Source="$(var.SOURCEDIR)/sftp.pdb" Name="sftp.pdb" />
+      </Component>
+      <Component Id="cmp_sshadd.pdb">
+        <File Id="sshadd.pdb" KeyPath="yes" Source="$(var.SOURCEDIR)/ssh-add.pdb" Name="ssh-add.pdb" />
+      </Component>
+      <Component Id="cmp_sshkeyscan.pdb">
+        <File Id="sshkeyscan.pdb" KeyPath="yes" Source="$(var.SOURCEDIR)/ssh-keyscan.pdb" Name="ssh-keyscan.pdb" />
+      </Component>
+      <Component Id="cmp_ssh.pdb">
+        <File Id="ssh.pdb" KeyPath="yes" Source="$(var.SOURCEDIR)/ssh.pdb" Name="ssh.pdb" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

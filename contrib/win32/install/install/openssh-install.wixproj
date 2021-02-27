@@ -37,14 +37,14 @@
     <Folder Include="components" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="components\c_main_symbols.wxi" />
-    <Content Include="components\c_server_symbols.wxi" />
-    <Content Include="components\c_client.wxi" />
-    <Content Include="components\c_main.wxi" />
-    <Content Include="components\c_client_symbols.wxi" />
-    <Content Include="components\c_scripts.wxi" />
-    <Content Include="components\c_server.wxi" />
-    <Content Include="components\c_sshdconfig.wxi" />
+    <Compile Include="components\c_main_symbols.wxs" />
+    <Compile Include="components\c_server_symbols.wxs" />
+    <Compile Include="components\c_client.wxs" />
+    <Compile Include="components\c_main.wxs" />
+    <Compile Include="components\c_client_symbols.wxs" />
+    <Compile Include="components\c_scripts.wxs" />
+    <Compile Include="components\c_server.wxs" />
+    <Compile Include="UI.wxs" />
   </ItemGroup>
   <ItemGroup>
     <WixExtension Include="WixFirewallExtension">

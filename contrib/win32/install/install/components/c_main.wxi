@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Include xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Component Id="C_MAIN" Guid="bed64a54-7dd2-45cf-b26a-7649bbf6a7f8">
-    <File Id="libcrypto.dll" Source="$(var.SOURCEDIR)/libcrypto.dll" Name="libcrypto.dll" />
-    <File Id="moduli" Source="$(var.SOURCEDIR)/moduli" Name="moduli" />
-    <File Id="sshkeygen.exe" Source="$(var.SOURCEDIR)/ssh-keygen.exe" Name="ssh-keygen.exe" />
-  </Component>
-</Include>

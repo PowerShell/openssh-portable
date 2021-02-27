@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
+
+<?ifndef var.IsPreview ?>
+  <?define IsPreview = False?>
+<?endif?>
+
 <?if $(var.MANUFACTURER) = "" ?>
 	<?define MANUFACTURER = "Microsoft Corporation"?>
 <?endif?>
@@ -8,7 +13,7 @@
 <?endif?>
 
 <?if $(var.VERSION) = "" ?>
-  <?define VERSION = "0.0.0.0"?>
+  <?error Variable VERSION not set?>
 <?endif?>
 
 <?if $(sys.BUILDARCH)="x86" ?>
@@ -19,33 +24,40 @@
   <?error Unsupported value of sys.BUILDARCH=$(sys.BUILDARCH)?>
 <?endif?>
 
-<?define UPGRADECODERELEASE = "c7a00fb1-c477-40d3-a951-ec4c749da439" ?>
-<?define UPGRADECODEDEBUG = "e2dd3c95-7a8b-444e-b75b-3e1cf697aadc" ?>
+<?if $(sys.BUILDARCH)=x64?>
+  <?define UpgradeCodePreview = "5a388d64-a109-4d85-bddc-7f46e1e1e520"?>
+  <?define UpgradeCodeRelease = "c7a00fb1-c477-40d3-a951-ec4c749da439"?>
+  <?if $(var.IsPreview)=True?>
+    <?define UpgradeCode = $(var.UpgradeCodePreview)?>
+  <?else?>
+    <?define UpgradeCode = $(var.UpgradeCodeRelease)?>
+  <?endif?>
+<?else?>
+  <?define UpgradeCodePreview = "271d2cdd-3c91-423f-b4e8-9c711a9e8ab1"?>
+  <?define UpgradeCodeRelease = "dd240959-6051-4108-9c7f-c409dca2b65e"?>
+  <?if $(var.IsPreview)=True?>
+    <?define UpgradeCode = $(var.UpgradeCodePreview)?>
+  <?else?>
+    <?define UpgradeCode = $(var.UpgradeCodeRelease)?>
+  <?endif?>
+<?endif?>
 
 <?if $(var.PRODUCTID) = "" ?>
+  <?warning PRODUCTID not passed as variable. Generating new one during build.?>
   <?define PRODUCTID = "*" ?>
 <?endif?>
-<?if $(var.CONFIGURATION) ~= "Release" ?>
-  <?define UPGRADECODE = "$(var.UPGRADECODERELEASE)" ?>
-  <?define UPGRADECODEBLOCKED = "$(var.UPGRADECODEDEBUG)" ?>
-<?elseif $(var.CONFIGURATION) ~= "Debug" ?>
-  <?define UPGRADECODE = "$(var.UPGRADECODEDEBUG)" ?>
-  <?define UPGRADECODEBLOCKED = "$(var.UPGRADECODERELEASE)" ?>
-<?else?>
-  <?error Variable CONFIGURATION is not set or uses an unsupported value. Valid values: Debug, Release ?>
-<?endif?>
 
-<Wix
-  xmlns="http://schemas.microsoft.com/wix/2006/wi"
-  xmlns:util="http://schemas.microsoft.com/wix/UtilExtension"
-  xmlns:fw="http://schemas.microsoft.com/wix/FirewallExtension">
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+
+  <?define MinOSVersionSupported = "VersionNT >= 601" ?>
+
 	<Product
     Id="$(var.PRODUCTID)"
     Name="OpenSSH ($(var.CONFIGURATION) $(var.VERSION))"
     Language="1033"
     Version="$(var.VERSION)"
     Manufacturer="$(var.MANUFACTURER)"
-    UpgradeCode="$(var.UPGRADECODE)">
+    UpgradeCode="$(var.UpgradeCode)">
 
 		<Package
       InstallerVersion="200"
@@ -56,33 +68,27 @@
 
     <Property Id="LOGVERBOSE" Value="LOGVERBOSE"/>
 
-    <!-- https://stackoverflow.com/a/19664484 -->
-    <Upgrade Id="$(var.UPGRADECODEBLOCKED)">
-      <UpgradeVersion OnlyDetect="yes" Property="INCOMPATIBLE_OPENSSH_INSTALLED" Minimum="0.0.0.0" />
-    </Upgrade>
-    <Condition Message="ERROR: OpenSSH debug and release versions cannot be installed side-by-side on the same computer. Please uninstall the existing installation first.">
-      <![CDATA[Installed OR (INCOMPATIBLE_OPENSSH_INSTALLED = "")]]>
-    </Condition>
-
 		<MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
 
 		<MediaTemplate EmbedCab="yes" />
 
     <UI>
       <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
-
-      <UIRef Id="WixUI_FeatureTree" />
-      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="CustomizeDlg">1</Publish>
-      <Publish Dialog="CustomizeDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg">1</Publish>
+      <UIRef Id="WixUI_FeatureTree_NoLicense" />
     </UI>
+
+    <!-- Prerequisites -->
+    <Condition Message="Supported only on Windows 7 and above">
+      <![CDATA[ Installed OR $(var.MinOSVersionSupported) ]]>
+    </Condition>
 
     <CustomAction Id="CA_SSHAGENT_PRIVS" Directory="INSTALLFOLDER" Execute="deferred" Impersonate="yes" Return="check" ExeCommand="sc.exe privs ssh-agent SeImpersonatePrivilege" />
     <CustomAction Id="CA_SSHD_PRIVS" Directory="INSTALLFOLDER" Execute="deferred" Impersonate="yes" Return="check" ExeCommand="sc.exe privs sshd SeAssignPrimaryTokenPrivilege/SeTcbPrivilege/SeBackupPrivilege/SeRestorePrivilege/SeImpersonatePrivilege" />
 
     <InstallExecuteSequence>
       <!--https://www.itninja.com/blog/view/appdeploy-articles-msi-advanced-custom-actions?from=appdeploy.com-->
-      <Custom Action="CA_SSHAGENT_PRIVS" After="InstallServices"><![CDATA[&F_Server=3]]></Custom>
-      <Custom Action="CA_SSHD_PRIVS" After="InstallServices"><![CDATA[&F_Server=3]]></Custom>
+      <Custom Action="CA_SSHAGENT_PRIVS" After="InstallServices"><![CDATA[&Server=3]]></Custom>
+      <Custom Action="CA_SSHD_PRIVS" After="InstallServices"><![CDATA[&Server=3]]></Custom>
     </InstallExecuteSequence>
     <!--
     How to enable and disable features refer to
@@ -91,29 +97,27 @@
     <Feature Id="ProductFeature" Title="OpenSSH" Level="1" Display="expand" AllowAdvertise="no">
 			<ComponentGroupRef Id="CG_Main" />
       <ComponentGroupRef Id="CG_Main_Symbols"/>
-      <Feature Id="F_Client" Title="Client programs" Level="1" Absent="allow" AllowAdvertise="no">
+      <Feature Id="Client" Title="Client programs" Level="1" Absent="allow" AllowAdvertise="no">
         <Condition Level="10000">DISABLE_CLIENT</Condition>
         <ComponentGroupRef Id="CG_Client" />
-        <Feature Id="F_Client_Symbols" Title="Client programs synbols" Level="10000" Absent="allow" AllowAdvertise="no">
-          <Condition Level="1">ENABLE_CLIENTSYMBOLS</Condition>
+        <Feature Id="ClientSymbols" Title="Client programs symbols" Level="2" Absent="allow" AllowAdvertise="no">
           <ComponentGroupRef Id="CG_Client_Symbols"/>
         </Feature>
       </Feature>
-      <Feature Id="F_Server" Title="Server programs" Level="10000" Absent="allow" AllowAdvertise="no">
-        <Condition Level="1">ENABLE_SERVER</Condition>
+      <Feature Id="Server" Title="Server programs" Level="2" Absent="allow" AllowAdvertise="no">
         <ComponentGroupRef Id="CG_Server" />
-        <Feature Id="F_SshdConfig" InstallDefault="followParent" Display="hidden" AllowAdvertise="no">
-          <ComponentGroupRef Id="CG_SshdConfig" />
-          <ComponentRef Id="C_PURGE_SSH_LOGS" />
-          <ComponentRef Id="C_PURGE_SSH" />
+        <Feature Id="PurgeSSHData" InstallDefault="followParent" Display="hidden" AllowAdvertise="no" Absent="disallow">
+          <ComponentRef Id="cmp_purge_ssh_logs" />
+          <ComponentRef Id="cmp_purge_ssh_config" />
         </Feature>
-        <Feature Id="F_Server_Symbols" Title="Server programs synbols" Level="10000" Absent="allow" AllowAdvertise="no">
-          <Condition Level="1">ENABLE_SERVERSYMBOLS</Condition>
+        <Feature Id="ServerFirewall" Title="Enable SSH Firewall exception" Level="2" Absent="allow" AllowAdvertise="no">
+          <ComponentGroupRef Id="CG_Server_Firewall"/>
+        </Feature>
+        <Feature Id="ServerSymbols" Title="Server programs symbols" Level="2" Absent="allow" AllowAdvertise="no">
           <ComponentGroupRef Id="CG_Server_Symbols"/>
         </Feature>
       </Feature>
-      <Feature Id="F_Scripts" Title="Management scripts" Level="10000" Absent="allow" AllowAdvertise="no">
-        <Condition Level="1">ENABLE_SCRIPTS</Condition>
+      <Feature Id="Scripts" Title="Management scripts" Level="2" Absent="allow" AllowAdvertise="no">
         <ComponentGroupRef Id="CG_Scripts" />
       </Feature>
     </Feature>
@@ -126,45 +130,19 @@
 			</Directory>
       <Directory Id="CommonAppDataFolder">
         <Directory Id="SSHDFOLDER" Name="ssh">
-          <Component Id="C_PURGE_SSH" Guid="a2a04863-6287-4650-bc48-ed857d86c23d">
-            <RemoveFile Id="RemoveSshFiles" Name="*" On="uninstall"/>
-            <RemoveFolder Id="RemoveSshFolder" On="uninstall"/>
-          </Component>
           <Directory Id="SSHDLOGFOLDER" Name="logs">
-            <Component Id="C_PURGE_SSH_LOGS" Guid="2311dc7e-0580-4c35-9acf-9cc381e6a90e">
+            <Component Id="cmp_purge_ssh_logs" Guid="2311dc7e-0580-4c35-9acf-9cc381e6a90e">
               <RemoveFile Id="RemoveLogFiles" Name="*" On="uninstall"/>
               <RemoveFolder Id="RemoveLogsFolder" On="uninstall"/>
             </Component>
           </Directory>
+          <Component Id="cmp_purge_ssh_config" Guid="a2a04863-6287-4650-bc48-ed857d86c23d">
+            <RemoveFile Id="RemoveSshFiles" Name="*" On="uninstall"/>
+            <RemoveFolder Id="RemoveSshFolder" On="uninstall"/>
+          </Component>
         </Directory>
       </Directory>
     </Directory>
 	</Fragment>
 
-	<Fragment>
-		<ComponentGroup Id="CG_Main" Directory="INSTALLFOLDER">
-      <?include components/c_main.wxi ?>
-		</ComponentGroup>
-    <ComponentGroup Id="CG_Main_Symbols" Directory="INSTALLFOLDER">
-      <?include components/c_main_symbols.wxi ?>
-    </ComponentGroup>
-    <ComponentGroup Id="CG_Client" Directory="INSTALLFOLDER">
-      <?include components/c_client.wxi ?>
-    </ComponentGroup>
-    <ComponentGroup Id="CG_Client_Symbols" Directory="INSTALLFOLDER">
-      <?include components/c_client_symbols.wxi ?>
-    </ComponentGroup>
-    <ComponentGroup Id="CG_Server" Directory="INSTALLFOLDER">
-      <?include components/c_server.wxi ?>
-    </ComponentGroup>
-    <ComponentGroup Id="CG_Server_Symbols" Directory="INSTALLFOLDER">
-      <?include components/c_server_symbols.wxi ?>
-    </ComponentGroup>
-    <ComponentGroup Id="CG_Scripts" Directory="INSTALLFOLDER">
-      <?include components/c_scripts.wxi ?>
-    </ComponentGroup>
-    <ComponentGroup Id="CG_SshdConfig" Directory="SSHDFOLDER">
-      <?include components/c_sshdconfig.wxi ?>
-    </ComponentGroup>
-  </Fragment>
 </Wix>
