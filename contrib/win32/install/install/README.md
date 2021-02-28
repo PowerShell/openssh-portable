@@ -8,17 +8,18 @@ The projects supports building MSI packages for 32bit and 64bit platforms. In ad
 
 The following parameters are supported 
 
-* `MANUFACTURER`: (optional) the manufacturer of the MSI; default: Microsoft Corporation
 * `CONFIGURATION`: (required) the configuration used; Valid values: `Release`, `Debug`
-* `VERSION`: (optional) the version tag of the MSI; default: `0.0.0.0`
+* `VERSION`: (required) the version tag of the MSI
 * `SOURCEDIR`: (required) the path to the input files
+* `MANUFACTURER`: (optional) the manufacturer of the MSI; default: Microsoft Corporation
 * `PRODUCTID`: (optional) the Product GUID of the created MSI; default: dynamic (`*`), changes every time the MSI is build
+* `IsPreview`: (optional) create a MSI for a previw version of OpenSSH, default: `false`
 
 The parameters are passed via `Msbuild` properties.
 
 Example:
 
-```
+```shell
 $ msbuild openssh-install.wixproj /p:Version=8.1.1 /p:Configuration=Release /p:Platform=x64 /p:SourceDir=c:\openssh-portable\bin /p:ProductId="15512e42-e946-45f9-bbe5-a8e495bd2e2b"
 ```
 
@@ -26,29 +27,37 @@ $ msbuild openssh-install.wixproj /p:Version=8.1.1 /p:Configuration=Release /p:P
 
 ### Upgrade Codes
 
-* Debug Version: `c7a00fb1-c477-40d3-a951-ec4c749da439`
-* Release Version: `e2dd3c95-7a8b-444e-b75b-3e1cf697aadc`
-
 https://docs.microsoft.com/en-us/windows/win32/msi/using-an-upgradecode
 
-### Flags
+#### x64 (64-bit)
 
-The following flags are supported. The flags are passed as public properties during an installation using `msiexec.exe`.
+* Preview version: `5a388d64-a109-4d85-bddc-7f46e1e1e520`
+* Release version: `c7a00fb1-c477-40d3-a951-ec4c749da439`
 
-* `DISABLE_CLIENT`: don't install ssh client components
-* `ENABLE_CLIENTSYMBOLS`: install symbol files for ssh client components
-* `ENABLE_SERVER`: install and configure OpenSSH Server and the corresponding OpenSSH Authentication Agent
-* `ENABLE_SERVERSYMBOLS`: install symbol files for ssh server components
-* `ENABLE_SCRIPTS`: install scripts for managing a OpenSSH installation
+#### x86 (32-bit)
+
+* Preview version: `271d2cdd-3c91-423f-b4e8-9c711a9e8ab1`
+* Release version: `dd240959-6051-4108-9c7f-c409dca2b65e`
+
+### Features
+
+The MSI contains the following features
+
+* `Client`: install ssh client components (enabled by default)
+* `ClientSymbols`: install symbol files for ssh client components
+* `Server`: install and configure OpenSSH Server and the corresponding OpenSSH Authentication Agent
+* `ServerFirewall`: configure firewall exception for incoming SSH traffic (TCP, Port 22)
+* `ServerSymbols`: install symbol files for ssh server components
+* `Scripts`: install scripts for managing a OpenSSH installation
 
 **Example:** silently install OpenSSH client tools and corresponding symbol files
 
-```
-$ msiexec /q /i openssh.msi /l*vx openssh.msi.log  ENABLE_CLIENTSYMBOLS=1
+```shell
+$ msiexec /q /i openssh.msi /l*vx openssh.msi.log  ADDLOCAL=Client,ClientSymbols
 ```
 
-**Example:** silently install only OpenSSH server components
+**Example:** silently install only OpenSSH server components and firewall exception, but no client tools
 
-```
-$ msiexec /q /i openssh.msi /l*vx openssh.msi.log  DISABLE_CLIENT=1 ENABLE_SERVER=1
+```shell
+$ msiexec /q /i openssh.msi /l*vx openssh.msi.log  ADDLOCAL=Server,ServerFirewall REMOVE=Client
 ```
