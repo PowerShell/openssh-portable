@@ -1,11 +1,11 @@
 [CmdletBinding()]
 param(
-	[Parameter()]
+	[Parameter(Mandatory)]
 	[ValidateScript( { Test-Path -LiteralPath $_ -PathType Leaf })]
 	[string]
 	$ProjectPath,
 
-	[Parameter()]
+	[Parameter(Mandatory)]
 	[ValidateScript( { Test-Path -LiteralPath $_ -PathType Container })]
 	[string]
 	$SourceDirectory,
