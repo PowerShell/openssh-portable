@@ -8,7 +8,6 @@
     <ProjectGuid>9607b2ee-4071-4e93-b0a5-a316c3b1ad44</ProjectGuid>
     <SchemaVersion>2.0</SchemaVersion>
     <OutputType>Package</OutputType>
-    <Version Condition=" '$(Version)' == '' ">0.0.0.0</Version>
     <BaseName Condition=" '$(BaseName)' == '' ">openssh-$(Version)-win</BaseName>
     <OutputName Condition=" '$(Configuration)' == 'Debug' ">$(BaseName)-debug-$(Platform)</OutputName>
     <OutputName Condition=" '$(Configuration)' == 'Release' ">$(BaseName)-$(Platform)</OutputName>
