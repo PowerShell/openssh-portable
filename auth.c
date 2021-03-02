@@ -955,8 +955,18 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 		if (posix_spawn_file_actions_init(&actions) != 0 ||
 			posix_spawn_file_actions_adddup2(&actions, p[1], STDOUT_FILENO) != 0)
 			fatal("posix_spawn initialization failed");
-		else if (__posix_spawn_asuser((pid_t*)&pid, av[0], &actions, NULL, av, NULL, pw->pw_name) != 0)
-			fatal("posix_spawn: %s", strerror(errno));
+		else {
+			if (strcmp(pw->pw_name, "system") == 0 && am_system()) {
+				debug("starting subprocess using posix_spawnp");
+				if (posix_spawnp((pid_t*)&pid, av[0], &actions, NULL, av, NULL) != 0)
+					fatal("posix_spawnp: %s", strerror(errno));
+			}
+			else {
+				debug("starting subprocess as user using __posix_spawn_asuser");
+				if (__posix_spawn_asuser((pid_t*)&pid, av[0], &actions, NULL, av, NULL, pw->pw_name) != 0)
+					fatal("posix_spawn_user: %s", strerror(errno));
+			}
+		}
 
 		posix_spawn_file_actions_destroy(&actions);
 	}
