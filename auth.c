@@ -77,6 +77,10 @@
 #include "compat.h"
 #include "channels.h"
 #include "sshfileperm.h"
+#ifdef WINDOWS
+#include <Windows.h>
+#include "misc_internal.h"
+#endif // WINDOWS
 
 /* import */
 extern ServerOptions options;
@@ -892,6 +896,7 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 	char *cp, errmsg[512];
 	u_int envsize;
 	char **child_env;
+	BOOL child_process = FALSE;
 
 	if (child != NULL)
 		*child = NULL;
@@ -931,6 +936,10 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 		restore_uid();
 		return 0;
 	}
+	/* If the user's SID is the System SID and sshd is running as
+	 * system, set to launch as a child process
+	 */
+	child_process = IsWellKnownSid(get_sid(pw->pw_name), WinLocalSystemSid) && am_system();
 #else
 	if (safe_path(av[0], &st, NULL, 0, errmsg, sizeof(errmsg)) != 0) {
 		error("Unsafe %s \"%s\": %s", tag, av[0], errmsg);
@@ -956,7 +965,7 @@ subprocess(const char *tag, struct passwd *pw, const char *command,
 			posix_spawn_file_actions_adddup2(&actions, p[1], STDOUT_FILENO) != 0)
 			fatal("posix_spawn initialization failed");
 		else {
-			if (strcmp(pw->pw_name, "system") == 0 && am_system()) {
+			if (child_process) {
 				debug("starting subprocess using posix_spawnp");
 				if (posix_spawnp((pid_t*)&pid, av[0], &actions, NULL, av, NULL) != 0)
 					fatal("posix_spawnp: %s", strerror(errno));
