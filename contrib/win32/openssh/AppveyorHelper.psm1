@@ -333,75 +333,75 @@ function Invoke-OpenSSHTests
         Write-BuildMessage -Message "All Unit tests passed!" -Category Information
     }
 
-    # Run all E2E tests.
-    Set-OpenSSHTestEnvironment -Confirm:$false
-    Invoke-OpenSSHE2ETest
-    if (($OpenSSHTestInfo -eq $null) -or (-not (Test-Path $OpenSSHTestInfo["E2ETestResultsFile"])))
-    {
-        Write-Warning "Test result file $OpenSSHTestInfo["E2ETestResultsFile"] not found after tests."
-        Write-BuildMessage -Message "Test result file $OpenSSHTestInfo["E2ETestResultsFile"] not found after tests." -Category Error
-        Set-BuildVariable TestPassed False
-        Write-Warning "Stop running further tests!"
-        return
-    }
-    $xml = [xml](Get-Content $OpenSSHTestInfo["E2ETestResultsFile"] | out-string)
-    if ([int]$xml.'test-results'.failures -gt 0)
-    {
-        $errorMessage = "$($xml.'test-results'.failures) tests in regress\pesterTests failed. Detail test log is at $($OpenSSHTestInfo["E2ETestResultsFile"])."
-        Write-Warning $errorMessage
-        Write-BuildMessage -Message $errorMessage -Category Error
-        Set-BuildVariable TestPassed False
-        Write-Warning "Stop running further tests!"
-        return
-    }
+    # # Run all E2E tests.
+    # Set-OpenSSHTestEnvironment -Confirm:$false
+    # Invoke-OpenSSHE2ETest
+    # if (($OpenSSHTestInfo -eq $null) -or (-not (Test-Path $OpenSSHTestInfo["E2ETestResultsFile"])))
+    # {
+    #     Write-Warning "Test result file $OpenSSHTestInfo["E2ETestResultsFile"] not found after tests."
+    #     Write-BuildMessage -Message "Test result file $OpenSSHTestInfo["E2ETestResultsFile"] not found after tests." -Category Error
+    #     Set-BuildVariable TestPassed False
+    #     Write-Warning "Stop running further tests!"
+    #     return
+    # }
+    # $xml = [xml](Get-Content $OpenSSHTestInfo["E2ETestResultsFile"] | out-string)
+    # if ([int]$xml.'test-results'.failures -gt 0)
+    # {
+    #     $errorMessage = "$($xml.'test-results'.failures) tests in regress\pesterTests failed. Detail test log is at $($OpenSSHTestInfo["E2ETestResultsFile"])."
+    #     Write-Warning $errorMessage
+    #     Write-BuildMessage -Message $errorMessage -Category Error
+    #     Set-BuildVariable TestPassed False
+    #     Write-Warning "Stop running further tests!"
+    #     return
+    # }
 
-    # Run UNIX bash tests.
-    Invoke-OpenSSHBashTests
-    if (-not $Global:bash_tests_summary)
-    {
-        $errorMessage = "Failed to start OpenSSH bash tests"
-        Write-Warning $errorMessage
-        Write-BuildMessage -Message $errorMessage -Category Error
-        Set-BuildVariable TestPassed False
-        Write-Warning "Stop running further tests!"
-        return
-    }
+    # # Run UNIX bash tests.
+    # Invoke-OpenSSHBashTests
+    # if (-not $Global:bash_tests_summary)
+    # {
+    #     $errorMessage = "Failed to start OpenSSH bash tests"
+    #     Write-Warning $errorMessage
+    #     Write-BuildMessage -Message $errorMessage -Category Error
+    #     Set-BuildVariable TestPassed False
+    #     Write-Warning "Stop running further tests!"
+    #     return
+    # }
 
-    if ($Global:bash_tests_summary["TotalBashTestsFailed"] -ne 0)
-    {
-        $total_bash_failed_tests = $Global:bash_tests_summary["TotalBashTestsFailed"]
-        $total_bash_tests = $Global:bash_tests_summary["TotalBashTests"]
-        $errorMessage = "At least one of the bash tests failed. [$total_bash_failed_tests of $total_bash_tests]"
-        Write-Warning $errorMessage
-        Write-BuildMessage -Message $errorMessage -Category Error
-        Set-BuildVariable TestPassed False
-        Write-Warning "Stop running further tests!"
-        return
-    }
+    # if ($Global:bash_tests_summary["TotalBashTestsFailed"] -ne 0)
+    # {
+    #     $total_bash_failed_tests = $Global:bash_tests_summary["TotalBashTestsFailed"]
+    #     $total_bash_tests = $Global:bash_tests_summary["TotalBashTests"]
+    #     $errorMessage = "At least one of the bash tests failed. [$total_bash_failed_tests of $total_bash_tests]"
+    #     Write-Warning $errorMessage
+    #     Write-BuildMessage -Message $errorMessage -Category Error
+    #     Set-BuildVariable TestPassed False
+    #     Write-Warning "Stop running further tests!"
+    #     return
+    # }
 
-    Invoke-OpenSSHUninstallTest
-    if (($OpenSSHTestInfo -eq $null) -or (-not (Test-Path $OpenSSHTestInfo["UninstallTestResultsFile"])))
-    {
-        Write-Warning "Test result file $OpenSSHTestInfo["UninstallTestResultsFile"] not found after tests."
-        Write-BuildMessage -Message "Test result file $OpenSSHTestInfo["UninstallTestResultsFile"] not found after tests." -Category Error
-        Set-BuildVariable TestPassed False
-    }
-    else {
-        $xml = [xml](Get-Content $OpenSSHTestInfo["UninstallTestResultsFile"] | out-string)
-        if ([int]$xml.'test-results'.failures -gt 0) 
-        {
-            $errorMessage = "$($xml.'test-results'.failures) uninstall tests in regress\pesterTests failed. Detail test log is at $($OpenSSHTestInfo["UninstallTestResultsFile"])."
-            Write-Warning $errorMessage
-            Write-BuildMessage -Message $errorMessage -Category Error
-            Set-BuildVariable TestPassed False
-        }
-    }
+    # Invoke-OpenSSHUninstallTest
+    # if (($OpenSSHTestInfo -eq $null) -or (-not (Test-Path $OpenSSHTestInfo["UninstallTestResultsFile"])))
+    # {
+    #     Write-Warning "Test result file $OpenSSHTestInfo["UninstallTestResultsFile"] not found after tests."
+    #     Write-BuildMessage -Message "Test result file $OpenSSHTestInfo["UninstallTestResultsFile"] not found after tests." -Category Error
+    #     Set-BuildVariable TestPassed False
+    # }
+    # else {
+    #     $xml = [xml](Get-Content $OpenSSHTestInfo["UninstallTestResultsFile"] | out-string)
+    #     if ([int]$xml.'test-results'.failures -gt 0) 
+    #     {
+    #         $errorMessage = "$($xml.'test-results'.failures) uninstall tests in regress\pesterTests failed. Detail test log is at $($OpenSSHTestInfo["UninstallTestResultsFile"])."
+    #         Write-Warning $errorMessage
+    #         Write-BuildMessage -Message $errorMessage -Category Error
+    #         Set-BuildVariable TestPassed False
+    #     }
+    # }
 
-    # Writing out warning when the $Error.Count is non-zero. Tests Should clean $Error after success.
-    if ($Error.Count -gt 0) 
-    {
-        Write-BuildMessage -Message "Tests Should clean $Error after success." -Category Warning
-    }
+    # # Writing out warning when the $Error.Count is non-zero. Tests Should clean $Error after success.
+    # if ($Error.Count -gt 0) 
+    # {
+    #     Write-BuildMessage -Message "Tests Should clean $Error after success." -Category Warning
+    # }
 }
 
 <#
