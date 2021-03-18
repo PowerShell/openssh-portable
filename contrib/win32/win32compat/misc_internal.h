@@ -82,3 +82,4 @@ int lookup_principal_name(const wchar_t * sam_account_name, wchar_t * user_princ
 BOOL is_bash_test_env();
 int bash_to_win_path(const char *in, char *out, const size_t out_len);
 void debug_assert_internal();
+void create_openssh_registry_key();
