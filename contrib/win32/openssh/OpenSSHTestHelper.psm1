@@ -203,8 +203,16 @@ WARNING: Following changes will be made to OpenSSH configuration
         {
             #only add the local user when it does not exists on the machine        
             net user $user $Script:OpenSSHTestAccountsPassword /ADD 2>&1 >> $Script:TestSetupLogFile
-        }        
+        }
     }
+
+    #restart ssh-agent
+    Write-Host "ssh-agent service state before restarting"
+    Get-Service ssh-agent | Format-List *
+    Stop-Service ssh-agent
+    Start-Service ssh-agent
+    Write-Host "Restarted ssh-agent before setting up single sing on user"
+    Get-Service ssh-agent | Format-List *
 
     #setup single sign on for ssouser
     $ssouserProfile = Get-LocalUserProfile -User $SSOUser
