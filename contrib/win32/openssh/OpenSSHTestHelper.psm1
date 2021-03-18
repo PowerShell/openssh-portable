@@ -206,13 +206,13 @@ WARNING: Following changes will be made to OpenSSH configuration
         }
     }
 
-    #restart ssh-agent
-    Write-Host "ssh-agent service state before restarting"
-    Get-Service ssh-agent | Format-List *
-    Stop-Service ssh-agent
-    Start-Service ssh-agent
-    Write-Host "Restarted ssh-agent before setting up single sing on user"
-    Get-Service ssh-agent | Format-List *
+    # #restart ssh-agent
+    # Write-Host "ssh-agent service state before restarting"
+    # Get-Service ssh-agent | Format-List *
+    # Stop-Service ssh-agent
+    # Start-Service ssh-agent
+    # Write-Host "Restarted ssh-agent before setting up single sing on user"
+    # Get-Service ssh-agent | Format-List *
 
     #setup single sign on for ssouser
     $ssouserProfile = Get-LocalUserProfile -User $SSOUser
