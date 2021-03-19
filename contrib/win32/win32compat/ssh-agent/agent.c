@@ -31,7 +31,7 @@
 #include "agent.h"
 #include <sddl.h>
 #include <UserEnv.h>
-//#include "..\misc_internal.h"
+#include "..\misc_internal.h"
 #define BUFSIZE 5 * 1024
 
 static HANDLE ioc_port = NULL;
@@ -190,38 +190,22 @@ agent_start(BOOL dbg_mode)
 	HKEY agent_root = NULL;
 	DWORD process_id = GetCurrentProcessId();
 	wchar_t* sddl_str;
-	PSECURITY_DESCRIPTOR pSD = NULL;
 	
 	verbose("%s pid:%d, dbg:%d", __FUNCTION__, process_id, dbg_mode);
 	debug_mode = dbg_mode;
 
 	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
 	sa.nLength = sizeof(sa);
-
-	// create parent registry entry.
-	//create_openssh_registry_key();
-
-	// SDDL - GA to System and Builtin/Admins
-	sddl_str = L"D:PAI(A;OICI;KA;;;SY)(A;OICI;KA;;;BA)";
-	if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, SSH_AGENT_ROOT, 0, WRITE_DAC | KEY_WRITE, &agent_root) == ERROR_SUCCESS)
-	{
-		if ((ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl_str, SDDL_REVISION, &pSD, NULL) == TRUE) &&
-		    (IsValidSecurityDescriptor(pSD) == TRUE))
-		{
-			// Set the right ACLs
-			RegSetKeySecurity(agent_root, DACL_SECURITY_INFORMATION, pSD);
-		}
-	}
-	else
-	{
-		if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl_str, SDDL_REVISION_1,
-			&sa.lpSecurityDescriptor, &sa.nLength))
-			fatal("cannot convert sddl ERROR:%d", GetLastError());
-
-		if ((r = RegCreateKeyExW(HKEY_LOCAL_MACHINE, SSH_AGENT_ROOT, 0, 0, 0, KEY_WRITE, &sa, &agent_root, 0)) != ERROR_SUCCESS)
-			fatal("cannot create agent root reg key, ERROR:%d", r);
-	}
-
+	/* 
+	 * SDDL - GA to System and Builtin/Admins and restricted access to Authenticated users
+	 * 0x12019b - FILE_GENERIC_READ/WRITE minus FILE_CREATE_PIPE_INSTANCE
+	 */
+	sddl_str = L"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x12019b;;;AU)";
+	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl_str, SDDL_REVISION_1,
+	    &sa.lpSecurityDescriptor, &sa.nLength))
+		fatal("cannot convert sddl ERROR:%d", GetLastError());
+	if ((r = RegCreateKeyExW(HKEY_LOCAL_MACHINE, SSH_AGENT_ROOT, 0, 0, 0, KEY_WRITE, &sa, &agent_root, 0)) != ERROR_SUCCESS)
+		fatal("cannot create agent root reg key, ERROR:%d", r);
 	if ((r = RegSetValueExW(agent_root, L"ProcessID", 0, REG_DWORD, (BYTE*)&process_id, 4)) != ERROR_SUCCESS)
 		fatal("cannot publish agent master process id ERROR:%d", r);
 	if ((event_stop_agent = CreateEvent(NULL, TRUE, FALSE, NULL)) == NULL)
