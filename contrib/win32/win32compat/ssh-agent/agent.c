@@ -31,7 +31,7 @@
 #include "agent.h"
 #include <sddl.h>
 #include <UserEnv.h>
-#include "..\misc_internal.h"
+//#include "..\misc_internal.h"
 #define BUFSIZE 5 * 1024
 
 static HANDLE ioc_port = NULL;
@@ -199,7 +199,7 @@ agent_start(BOOL dbg_mode)
 	sa.nLength = sizeof(sa);
 
 	// create parent registry entry.
-	create_openssh_registry_key();
+	//create_openssh_registry_key();
 
 	// SDDL - GA to System and Builtin/Admins
 	sddl_str = L"D:PAI(A;OICI;KA;;;SY)(A;OICI;KA;;;BA)";
