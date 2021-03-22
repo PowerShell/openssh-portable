@@ -275,7 +275,7 @@ Describe "Setup Tests" -Tags "Setup" {
                 @{
                     Identity=$authenticatedUserSid
                     IsInherited = $false
-                    RegistryRights = $RegReadKeyPerm -bor ([System.UInt32] [System.Security.AccessControl.RegistryRights]::ReadKey.value__)
+                    RegistryRights = $RegReadKeyPerm
                     PropagationFlags = "None"
                 }
             )

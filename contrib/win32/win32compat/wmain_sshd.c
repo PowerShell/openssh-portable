@@ -162,6 +162,31 @@ create_prgdata_ssh_folder()
 	}
 }
 
+/* Create HKLM\Software\OpenSSH windows registry key */
+static void
+create_openssh_registry_key()
+{
+	HKEY ssh_registry_root = NULL;
+	wchar_t* sddl_str;
+	SECURITY_ATTRIBUTES sa;
+	int r;
+
+	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
+	sa.nLength = sizeof(sa);
+
+	// SDDL - FullAcess to System and Builtin/Admins and read only access to Authenticated users
+	sddl_str = L"D:PAI(A;OICI;KA;;;SY)(A;OICI;KA;;;BA)(A;OICI;KR;;;AU)";
+	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl_str, SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sa.nLength)) {
+		printf("cannot convert sddl ERROR:%d", GetLastError());
+		return;
+	}
+
+	if ((r = RegCreateKeyExW(HKEY_LOCAL_MACHINE, SSH_REGISTRY_ROOT, 0, 0, 0, KEY_WRITE, &sa, &ssh_registry_root, 0)) == ERROR_SUCCESS)
+		RegCloseKey(ssh_registry_root);
+	else
+		printf("cannot create ssh root reg key, ERROR:%d", r);
+}
+
 static void
 prereq_setup()
 {
