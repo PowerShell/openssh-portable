@@ -48,6 +48,7 @@ finally {
 }
 
 # Fix the registry permissions
+Import-Module $PSScriptRoot\OpenSSHUtils -Force
 Enable-Privilege SeRestorePrivilege | out-null
 
 $sshRootRegPath="HKLM:SOFTWARE/Openssh"
