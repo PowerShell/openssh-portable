@@ -359,18 +359,13 @@ client_x11_get_proto(struct ssh *ssh, const char *display,
 				}
 #ifdef WINDOWS
 				xasprintf(&cmd, "\"%s\" -f %s generate %s %s "
-					"untrusted timeout %u 2>%s",
-					xauth_path, xauthfile, display,
-					SSH_X11_PROTO, x11_timeout_real,
-					_PATH_DEVNULL);
 #else
 				xasprintf(&cmd, "%s -f %s generate %s %s "
+#endif
 					"untrusted timeout %u 2>%s",
 					xauth_path, xauthfile, display,
 					SSH_X11_PROTO, x11_timeout_real,
 					_PATH_DEVNULL);
-#endif
-
 			}
 			debug2("%s: xauth command: %s", __func__, cmd);
 
@@ -394,21 +389,16 @@ client_x11_get_proto(struct ssh *ssh, const char *display,
 		 * above.
 		 */
 		if (trusted || generated) {
+			xasprintf(&cmd,
 #ifdef WINDOWS
-			xasprintf(&cmd,
-			    "\"%s\" %s%s list %s 2>" _PATH_DEVNULL,
-			    xauth_path,
-			    generated ? "-f " : "" ,
-			    generated ? xauthfile : "",
-			    display);
+				"\"%s\" %s%s list %s 2>" _PATH_DEVNULL,
 #else
-			xasprintf(&cmd,
 				"%s %s%s list %s 2>" _PATH_DEVNULL,
+#endif
 				xauth_path,
 				generated ? "-f " : "",
 				generated ? xauthfile : "",
 				display);
-#endif
 			debug2("x11_get_proto: %s", cmd);
 			f = popen(cmd, "r");
 			if (f && fgets(line, sizeof(line), f) &&
