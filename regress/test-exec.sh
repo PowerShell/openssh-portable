@@ -1,4 +1,4 @@
-#	$OpenBSD: test-exec.sh,v 1.66 2019/07/05 04:12:46 dtucker Exp $
+#	$OpenBSD: test-exec.sh,v 1.79 2021/04/06 23:57:56 dtucker Exp $
 #	Placed in the Public Domain.
 
 #SUDO=sudo
@@ -23,10 +23,14 @@ if [ "$os" != "windows" ]; then
 	esac
 fi
 
-if [ ! -z "$TEST_SSH_PORT" ]; then
-	PORT="$TEST_SSH_PORT"
-else
-	PORT=4242
+# If configure tells us to use a different egrep, create a wrapper function
+# to call it.  This means we don't need to change all the tests that depend
+# on a good implementation.
+if test "x${EGREP}" != "x"; then
+	egrep ()
+{
+	 ${EGREP} "$@"
+}
 fi
 
 if [ "$os" == "windows" ]; then
@@ -41,8 +45,31 @@ else
 	elif logname >/dev/null 2>&1; then
 		USER=`logname`
 	else
-		USER=`id -un`
+		if [ -x /usr/ucb/whoami ]; then
+			USER=`/usr/ucb/whoami`
+		elif whoami >/dev/null 2>&1; then
+			USER=`whoami`
+		elif logname >/dev/null 2>&1; then
+			USER=`logname`
+		else
+			USER=`id -un`
+		fi
 	fi
+fi
+
+if test -z "$LOGNAME"; then
+	LOGNAME="${USER}"
+	export LOGNAME
+fi
+
+if [ ! -x "$TEST_SSH_ELAPSED_TIMES" ]; then
+	STARTTIME=`date '+%s'`
+fi
+
+if [ ! -z "$TEST_SSH_PORT" ]; then
+	PORT="$TEST_SSH_PORT"
+else
+	PORT=4242
 fi
 
 OBJ=$1
@@ -92,6 +119,9 @@ PLINK=plink
 PUTTYGEN=puttygen
 CONCH=conch
 
+# Tools used by multiple tests
+NC=$OBJ/netcat
+
 if [ "x$TEST_SSH_SSH" != "x" ]; then
 	SSH="${TEST_SSH_SSH}"
 fi
@@ -139,6 +169,12 @@ if [ "x$TEST_SSH_CONCH" != "x" ]; then
 	/*) CONCH="${TEST_SSH_CONCH}" ;;
 	*) CONCH=`which ${TEST_SSH_CONCH} 2>/dev/null` ;;
 	esac
+fi
+if [ "x$TEST_SSH_PKCS11_HELPER" != "x" ]; then
+	SSH_PKCS11_HELPER="${TEST_SSH_PKCS11_HELPER}"
+fi
+if [ "x$TEST_SSH_SK_HELPER" != "x" ]; then
+	SSH_SK_HELPER="${TEST_SSH_SK_HELPER}"
 fi
 
 # Path to sshd must be absolute for rexec
@@ -246,6 +282,7 @@ fi
 
 chmod a+rx $OBJ/ssh-log-wrapper.sh
 REAL_SSH="$SSH"
+REAL_SSHD="$SSHD"
 SSH="$SSHLOGWRAP"
 
 # Some test data.  We make a copy because some tests will overwrite it.
@@ -271,6 +308,7 @@ increase_datafile_size()
 
 # these should be used in tests
 export SSH SSHD SSHAGENT SSHADD SSHKEYGEN SSHKEYSCAN SFTP SFTPSERVER SCP
+export SSH_PKCS11_HELPER SSH_SK_HELPER
 #echo $SSH $SSHD $SSHAGENT $SSHADD $SSHKEYGEN $SSHKEYSCAN $SFTP $SFTPSERVER $SCP
 
 # Portable specific functions
@@ -322,6 +360,28 @@ md5 () {
 		wc -c
 	fi
 }
+
+# Some platforms don't have hostname at all, but on others uname -n doesn't
+# provide the fully qualified name we need, so in the former case we create
+# our own hostname function.
+if ! have_prog hostname; then
+	hostname() {
+		uname -n
+	}
+fi
+
+make_tmpdir ()
+{
+	if [ "$os" == "windows" ]; then
+		powershell.exe /c "New-Item -Path $OBJ\openssh-XXXXXXXX -ItemType Directory -Force" >/dev/null 2>&1
+		if [ $? -ne 0 ]; then
+			fatal "failed to create temporary directory"
+		fi
+	else
+		SSH_REGRESS_TMP="$($OBJ/mkdtemp openssh-XXXXXXXX)" || \
+			fatal "failed to create temporary directory"
+	fi
+}
 # End of portable specific functions
 
 stop_sshd ()
@@ -360,19 +420,6 @@ stop_sshd ()
 	fi
 }
 
-make_tmpdir ()
-{
-	if [ "$os" == "windows" ]; then
-		powershell.exe /c "New-Item -Path $OBJ\openssh-XXXXXXXX -ItemType Directory -Force" >/dev/null 2>&1
-		if [ $? -ne 0 ]; then
-			fatal "failed to create temporary directory"
-		fi
-	else
-		SSH_REGRESS_TMP="$($OBJ/mkdtemp openssh-XXXXXXXX)" || \
-			fatal "failed to create temporary directory"
-	fi
-}
-
 # helper
 cleanup ()
 {
@@ -395,6 +442,11 @@ cleanup ()
 		rm -rf "$SSH_REGRESS_TMP"
 	fi
 	stop_sshd
+	if [ ! -z "$TEST_SSH_ELAPSED_TIMES" ]; then
+		now=`date '+%s'`
+		elapsed=$(($now - $STARTTIME))
+		echo elapsed $elapsed `basename $SCRIPT .sh`
+	fi
 }
 
 start_debug_log ()
@@ -428,12 +480,6 @@ verbose ()
 	if [ "X$TEST_SSH_QUIET" != "Xyes" ]; then
 		echo "$@"
 	fi
-}
-
-warn ()
-{
-	echo "WARNING: $@" >>$TEST_SSH_LOGFILE
-	echo "WARNING: $@"
 }
 
 fail ()
@@ -476,11 +522,43 @@ cat << EOF > $OBJ/sshd_config
 	Subsystem	sftp	$SFTPSERVER
 EOF
 
+if [ "$os" != "windows" ]; then
 # This may be necessary if /usr/src and/or /usr/obj are group-writable,
 # but if you aren't careful with permissions then the unit tests could
 # be abused to locally escalate privileges.
 if [ ! -z "$TEST_SSH_UNSAFE_PERMISSIONS" ]; then
-	echo "StrictModes no" >> $OBJ/sshd_config
+	echo "	StrictModes no" >> $OBJ/sshd_config
+else
+	# check and warn if excessive permissions are likely to cause failures.
+	unsafe=""
+	dir="${OBJ}"
+	while test ${dir} != "/"; do
+		if test -d "${dir}" && ! test -h "${dir}"; then
+			perms=`ls -ld ${dir}`
+			case "${perms}" in
+			?????w????*|????????w?*) unsafe="${unsafe} ${dir}" ;;
+			esac
+		fi
+		dir=`dirname ${dir}`
+	done
+	if ! test  -z "${unsafe}"; then
+		cat <<EOD
+
+WARNING: Unsafe (group or world writable) directory permissions found:
+${unsafe}
+
+These could be abused to locally escalate privileges.  If you are
+sure that this is not a risk (eg there are no other users), you can
+bypass this check by setting TEST_SSH_UNSAFE_PERMISSIONS=1
+
+EOD
+	fi
+fi
+fi
+
+if [ ! -z "$TEST_SSH_MODULI_FILE" ]; then
+	trace "adding modulifile='$TEST_SSH_MODULI_FILE' to sshd_config"
+	echo "	ModuliFile '$TEST_SSH_MODULI_FILE'" >> $OBJ/sshd_config
 fi
 
 if [ ! -z "$TEST_SSH_SSHD_CONFOPTS" ]; then
@@ -519,9 +597,39 @@ fi
 
 rm -f $OBJ/known_hosts $OBJ/authorized_keys_$USER
 
-SSH_KEYTYPES=`$SSH -Q key-plain`
+SSH_SK_PROVIDER=
+if ! config_defined ENABLE_SK; then
+	trace skipping sk-dummy
+elif [ -f "${SRC}/misc/sk-dummy/obj/sk-dummy.so" ] ; then
+	SSH_SK_PROVIDER="${SRC}/misc/sk-dummy/obj/sk-dummy.so"
+elif [ -f "${SRC}/misc/sk-dummy/sk-dummy.so" ] ; then
+	SSH_SK_PROVIDER="${SRC}/misc/sk-dummy/sk-dummy.so"
+fi
+export SSH_SK_PROVIDER
+
+if ! test -z "$SSH_SK_PROVIDER"; then
+	EXTRA_AGENT_ARGS='-P/*' # XXX want realpath(1)...
+	echo "SecurityKeyProvider $SSH_SK_PROVIDER" >> $OBJ/ssh_config
+	echo "SecurityKeyProvider $SSH_SK_PROVIDER" >> $OBJ/sshd_config
+	echo "SecurityKeyProvider $SSH_SK_PROVIDER" >> $OBJ/sshd_proxy
+fi
+export EXTRA_AGENT_ARGS
+
+maybe_filter_sk() {
+	if test -z "$SSH_SK_PROVIDER" ; then
+		grep -v ^sk
+	else
+		cat
+	fi
+}
+
+SSH_KEYTYPES=`$SSH -Q key-plain | maybe_filter_sk`
+SSH_HOSTKEY_TYPES=`$SSH -Q key-plain | maybe_filter_sk`
+
 if [ "$os" == "windows" ]; then
 	SSH_KEYTYPES=`echo $SSH_KEYTYPES | tr -d '\r','\n'`  # remove \r\n
+	SSH_HOSTKEY_TYPES=`echo $SSH_HOSTKEY_TYPES | tr -d '\r','\n'`  # remove \r\n
+	OBJ_WIN_FORMAT=`windows_path $OBJ`
 	first_key_type=${SSH_KEYTYPES%% *}
 	if [ "x$USER_DOMAIN" != "x" ]; then
 		# For domain user, create folders
@@ -537,29 +645,28 @@ if [ "$os" == "windows" ]; then
 	fi
 fi
 
-if [ "$os" == "windows" ]; then
-	OBJ_WIN_FORMAT=`windows_path $OBJ`
-fi
-
 for t in ${SSH_KEYTYPES}; do
 	# generate user key
-	trace "generating key type $t"
-
 	if [ ! -f $OBJ/$t ] || [ ${SSHKEYGEN_BIN} -nt $OBJ/$t ]; then
+		trace "generating key type $t"
 		rm -f $OBJ/$t
 		${SSHKEYGEN} -q -N '' -t $t  -f $OBJ/$t ||\
 			fail "ssh-keygen for $t failed"
+	else
+		trace "using cached key type $t"
 	fi
 
+	# setup authorized keys
+	cat $OBJ/$t.pub >> $OBJ/authorized_keys_$USER
+	echo IdentityFile $OBJ/$t >> $OBJ/ssh_config
+done
+
+for t in ${SSH_HOSTKEY_TYPES}; do
 	# known hosts file for client
 	(
 		printf 'localhost-with-alias,127.0.0.1,::1 '
 		cat $OBJ/$t.pub
 	) >> $OBJ/known_hosts
-
-	# setup authorized keys
-	cat $OBJ/$t.pub >> $OBJ/authorized_keys_$USER
-	echo IdentityFile $OBJ/$t >> $OBJ/ssh_config
 
 	# use key as host key, too
 	$SUDO cp $OBJ/$t $OBJ/host.$t
@@ -585,10 +692,11 @@ if test -x "$CONCH" ; then
 	REGRESS_INTEROP_CONCH=yes
 fi
 
-# If PuTTY is present and we are running a PuTTY test, prepare keys and
-# configuration
+# If PuTTY is present, new enough and we are running a PuTTY test, prepare
+# keys and configuration.
 REGRESS_INTEROP_PUTTY=no
-if test -x "$PUTTYGEN" -a -x "$PLINK" ; then
+if test -x "$PUTTYGEN" -a -x "$PLINK" &&
+    "$PUTTYGEN" --help 2>&1 | grep -- --new-passphrase >/dev/null; then
 	REGRESS_INTEROP_PUTTY=yes
 fi
 case "$SCRIPT" in
@@ -601,13 +709,13 @@ if test "$REGRESS_INTEROP_PUTTY" = "yes" ; then
 
 	# Add a PuTTY key to authorized_keys
 	rm -f ${OBJ}/putty.rsa2
-	if ! puttygen -t rsa -o ${OBJ}/putty.rsa2 \
+	if ! "$PUTTYGEN" -t rsa -o ${OBJ}/putty.rsa2 \
 	    --random-device=/dev/urandom \
 	    --new-passphrase /dev/null < /dev/null > /dev/null; then
-		echo "Your installed version of PuTTY is too old to support --new-passphrase; trying without (may require manual interaction) ..." >&2
-		puttygen -t rsa -o ${OBJ}/putty.rsa2 < /dev/null > /dev/null
+		echo "Your installed version of PuTTY is too old to support --new-passphrase, skipping test" >&2
+		exit 1
 	fi
-	puttygen -O public-openssh ${OBJ}/putty.rsa2 \
+	"$PUTTYGEN" -O public-openssh ${OBJ}/putty.rsa2 \
 	    >> $OBJ/authorized_keys_$USER
 
 	# Convert rsa2 host key to PuTTY format
@@ -631,17 +739,17 @@ if test "$REGRESS_INTEROP_PUTTY" = "yes" ; then
 
 	PUTTYDIR=${OBJ}/.putty
 	export PUTTYDIR
-
-	REGRESS_INTEROP_PUTTY=yes
 fi
 
 # create a proxy version of the client config
 (
 	cat $OBJ/ssh_config
 	if [ "$os" == "windows" ]; then
+		# TODO - having SSH_SK_HELPER is causing issues. Need to find a way.
+		# This is fine for now as we don't have FIDO enabled.
 		echo proxycommand  `windows_path ${SSHD}` -i -f $OBJ_WIN_FORMAT/sshd_proxy
 	else
-		echo proxycommand ${SUDO} sh ${SRC}/sshd-log-wrapper.sh ${TEST_SSHD_LOGFILE} ${SSHD} -i -f $OBJ/sshd_proxy
+		echo proxycommand ${SUDO} env SSH_SK_HELPER=\"$SSH_SK_HELPER\" sh ${SRC}/sshd-log-wrapper.sh ${TEST_SSHD_LOGFILE} ${SSHD} -i -f $OBJ/sshd_proxy
 	fi
 ) > $OBJ/ssh_proxy
 
@@ -658,7 +766,8 @@ start_sshd ()
 		#TODO (Code BUG) : -E<sshd.log> is writing the data the cygwin terminal.
 		${SSHD} -f $OBJ/sshd_config "$@" &
 	else
-		$SUDO ${SSHD} -f $OBJ/sshd_config "$@" -E$TEST_SSHD_LOGFILE
+		$SUDO env SSH_SK_HELPER="$SSH_SK_HELPER" \
+	    	${SSHD} -f $OBJ/sshd_config "$@" -E$TEST_SSHD_LOGFILE
 	fi
 
 	trace "wait for sshd"

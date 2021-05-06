@@ -203,7 +203,7 @@ WARNING: Following changes will be made to OpenSSH configuration
         {
             #only add the local user when it does not exists on the machine        
             net user $user $Script:OpenSSHTestAccountsPassword /ADD 2>&1 >> $Script:TestSetupLogFile
-        }        
+        }
     }
 
     #setup single sign on for ssouser
@@ -344,10 +344,12 @@ function Get-LocalUserProfile
         $askpass_util = Join-Path $Script:E2ETestDirectory "utilities\askpass_util\askpass_util.exe"
         $env:SSH_ASKPASS=$askpass_util
         $env:ASKPASS_PASSWORD=$OpenSSHTestAccountsPassword
+        $env:SSH_ASKPASS_REQUIRE="prefer"
         $ret = ssh -p 47002 "$User@localhost" echo %userprofile%
         if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
-        remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
-        Remove-item "env:ASKPASS_PASSWORD" -ErrorAction SilentlyContinue 
+        Remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
+        Remove-item "env:ASKPASS_PASSWORD" -ErrorAction SilentlyContinue
+        Remove-item "env:SSH_ASKPASS_REQUIRE" -ErrorAction SilentlyContinue
     }   
     
     (Get-ItemProperty -Path $userProfileRegistry -Name 'ProfileImagePath').ProfileImagePath    

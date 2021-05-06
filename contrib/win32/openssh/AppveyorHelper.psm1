@@ -253,6 +253,7 @@ function Add-Artifact
     else
     {
         $null = $artifacts.Add($FileToAdd)
+        Write-Host "Added $FileToAdd to publishing package artifacts"
     }
 }
 
@@ -289,6 +290,8 @@ function Publish-Artifact
         Write-Host "Publishing $artifact as Appveyor artifact"
         Push-AppveyorArtifact $artifact -ErrorAction Continue
     }
+
+    Write-Host -ForegroundColor Yellow "End of publishing project artifacts"
 }
 
 <#

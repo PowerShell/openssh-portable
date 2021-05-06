@@ -1602,8 +1602,14 @@ lookup_sid(const wchar_t* name_utf16, PSID psid, DWORD * psid_len)
 	WCHAR dom[DNLEN + 1] = L"";
 	DWORD dom_len = DNLEN + 1;
 	wchar_t* name_utf16_modified = NULL;
+	BOOL resolveAsAdminsSid = 0, r;
 
 	LookupAccountNameW(NULL, name_utf16, NULL, &sid_len, dom, &dom_len, &n_use);
+
+	if (sid_len == 0 && _wcsicmp(name_utf16, L"administrators") == 0) {
+		CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, NULL, &sid_len);
+		resolveAsAdminsSid = 1;
+	}
 
 	if (sid_len == 0) {
 		errno = errno_from_Win32LastError();
@@ -1619,7 +1625,12 @@ lookup_sid(const wchar_t* name_utf16, PSID psid, DWORD * psid_len)
 		target_psid = alloc_psid;
 	}
 
-	if (!LookupAccountNameW(NULL, name_utf16, target_psid, &sid_len, dom, &dom_len, &n_use)) {
+	if (resolveAsAdminsSid)
+		r = CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, psid, &sid_len);
+	else
+		r = LookupAccountNameW(NULL, name_utf16, target_psid, &sid_len, dom, &dom_len, &n_use);
+
+	if (!r) {
 		errno = errno_from_Win32LastError();
 		goto cleanup;
 	}
@@ -1627,6 +1638,18 @@ lookup_sid(const wchar_t* name_utf16, PSID psid, DWORD * psid_len)
 	if (n_use == SidTypeDomain) {
 		// Additionally check the case when name is the same as computer name and
 		// thus same as local domain. Try to resolve <name>\<name>.
+		/* fetch the computer name so we can determine if the specified user is local or not */
+		wchar_t computer_name[CNLEN + 1];
+		DWORD computer_name_size = ARRAYSIZE(computer_name);
+		if (GetComputerNameW(computer_name, &computer_name_size) == 0) {
+			error_f("GetComputerNameW() failed with error:%d", GetLastError());
+			goto cleanup;
+		}
+		if (_wcsicmp(name_utf16, computer_name) != 0) {
+			error_f("For SidTypeDomain, name:%ls must be same as machine name:%ls", name_utf16, computer_name);
+			goto cleanup;
+		}
+
 		size_t name_size = wcslen(name_utf16) * 2U + 2U;
 		name_utf16_modified = malloc(name_size * sizeof(wchar_t));
 		name_utf16_modified[0] = L'\0';
@@ -1716,6 +1739,7 @@ cleanup:
 
 	return ret;
 }
+
 /* Interpret scp and sftp executables*/
 char *
 build_exec_command(const char * command)

@@ -558,7 +558,7 @@ w32_write(int fd, const void *buf, size_t max)
 	if (fd_table.w32_ios[fd]->type == SOCK_FD)
 		return socketio_send(fd_table.w32_ios[fd], buf, max, 0);
 
-	return fileio_write(fd_table.w32_ios[fd], buf, max);
+	return fileio_write_wrapper(fd_table.w32_ios[fd], buf, max);
 }
 
 int
@@ -1071,14 +1071,21 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 	if (strstr(cmd, "sshd.exe")) {
 		flags |= DETACHED_PROCESS;
 	}
+
+	if (is_bash_test_env()) {
+		flags |= CREATE_NO_WINDOW;
+	}
 	
 	wchar_t * t = cmdline_utf16;
 	do {
-		debug3("spawning %ls", t);
-		if (as_user)
+		if (as_user) {
+			debug3("spawning %ls as user", t);
 			b = CreateProcessAsUserW(as_user, NULL, t, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
-		else
+		}
+		else {
+			debug3("spawning %ls as subprocess", t);
 			b = CreateProcessW(NULL, t, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
+		}
 		if(b || GetLastError() != ERROR_FILE_NOT_FOUND || (argv != NULL && *argv != NULL) || cmd[0] == '\"')
 			break;
 		t++;
