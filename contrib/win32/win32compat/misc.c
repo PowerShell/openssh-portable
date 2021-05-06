@@ -1631,7 +1631,7 @@ lookup_sid(const wchar_t* name_utf16, PSID psid, DWORD * psid_len)
 	}
 
 	if (resolveAsAdminsSid)
-		r = CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, psid, &sid_len);
+		r = CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, target_psid, &sid_len);
 	else
 		r = LookupAccountNameW(NULL, name_utf16, target_psid, &sid_len, dom, &dom_len, &n_use);
 
