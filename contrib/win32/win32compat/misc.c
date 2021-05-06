@@ -1604,14 +1604,18 @@ lookup_sid(const wchar_t* name_utf16, PSID psid, DWORD * psid_len)
 	wchar_t* name_utf16_modified = NULL;
 	BOOL resolveAsAdminsSid = 0, r;
 
+	debug3_f("name_utf16:%S", name_utf16);
+
 	LookupAccountNameW(NULL, name_utf16, NULL, &sid_len, dom, &dom_len, &n_use);
 
 	if (sid_len == 0 && _wcsicmp(name_utf16, L"administrators") == 0) {
 		CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, NULL, &sid_len);
 		resolveAsAdminsSid = 1;
+		debug3_f("resolveAsAdminsSid:%d", resolveAsAdminsSid);
 	}
 
 	if (sid_len == 0) {
+		error_f("LookupAccountNameW() failed with error:%d", GetLastError());
 		errno = errno_from_Win32LastError();
 		goto cleanup;
 	}
@@ -1620,6 +1624,7 @@ lookup_sid(const wchar_t* name_utf16, PSID psid, DWORD * psid_len)
 	if (target_psid == NULL) {
 		if ((alloc_psid = malloc(sid_len)) == NULL) {
 			errno = ENOMEM;
+			error_f("Failed to allocate memory");
 			goto cleanup;
 		}
 		target_psid = alloc_psid;
@@ -1631,6 +1636,7 @@ lookup_sid(const wchar_t* name_utf16, PSID psid, DWORD * psid_len)
 		r = LookupAccountNameW(NULL, name_utf16, target_psid, &sid_len, dom, &dom_len, &n_use);
 
 	if (!r) {
+		error_f("Failed to retrieve SID for user:%S error:%d", name_utf16, GetLastError());
 		errno = errno_from_Win32LastError();
 		goto cleanup;
 	}
@@ -1645,11 +1651,13 @@ lookup_sid(const wchar_t* name_utf16, PSID psid, DWORD * psid_len)
 			error_f("GetComputerNameW() failed with error:%d", GetLastError());
 			goto cleanup;
 		}
+
 		if (_wcsicmp(name_utf16, computer_name) != 0) {
 			error_f("For SidTypeDomain, name:%ls must be same as machine name:%ls", name_utf16, computer_name);
 			goto cleanup;
 		}
 
+		debug3_f("local user name is same as machine name");
 		size_t name_size = wcslen(name_utf16) * 2U + 2U;
 		name_utf16_modified = malloc(name_size * sizeof(wchar_t));
 		name_utf16_modified[0] = L'\0';
