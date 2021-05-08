@@ -1,4 +1,4 @@
-Set-StrictMode -Version 2.0
+﻿Set-StrictMode -Version 2.0
 If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -Force
 
@@ -196,8 +196,9 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsVerbose -Message "$gitCmdPath already present in Path environment variable" -Silent:$silent
     }
 
-    $VS2015Path = Get-VS2015BuildToolPath
+    $VS2019Path = Get-VS2019BuildToolPath
     $VS2017Path = Get-VS2017BuildToolPath
+    $VS2015Path = Get-VS2015BuildToolPath
 
     # Update machine environment path
     if ($newMachineEnvironmentPath -ne $machinePath)
@@ -236,17 +237,24 @@ function Start-OpenSSHBootstrap
         }
     }
 
-    #use vs2017 build tool if exists
-    if($VS2017Path -ne $null)
-    {
+    $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"
 
+    if ($VS2019Path -or $VS2017Path)
+    {
+        # Use VS2019 or VS2017 build tools if installed.
+        if (-not (Test-Path $sdkPath))
+        {
+            $packageName = "windows-sdk-8.1"
+            Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
+            choco install $packageName -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
+        }
 
         if(-not (Test-Path $VcVars))
         {
             Write-BuildMsg -AsError -ErrorAction Stop -Message "VC++ 2015.3 v140 toolset are not installed."   
         }
     }
-    elseIf (($VS2015Path -eq $null) -or (-not (Test-Path $VcVars))) {
+    elseIf (($VS2015Path -eq $null) -or (-not (Test-Path $VcVars)) -or (-not (Test-Path $sdkPath))) {
         $packageName = "vcbuildtools"
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
         choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK" -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
@@ -283,10 +291,9 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsVerbose -Message 'VC++ 2015 Build Tools already present.'
     }
 
-    if($NativeHostArch.ToLower().Startswith('arm') -and ($VS2017Path -eq $null))
+    if($NativeHostArch.ToLower().Startswith('arm') -and ($VS2019Path -or $VS2017Path))
     {
-        
-        #todo, install vs 2017 build tools
+        #TODO: Install VS2019 or VS2017 build tools
         Write-BuildMsg -AsError -ErrorAction Stop -Message "The required msbuild 15.0 is not installed on the machine."
     }
 
@@ -302,9 +309,16 @@ function Start-OpenSSHBootstrap
     }
 
     # Ensure the VS C toolset is installed
-    if ($null -eq $env:VS140COMNTOOLS)
+    if (!$env:VS140COMNTOOLS)
     {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "Cannot find Visual Studio 2015 Environment variable VS140COMNTOOlS."
+        if (Test-Path $vcVars)
+        {
+            $env:VS140COMNTOOLS = Split-Path $vcVars
+        }
+        else
+        {
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "Cannot find Visual Studio 2015 Environment variable VS140COMNTOOlS."
+        }
     }
 
     $item = Get-Item(Join-Path -Path $env:VS140COMNTOOLS -ChildPath '../../vc')
@@ -594,13 +608,24 @@ function Start-OpenSSHBuild
     {
         $cmdMsg += "/noconlog"
     }
-    
-    $msbuildCmd = Get-VS2017BuildToolPath
-    if($msbuildCmd -eq $null)
+
+    if ($msbuildCmd = Get-VS2019BuildToolPath)
     {
-        $msbuildCmd = Get-VS2015BuildToolPath
+        Write-BuildMsg -AsInfo -Message "Using MSBuild path: $msbuildCmd"
     }
-    
+    elseif ($msbuildCmd = Get-VS2017BuildToolPath)
+    {
+        Write-BuildMsg -AsInfo -Message "Using MSBuild path: $msbuildCmd"
+    }
+    elseif ($msbuildCmd = Get-VS2015BuildToolPath)
+    {
+        Write-BuildMsg -AsInfo -Message "Using MSBuild path: $msbuildCmd"
+    }
+    else
+    {
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "MSBuild not found"
+    }
+
     Write-BuildMsg -AsInfo -Message "Starting Open SSH build; Build Log: $($script:BuildLogFile)."
     Write-BuildMsg -AsInfo -Message "$msbuildCmd $cmdMsg"
 
@@ -615,8 +640,26 @@ function Start-OpenSSHBuild
     Write-BuildMsg -AsInfo -Message "SSH build successful."
 }
 
+function Get-VS2019BuildToolPath
+{
+    # TODO: Should use vswhere: https://github.com/microsoft/vswhere/wiki/Find-MSBuild
+    $searchPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\*\MSBuild\Current\Bin"
+    if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
+    {
+        $searchPath += "\amd64"
+    }
+    $toolAvailable = @()
+    $toolAvailable += Get-ChildItem -path $searchPath\* -Filter "MSBuild.exe" -ErrorAction SilentlyContinue
+    if($toolAvailable.count -eq 0)
+    {
+        return $null
+    }
+   return $toolAvailable[0].FullName
+}
+
 function Get-VS2017BuildToolPath
 {
+    # TODO: Should use vswhere: https://github.com/microsoft/vswhere/wiki/Find-MSBuild
     $searchPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2017\*\MSBuild\15.0\Bin"
     if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
     {
