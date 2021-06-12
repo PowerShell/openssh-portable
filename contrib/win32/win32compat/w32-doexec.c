@@ -106,65 +106,81 @@ setup_session_user_vars(wchar_t* profile_path)
 	swprintf_s(path, _countof(path), L"%s\\AppData\\Roaming", profile_path);
 	SetEnvironmentVariableW(L"APPDATA", path);
 
-	ret = RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE, &reg_key);
-	if (ret != ERROR_SUCCESS)
-		//error("Error retrieving user environment variables. RegOpenKeyExW returned %d", ret);
-		return;
-	else while (1) {
-		to_apply = NULL;
-		required = data_chars * sizeof(wchar_t);
-		name_chars = 256;
-		ret = RegEnumValueW(reg_key, i++, name, &name_chars, 0, &type, (LPBYTE)data, &required);
-		if (ret == ERROR_NO_MORE_ITEMS)
-			break;
-		else if (ret == ERROR_MORE_DATA || required > data_chars * 2) {
-			if (data != NULL)
-				free(data);
-			data = xmalloc(required);
-			data_chars = required / 2;
-			i--;
-			continue;
-		}
-		else if (ret != ERROR_SUCCESS)
-			break;
 
-		if (type == REG_SZ)
-			to_apply = data;
-		else if (type == REG_EXPAND_SZ) {
-			required = ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
-			if (required > data_expanded_chars) {
-				if (data_expanded)
-					free(data_expanded);
-				data_expanded = xmalloc(required * 2);
-				data_expanded_chars = required;
-				ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+	for (int j = 0; j < 2; j++)
+	{
+		if (j == 0) 
+			ret = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", 0, KEY_QUERY_VALUE, &reg_key);
+		else
+			ret = RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE, &reg_key);
+
+		if (ret != ERROR_SUCCESS)
+			return;
+		
+		else while (1) {
+			to_apply = NULL;
+			required = data_chars * sizeof(wchar_t);
+			name_chars = 256;
+			ret = RegEnumValueW(reg_key, i++, name, &name_chars, 0, &type, (LPBYTE)data, &required);
+			if (ret == ERROR_NO_MORE_ITEMS)
+				break;
+			else if (ret == ERROR_MORE_DATA || required > data_chars * 2) {
+				if (data != NULL)
+					free(data);
+				data = xmalloc(required);
+				data_chars = required / 2;
+				i--;
+				continue;
 			}
-			to_apply = data_expanded;
-		}
+			else if (ret != ERROR_SUCCESS)
+				break;
 
-		if (_wcsicmp(name, L"PATH") == 0) {
-			if ((required = GetEnvironmentVariableW(L"PATH", NULL, 0)) != 0) {
-				/* "required" includes null term */
-				path_value = xmalloc((wcslen(to_apply) + 1 + required) * 2);
-				GetEnvironmentVariableW(L"PATH", path_value, required);
-				path_value[required - 1] = L';';
-				GOTO_CLEANUP_ON_ERR(memcpy_s(path_value + required, (wcslen(to_apply) + 1) * 2, to_apply, (wcslen(to_apply) + 1) * 2));
-				to_apply = path_value;
+			if (type == REG_SZ)
+				to_apply = data;
+			else if (type == REG_EXPAND_SZ) {
+				required = ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+				if (required > data_expanded_chars) {
+					if (data_expanded)
+						free(data_expanded);
+					data_expanded = xmalloc(required * 2);
+					data_expanded_chars = required;
+					ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+				}
+				to_apply = data_expanded;
 			}
 
+			if (_wcsicmp(name, L"PATH") == 0 && j == 1) {
+				if ((required = GetEnvironmentVariableW(L"PATH", NULL, 0)) != 0) {
+					path_value = xmalloc((wcslen(to_apply) + 1 + required) * 2);
+					GetEnvironmentVariableW(L"PATH", path_value, required);
+					path_value[required - 1] = L';';
+					GOTO_CLEANUP_ON_ERR(memcpy_s(path_value + required, (wcslen(to_apply) + 1) * 2, to_apply, (wcslen(to_apply) + 1) * 2));
+					to_apply = path_value;
+				}
+			}
+
+			if (to_apply)
+				SetEnvironmentVariableW(name, to_apply);
+				
 		}
-		if (to_apply)
-			SetEnvironmentVariableW(name, to_apply);
+	cleanup:
+		if (reg_key)
+			RegCloseKey(reg_key);
+		if (data)
+			free(data);
+		if (data_expanded)
+			free(data_expanded);
+		if (path_value)
+			free(path_value);
+		i = 0;
+		data = NULL; 
+		data_expanded = NULL; 
+		path_value = NULL;
+		name_chars = 256; 
+		data_chars = 0; 
+		data_expanded_chars = 0;
+		reg_key = 0;
 	}
-cleanup:
-	if (reg_key)
-		RegCloseKey(reg_key);
-	if (data)
-		free(data);
-	if (data_expanded)
-		free(data_expanded);
-	if (path_value)
-		free(path_value);
 }
 
 static int
