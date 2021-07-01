@@ -156,6 +156,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ssh-keyscan", "ssh-keyscan.
 		{0D02F0F0-013B-4EE3-906D-86517F3822C0} = {0D02F0F0-013B-4EE3-906D-86517F3822C0}
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ssh-sk-helper", "ssh-sk-helper.vcxproj", "{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM = Debug|ARM
@@ -504,6 +506,22 @@ Global
 		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCA}.Release|x64.Build.0 = Release|x64
 		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCA}.Release|x86.ActiveCfg = Release|Win32
 		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCA}.Release|x86.Build.0 = Release|Win32
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Debug|ARM.ActiveCfg = Debug|ARM
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Debug|ARM.Build.0 = Debug|ARM
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Debug|ARM64.Build.0 = Debug|ARM64
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Debug|x64.ActiveCfg = Debug|x64
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Debug|x64.Build.0 = Debug|x64
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Debug|x86.ActiveCfg = Debug|Win32
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Debug|x86.Build.0 = Debug|Win32
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Release|ARM.ActiveCfg = Release|ARM
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Release|ARM.Build.0 = Release|ARM
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Release|ARM64.ActiveCfg = Release|ARM64
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Release|ARM64.Build.0 = Release|ARM64
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Release|x64.ActiveCfg = Release|x64
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Release|x64.Build.0 = Release|x64
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Release|x86.ActiveCfg = Release|Win32
+		{7D0A75FC-F366-4B60-B72F-B37C3EA07CCB}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
