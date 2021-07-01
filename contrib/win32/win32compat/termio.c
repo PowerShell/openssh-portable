@@ -264,17 +264,21 @@ syncio_close(struct w32_io* pio)
 
 	/* If io is pending, let worker threads exit. */
 	if (pio->read_details.pending) {
-		/*
-		Terminate the read thread at the below situations:
-		1. For console - the read thread is blocked by the while loop on raw mode
-		2. Function ReadFile on Win7 machine dees not return when no content to read in non-interactive mode.
-		*/
-		if (FILETYPE(pio) == FILE_TYPE_CHAR && (IsWin7OrLess() || in_raw_mode)) {
+		if (FILETYPE(pio) == FILE_TYPE_CHAR) {
+			/* The read thread is blocked by the while loop when in raw mode. */
 			QueueUserAPC(InterruptThread, pio->read_overlapped.hEvent, (ULONG_PTR)NULL);
 			CancelSynchronousIo(pio->read_overlapped.hEvent);
 		}
 
-		WaitForSingleObject(pio->read_overlapped.hEvent, INFINITE);
+		/*
+		Keep trying until we know for sure that the read has been canceled.
+		This avoids a concurrency issue, where we call CancelSynchronousIo before the read thread has called ReadFile.
+		If ReadFile gets called second, and we only cancel once, this would result in a hang until the user presses Enter.
+		This race condition appears to only happen for very short-lived commands (eg: /bin/true, cd, mkdir).
+		*/
+		while (WaitForSingleObject(pio->read_overlapped.hEvent, 100) == WAIT_TIMEOUT) {
+			CancelSynchronousIo(pio->read_overlapped.hEvent);
+		}
 	}
 	if (pio->write_details.pending)
 		WaitForSingleObject(pio->write_overlapped.hEvent, INFINITE);
