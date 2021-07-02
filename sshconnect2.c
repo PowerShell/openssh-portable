@@ -1281,8 +1281,13 @@ identity_sign(struct identity *id, u_char **sigp, size_t *lenp,
 		}
 		sign_key = prv;
 		if (sshkey_is_sk(sign_key)) {
+#ifdef WINDOWS
+			if ((sign_key->sk_flags &
+			    SSH_SK_USER_VERIFICATION_REQD) && 0) {
+#else
 			if ((sign_key->sk_flags &
 			    SSH_SK_USER_VERIFICATION_REQD)) {
+#endif
  retry_pin:
 				xasprintf(&prompt, "Enter PIN for %s key %s: ",
 				    sshkey_type(sign_key), id->filename);
