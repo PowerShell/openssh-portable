@@ -24,7 +24,7 @@
                 <ServiceInstall
                     Name="sshd"
                     DisplayName="OpenSSH SSH Server"
-                    Description="SSH protocol based service to provide secure encrypted communications between two untrusted hosts over an insecure network."
+                    Description="OpenSSH is a connectivity tool for remote login that uses the SSH protocol. It encrypts all traffic between client and server to eliminate eavesdropping, connection hijacking, and other attacks."
                     Start="auto"
                     Type="ownProcess"
                     Interactive="no"
