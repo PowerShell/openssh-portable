@@ -22,7 +22,7 @@
             <Component Id="ClientPATH" Guid="F07FFA0C-B5CF-45A3-9013-A7420DDFD654">
                 <!-- Use same property condition as PowerShell. We can use a shared component GUID here because there should be only one installed on a system. -->
                 <Condition>ADD_PATH=1</Condition>
-                <Environment Id="ClientPATH" Name="PATH" Value="[INSTALLFOLDER]" Part="first" System="yes" />
+                <Environment Id="ClientPATH" Name="PATH" Value="[INSTALLFOLDER]" Action="set" Part="first" System="yes" />
             </Component>
         </ComponentGroup>
     </Fragment>

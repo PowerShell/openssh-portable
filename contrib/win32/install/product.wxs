@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 
 <?ifndef ProductVersion?>
-<?define ProductVersion = "0.0.0"?>
+<?error ProductVersion must be defined?>
 <?endif?>
 
 <!-- Currently support x86, x64 builds. Assumes only previews are built as MSIs. -->
@@ -31,7 +31,7 @@
         </Feature>
 
         <Directory Id="TARGETDIR" Name="SourceDir">
-            <Directory Id="ProgramFilesFolder" Name="Program Files">
+            <Directory Id="$(var.ProgramFilesFolder)" Name="Program Files">
                 <Directory Id="INSTALLFOLDER" Name="OpenSSH" />
             </Directory>
         </Directory>
