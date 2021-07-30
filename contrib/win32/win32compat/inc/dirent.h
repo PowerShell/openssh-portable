@@ -8,7 +8,10 @@
 #define __DIRENT_H__
 
 #include <direct.h>
+#pragma push_macro("_CRT_INTERNAL_NONSTDC_NAMES")
+#undef _CRT_INTERNAL_NONSTDC_NAMES
 #include <io.h>
+#pragma pop_macro("_CRT_INTERNAL_NONSTDC_NAMES")
 #include <fcntl.h>
 #include "..\misc_internal.h"
 

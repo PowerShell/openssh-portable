@@ -343,6 +343,12 @@
 
 /* Define to 1 if you have the `DSA_generate_parameters_ex' function. */
 #define HAVE_DSA_GENERATE_PARAMETERS_EX 1
+#define HAVE_DSA_GET0_KEY 1
+#define HAVE_DSA_GET0_PQG 1
+#define HAVE_DSA_SET0_KEY 1
+#define HAVE_DSA_SET0_PQG 1
+#define HAVE_DSA_SIG_GET0 1
+#define HAVE_DSA_SIG_SET0 1
 
 /* Define to 1 if you have the <endian.h> header file. */
 /* #undef HAVE_ENDIAN_H */
@@ -713,6 +719,10 @@
  with #include <openssl/header.h>
    */
 #define HAVE_OPENSSL 1
+#define HAVE_OPENSSL_ADD_ALL_ALGORITHMS 1
+#define HAVE_OPENSSL_INIT_CRYPTO 1
+#define HAVE_OPENSSL_VERSION 1
+#define HAVE_OPENSSL_VERSION_NUM 1
 
 /* Define if you have Digital Unix Security
  Integration Architecture */
@@ -795,9 +805,22 @@
 
 /* Define to 1 if you have the `RSA_generate_key_ex' function. */
 #define HAVE_RSA_GENERATE_KEY_EX 1
+#define HAVE_RSA_GET0_CRT_PARAMS 1
+#define HAVE_RSA_GET0_FACTORS 1
+#define HAVE_RSA_GET0_KEY 1
 
 /* Define to 1 if you have the `RSA_get_default_method' function. */
 #define HAVE_RSA_GET_DEFAULT_METHOD 1
+#define HAVE_RSA_METH_DUP 1
+#define HAVE_RSA_METH_FREE 1
+#define HAVE_RSA_METH_GET_FINISH 1
+#define HAVE_RSA_METH_SET1_NAME 1
+#define HAVE_RSA_METH_SET_FINISH 1
+#define HAVE_RSA_METH_SET_PRIV_DEC 1
+#define HAVE_RSA_METH_SET_PRIV_ENC 1
+#define HAVE_RSA_SET0_CRT_PARAMS 1
+#define HAVE_RSA_SET0_FACTORS 1
+#define HAVE_RSA_SET0_KEY 1
 
 /* Define to 1 if you have the <sandbox.h> header file. */
 /* #undef HAVE_SANDBOX_H */
@@ -1342,6 +1365,8 @@
 
 /* libcrypto includes complete ECC support */
 #define OPENSSL_HAS_ECC 1
+#define OPENSSL_HAS_NISTP256 1
+#define OPENSSL_HAS_NISTP384 1
 #define OPENSSL_HAS_NISTP521 1
 
 /* libcrypto is missing AES 192 and 256 bit functions */
@@ -1667,13 +1692,30 @@
 
 
 #define WITH_OPENSSL 1
+#define HAVE_EVP_CHACHA20 1
+#define OPENSSL_HAVE_EVPCTR 1
 #define OPENSSL_HAVE_EVPGCM 1
 #define HAVE_EVP_CIPHER_CTX_CTRL 1
+#define HAVE_EVP_CIPHER_CTX_IV 1
+#define HAVE_EVP_CIPHER_CTX_IV_NOCONST 1
+#define HAVE_EVP_DIGESTFINAL_EX 1
+#define HAVE_EVP_DIGESTINIT_EX 1
+#define HAVE_EVP_MD_CTX_COPY_EX 1
+#define HAVE_EVP_MD_CTX_FREE 1
+#define HAVE_EVP_MD_CTX_NEW 1
+#define HAVE_EVP_PKEY_GET0_RSA 1
 #define HAVE_DECL_NFDBITS 0
 #define HAVE_DECL_HOWMANY 0
 #define HAVE_STRTOULL 1
 #define HAVE_USLEEP 1
 #define HAVE_EVP_RIPEMD160 1
+#define HAVE_ECDSA_SIG_GET0 1
+#define HAVE_ECDSA_SIG_SET0 1
+#define HAVE_DH_GET0_KEY 1
+#define HAVE_DH_GET0_PQG 1
+#define HAVE_DH_SET0_KEY 1
+#define HAVE_DH_SET0_PQG 1
+#define HAVE_DH_SET_LENGTH 1
 
 #if defined ( WIN32 )
 #define __func__ __FUNCTION__

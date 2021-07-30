@@ -1,6 +1,11 @@
-Param($Config_h_vs, $Config_h, $VCIncludePath, $OutCRTHeader)
+Param($Config_h_vs, $Config_h, $VCIncludePath, $OutCRTHeader, $OpenSSL)
 
 Copy-Item $Config_h_vs $Config_h -Force
+if ($OpenSSL -ne "True" )
+{
+    (Get-Content $Config_h).Replace('#define HAVE_EVP_CIPHER_CTX_IV 1','') | Set-Content $Config_h
+    (Get-Content $Config_h).Replace('#define HAVE_EVP_CIPHER_CTX_IV_NOCONST 1','') | Set-Content $Config_h
+}
 if (Test-Path $OutCRTHeader) {exit}
 $headers = ("stdio.h", "string.h", "sys\types.h", "ctype.h", "stdlib.h", "sys\stat.h", "fcntl.h", "time.h")
 $paths = $VCIncludePath.Split(";")

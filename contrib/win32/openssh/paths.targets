@@ -5,12 +5,20 @@
     <OpenSSH-Bin-Path>$(SolutionDir)..\..\..\bin\</OpenSSH-Bin-Path>
     <OpenSSH-Lib-Path>$(SolutionDir)lib\</OpenSSH-Lib-Path>
     <LibreSSLVersion>3.3.3.0</LibreSSLVersion>
+    <OpenSSLVersion>1_1_1-stable</OpenSSLVersion>
+    <BuildWithOpenSSL>True</BuildWithOpenSSL> 
     <ZLibVersion>1.2.11</ZLibVersion>
-    <LibreSSL-Path>$(SolutionDir)\LibreSSL\sdk\</LibreSSL-Path>
-    <LibreSSL-x86-Path>$(SolutionDir)\LibreSSL\bin\desktop\x86\</LibreSSL-x86-Path>
-    <LibreSSL-x64-Path>$(SolutionDir)\LibreSSL\bin\desktop\x64\</LibreSSL-x64-Path>
-    <LibreSSL-arm64-Path>$(SolutionDir)\LibreSSL\bin\desktop\arm64\</LibreSSL-arm64-Path>
-    <LibreSSL-arm-Path>$(SolutionDir)\LibreSSL\bin\desktop\arm\</LibreSSL-arm-Path>
+    <ZLibBuild>True</ZLibBuild>
+    <SSL-Path Condition="'$(BuildWithOpenSSL)'=='False'">$(SolutionDir)\LibreSSL\sdk\</SSL-Path>
+    <SSL-x86-Path Condition="'$(BuildWithOpenSSL)'=='False'">$(SolutionDir)\LibreSSL\bin\desktop\x86\</SSL-x86-Path>
+    <SSL-x64-Path Condition="'$(BuildWithOpenSSL)'=='False'">$(SolutionDir)\LibreSSL\bin\desktop\x64\</SSL-x64-Path>
+    <SSL-arm64-Path Condition="'$(BuildWithOpenSSL)'=='False'">$(SolutionDir)\LibreSSL\bin\desktop\arm64\</SSL-arm64-Path>
+    <SSL-arm-Path Condition="'$(BuildWithOpenSSL)'=='False'">$(SolutionDir)\LibreSSL\bin\desktop\arm\</SSL-arm-Path>
+    <SSL-Path Condition="'$(BuildWithOpenSSL)'=='True'">$(SolutionDir)\OpenSSL\</SSL-Path>
+    <SSL-x86-Path Condition="'$(BuildWithOpenSSL)'=='True'">$(SolutionDir)\OpenSSL\bin\x86\</SSL-x86-Path>
+    <SSL-x64-Path Condition="'$(BuildWithOpenSSL)'=='True'">$(SolutionDir)\OpenSSL\bin\x64\</SSL-x64-Path>
+    <SSL-arm64-Path Condition="'$(BuildWithOpenSSL)'=='True'">$(SolutionDir)\OpenSSL\bin\arm64\</SSL-arm64-Path>
+    <SSL-arm-Path Condition="'$(BuildWithOpenSSL)'=='True'">$(SolutionDir)\OpenSSL\bin\arm\</SSL-arm-Path>
     <ZLib-Path>$(SolutionDir)\ZLib\sdk\</ZLib-Path>
     <ZLib-x86-Path>$(SolutionDir)\ZLib\bin\x86\</ZLib-x86-Path>
     <ZLib-x64-Path>$(SolutionDir)\ZLib\bin\x64\</ZLib-x64-Path>
