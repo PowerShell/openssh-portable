@@ -187,7 +187,7 @@
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h" -OpenSSL "$(BuildWithOpenSSL)"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetSSL.ps1" $(BuildWithOpenSSL) $(Configuration) $(Platform) $(PlatformToolset)
 powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1" $(Configuration) $(Platform) $(PlatformToolset)</Command>
     </PreBuildEvent>
     <PreBuildEvent>
@@ -224,7 +224,7 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h" -OpenSSL "$(BuildWithOpenSSL)"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetSSL.ps1" $(BuildWithOpenSSL) $(Configuration) $(Platform) $(PlatformToolset)
 powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1" $(Configuration) $(Platform) $(PlatformToolset)</Command>
     </PreBuildEvent>
     <PreBuildEvent>
@@ -261,7 +261,7 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h" -OpenSSL "$(BuildWithOpenSSL)"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetSSL.ps1" $(BuildWithOpenSSL) $(Configuration) $(Platform) $(PlatformToolset)
 powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1" $(Configuration) $(Platform) $(PlatformToolset)</Command>
     </PreBuildEvent>
     <PreBuildEvent>
@@ -298,7 +298,7 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h" -OpenSSL "$(BuildWithOpenSSL)"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetSSL.ps1" $(BuildWithOpenSSL) $(Configuration) $(Platform) $(PlatformToolset)
 powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1" $(Configuration) $(Platform) $(PlatformToolset)</Command>
     </PreBuildEvent>
     <PreBuildEvent>
@@ -339,7 +339,7 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h" -OpenSSL "$(BuildWithOpenSSL)"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetSSL.ps1" $(BuildWithOpenSSL) $(Configuration) $(Platform) $(PlatformToolset)
 powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1" $(Configuration) $(Platform) $(PlatformToolset)</Command>
     </PreBuildEvent>
     <PreBuildEvent>
@@ -380,7 +380,7 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h" -OpenSSL "$(BuildWithOpenSSL)"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetSSL.ps1" $(BuildWithOpenSSL) $(Configuration) $(Platform) $(PlatformToolset)
 powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1" $(Configuration) $(Platform) $(PlatformToolset)</Command>
     </PreBuildEvent>
     <PreBuildEvent>
@@ -421,7 +421,7 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h" -OpenSSL "$(BuildWithOpenSSL)"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetSSL.ps1" $(BuildWithOpenSSL) $(Configuration) $(Platform) $(PlatformToolset)
 powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1" $(Configuration) $(Platform) $(PlatformToolset)</Command>
     </PreBuildEvent>
     <PreBuildEvent>
@@ -462,7 +462,7 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
     </Link>
     <PreBuildEvent>
       <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h" -OpenSSL "$(BuildWithOpenSSL)"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
+powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetSSL.ps1" $(BuildWithOpenSSL) $(Configuration) $(Platform) $(PlatformToolset)
 powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1" $(Configuration) $(Platform) $(PlatformToolset)</Command>
     </PreBuildEvent>
     <PreBuildEvent>
