@@ -212,8 +212,9 @@ function Start-OpenSSHBootstrap
     if($VS2019Path -ne $null)
     {
        $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Community\Common7\Tools\VsDevCmd.bat"
+       # $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"
        $win10SDKVer = Get-Windows10SDKVersion
-       $sdkPath = "${env:WindowsSDKDir}\bin\$win10SDKVer\x86\register_app.vbs"    
+       $sdkPath = "${env:WindowsSDKDir}\bin\$win10SDKVer\x64\register_app.vbs"    
        If (-not (Test-Path $sdkPath))
        {
             $packageName = "windows-sdk-10.1"
@@ -608,6 +609,8 @@ function Start-OpenSSHBuild
     }
 
     Write-BuildMsg -AsInfo -Message "Starting Open SSH build; Build Log: $($script:BuildLogFile)."
+    Write-BuildMsg -AsInfo -Message "$msbuildCmd"
+    Write-BuildMsg -AsInfo -Message "$cmdMsg"
     
     & "$msbuildCmd" $cmdMsg
     $errorCode = $LASTEXITCODE
