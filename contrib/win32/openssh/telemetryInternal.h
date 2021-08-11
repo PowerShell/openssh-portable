@@ -4,9 +4,5 @@
 #include "TraceLoggingProvider.h"  // The native TraceLogging API
 #include "MicrosoftTelemetry.h"
 
-#ifndef PDT_ProductAndServiceUsage
-	#include <MicrosoftTelemetryPrivacy.h>
-#endif // !PDT_ProductAndServiceUsage
-
 // Forward-declare the g_hMyComponentProvider variable that you will use for tracing in this component
 TRACELOGGING_DECLARE_PROVIDER(g_hProvider1);
