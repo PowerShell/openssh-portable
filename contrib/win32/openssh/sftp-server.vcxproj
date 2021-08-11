@@ -48,7 +48,7 @@
     <ProjectGuid>{6657614F-7821-4D55-96EF-7C3C4B551880}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>keygen</RootNamespace>
-    <WindowsTargetPlatformVersion>$(WindowsSDKVersion)</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
     <ProjectName>sftp-server</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />

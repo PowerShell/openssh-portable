@@ -62,6 +62,8 @@
 #include "sshbuf.h"
 #include "digest.h"
 
+#include "telemetry.h"
+
 /* prototype */
 static int kex_choose_conf(struct ssh *);
 static int kex_input_newkeys(int, u_int32_t, struct ssh *);
@@ -890,6 +892,7 @@ kex_choose_conf(struct ssh *ssh)
 	int nenc, nmac, ncomp;
 	u_int mode, ctos, need, dh_need, authlen;
 	int r, first_kex_follows;
+	int telemetrySent = 0;
 
 	debug2("local %s KEXINIT proposal", kex->server ? "server" : "client");
 	if ((r = kex_buf2prop(kex->my, NULL, &my)) != 0)
@@ -965,6 +968,12 @@ kex_choose_conf(struct ssh *ssh)
 		    newkeys->enc.name,
 		    authlen == 0 ? newkeys->mac.name : "<implicit>",
 		    newkeys->comp.name);
+
+		// TODO - send tracelogging of enc.name if on windows
+		if (telemetrySent == 0) {
+			send_telemetry(newkeys->enc.name, ctos ? "client->server" : "server->client");
+			telemetrySent += 1;
+		}
 	}
 	need = dh_need = 0;
 	for (mode = 0; mode < MODE_MAX; mode++) {

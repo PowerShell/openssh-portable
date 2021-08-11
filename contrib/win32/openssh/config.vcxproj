@@ -42,7 +42,7 @@
     <ProjectGuid>{8F9D3B74-8D33-448E-9762-26E8DCC6B2F4}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>config</RootNamespace>
-    <WindowsTargetPlatformVersion>$(WindowsSDKVersion)</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
     <ProjectName>config</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />

@@ -24,6 +24,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\win32_usertoken_utils.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\gss-sspi.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\win32_pty.c" />
+    <ClCompile Include="telemetry.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\w32fd.h" />
@@ -155,6 +156,9 @@
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\gssapi.h">
       <Filter>inc</Filter>
     </ClInclude>
+    <ClInclude Include="MicrosoftTelemetry.h" />
+    <ClInclude Include="telemetryInternal.h" />
+    <ClInclude Include="telemetry.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="inc">
