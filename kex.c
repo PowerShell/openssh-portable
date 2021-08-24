@@ -892,7 +892,7 @@ kex_choose_conf(struct ssh *ssh)
 	int nenc, nmac, ncomp;
 	u_int mode, ctos, need, dh_need, authlen;
 	int r, first_kex_follows;
-	int telemetrySent = 0;
+	BOOL sendTelemetry = TRUE;
 
 	debug2("local %s KEXINIT proposal", kex->server ? "server" : "client");
 	if ((r = kex_buf2prop(kex->my, NULL, &my)) != 0)
@@ -969,10 +969,10 @@ kex_choose_conf(struct ssh *ssh)
 		    authlen == 0 ? newkeys->mac.name : "<implicit>",
 		    newkeys->comp.name);
 
-		// TODO - send tracelogging of enc.name if on windows
-		if (telemetrySent == 0) {
+		// data gets sent from both the client & the server; only send once to prevent redundant data
+		if (sendTelemetry) {
 			send_telemetry(newkeys->enc.name, ctos ? "client->server" : "server->client");
-			telemetrySent += 1;
+			sendTelemetry = FALSE;
 		}
 	}
 	need = dh_need = 0;
