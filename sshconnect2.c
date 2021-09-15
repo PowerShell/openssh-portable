@@ -75,6 +75,7 @@
 #include "utf8.h"
 #include "ssh-sk.h"
 #include "sk-api.h"
+#include "telemetry.h"
 
 #ifdef GSSAPI
 #include "ssh-gss.h"
@@ -487,6 +488,8 @@ ssh_userauth2(struct ssh *ssh, const char *local_user,
 
 	ssh_dispatch_range(ssh, SSH2_MSG_USERAUTH_MIN, SSH2_MSG_USERAUTH_MAX, NULL);
 
+	send_auth_telemetry(authctxt.success, authctxt.success ? authctxt.method->name:"NULL");
+
 	if (!authctxt.success)
 		fatal("Authentication failed.");
 	debug("Authentication succeeded (%s).", authctxt.method->name);
@@ -703,23 +706,31 @@ input_userauth_pk_ok(int type, u_int32_t seq, struct ssh *ssh)
 	u_char *pkblob = NULL;
 	int r;
 
-	if (authctxt == NULL)
+	if (authctxt == NULL) {
+		send_key_telemetry("input_userauth_pk_ok: no authentication context");
 		fatal("input_userauth_pk_ok: no authentication context");
+	}
 
 	if ((r = sshpkt_get_cstring(ssh, &pkalg, NULL)) != 0 ||
-	    (r = sshpkt_get_string(ssh, &pkblob, &blen)) != 0 ||
-	    (r = sshpkt_get_end(ssh)) != 0)
+		(r = sshpkt_get_string(ssh, &pkblob, &blen)) != 0 ||
+		(r = sshpkt_get_end(ssh)) != 0) {
+		send_key_telemetry("failure");
 		goto done;
+	}
+
 
 	if ((pktype = sshkey_type_from_name(pkalg)) == KEY_UNSPEC) {
+		send_key_telemetry("server sent unknown pkalg");
 		debug_f("server sent unknown pkalg %s", pkalg);
 		goto done;
 	}
 	if ((r = sshkey_from_blob(pkblob, blen, &key)) != 0) {
+		send_key_telemetry("no key from blob");
 		debug_r(r, "no key from blob. pkalg %s", pkalg);
 		goto done;
 	}
 	if (key->type != pktype) {
+		send_key_telemetry("type mistmatch for decoded key");
 		error("input_userauth_pk_ok: type mismatch "
 		    "for decoded key (received %d, expected %d)",
 		    key->type, pktype);
@@ -746,6 +757,7 @@ input_userauth_pk_ok(int type, u_int32_t seq, struct ssh *ssh)
 	}
 	ident = format_identity(id);
 	debug("Server accepts key: %s", ident);
+	send_key_telemetry("success");
 	sent = sign_and_send_pubkey(ssh, id);
 	r = 0;
  done:
@@ -1395,6 +1407,7 @@ sign_and_send_pubkey(struct ssh *ssh, Identity *id)
 		signature = NULL;
 		if ((alg = key_sig_algorithm(fallback_sigtype ? NULL : ssh,
 		    id->key)) == NULL) {
+			send_sign_telemetry("no mutual signature supported");
 			error_f("no mutual signature supported");
 			goto out;
 		}
@@ -1439,6 +1452,7 @@ sign_and_send_pubkey(struct ssh *ssh, Identity *id)
 			    loc, sshkey_type(id->key), fp);
 			continue;
 		}
+		send_sign_telemetry("signing failed");
 		error_fr(r, "signing failed for %s \"%s\"%s",
 		    sshkey_type(sign_id->key), sign_id->filename,
 		    id->agent_fd != -1 ? " from agent" : "");
@@ -1466,8 +1480,9 @@ sign_and_send_pubkey(struct ssh *ssh, Identity *id)
 
 	/* success */
 	sent = 1;
+	send_sign_telemetry("success");
 
- out:
+out:
 	free(fp);
 	free(alg);
 	sshbuf_free(b);

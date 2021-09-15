@@ -125,6 +125,7 @@
 #include "sk-api.h"
 #include "srclimit.h"
 #include "dh.h"
+#include "telemetry.h"
 
 /* Re-exec fds */
 #define REEXEC_DEVCRYPTO_RESERVED_FD	(STDERR_FILENO + 1)
@@ -2225,6 +2226,8 @@ main(int ac, char **av)
 	}
 
 	debug("sshd version %s, %s", SSH_VERSION, SSH_OPENSSL_VERSION);
+	send_sshd_telemetry(options.num_auth_methods, options.auth_methods,
+		options.num_ports, options.ports);
 
 	/* Store privilege separation user for later use if required. */
 	privsep_chroot = use_privsep && (getuid() == 0 || geteuid() == 0);

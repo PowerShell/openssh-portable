@@ -69,6 +69,7 @@
 #include "ssherr.h"
 #include "authfd.h"
 #include "kex.h"
+#include "telemetry.h"
 
 struct sshkey *previous_host_key = NULL;
 
@@ -539,14 +540,17 @@ ssh_connect_direct(struct ssh *ssh, const char *host, struct addrinfo *aitop,
 			break;	/* Successful connection. */
 	}
 
+	
 	/* Return failure if we didn't get a successful connection. */
 	if (sock == -1) {
 		error("ssh: connect to host %s port %s: %s",
 		    host, strport, errno == 0 ? "failure" : strerror(errno));
+		send_ssh_telemetry(strerror(errno));
 		return -1;
 	}
 
 	debug("Connection established.");
+	send_ssh_telemetry("Connection established.");
 
 	/* Set SO_KEEPALIVE if requested. */
 	if (want_keepalive &&

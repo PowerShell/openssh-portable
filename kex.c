@@ -892,11 +892,11 @@ kex_choose_conf(struct ssh *ssh)
 	int nenc, nmac, ncomp;
 	u_int mode, ctos, need, dh_need, authlen;
 	int r, first_kex_follows;
-	BOOL sendTelemetry = TRUE;
 
 	debug2("local %s KEXINIT proposal", kex->server ? "server" : "client");
 	if ((r = kex_buf2prop(kex->my, NULL, &my)) != 0)
 		goto out;
+
 	debug2("peer %s KEXINIT proposal", kex->server ? "client" : "server");
 	if ((r = kex_buf2prop(kex->peer, &first_kex_follows, &peer)) != 0)
 		goto out;
@@ -968,12 +968,12 @@ kex_choose_conf(struct ssh *ssh)
 		    newkeys->enc.name,
 		    authlen == 0 ? newkeys->mac.name : "<implicit>",
 		    newkeys->comp.name);
-
-		// data gets sent from both the client & the server; only send once to prevent redundant data
-		if (sendTelemetry) {
-			send_telemetry(newkeys->enc.name, ctos ? "client->server" : "server->client");
-			sendTelemetry = FALSE;
-		}
+		send_encryption_telemetry(ctos ? "ctos" : "stoc",
+			newkeys->enc.name, kex->name ? kex->name : "(no match)", 
+			authlen == 0 ? newkeys->mac.name : "<implicit>", 
+			newkeys->comp.name, 
+			kex->hostkey_alg ? kex->hostkey_alg : "(no match)", 
+			my, peer);
 	}
 	need = dh_need = 0;
 	for (mode = 0; mode < MODE_MAX; mode++) {
@@ -1328,6 +1328,9 @@ kex_exchange_identification(struct ssh *ssh, int timeout_ms,
 	    &remote_major, &remote_minor, remote_version) != 3) {
 		error("Bad remote protocol version identification: '%.100s'",
 		    peer_version_string);
+		send_startup_telemetry(our_version_string, peer_version_string,
+			"Bad remote protocol version identification");
+
  invalid:
 		send_error(ssh, "Invalid SSH identification string.");
 		r = SSH_ERR_INVALID_FORMAT;
@@ -1353,6 +1356,8 @@ kex_exchange_identification(struct ssh *ssh, int timeout_ms,
 		error("Protocol major versions differ: %d vs. %d",
 		    PROTOCOL_MAJOR_2, remote_major);
 		send_error(ssh, "Protocol major versions differ.");
+		send_startup_telemetry(our_version_string, peer_version_string,
+			"Protocol major versions differ");
 		r = SSH_ERR_NO_PROTOCOL_VERSION;
 		goto out;
 	}
@@ -1375,6 +1380,9 @@ kex_exchange_identification(struct ssh *ssh, int timeout_ms,
 		logit("Remote version \"%.100s\" uses unsafe RSA signature "
 		    "scheme; disabling use of RSA keys", remote_version);
 	}
+
+	send_startup_telemetry(our_version_string, peer_version_string,
+		"none");
 	/* success */
 	r = 0;
  out:

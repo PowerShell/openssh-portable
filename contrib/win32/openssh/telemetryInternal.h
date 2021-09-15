@@ -4,5 +4,5 @@
 #include "TraceLoggingProvider.h"  // The native TraceLogging API
 #include "MicrosoftTelemetry.h"
 
-// Forward-declare the g_hMyComponentProvider variable that you will use for tracing in this component
+// Forward-declare the g_hProvider1 variable that you will use for tracing
 TRACELOGGING_DECLARE_PROVIDER(g_hProvider1);
