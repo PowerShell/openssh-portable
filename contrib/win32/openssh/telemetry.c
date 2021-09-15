@@ -14,11 +14,12 @@ GitHub releases will not send any Telemetry.
 TRACELOGGING_DEFINE_PROVIDER(
     g_hProvider1,
     "Microsoft.Windows.Win32OpenSSH",
-    (0x0d986661, 0x0dd7, 0x561a, 0xb1, 0x5b, 0xfc, 0xc1, 0xcd, 0x46, 0xd2, 0xbb));
+    (0x0d986661, 0x0dd7, 0x561a, 0xb1, 0x5b, 0xfc, 0xc1, 0xcd, 0x46, 0xd2, 0xbb),
+    TraceLoggingOptionMicrosoftTelemetry());
 
 void send_auth_telemetry(const int status, const char* auth_type)
 {
-//#ifdef WINDOWS_TELEMETRY
+#ifdef WINDOWS_TELEMETRY
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
         g_hProvider1,
@@ -29,7 +30,7 @@ void send_auth_telemetry(const int status, const char* auth_type)
         TraceLoggingString(auth_type, "Auth Type")
     );
     TraceLoggingUnregister(g_hProvider1);
-//#endif
+#endif
 }
 
 void send_encryption_telemetry(const char* direction, const char* cipher, const char* kex,
