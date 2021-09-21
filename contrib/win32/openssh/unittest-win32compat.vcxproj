@@ -62,7 +62,7 @@
     </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)regress\unittests\win32compat\signal_tests.c">
       <ExcludedFromBuild Condition="$(UseOpenSSL)=='false'">true</ExcludedFromBuild>
-    </ClCompile>
+    </ClCompile>    
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(OpenSSH-Src-Path)regress\unittests\win32compat\tests.h" />
@@ -71,7 +71,7 @@
     <ProjectGuid>{BF295BA9-4BF8-43F8-8CBF-FAE84815466C}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>Win32OpenSSH</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>$(WindowsSDKVersion)</WindowsTargetPlatformVersion>
     <ProjectName>unittest-win32compat</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
