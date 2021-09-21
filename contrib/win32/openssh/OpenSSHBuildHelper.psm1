@@ -205,13 +205,13 @@ function Start-OpenSSHBootstrap
     }    
 
     $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
-    $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"    
+    $sdkPath = Get-Windows10SDKVersion    
     #use vs2017 build tool if exists
     if($VS2017Path -ne $null)
     {
-        If (-not (Test-Path $sdkPath))
+        If ($sdkPath -eq $null)
         {
-            $packageName = "windows-sdk-8.1"
+            $packageName = "windows-sdk-10.0"
             Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
             choco install $packageName -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
         }
@@ -224,7 +224,7 @@ function Start-OpenSSHBootstrap
     elseIf (($VS2015Path -eq $null) -or (-not (Test-Path $VcVars)) -or (-not (Test-Path $sdkPath))) {
         $packageName = "vcbuildtools"
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
-        choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK;Win81SDK_CppBuildSKUV1" -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
+        choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK;Win10SDK_VisibleV1" -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
         $errorCode = $LASTEXITCODE
         if ($errorCode -eq 3010)
         {
@@ -627,8 +627,9 @@ function Get-Windows10SDKVersion
    $windowsSDKPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Lib"
    $minSDKVersion = [version]"10.0.14393.0"
    $versionsAvailable = @()
-   #Temporary fix - Onecore builds are failing with latest widows 10 SDK (10.0.18362.0)
-   $maxSDKVersion = [version]"10.0.17763.0"
+   #Temporary fix - Onecore builds are failing with latest windows 10 SDK (10.0.18362.0)
+   #Telemetry needs sdk version 10.0.16299.0
+   $maxSDKVersion = [version]"10.0.16299.0"
    $versionsAvailable = Get-ChildItem $windowsSDKPath | ? {$_.Name.StartsWith("10.")} | % {$version = [version]$_.Name; if(($version.CompareTo($minSDKVersion) -ge 0) -and ($version.CompareTo($maxSDKVersion) -le 0)) {$version}}
    if(0 -eq $versionsAvailable.count)
    {
