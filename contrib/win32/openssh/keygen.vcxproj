@@ -39,7 +39,7 @@
     <ProjectGuid>{47496135-131B-41D6-BF2B-EE7144873DD0}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>keygen</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>$(WindowsSDKVersion)</WindowsTargetPlatformVersion>
     <ProjectName>ssh-keygen</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />

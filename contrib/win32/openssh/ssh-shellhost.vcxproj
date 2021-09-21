@@ -46,7 +46,7 @@
     <ProjectGuid>{C0AE8A30-E4FA-49CE-A2B5-0C072C77EC64}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>shellhost</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>$(WindowsSDKVersion)</WindowsTargetPlatformVersion>
     <ProjectName>ssh-shellhost</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
