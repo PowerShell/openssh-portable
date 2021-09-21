@@ -39,7 +39,7 @@
     <ProjectGuid>{7D0A75FC-F366-4B60-B72F-B37C3EA07CCA}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>sshkeyscan</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>$(WindowsSDKVersion)</WindowsTargetPlatformVersion>
     <ProjectName>ssh-keyscan</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />

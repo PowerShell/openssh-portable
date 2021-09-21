@@ -51,7 +51,7 @@
     <ProjectGuid>{029797FF-C986-43DE-95CD-2E771E86AEBC}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>keygen</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>$(WindowsSDKVersion)</WindowsTargetPlatformVersion>
     <ProjectName>ssh-add</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
