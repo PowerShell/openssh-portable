@@ -15,7 +15,7 @@
       },
       {
         "file": "auth.c",
-        "_justification": "upstream oss code uses fake password"
+        "_justification": "upstream code uses fake password"
       },
       {
         "file": "\\regress\\pesterTests\\data\\sshtest_hostkey_dsa",
