@@ -631,6 +631,10 @@ function Get-Windows10SDKVersion
    #Telemetry needs sdk version 10.0.16299.0
    $maxSDKVersion = [version]"10.0.16299.0"
    $versionsAvailable = Get-ChildItem $windowsSDKPath | ? {$_.Name.StartsWith("10.")} | % {$version = [version]$_.Name; if(($version.CompareTo($minSDKVersion) -ge 0) -and ($version.CompareTo($maxSDKVersion) -le 0)) {$version}}
+   if($null -eq $versionsAvailable)
+   {
+       return $null
+   }
    if(0 -eq $versionsAvailable.count)
    {
         return $null
