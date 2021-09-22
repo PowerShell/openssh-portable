@@ -221,7 +221,7 @@ function Start-OpenSSHBootstrap
             Write-BuildMsg -AsError -ErrorAction Stop -Message "VC++ 2015.3 v140 toolset are not installed."   
         }
     }
-    elseIf (($VS2015Path -eq $null) -or (-not (Test-Path $VcVars)) -or ($sdkPath -eq $null))) {
+    elseIf (($VS2015Path -eq $null) -or (-not (Test-Path $VcVars)) -or ($sdkPath -eq $null)) {
         Write-BuildMsg -AsInfo -Message "vs2015: $VS2015Path"
         Write-BuildMsg -AsInfo -Message "vcvars: $VcVars"
         Write-BuildMsg -AsInfo -Message "sdkpath: $sdkpath"
