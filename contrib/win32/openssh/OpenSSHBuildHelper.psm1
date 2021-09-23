@@ -222,9 +222,6 @@ function Start-OpenSSHBootstrap
         }
     }
     elseIf (($VS2015Path -eq $null) -or (-not (Test-Path $VcVars)) -or ($sdkPath -eq $null)) {
-        Write-BuildMsg -AsInfo -Message "vs2015: $VS2015Path"
-        Write-BuildMsg -AsInfo -Message "vcvars: $VcVars"
-        Write-BuildMsg -AsInfo -Message "sdkpath: $sdkpath"
         $packageName = "vcbuildtools"
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
         choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK;Win10SDK_VisibleV1" -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
@@ -580,6 +577,7 @@ function Start-OpenSSHBuild
     }
     
     Write-BuildMsg -AsInfo -Message "Starting Open SSH build; Build Log: $($script:BuildLogFile)."
+    Write-BuildMsg -AsInfo -Message "$msbuildCmd $cmdMsg"
 
     & "$msbuildCmd" $cmdMsg
     $errorCode = $LASTEXITCODE
