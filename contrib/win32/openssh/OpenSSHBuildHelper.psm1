@@ -631,8 +631,7 @@ function Get-Windows10SDKVersion
    $minSDKVersion = [version]"10.0.14393.0"
    $versionsAvailable = @()
    #Temporary fix - Onecore builds are failing with latest windows 10 SDK (10.0.18362.0)
-   #Telemetry needs sdk version 10.0.16299.0
-   $maxSDKVersion = [version]"10.0.16299.0"
+   $maxSDKVersion = [version]"10.0.17763.0"
    $versionsAvailable = Get-ChildItem $windowsSDKPath | ? {$_.Name.StartsWith("10.")} | % {$version = [version]$_.Name; if(($version.CompareTo($minSDKVersion) -ge 0) -and ($version.CompareTo($maxSDKVersion) -le 0)) {$version}}
    # when no sdk is found in the specified range
    if($null -eq $versionsAvailable)
