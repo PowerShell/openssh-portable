@@ -206,7 +206,7 @@ function Start-OpenSSHBootstrap
 
     $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
     $sdkPath = Get-Windows10SDKVersion
-    $vctargetspath = "${env:ProgramFiles(x86)}\Program Files (x86)\MSBuild\Microsoft.Cpp\v4.0\v140"
+    $env:vctargetspath = "${env:ProgramFiles(x86)}\MSBuild\Microsoft.Cpp\v4.0\v140"
     #use vs2017 build tool if exists
     if($VS2017Path -ne $null)
     {
@@ -214,7 +214,7 @@ function Start-OpenSSHBootstrap
         {
             $packageName = "windows-sdk-10.1"
             Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
-            choco install $packageName -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
+            choco install $packageName --version=10.1.17763.1 -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
         }
 
         if(-not (Test-Path $VcVars))
@@ -222,7 +222,7 @@ function Start-OpenSSHBootstrap
             Write-BuildMsg -AsError -ErrorAction Stop -Message "VC++ 2015.3 v140 toolset are not installed."   
         }
     }
-    elseIf (($VS2015Path -eq $null) -or (-not (Test-Path $VcVars)) -or (-not (Test-Path $vctargetspath)) -or ($sdkPath -eq $null)) {
+    elseIf (($VS2015Path -eq $null) -or (-not (Test-Path $VcVars)) -or ($sdkPath -eq $null)) {
         $packageName = "vcbuildtools"
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
         choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK;Win10SDK_VisibleV1" -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
@@ -253,6 +253,10 @@ function Start-OpenSSHBootstrap
         {
             Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $errorCode."
         }
+    }
+    elseIf (-not (Test-Path $env:vctargetspath)) {
+        Write-BuildMsg -AsInfo -Message "installing visualcpp-build-tools"
+        choco install visualcpp-build-tools --version 14.0.25420.1 -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
     }
     else
     {
@@ -575,7 +579,6 @@ function Start-OpenSSHBuild
     if($msbuildCmd -eq $null)
     {
         $msbuildCmd = Get-VS2015BuildToolPath
-        $env:VCTargetsPath=$vctargetspath
     }
     
     Write-BuildMsg -AsInfo -Message "Starting Open SSH build; Build Log: $($script:BuildLogFile)."
