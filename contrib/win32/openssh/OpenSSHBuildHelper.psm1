@@ -634,7 +634,7 @@ function Get-Windows10SDKVersion
 {   
    ## Search for latest windows sdk available on the machine
    $windowsSDKPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Lib"
-   $minSDKVersion = [version]"10.0.14393.0"
+   $minSDKVersion = [version]"10.0.17763.0"
    $versionsAvailable = @()
    #Temporary fix - Onecore builds are failing with latest windows 10 SDK (10.0.18362.0)
    $maxSDKVersion = [version]"10.0.17763.0"
