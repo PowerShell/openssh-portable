@@ -1716,4 +1716,3 @@
 #define HAVE_DECL_MEMMEM 0
 #define WITH_ZLIB
 #define _PATH_TTY "conin$"
-#define WINDOWS_TELEMETRY 0
