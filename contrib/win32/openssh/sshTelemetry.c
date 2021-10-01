@@ -1,4 +1,34 @@
-/* 
+/*
+* Author: Tess Gauthier <tessgauthier@microsoft.com>
+*
+* Copyright(c) 2021 Microsoft Corp.
+* All rights reserved
+*
+* Misc Unix POSIX routine implementations for Windows
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions
+* are met :
+*
+* 1. Redistributions of source code must retain the above copyright
+* notice, this list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright
+* notice, this list of conditions and the following disclaimer in the
+* documentation and / or other materials provided with the distribution.
+*
+* THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+* IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+* OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+* IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+* INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES(INCLUDING, BUT
+* NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+* DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+* THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+* THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/ 
+
+/*
 this file defines functions to collect Microsoft Telemetry,
 which will only be sent for Windows In-Box releases. 
 GitHub releases will not send any Telemetry. 
@@ -7,8 +37,8 @@ GitHub releases will not send any Telemetry.
 #include <stdio.h>
 #include <Objbase.h>
 
-#include "telemetry.h"
-#include "telemetryInternal.h"
+#include "sshTelemetry.h"
+#include "sshTelemetryInternal.h"
 
 // {0d986661-0dd7-561a-b15b-fcc1cd46d2bb}
 TRACELOGGING_DEFINE_PROVIDER(
@@ -66,15 +96,15 @@ void send_encryption_telemetry(const char* direction, const char* cipher, const 
     TraceLoggingUnregister(g_hProvider1);
 }
 
-void send_key_telemetry(const char* key)
+void send_pubkey_telemetry(const char* pubKeyStatus)
 {
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
         g_hProvider1,
-        "Key",
+        "PublicKey",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingString(key, "Status")
+        TraceLoggingString(pubKeyStatus, "Status")
     );
     TraceLoggingUnregister(g_hProvider1);
 }
@@ -93,20 +123,20 @@ void send_shell_telemetry(const int pty, const int shell_type)
     TraceLoggingUnregister(g_hProvider1);
 }
 
-void send_sign_telemetry(const char* sign_status)
+void send_pubkey_sign_telemetry(const char* pubKeySignStatus)
 {
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
         g_hProvider1,
-        "Signing",
+        "Pubkey Signing",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingString(sign_status, "Status")
+        TraceLoggingString(pubKeySignStatus, "Status")
     );
     TraceLoggingUnregister(g_hProvider1);
 }
 
-void send_ssh_telemetry(const char* conn)
+void send_ssh_connection_telemetry(const char* conn)
 {
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
@@ -119,7 +149,7 @@ void send_ssh_telemetry(const char* conn)
     TraceLoggingUnregister(g_hProvider1);
 }
 
-void send_sshd_telemetry(const int num_auth_methods, const char** auth_methods,
+void send_sshd_config_telemetry(const int num_auth_methods, const char** auth_methods,
     const unsigned int num_ports, const int ports[])
 {
     char* auth_buffer = NULL;
@@ -136,7 +166,7 @@ void send_sshd_telemetry(const int num_auth_methods, const char** auth_methods,
         for (int i = 0; i < num_auth_methods; i++) {
             buffer_size += strlen(auth_methods[i]);
         }
-        auth_buffer = (char*)malloc(buffer_size * sizeof(char));
+        auth_buffer = (char*)malloc((buffer_size + 1) * sizeof(char));
         auth_buffer[0] = '\0';
         for (int i = 0; i < num_auth_methods; i++) {
             strcat_s(auth_buffer, buffer_size, auth_methods[i]);
@@ -159,7 +189,7 @@ void send_sshd_telemetry(const int num_auth_methods, const char** auth_methods,
     free(auth_buffer);
 }
 
-void send_startup_telemetry(const char* ssh_version, const char* peer_version, 
+void send_ssh_version_telemetry(const char* ssh_version, const char* peer_version,
     const char* remote_protocol_supported)
 {
     TraceLoggingRegister(g_hProvider1);

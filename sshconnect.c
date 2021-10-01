@@ -49,6 +49,10 @@
 # include <ifaddrs.h>
 #endif
 
+#ifdef WINDOWS
+#include "sshTelemetry.h"
+#endif
+
 #include "xmalloc.h"
 #include "hostfile.h"
 #include "ssh.h"
@@ -69,7 +73,6 @@
 #include "ssherr.h"
 #include "authfd.h"
 #include "kex.h"
-#include "telemetry.h"
 
 struct sshkey *previous_host_key = NULL;
 
@@ -545,12 +548,16 @@ ssh_connect_direct(struct ssh *ssh, const char *host, struct addrinfo *aitop,
 	if (sock == -1) {
 		error("ssh: connect to host %s port %s: %s",
 		    host, strport, errno == 0 ? "failure" : strerror(errno));
-		send_ssh_telemetry(strerror(errno));
+#ifdef WINDOWS
+		send_ssh_connection_telemetry(strerror(errno));
+#endif
 		return -1;
 	}
 
 	debug("Connection established.");
-	send_ssh_telemetry("Connection established.");
+#ifdef WINDOWS
+	send_ssh_connection_telemetry("Connection established.");
+#endif
 
 	/* Set SO_KEEPALIVE if requested. */
 	if (want_keepalive &&

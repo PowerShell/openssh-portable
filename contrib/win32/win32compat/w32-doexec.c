@@ -38,7 +38,7 @@
 #include "servconf.h"
 #include "pal_doexec.h"
 #include "misc_internal.h"
-#include "telemetry.h"
+#include "sshTelemetry.h"
 
 #ifndef SUBSYSTEM_NONE
 #define SUBSYSTEM_NONE				0
