@@ -49,6 +49,13 @@ TRACELOGGING_DEFINE_PROVIDER(
 
 void send_auth_telemetry(const int status, const char* auth_type)
 {
+    /* 
+    registering only needs to be done once per process but
+    since these functions are used by multiple processes
+    and we need to unregister so the ETW process knows
+    not to do any callbacks, registering and unregistering 
+    is done after each tracelogging call for safety 
+    */
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
         g_hProvider1,
