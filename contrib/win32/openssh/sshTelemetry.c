@@ -135,7 +135,7 @@ void send_pubkey_sign_telemetry(const char* pubKeySignStatus)
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
         g_hProvider1,
-        "Pubkey Signing",
+        "PubkeySigning",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
         TraceLoggingString(pubKeySignStatus, "Status")
