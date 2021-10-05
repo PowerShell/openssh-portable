@@ -709,22 +709,27 @@ input_userauth_pk_ok(int type, u_int32_t seq, struct ssh *ssh)
 	u_char *pkblob = NULL;
 	int r;
 
-	if (authctxt == NULL) {
+	if (authctxt == NULL)
 #ifdef WINDOWS
+	{
 		send_pubkey_telemetry("input_userauth_pk_ok: no authentication context");
-#endif
 		fatal("input_userauth_pk_ok: no authentication context");
 	}
+#else
+		fatal("input_userauth_pk_ok: no authentication context");
+#endif
 
 	if ((r = sshpkt_get_cstring(ssh, &pkalg, NULL)) != 0 ||
 		(r = sshpkt_get_string(ssh, &pkblob, &blen)) != 0 ||
-		(r = sshpkt_get_end(ssh)) != 0) {
+		(r = sshpkt_get_end(ssh)) != 0) 
 #ifdef WINDOWS
+	{
 		send_pubkey_telemetry("failure");
-#endif
 		goto done;
 	}
-
+#else
+		goto done;
+#endif
 
 	if ((pktype = sshkey_type_from_name(pkalg)) == KEY_UNSPEC) {
 #ifdef WINDOWS
