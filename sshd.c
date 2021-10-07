@@ -2229,6 +2229,7 @@ main(int ac, char **av)
 	}
 
 	debug("sshd version %s, %s", SSH_VERSION, SSH_OPENSSL_VERSION);
+
 #ifdef WINDOWS
 	send_sshd_config_telemetry(options.num_auth_methods, 
 		options.auth_methods);

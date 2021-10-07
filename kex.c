@@ -898,7 +898,6 @@ kex_choose_conf(struct ssh *ssh)
 	debug2("local %s KEXINIT proposal", kex->server ? "server" : "client");
 	if ((r = kex_buf2prop(kex->my, NULL, &my)) != 0)
 		goto out;
-
 	debug2("peer %s KEXINIT proposal", kex->server ? "client" : "server");
 	if ((r = kex_buf2prop(kex->peer, &first_kex_follows, &peer)) != 0)
 		goto out;
