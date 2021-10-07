@@ -68,8 +68,10 @@ void send_auth_telemetry(const int status, const char* auth_type)
     TraceLoggingUnregister(g_hProvider1);
 }
 
-void send_encryption_telemetry(const char* direction, const char* cipher, const char* kex,
-    const char* mac, const char* comp, const char* host_key, const char** cproposal, const char** sproposal)
+void send_encryption_telemetry(const char* direction, 
+    const char* cipher, const char* kex, const char* mac, 
+    const char* comp, const char* host_key, 
+    const char** cproposal, const char** sproposal)
 {
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
@@ -143,7 +145,7 @@ void send_pubkey_sign_telemetry(const char* pubKeySignStatus)
     TraceLoggingUnregister(g_hProvider1);
 }
 
-void send_ssh_connection_telemetry(const char* conn)
+void send_ssh_connection_telemetry(const char* conn, const char* port)
 {
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
@@ -151,13 +153,14 @@ void send_ssh_connection_telemetry(const char* conn)
         "Connection",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingString(conn, "Status")
+        TraceLoggingString(conn, "Status"),
+        TraceLoggingString(port, "Port")
     );
     TraceLoggingUnregister(g_hProvider1);
 }
 
-void send_sshd_config_telemetry(const int num_auth_methods, const char** auth_methods,
-    const unsigned int num_ports, const int ports[])
+void send_sshd_config_telemetry(const int num_auth_methods, 
+    const char** auth_methods)
 {
     char* auth_buffer = NULL;
     if (num_auth_methods == 0) {
@@ -186,7 +189,6 @@ void send_sshd_config_telemetry(const int num_auth_methods, const char** auth_me
         "SSHD",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingInt32Array(ports, num_ports, "Port"),
         TraceLoggingString(auth_buffer, "Auth Methods")
     );
     TraceLoggingUnregister(g_hProvider1);

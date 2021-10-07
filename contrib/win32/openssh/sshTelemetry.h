@@ -19,12 +19,11 @@ void send_shell_telemetry(const int pty, const int shell_type);
 void send_pubkey_sign_telemetry(const char* pubKeySignStatus);
 
 // sends connection status from ssh client
-void send_ssh_connection_telemetry(const char* conn);
+void send_ssh_connection_telemetry(const char* conn, const char* port);
 
 // sends ports and auth methods configured by sshd
 void send_sshd_config_telemetry(const int num_auth_methods, 
-	const char** auth_methods, const unsigned int num_ports, 
-	const int ports[]);
+	const char** auth_methods);
 
 // sends version and peer version from ssh & sshd
 void send_ssh_version_telemetry(const char* ssh_version,

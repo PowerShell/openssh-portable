@@ -543,20 +543,19 @@ ssh_connect_direct(struct ssh *ssh, const char *host, struct addrinfo *aitop,
 			break;	/* Successful connection. */
 	}
 
-	
 	/* Return failure if we didn't get a successful connection. */
 	if (sock == -1) {
 		error("ssh: connect to host %s port %s: %s",
 		    host, strport, errno == 0 ? "failure" : strerror(errno));
 #ifdef WINDOWS
-		send_ssh_connection_telemetry(strerror(errno));
+		send_ssh_connection_telemetry(strerror(errno), strport);
 #endif
 		return -1;
 	}
 
 	debug("Connection established.");
 #ifdef WINDOWS
-	send_ssh_connection_telemetry("Connection established.");
+	send_ssh_connection_telemetry("Connection established.", strport);
 #endif
 
 	/* Set SO_KEEPALIVE if requested. */
