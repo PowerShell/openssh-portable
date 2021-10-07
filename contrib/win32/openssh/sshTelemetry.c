@@ -34,6 +34,7 @@ which will only be sent for Windows In-Box releases.
 GitHub releases will not send any Telemetry. 
 */
 
+#include <string.h>
 #include <stdio.h>
 #include <Objbase.h>
 
@@ -62,8 +63,8 @@ void send_auth_telemetry(const int status, const char* auth_type)
         "Auth",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingInt16(status, "Success"),
-        TraceLoggingString(auth_type, "Auth Type")
+        TraceLoggingInt16(status, "success"),
+        TraceLoggingString(auth_type, "authType")
     );
     TraceLoggingUnregister(g_hProvider1);
 }
@@ -84,23 +85,23 @@ void send_encryption_telemetry(const char* direction,
         TraceLoggingString(kex, "kex"),
         TraceLoggingString(mac, "mac"),
         TraceLoggingString(comp, "compression"),
-        TraceLoggingString(host_key, "host_key"),
-        TraceLoggingString(cproposal[0], "client proposed kex"),
-        TraceLoggingString(cproposal[1], "client proposed host keys"),
-        TraceLoggingString(cproposal[2], "client proposed ciphers ctos"),
-        TraceLoggingString(cproposal[3], "client proposed ciphers stoc"),
-        TraceLoggingString(cproposal[4], "client proposed MACs ctos"),
-        TraceLoggingString(cproposal[5], "client proposed MACs stoc"),
-        TraceLoggingString(cproposal[6], "client proposed compression ctos"),
-        TraceLoggingString(cproposal[7], "client proposed compression stoc"),
-        TraceLoggingString(sproposal[0], "server proposed kex"),
-        TraceLoggingString(sproposal[1], "server proposed host keys"),
-        TraceLoggingString(sproposal[2], "server proposed ciphers ctos"),
-        TraceLoggingString(sproposal[3], "server proposed ciphers stoc"),
-        TraceLoggingString(sproposal[4], "server proposed MACs ctos"),
-        TraceLoggingString(sproposal[5], "server proposed MACs stoc"),
-        TraceLoggingString(sproposal[6], "server proposed compression ctos"),
-        TraceLoggingString(sproposal[7], "server proposed compression stoc")
+        TraceLoggingString(host_key, "hostKey"),
+        TraceLoggingString(cproposal[0], "clientProposedKex"),
+        TraceLoggingString(cproposal[1], "clientProposedHostKeys"),
+        TraceLoggingString(cproposal[2], "clientProposedCiphersCtos"),
+        TraceLoggingString(cproposal[3], "clientProposedCiphersStoc"),
+        TraceLoggingString(cproposal[4], "clientProposedMACsCtos"),
+        TraceLoggingString(cproposal[5], "clientProposedMACsStoc"),
+        TraceLoggingString(cproposal[6], "clientProposedCompressionCtos"),
+        TraceLoggingString(cproposal[7], "clientProposedCompressionStoc"),
+        TraceLoggingString(sproposal[0], "serverProposedKex"),
+        TraceLoggingString(sproposal[1], "serverProposedHostKeys"),
+        TraceLoggingString(sproposal[2], "serverProposedCiphersCtos"),
+        TraceLoggingString(sproposal[3], "serverProposedCiphersStoc"),
+        TraceLoggingString(sproposal[4], "serverProposedMACsCtos"),
+        TraceLoggingString(sproposal[5], "serverProposedMACsCtoc"),
+        TraceLoggingString(sproposal[6], "serverProposedCompressionCtos"),
+        TraceLoggingString(sproposal[7], "serverProposedCompressionStoc")
     );
     TraceLoggingUnregister(g_hProvider1);
 }
@@ -113,7 +114,7 @@ void send_pubkey_telemetry(const char* pubKeyStatus)
         "PublicKey",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingString(pubKeyStatus, "Status")
+        TraceLoggingString(pubKeyStatus, "status")
     );
     TraceLoggingUnregister(g_hProvider1);
 }
@@ -127,7 +128,7 @@ void send_shell_telemetry(const int pty, const int shell_type)
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
         TraceLoggingInt16(pty, "PTY"),
-        TraceLoggingInt16(shell_type, "Type")
+        TraceLoggingInt16(shell_type, "type")
     );
     TraceLoggingUnregister(g_hProvider1);
 }
@@ -140,21 +141,25 @@ void send_pubkey_sign_telemetry(const char* pubKeySignStatus)
         "PubkeySigning",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingString(pubKeySignStatus, "Status")
+        TraceLoggingString(pubKeySignStatus, "status")
     );
     TraceLoggingUnregister(g_hProvider1);
 }
 
 void send_ssh_connection_telemetry(const char* conn, const char* port)
 {
+    int isCustomPort = 0;
+    if (strcmp(port, "22") != 0) {
+        isCustomPort = 1;
+    }
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
         g_hProvider1,
         "Connection",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingString(conn, "Status"),
-        TraceLoggingString(port, "Port")
+        TraceLoggingString(conn, "status"),
+        TraceLoggingBool(isCustomPort, "isCustomSSHServerPort")
     );
     TraceLoggingUnregister(g_hProvider1);
 }
