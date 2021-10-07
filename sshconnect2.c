@@ -490,6 +490,7 @@ ssh_userauth2(struct ssh *ssh, const char *local_user,
 	ssh->authctxt = NULL;
 
 	ssh_dispatch_range(ssh, SSH2_MSG_USERAUTH_MIN, SSH2_MSG_USERAUTH_MAX, NULL);
+
 #ifdef WINDOWS
 	send_auth_telemetry(authctxt.success, authctxt.success ? authctxt.method->name : "NULL");
 #endif
