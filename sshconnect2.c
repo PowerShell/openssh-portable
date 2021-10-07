@@ -491,7 +491,7 @@ ssh_userauth2(struct ssh *ssh, const char *local_user,
 
 	ssh_dispatch_range(ssh, SSH2_MSG_USERAUTH_MIN, SSH2_MSG_USERAUTH_MAX, NULL);
 #ifdef WINDOWS
-	send_auth_telemetry(authctxt.success, authctxt.success ? authctxt.method->name:"NULL");
+	send_auth_telemetry(authctxt.success, authctxt.success ? authctxt.method->name : "NULL");
 #endif
 	if (!authctxt.success)
 		fatal("Authentication failed.");
@@ -721,7 +721,7 @@ input_userauth_pk_ok(int type, u_int32_t seq, struct ssh *ssh)
 
 	if ((r = sshpkt_get_cstring(ssh, &pkalg, NULL)) != 0 ||
 	    (r = sshpkt_get_string(ssh, &pkblob, &blen)) != 0 ||
-	    (r = sshpkt_get_end(ssh)) != 0) 
+	    (r = sshpkt_get_end(ssh)) != 0)
 #ifdef WINDOWS
 	{
 		send_pubkey_telemetry("failure");
@@ -741,7 +741,7 @@ input_userauth_pk_ok(int type, u_int32_t seq, struct ssh *ssh)
 	if ((r = sshkey_from_blob(pkblob, blen, &key)) != 0) {
 #ifdef WINDOWS
 		send_pubkey_telemetry("no key from blob");
-#endif
+#endif		
 		debug_r(r, "no key from blob. pkalg %s", pkalg);
 		goto done;
 	}
