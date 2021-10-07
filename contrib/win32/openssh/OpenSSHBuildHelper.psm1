@@ -209,13 +209,15 @@ function Start-OpenSSHBootstrap
     $sdkVersion = Get-Windows10SDKVersion
     $env:vctargetspath = "${env:ProgramFiles(x86)}\MSBuild\Microsoft.Cpp\v4.0\v140"
 
-    If ($sdkVersion -eq $null) {
+    if ($sdkVersion -eq $null) 
+    {
         $packageName = "windows-sdk-10.1"
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
         choco install $packageName --version=$Win10SDKVerChoco -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
     }
 
-    If (-not (Test-Path $env:vctargetspath)) {
+    if (-not (Test-Path $env:vctargetspath)) 
+    {
         Write-BuildMsg -AsInfo -Message "installing visualcpp-build-tools"
         choco install visualcpp-build-tools --version 14.0.25420.1 -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
     }

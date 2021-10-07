@@ -160,8 +160,6 @@ void send_sshd_config_telemetry(const int num_auth_methods, const char** auth_me
     const unsigned int num_ports, const int ports[])
 {
     char* auth_buffer = NULL;
-
-
     if (num_auth_methods == 0) {
         auth_buffer = (char*)malloc(5 * sizeof(char));
         strcpy_s(auth_buffer, 5, "none");
@@ -182,7 +180,6 @@ void send_sshd_config_telemetry(const int num_auth_methods, const char** auth_me
             }
         }
     }
-
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
         g_hProvider1,
@@ -205,7 +202,7 @@ void send_ssh_version_telemetry(const char* ssh_version, const char* peer_versio
         "Startup",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingString(ssh_version, " our version"),
+        TraceLoggingString(ssh_version, "our version"),
         TraceLoggingString(remote_protocol_supported, "remote protocol error"),
         TraceLoggingString(peer_version, "peer version")
     );

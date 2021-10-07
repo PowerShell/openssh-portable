@@ -720,8 +720,8 @@ input_userauth_pk_ok(int type, u_int32_t seq, struct ssh *ssh)
 #endif
 
 	if ((r = sshpkt_get_cstring(ssh, &pkalg, NULL)) != 0 ||
-		(r = sshpkt_get_string(ssh, &pkblob, &blen)) != 0 ||
-		(r = sshpkt_get_end(ssh)) != 0) 
+	(r = sshpkt_get_string(ssh, &pkblob, &blen)) != 0 ||
+	(r = sshpkt_get_end(ssh)) != 0) 
 #ifdef WINDOWS
 	{
 		send_pubkey_telemetry("failure");
@@ -1508,7 +1508,7 @@ sign_and_send_pubkey(struct ssh *ssh, Identity *id)
 	send_pubkey_sign_telemetry("success");
 #endif
 
-out:
+ out:
 	free(fp);
 	free(alg);
 	sshbuf_free(b);
