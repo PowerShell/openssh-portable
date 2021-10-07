@@ -194,7 +194,7 @@ void send_sshd_config_telemetry(const int num_auth_methods,
         "SSHD",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingString(auth_buffer, "Auth Methods")
+        TraceLoggingString(auth_buffer, "authMethods")
     );
     TraceLoggingUnregister(g_hProvider1);
     free(auth_buffer);
@@ -209,9 +209,9 @@ void send_ssh_version_telemetry(const char* ssh_version, const char* peer_versio
         "Startup",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingString(ssh_version, "our version"),
-        TraceLoggingString(remote_protocol_supported, "remote protocol error"),
-        TraceLoggingString(peer_version, "peer version")
+        TraceLoggingString(ssh_version, "ourVersion"),
+        TraceLoggingString(remote_protocol_supported, "remoteProtocolError"),
+        TraceLoggingString(peer_version, "peerVersion")
     );
     TraceLoggingUnregister(g_hProvider1);
 }
