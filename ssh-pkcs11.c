@@ -1696,6 +1696,46 @@ pkcs11_add_provider(char *provider_id, char *pin, struct sshkey ***keyp,
 	return (nkeys);
 }
 
+void
+add_key(struct sshkey *k, char *name)
+{
+	struct pkcs11_keyinfo *ki;
+
+	ki = xcalloc(1, sizeof(*ki));
+	ki->providername = xstrdup(name);
+	ki->key = k;
+	TAILQ_INSERT_TAIL(&pkcs11_keylist, ki, next);
+}
+
+void
+del_all_keys()
+{
+	struct pkcs11_keyinfo *ki, *nxt;
+
+	for (ki = TAILQ_FIRST(&pkcs11_keylist); ki; ki = nxt) {
+		nxt = TAILQ_NEXT(ki, next);
+		TAILQ_REMOVE(&pkcs11_keylist, ki, next);
+		free(ki->providername);
+		sshkey_free(ki->key);
+		free(ki);
+	}
+}
+
+/* lookup matching 'private' key */
+struct sshkey *
+lookup_key(const struct sshkey *k)
+{
+	struct pkcs11_keyinfo *ki;
+
+	TAILQ_FOREACH(ki, &pkcs11_keylist, next) {
+		debug("check %p %s", ki, ki->providername);
+		if (sshkey_equal(k, ki->key)) {
+			return (ki->key);
+		}
+	}
+	return (NULL);
+}
+
 #ifdef WITH_PKCS11_KEYGEN
 struct sshkey *
 pkcs11_gakp(char *provider_id, char *pin, unsigned int slotidx, char *label,
@@ -1860,46 +1900,6 @@ out:
 		pkcs11_del_provider(provider_id);
 
 	return (k);
-}
-
-void
-add_key(struct sshkey *k, char *name)
-{
-	struct pkcs11_keyinfo *ki;
-
-	ki = xcalloc(1, sizeof(*ki));
-	ki->providername = xstrdup(name);
-	ki->key = k;
-	TAILQ_INSERT_TAIL(&pkcs11_keylist, ki, next);
-}
-
-void
-del_all_keys()
-{
-	struct pkcs11_keyinfo *ki, *nxt;
-
-	for (ki = TAILQ_FIRST(&pkcs11_keylist); ki; ki = nxt) {
-		nxt = TAILQ_NEXT(ki, next);
-		TAILQ_REMOVE(&pkcs11_keylist, ki, next);
-		free(ki->providername);
-		sshkey_free(ki->key);
-		free(ki);
-	}
-}
-
-/* lookup matching 'private' key */
-struct sshkey *
-	lookup_key(const struct sshkey *k)
-{
-	struct pkcs11_keyinfo *ki;
-
-	TAILQ_FOREACH(ki, &pkcs11_keylist, next) {
-		debug("check %p %s", ki, ki->providername);
-		if (sshkey_equal(k, ki->key)) {
-			return (ki->key);
-		}
-	}
-	return (NULL);
 }
 
 #endif /* WITH_PKCS11_KEYGEN */
