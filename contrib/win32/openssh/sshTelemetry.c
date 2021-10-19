@@ -99,7 +99,7 @@ void send_encryption_telemetry(const char* direction,
         TraceLoggingString(sproposal[2], "serverProposedCiphersCtos"),
         TraceLoggingString(sproposal[3], "serverProposedCiphersStoc"),
         TraceLoggingString(sproposal[4], "serverProposedMACsCtos"),
-        TraceLoggingString(sproposal[5], "serverProposedMACsCtoc"),
+        TraceLoggingString(sproposal[5], "serverProposedMACsStoc"),
         TraceLoggingString(sproposal[6], "serverProposedCompressionCtos"),
         TraceLoggingString(sproposal[7], "serverProposedCompressionStoc")
     );
