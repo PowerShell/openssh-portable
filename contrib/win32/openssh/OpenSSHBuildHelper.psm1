@@ -207,7 +207,6 @@ function Start-OpenSSHBootstrap
 
     $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
     $sdkVersion = Get-Windows10SDKVersion
-    $env:vctargetspath = "${env:ProgramFiles(x86)}\MSBuild\Microsoft.Cpp\v4.0\v140"
 
     if ($sdkVersion -eq $null) 
     {
@@ -216,10 +215,15 @@ function Start-OpenSSHBootstrap
         choco install $packageName --version=$Win10SDKVerChoco -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
     }
 
-    if (-not (Test-Path $env:vctargetspath)) 
+    # The x86/x64 builds on appveyor needed this, but populating the env variable was failing the arm/arm64 builds
+    if (($NativeHostArch -eq 'x86') -or ($NativeHostArch -eq 'x64')) 
     {
+        $env:vctargetspath = "${env:ProgramFiles(x86)}\MSBuild\Microsoft.Cpp\v4.0\v140"
+        if (-not (Test-Path $env:vctargetspath)) 
+        {
         Write-BuildMsg -AsInfo -Message "installing visualcpp-build-tools"
         choco install visualcpp-build-tools --version 14.0.25420.1 -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
+        }
     }
 
     #use vs2017 build tool if exists
@@ -521,7 +525,7 @@ function Start-OpenSSHBuild
         Remove-Item -Path $script:BuildLogFile -force
     }
 
-    Start-OpenSSHBootstrap -OneCore:$OneCore
+    Start-OpenSSHBootstrap -NativeHostArch $NativeHostArch -OneCore:$OneCore
 
     $PathTargets = Join-Path $PSScriptRoot paths.targets
     if ($NoOpenSSL) 
