@@ -22,10 +22,14 @@
 #define	SSH_PKCS11_ERR_PIN_REQUIRED		4
 #define	SSH_PKCS11_ERR_PIN_LOCKED		5
 
-int	pkcs11_init(int);
-void	pkcs11_terminate(void);
-int	pkcs11_add_provider(char *, char *, struct sshkey ***, char ***);
-int	pkcs11_del_provider(char *);
+struct sshkey * lookup_key(const struct sshkey *);
+void            add_key(struct sshkey *, char *);
+void            del_all_keys();
+int             pkcs11_init(int);
+void            pkcs11_terminate(void);
+int             pkcs11_add_provider(char *, char *, struct sshkey ***, char ***);
+int             pkcs11_del_provider(char *);
+
 #ifdef WITH_PKCS11_KEYGEN
 struct sshkey *
 	pkcs11_gakp(char *, char *, unsigned int, char *, unsigned int,
