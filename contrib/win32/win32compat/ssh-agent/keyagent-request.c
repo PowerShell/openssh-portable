@@ -29,13 +29,12 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "includes.h"
 #include "agent.h"
 #include "agent-request.h"
 #include <sddl.h>
-#include <dpapi.h>
 #ifdef ENABLE_PKCS11
 #include "ssh-pkcs11.h"
+#define ENABLE_PKCS11
 #endif
 
 #pragma warning(push, 3)
