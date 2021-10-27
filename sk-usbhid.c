@@ -706,8 +706,10 @@ sk_enroll(uint32_t alg, const uint8_t *challenge, size_t challenge_len,
 	}
 	if (device != NULL)
 		sk = sk_open(device);
-	else
-		sk = sk_probe(NULL, NULL, 0);
+	else {
+		if ((sk = sk_open("windows://hello")) == NULL)
+			sk = sk_probe(NULL, NULL, 0);
+	}
 	if (sk == NULL) {
 		skdebug(__func__, "failed to find sk");
 		goto out;
@@ -986,10 +988,16 @@ sk_sign(uint32_t alg, const uint8_t *data, size_t datalen,
 		goto out; /* error already logged */
 	if (device != NULL)
 		sk = sk_open(device);
-	else if (pin != NULL || (flags & SSH_SK_USER_VERIFICATION_REQD))
-		sk = sk_probe(NULL, NULL, 0);
-	else
-		sk = sk_probe(application, key_handle, key_handle_len);
+	else {
+		if ((sk = sk_open("windows://hello")) == NULL) {
+			if (pin != NULL ||
+			    (flags & SSH_SK_USER_VERIFICATION_REQD))
+				sk = sk_probe(NULL, NULL, 0);
+			else
+				sk = sk_probe(application, key_handle,
+				    key_handle_len);
+		}
+	}
 	if (sk == NULL) {
 		skdebug(__func__, "failed to find sk");
 		goto out;
