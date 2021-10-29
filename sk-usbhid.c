@@ -686,7 +686,7 @@ sk_enroll(uint32_t alg, const uint8_t *challenge, size_t challenge_len,
 		goto out;
 	}
 	*enroll_response = NULL;
-	memset(user_id, 0, sizeof(user_id));
+	arc4random_buf(user_id, sizeof(user_id));
 	if (check_enroll_options(options, &device, user_id,
 	    sizeof(user_id)) != 0)
 		goto out; /* error already logged */
