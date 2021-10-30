@@ -85,6 +85,10 @@
 #include <prot.h>
 #endif
 
+#ifdef WINDOWS
+#include "sshTelemetry.h"
+#endif
+
 #include "xmalloc.h"
 #include "ssh.h"
 #include "ssh2.h"
@@ -2226,6 +2230,10 @@ main(int ac, char **av)
 
 	debug("sshd version %s, %s", SSH_VERSION, SSH_OPENSSL_VERSION);
 
+#ifdef WINDOWS
+	send_sshd_config_telemetry(options.num_auth_methods, 
+		options.auth_methods);
+#endif
 	/* Store privilege separation user for later use if required. */
 	privsep_chroot = use_privsep && (getuid() == 0 || geteuid() == 0);
 	if ((privsep_pw = getpwnam(SSH_PRIVSEP_USER)) == NULL) {

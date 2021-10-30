@@ -49,6 +49,10 @@
 # include <ifaddrs.h>
 #endif
 
+#ifdef WINDOWS
+#include "sshTelemetry.h"
+#endif
+
 #include "xmalloc.h"
 #include "hostfile.h"
 #include "ssh.h"
@@ -543,10 +547,16 @@ ssh_connect_direct(struct ssh *ssh, const char *host, struct addrinfo *aitop,
 	if (sock == -1) {
 		error("ssh: connect to host %s port %s: %s",
 		    host, strport, errno == 0 ? "failure" : strerror(errno));
+#ifdef WINDOWS
+		send_ssh_connection_telemetry(strerror(errno), strport);
+#endif
 		return -1;
 	}
 
 	debug("Connection established.");
+#ifdef WINDOWS
+	send_ssh_connection_telemetry("Connection established.", strport);
+#endif
 
 	/* Set SO_KEEPALIVE if requested. */
 	if (want_keepalive &&

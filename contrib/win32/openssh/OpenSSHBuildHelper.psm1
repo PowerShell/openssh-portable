@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version 2.0
+Set-StrictMode -Version 2.0
 If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -Force
 
@@ -150,6 +150,7 @@ function Start-OpenSSHBootstrap
     [bool] $silent = -not $script:Verbose
     Write-BuildMsg -AsInfo -Message "Checking tools and dependencies" -Silent:$silent
 
+    $Win10SDKVerChoco = "10.1.17763.1"
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
     $newMachineEnvironmentPath = $machinePath   
 
@@ -205,26 +206,36 @@ function Start-OpenSSHBootstrap
     }    
 
     $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
-    $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"    
+    $sdkVersion = Get-Windows10SDKVersion
+    $env:vctargetspath = "${env:ProgramFiles(x86)}\MSBuild\Microsoft.Cpp\v4.0\v140"
+
+    if ($sdkVersion -eq $null) 
+    {
+        $packageName = "windows-sdk-10.1"
+        Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
+        choco install $packageName --version=$Win10SDKVerChoco -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
+    }
+
+    if (-not (Test-Path $env:vctargetspath)) 
+    {
+        Write-BuildMsg -AsInfo -Message "installing visualcpp-build-tools"
+        choco install visualcpp-build-tools --version 14.0.25420.1 -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
+    }
+
     #use vs2017 build tool if exists
     if($VS2017Path -ne $null)
     {
-        If (-not (Test-Path $sdkPath))
-        {
-            $packageName = "windows-sdk-8.1"
-            Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
-            choco install $packageName -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
-        }
+
 
         if(-not (Test-Path $VcVars))
         {
             Write-BuildMsg -AsError -ErrorAction Stop -Message "VC++ 2015.3 v140 toolset are not installed."   
         }
     }
-    elseIf (($VS2015Path -eq $null) -or (-not (Test-Path $VcVars)) -or (-not (Test-Path $sdkPath))) {
+    elseIf (($VS2015Path -eq $null) -or (-not (Test-Path $VcVars))) {
         $packageName = "vcbuildtools"
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
-        choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK;Win81SDK_CppBuildSKUV1" -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
+        choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK" -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
         $errorCode = $LASTEXITCODE
         if ($errorCode -eq 3010)
         {
@@ -272,7 +283,7 @@ function Start-OpenSSHBootstrap
         {
             $packageName = "windows-sdk-10.1"
             Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
-            choco install $packageName --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
+            choco install $packageName --version=$Win10SDKVerChoco --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
         }
     }
 
@@ -577,6 +588,7 @@ function Start-OpenSSHBuild
     }
     
     Write-BuildMsg -AsInfo -Message "Starting Open SSH build; Build Log: $($script:BuildLogFile)."
+    Write-BuildMsg -AsInfo -Message "$msbuildCmd $cmdMsg"
 
     & "$msbuildCmd" $cmdMsg
     $errorCode = $LASTEXITCODE
@@ -622,20 +634,17 @@ function Get-VS2015BuildToolPath
 }
 
 function Get-Windows10SDKVersion
-{   
+{  
+   #Temporary fix - Onecore builds are failing with latest windows 10 SDK (10.0.18362.0)
+   $requiredSDKVersion = [version]"10.0.17763.0" 
    ## Search for latest windows sdk available on the machine
-   $windowsSDKPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Lib"
-   $minSDKVersion = [version]"10.0.14393.0"
-   $versionsAvailable = @()
-   #Temporary fix - Onecore builds are failing with latest widows 10 SDK (10.0.18362.0)
-   $maxSDKVersion = [version]"10.0.17763.0"
-   $versionsAvailable = Get-ChildItem $windowsSDKPath | ? {$_.Name.StartsWith("10.")} | % {$version = [version]$_.Name; if(($version.CompareTo($minSDKVersion) -ge 0) -and ($version.CompareTo($maxSDKVersion) -le 0)) {$version}}
-   if(0 -eq $versionsAvailable.count)
-   {
-        return $null
+   $windowsSDKPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin\$requiredSDKVersion\x86\register_app.vbs"
+   if (test-path $windowsSDKPath) {
+       return $requiredSDKVersion
    }
-   $versionsAvailable = $versionsAvailable | Sort-Object -Descending
-   return $versionsAvailable[0]
+   else {
+       return $null
+   }
 }
 
 function Get-BuildLogFile
