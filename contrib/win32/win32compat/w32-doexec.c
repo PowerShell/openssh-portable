@@ -175,7 +175,7 @@ setup_session_env(struct ssh *ssh, Session* s)
 	char *env_name = NULL, *env_value = NULL, *t = NULL, **env = NULL, *path_env_val = NULL;
 	char buf[1024] = { 0 };
 	wchar_t *env_name_w = NULL, *env_value_w = NULL, *pw_dir_w = NULL, *tmp = NULL, wbuf[1024] = { 0, };
-	char *laddr, *c;
+	char *c;
 
 	UTF8_TO_UTF16_WITH_CLEANUP(pw_dir_w, s->pw->pw_dir);
 	/* skip domain part (if present) while setting USERNAME */
@@ -238,7 +238,7 @@ cleanup:
 }
 
 int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
-	int pipein[2], pipeout[2], pipeerr[2], r, ret = -1;
+	int pipein[2], pipeout[2], pipeerr[2], ret = -1;
 	char *exec_command = NULL, *posix_cmd_input = NULL, *shell = NULL;
 	HANDLE job = NULL, process_handle;
 	extern char* shell_command_option;

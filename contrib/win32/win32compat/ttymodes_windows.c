@@ -112,7 +112,7 @@ ssh_tty_parse_modes(struct ssh *ssh, int fd)
 	struct sshbuf *buf;
 	const u_char *data;
 	u_char opcode;
-	u_int baud, u;
+	u_int baud;
 	int r, failure = 0;
 	size_t len;
 
