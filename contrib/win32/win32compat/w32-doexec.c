@@ -285,7 +285,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	HANDLE job_dup;
 	pid_t pid = -1;
 	char * shell_command_option_local = NULL;
-	int shell_len = 0;
+	size_t shell_len = 0;
 	/*account for the quotes and null*/
 	shell_len = strlen(s->pw->pw_shell) + 2 + 1;
 	if ((shell = malloc(shell_len)) == NULL) {
@@ -369,7 +369,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 			 * in registry; pass shell, shell option, and quoted command as cmd path
 			 * of posix_spawn to avoid escaping
 			 */
-			int posix_cmd_input_len = strlen(shell) + 1;
+			size_t posix_cmd_input_len = strlen(shell) + 1;
 
 			/* account for " around and null */
 			if (exec_command) {

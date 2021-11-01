@@ -686,7 +686,7 @@ fileio_write_wrapper(struct w32_io* pio, const void* buf, size_t bytes_to_copy)
 	void* chunk_buf = NULL;
 	int chunk_count = 0;
 	int bytes_copied = -1;
-	int chunk_size = 0;
+	size_t chunk_size = 0;
 
 	for (int i = 0; i < bytes_to_copy; i += WRITE_BUFFER_SIZE, chunk_count++) {
 		chunk_buf = (BYTE*)buf + chunk_count * WRITE_BUFFER_SIZE;
