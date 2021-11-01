@@ -94,12 +94,11 @@ ssh_tty_make_modes(struct ssh *ssh, int fd, struct termios *tiop)
 #undef TTYCHAR
 #undef TTYMODE
 
-end :
-	    /* Mark end of mode data. */
-	    if ((r = sshbuf_put_u8(buf, TTY_OP_END)) != 0 ||
-		    (r = sshpkt_put_stringb(ssh, buf)) != 0)
-		    fatal("%s: packet error: %s", __func__, ssh_err(r));
-	    sshbuf_free(buf);
+	/* Mark end of mode data. */
+	if ((r = sshbuf_put_u8(buf, TTY_OP_END)) != 0 ||
+		(r = sshpkt_put_stringb(ssh, buf)) != 0)
+		fatal("%s: packet error: %s", __func__, ssh_err(r));
+	sshbuf_free(buf);
 }
 
 /*
