@@ -56,6 +56,7 @@
 /* import */
 extern ServerOptions options;
 extern struct sshauthopt *auth_opts;
+int get_in_chroot();
 char **
 do_setup_env_proxy(struct ssh *, Session *, const char *);
 

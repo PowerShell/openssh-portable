@@ -33,7 +33,7 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, size_t namebuflen)
 	unset_nonblock(p[1]);
 	*ttyfd = p[0];
 	*ptyfd = p[1];
-	strlcpy(namebuf, "windows-pty", namebuflen);
+	strcpy_s(namebuf, namebuflen, "windows-pty");
 	return 1;
 }
 

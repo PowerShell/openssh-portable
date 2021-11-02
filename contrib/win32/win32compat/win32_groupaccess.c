@@ -41,6 +41,7 @@
 #include <Ntsecapi.h>
 #include <security.h>
 #include <ntstatus.h>
+#include <stdio.h>
 
 #define __attribute__(a)
 #include "inc/sys/types.h"
