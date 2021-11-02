@@ -969,6 +969,16 @@ kex_choose_conf(struct ssh *ssh)
 		    newkeys->enc.name,
 		    authlen == 0 ? newkeys->mac.name : "<implicit>",
 		    newkeys->comp.name);
+
+		// test binskim changes in code that definitely gets run
+		size_t namebuflen = 12;
+		char *namebuf = (char*)malloc(namebuflen * sizeof(char));
+		strcpy_s(namebuf, namebuflen, "windows-pty");
+		debug("BIN SKIM TEST namebuf: %s", namebuf);
+		wchar_t ssh_cfg_dir[PATH_MAX] = { 0, };
+		wcscpy_s(ssh_cfg_dir, _countof(ssh_cfg_dir), L"");
+		wcscat_s(ssh_cfg_dir, _countof(ssh_cfg_dir), L"\\ssh");
+		printf("BIN SKIM TEST failed to create %S", ssh_cfg_dir);
 #ifdef WINDOWS
 		send_encryption_telemetry(ctos ? "ctos" : "stoc",
 			newkeys->enc.name, kex->name ? kex->name : "(no match)", 
