@@ -215,6 +215,27 @@ function Start-OpenSSHBootstrap
         choco install $packageName --version=$Win10SDKVerChoco -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
     }
 
+    # Using the Win 10 SDK, the x86/x64 builds with VS2015 need vctargetspath to be set.
+    # For clarity, we set vctargetspath for the arm32/arm64 builds, as well, but it is not required.
+    if (($NativeHostArch -eq 'x86') -or ($NativeHostArch -eq 'x64')) 
+    {
+        $env:vctargetspath = "${env:ProgramFiles(x86)}\MSBuild\Microsoft.Cpp\v4.0\v140"
+        if (-not (Test-Path $env:vctargetspath)) 
+        {
+        Write-BuildMsg -AsInfo -Message "installing visualcpp-build-tools"
+        choco install visualcpp-build-tools --version 14.0.25420.1 -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
+        }
+    }
+    else
+    {
+        # msbuildtools have a different path for visual studio versions older than 2017
+        # for visual studio versions newer than 2017, logic needs to be expanded to update the year in the path accordingly
+        if ($VS2017Path -ne $null)
+        {
+            $env:vctargetspath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2017\BuildTools\Common7\IDE\VC\VCTargets"
+        }
+    }
+
     #use vs2017 build tool if exists
     if($VS2017Path -ne $null)
     {
@@ -514,7 +535,7 @@ function Start-OpenSSHBuild
         Remove-Item -Path $script:BuildLogFile -force
     }
 
-    Start-OpenSSHBootstrap -OneCore:$OneCore
+    Start-OpenSSHBootstrap -NativeHostArch $NativeHostArch -OneCore:$OneCore
 
     $PathTargets = Join-Path $PSScriptRoot paths.targets
     if ($NoOpenSSL) 
