@@ -1333,7 +1333,8 @@ kex_exchange_identification(struct ssh *ssh, int timeout_ms,
 		    peer_version_string);
 #ifdef WINDOWS
 		send_ssh_version_telemetry(our_version_string, peer_version_string,
-			"Bad remote protocol version identification");
+			"Bad remote protocol version identification", remote_major, 
+			remote_minor);
 #endif
 
  invalid:
@@ -1363,7 +1364,8 @@ kex_exchange_identification(struct ssh *ssh, int timeout_ms,
 		send_error(ssh, "Protocol major versions differ.");
 #ifdef WINDOWS
 		send_ssh_version_telemetry(our_version_string, 
-			peer_version_string, "Protocol major versions differ");
+			peer_version_string, "Protocol major versions differ",
+			remote_major, remote_minor);
 #endif
 		r = SSH_ERR_NO_PROTOCOL_VERSION;
 		goto out;
@@ -1390,7 +1392,7 @@ kex_exchange_identification(struct ssh *ssh, int timeout_ms,
 
 #ifdef WINDOWS
 	send_ssh_version_telemetry(our_version_string, 
-		peer_version_string, "none");
+		peer_version_string, "none", remote_major, remote_minor);
 #endif
 	/* success */
 	r = 0;

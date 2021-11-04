@@ -23,8 +23,9 @@ void send_ssh_connection_telemetry(const char* conn, const char* port);
 
 // sends ports and auth methods configured by sshd
 void send_sshd_config_telemetry(const int num_auth_methods, 
-	const char** auth_methods);
+	const char** auth_methods, const char* conn);
 
 // sends version and peer version from ssh & sshd
 void send_ssh_version_telemetry(const char* ssh_version,
-	const char* peer_version, const char* remote_protocol_supported);
+	const char* peer_version, const char* remote_protocol_supported, 
+	const int remote_major, const int remote_minor);

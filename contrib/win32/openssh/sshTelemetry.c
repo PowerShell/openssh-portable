@@ -165,7 +165,7 @@ void send_ssh_connection_telemetry(const char* conn, const char* port)
 }
 
 void send_sshd_config_telemetry(const int num_auth_methods, 
-    const char** auth_methods)
+    const char** auth_methods, const char* conn)
 {
     char* auth_buffer = NULL;
     if (num_auth_methods == 0) {
@@ -194,15 +194,19 @@ void send_sshd_config_telemetry(const int num_auth_methods,
         "SSHD",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingString(auth_buffer, "authMethods")
+        TraceLoggingString(auth_buffer, "authMethods"),
+        TraceLoggingString(conn, "connStatus")
     );
     TraceLoggingUnregister(g_hProvider1);
     free(auth_buffer);
 }
 
 void send_ssh_version_telemetry(const char* ssh_version, const char* peer_version,
-    const char* remote_protocol_supported)
+    const char* remote_protocol_supported, const int remote_major, const int remote_minor)
 {
+    // assuming digits of remote major & remote major won't exceed 4
+    char* remote_version = (char*)malloc(6 * sizeof(char));
+    sprintf_s(remote_version, 6, "%d.%d", remote_major, remote_minor);
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
         g_hProvider1,
@@ -211,8 +215,10 @@ void send_ssh_version_telemetry(const char* ssh_version, const char* peer_versio
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
         TraceLoggingString(ssh_version, "ourVersion"),
         TraceLoggingString(remote_protocol_supported, "remoteProtocolError"),
-        TraceLoggingString(peer_version, "peerVersion")
+        TraceLoggingString(peer_version, "peerVersion"),
+        TraceLoggingString(remote_version, "remoteVersion")
     );
     TraceLoggingUnregister(g_hProvider1);
+    free(remote_version);
 }
 

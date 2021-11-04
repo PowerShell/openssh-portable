@@ -2230,10 +2230,6 @@ main(int ac, char **av)
 
 	debug("sshd version %s, %s", SSH_VERSION, SSH_OPENSSL_VERSION);
 
-#ifdef WINDOWS
-	send_sshd_config_telemetry(options.num_auth_methods, 
-		options.auth_methods);
-#endif
 	/* Store privilege separation user for later use if required. */
 	privsep_chroot = use_privsep && (getuid() == 0 || geteuid() == 0);
 	if ((privsep_pw = getpwnam(SSH_PRIVSEP_USER)) == NULL) {
@@ -2602,7 +2598,15 @@ done_loading_hostkeys:
 	io_sock_in = sock_in;
 	io_sock_out = sock_out;
 	if ((ssh = ssh_packet_set_connection(NULL, sock_in, sock_out)) == NULL)
+#ifdef WINDOWS
+	{
+		send_sshd_config_telemetry(options.num_auth_methods,
+			options.auth_methods, "connection failed: unable to create connection");
 		fatal("Unable to create connection");
+	}
+#else
+		fatal("Unable to create connection");
+#endif 
 	the_active_state = ssh;
 	ssh_packet_set_server(ssh);
 
@@ -2620,6 +2624,10 @@ done_loading_hostkeys:
 
 	if ((remote_port = ssh_remote_port(ssh)) < 0) {
 		debug("ssh_remote_port failed");
+#ifdef WINDOWS
+		send_sshd_config_telemetry(options.num_auth_methods,
+			options.auth_methods, "connection failed: ssh_remote_port failed");
+#endif
 		cleanup_exit(255);
 	}
 
@@ -2650,6 +2658,10 @@ done_loading_hostkeys:
 	    rdomain == NULL ? "" : " rdomain \"",
 	    rdomain == NULL ? "" : rdomain,
 	    rdomain == NULL ? "" : "\"");
+#ifdef WINDOWS
+	send_sshd_config_telemetry(options.num_auth_methods,
+		options.auth_methods, "connection established");
+#endif
 	free(laddr);
 
 	/*
