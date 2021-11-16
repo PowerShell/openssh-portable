@@ -2600,8 +2600,8 @@ done_loading_hostkeys:
 	if ((ssh = ssh_packet_set_connection(NULL, sock_in, sock_out)) == NULL)
 #ifdef WINDOWS
 	{
-		send_sshd_config_telemetry(options.num_auth_methods,
-			options.auth_methods, "connection failed: unable to create connection");
+		send_sshd_connection_telemetry(
+			"connection failed: unable to create connection");
 		fatal("Unable to create connection");
 	}
 #else
@@ -2625,8 +2625,8 @@ done_loading_hostkeys:
 	if ((remote_port = ssh_remote_port(ssh)) < 0) {
 		debug("ssh_remote_port failed");
 #ifdef WINDOWS
-		send_sshd_config_telemetry(options.num_auth_methods,
-			options.auth_methods, "connection failed: ssh_remote_port failed");
+		send_sshd_connection_telemetry(
+			"connection failed: ssh_remote_port failed");
 #endif
 		cleanup_exit(255);
 	}
@@ -2659,8 +2659,7 @@ done_loading_hostkeys:
 	    rdomain == NULL ? "" : rdomain,
 	    rdomain == NULL ? "" : "\"");
 #ifdef WINDOWS
-	send_sshd_config_telemetry(options.num_auth_methods,
-		options.auth_methods, "connection established");
+	send_sshd_connection_telemetry("connection established");
 #endif
 	free(laddr);
 
