@@ -29,4 +29,4 @@ void send_sshd_connection_telemetry(const char* conn);
 
 // sends version and peer version from ssh & sshd
 void send_ssh_version_telemetry(const char* ssh_version,
-	const char* peer_version, const char* remote_protocol_supported);
+	const char* peer_version, const char* remote_protocol_error);

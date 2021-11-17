@@ -191,7 +191,7 @@ void send_sshd_connection_telemetry(const char* conn)
 }
 
 void send_ssh_version_telemetry(const char* ssh_version, 
-    const char* peer_version, const char* remote_protocol_supported)
+    const char* peer_version, const char* remote_protocol_error)
 {
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
@@ -200,7 +200,7 @@ void send_ssh_version_telemetry(const char* ssh_version,
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
         TraceLoggingString(ssh_version, "ourVersion"),
-        TraceLoggingString(remote_protocol_supported, "remoteProtocolError"),
+        TraceLoggingString(remote_protocol_error, "remoteProtocolError"),
         TraceLoggingString(peer_version, "peerVersion")
     );
     TraceLoggingUnregister(g_hProvider1);
