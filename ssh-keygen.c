@@ -2530,6 +2530,7 @@ sign_one(struct sshkey *signkey, const char *filename, int fd,
 			fprintf(stderr, "Signing file %s\n", filename);
 	}
 	if (signer == NULL && sshkey_is_sk(signkey)) {
+#ifndef WINDOWS
 		if ((signkey->sk_flags & SSH_SK_USER_VERIFICATION_REQD)) {
 			xasprintf(&prompt, "Enter PIN for %s key: ",
 			    sshkey_type(signkey));
@@ -2537,6 +2538,7 @@ sign_one(struct sshkey *signkey, const char *filename, int fd,
 			    RP_ALLOW_STDIN)) == NULL)
 				fatal_f("couldn't read PIN");
 		}
+#endif
 		if ((signkey->sk_flags & SSH_SK_USER_PRESENCE_REQD)) {
 			if ((fp = sshkey_fingerprint(signkey, fingerprint_hash,
 			    SSH_FP_DEFAULT)) == NULL)
