@@ -1738,7 +1738,7 @@ do_ca_sign(struct passwd *pw, const char *ca_key_path, int prefer_agent,
     unsigned long long cert_serial, int cert_serial_autoinc,
     int argc, char **argv)
 {
-	int r, i, found, agent_fd = -1;
+	int r, i, found, agent_fd = -1, retried = 0;
 	u_int n;
 	struct sshkey *ca, *public;
 	char valid[64], *otmp, *tmp, *cp, *out, *comment;
@@ -1781,12 +1781,14 @@ do_ca_sign(struct passwd *pw, const char *ca_key_path, int prefer_agent,
 	} else {
 		/* CA key is assumed to be a private key on the filesystem */
 		ca = load_identity(tmp, NULL);
+#ifndef WINDOWS
 		if (sshkey_is_sk(ca) &&
 		    (ca->sk_flags & SSH_SK_USER_VERIFICATION_REQD)) {
 			if ((pin = read_passphrase("Enter PIN for CA key: ",
 			    RP_ALLOW_STDIN)) == NULL)
 				fatal_f("couldn't read PIN");
 		}
+#endif
 	}
 	free(tmp);
 
@@ -1848,6 +1850,7 @@ do_ca_sign(struct passwd *pw, const char *ca_key_path, int prefer_agent,
 			    &agent_fd)) != 0)
 				fatal_r(r, "Couldn't certify %s via agent", tmp);
 		} else {
+ retry:
 			if (sshkey_is_sk(ca) &&
 			    (ca->sk_flags & SSH_SK_USER_PRESENCE_REQD)) {
 				notifier = notify_start(0,
@@ -1857,6 +1860,17 @@ do_ca_sign(struct passwd *pw, const char *ca_key_path, int prefer_agent,
 			r = sshkey_certify(public, ca, key_type_name,
 			    sk_provider, pin);
 			notify_complete(notifier, "User presence confirmed");
+#ifdef WINDOWS
+			if (r == SSH_ERR_KEY_WRONG_PASSPHRASE &&
+			    pin == NULL && !retried && sshkey_is_sk(ca) &&
+			    (ca->sk_flags & SSH_SK_USER_VERIFICATION_REQD)) {
+				if ((pin = read_passphrase("Enter PIN for CA "
+				    "key: ", RP_ALLOW_STDIN)) == NULL)
+					fatal_f("couldn't read PIN");
+				retried = 1;
+				goto retry;
+			}
+#endif
 			if (r != 0)
 				fatal_r(r, "Couldn't certify key %s", tmp);
 		}
