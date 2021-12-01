@@ -1282,6 +1282,14 @@ identity_sign(struct identity *id, u_char **sigp, size_t *lenp,
 		sign_key = prv;
 		if (sshkey_is_sk(sign_key)) {
 #ifdef WINDOWS
+			/*
+			 * Don't prompt for FIDO2 PINs by default on Windows.
+			 * The odds are we are communicating with webauthn.dll,
+			 * which handles this internally. In the event we are
+			 * talking directly to a FIDO2 device and a PIN is
+			 * required, sshkey_sign() will return WRONG_PASSPHRASE
+			 * and we will prompt for a PIN when we retry.
+			 */
 			if ((sign_key->sk_flags &
 			    SSH_SK_USER_VERIFICATION_REQD) && 0) {
 #else
