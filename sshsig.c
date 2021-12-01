@@ -558,7 +558,6 @@ hash_file(int fd, const char *hashalg, struct sshbuf **bp)
 	return r;
 }
 
-#ifdef WINDOWS
 int
 sshsig_sign_fd(struct sshkey *key, const char *hashalg,
     const char *sk_provider, const char *sk_pin,
@@ -566,8 +565,11 @@ sshsig_sign_fd(struct sshkey *key, const char *hashalg,
     sshsig_signer *signer, void *signer_ctx)
 {
 	struct sshbuf *b = NULL;
-	int r = SSH_ERR_INTERNAL_ERROR, retried = 0;
+	int r = SSH_ERR_INTERNAL_ERROR;
+#ifdef WINDOWS
+	int retried = 0;
 	char *pin = NULL, *prompt = NULL;
+#endif
 
 	if (hashalg == NULL)
 		hashalg = HASHALG_DEFAULT;
@@ -577,9 +579,12 @@ sshsig_sign_fd(struct sshkey *key, const char *hashalg,
 		error_fr(r, "hash_file");
 		return r;
 	}
+#ifdef WINDOWS
  retry:
+#endif
 	if ((r = sshsig_wrap_sign(key, hashalg, sk_provider, sk_pin, b,
 	    sig_namespace, out, signer, signer_ctx)) != 0) {
+#ifdef WINDOWS
 		if (r == SSH_ERR_KEY_WRONG_PASSPHRASE && signer == NULL &&
 		    sshkey_is_sk(key) && sk_pin == NULL && !retried &&
 		    (key->sk_flags & SSH_SK_USER_VERIFICATION_REQD)) {
@@ -595,45 +600,20 @@ sshsig_sign_fd(struct sshkey *key, const char *hashalg,
 			goto retry;
 		}
 		error_fr(r, "sshsig_wrap_sign");
+#endif
 		goto out;
 	}
 	/* success */
 	r = 0;
  out:
+#ifdef WINDOWS
 	free(prompt);
 	if (pin != NULL)
 		freezero(pin, strlen(pin));
+#endif
 	sshbuf_free(b);
 	return r;
 }
-#else
-int
-sshsig_sign_fd(struct sshkey *key, const char *hashalg,
-    const char *sk_provider, const char *sk_pin,
-    int fd, const char *sig_namespace, struct sshbuf **out,
-    sshsig_signer *signer, void *signer_ctx)
-{
-	struct sshbuf *b = NULL;
-	int r = SSH_ERR_INTERNAL_ERROR;
-
-	if (hashalg == NULL)
-		hashalg = HASHALG_DEFAULT;
-	if (out != NULL)
-		*out = NULL;
-	if ((r = hash_file(fd, hashalg, &b)) != 0) {
-		error_fr(r, "hash_file");
-		return r;
-	}
-	if ((r = sshsig_wrap_sign(key, hashalg, sk_provider, sk_pin, b,
-	    sig_namespace, out, signer, signer_ctx)) != 0)
-		goto out;
-	/* success */
-	r = 0;
- out:
-	sshbuf_free(b);
-	return r;
-}
-#endif /* WINDOWS */
 
 int
 sshsig_verify_fd(struct sshbuf *signature, int fd,
