@@ -88,29 +88,60 @@ find_helper(void)
 
 	return helper;
 }
+#endif /* WINDOWS */
 
 static int
 start_helper(int *fdp, pid_t *pidp, void (**osigchldp)(int))
 {
 	void (*osigchld)(int);
-	int r, pair[2], actions_inited = 0;
+	int oerrno, pair[2];
 	pid_t pid;
-	char *helper, *av[3], *verbosity = NULL;
+	char *helper, *verbosity = NULL;
+#ifdef WINDOWS
+	int r, actions_inited = 0;
+	char *av[3];
 	posix_spawn_file_actions_t actions;
+#endif
 
 	*fdp = -1;
 	*pidp = 0;
 	*osigchldp = SIG_DFL;
+#ifdef WINDOWS
 	r = SSH_ERR_SYSTEM_ERROR;
 	pair[0] = pair[1] = -1;
+#endif
 
+#ifdef WINDOWS
 	if ((helper = find_helper()) == NULL)
 		goto out;
-	osigchld = ssh_signal(SIGCHLD, SIG_DFL);
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == -1) {
-		error_f("socketpair: %s", strerror(errno));
-		goto out;
+#else
+	helper = getenv("SSH_SK_HELPER");
+	if (helper == NULL || strlen(helper) == 0)
+		helper = _PATH_SSH_SK_HELPER;
+	if (access(helper, X_OK) != 0) {
+		oerrno = errno;
+		error_f("helper \"%s\" unusable: %s", helper, strerror(errno));
+		errno = oerrno;
+		return SSH_ERR_SYSTEM_ERROR;
 	}
+#endif
+
+#ifdef DEBUG_SK
+	verbosity = "-vvv";
+#endif
+
+	/* Start helper */
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == -1) {
+		error("socketpair: %s", strerror(errno));
+#ifdef WINDOWS
+		goto out;
+#else
+		return SSH_ERR_SYSTEM_ERROR;
+#endif
+	}
+	osigchld = ssh_signal(SIGCHLD, SIG_DFL);
+
+#ifdef WINDOWS
 	if (posix_spawn_file_actions_init(&actions) != 0) {
 		error_f("posix_spawn_file_actions_init failed");
 		goto out;
@@ -123,9 +154,9 @@ start_helper(int *fdp, pid_t *pidp, void (**osigchldp)(int))
 		error_f("posix_spawn_file_actions_adddup2 failed");
 		goto out;
 	}
-#ifdef DEBUG_SK
-	verbosity = "-vvv";
 #endif
+
+#ifdef WINDOWS
 	av[0] = helper;
 	av[1] = verbosity;
 	av[2] = NULL;
@@ -133,55 +164,8 @@ start_helper(int *fdp, pid_t *pidp, void (**osigchldp)(int))
 		error_f("posix_spawnp failed");
 		goto out;
 	}
-	/* success */
-	debug3_f("started pid=%ld", (long)pid);
 	r = 0;
-	*fdp = pair[0];
-	*pidp = pid;
-	*osigchldp = osigchld;
-	pair[0] = -1;
-out:
-	if (pair[0] != -1)
-		close(pair[0]);
-	if (pair[1] != -1)
-		close(pair[1]);
-	if (actions_inited)
-		posix_spawn_file_actions_destroy(&actions);
-
-	return r;
-}
 #else
-static int
-start_helper(int *fdp, pid_t *pidp, void (**osigchldp)(int))
-{
-	void (*osigchld)(int);
-	int oerrno, pair[2];
-	pid_t pid;
-	char *helper, *verbosity = NULL;
-
-	*fdp = -1;
-	*pidp = 0;
-	*osigchldp = SIG_DFL;
-
-	helper = getenv("SSH_SK_HELPER");
-	if (helper == NULL || strlen(helper) == 0)
-		helper = _PATH_SSH_SK_HELPER;
-	if (access(helper, X_OK) != 0) {
-		oerrno = errno;
-		error_f("helper \"%s\" unusable: %s", helper, strerror(errno));
-		errno = oerrno;
-		return SSH_ERR_SYSTEM_ERROR;
-	}
-#ifdef DEBUG_SK
-	verbosity = "-vvv";
-#endif
-
-	/* Start helper */
-	if (socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == -1) {
-		error("socketpair: %s", strerror(errno));
-		return SSH_ERR_SYSTEM_ERROR;
-	}
-	osigchld = ssh_signal(SIGCHLD, SIG_DFL);
 	if ((pid = fork()) == -1) {
 		oerrno = errno;
 		error("fork: %s", strerror(errno));
@@ -207,15 +191,27 @@ start_helper(int *fdp, pid_t *pidp, void (**osigchldp)(int))
 		_exit(1);
 	}
 	close(pair[1]);
-
+#endif
 	/* success */
 	debug3_f("started pid=%ld", (long)pid);
 	*fdp = pair[0];
 	*pidp = pid;
 	*osigchldp = osigchld;
+#ifdef WINDOWS
+	pair[0] = -1;
+out:
+	if (pair[0] != -1)
+		close(pair[0]);
+	if (pair[1] != -1)
+		close(pair[1]);
+	if (actions_inited)
+		posix_spawn_file_actions_destroy(&actions);
+
+	return r;
+#else
 	return 0;
+#endif
 }
-#endif /* WINDOWS */
 
 static int
 reap_helper(pid_t pid)
