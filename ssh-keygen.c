@@ -1738,7 +1738,7 @@ do_ca_sign(struct passwd *pw, const char *ca_key_path, int prefer_agent,
     unsigned long long cert_serial, int cert_serial_autoinc,
     int argc, char **argv)
 {
-	int r, i, found, agent_fd = -1, retried = 0;
+	int r, i, found, agent_fd = -1;
 	u_int n;
 	struct sshkey *ca, *public;
 	char valid[64], *otmp, *tmp, *cp, *out, *comment;
@@ -1746,6 +1746,9 @@ do_ca_sign(struct passwd *pw, const char *ca_key_path, int prefer_agent,
 	struct ssh_identitylist *agent_ids;
 	size_t j;
 	struct notifier_ctx *notifier = NULL;
+#ifdef WINDOWS
+	int retried = 0;
+#endif
 
 #ifdef ENABLE_PKCS11
 	pkcs11_init(1);
@@ -1850,7 +1853,9 @@ do_ca_sign(struct passwd *pw, const char *ca_key_path, int prefer_agent,
 			    &agent_fd)) != 0)
 				fatal_r(r, "Couldn't certify %s via agent", tmp);
 		} else {
+#ifdef WINDOWS
  retry:
+#endif
 			if (sshkey_is_sk(ca) &&
 			    (ca->sk_flags & SSH_SK_USER_PRESENCE_REQD)) {
 				notifier = notify_start(0,
