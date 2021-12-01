@@ -136,7 +136,11 @@
 
 /* Location of ssh-sk-helper to support keys in security keys */
 #ifndef _PATH_SSH_SK_HELPER
+#ifdef WINDOWS
+#define _PATH_SSH_SK_HELPER		"C:\Windows\System32\OpenSSH\ssh-sk-helper.exe"
+#else
 #define _PATH_SSH_SK_HELPER		"/usr/libexec/ssh-sk-helper"
+#endif
 #endif
 
 /* xauth for X11 forwarding */
