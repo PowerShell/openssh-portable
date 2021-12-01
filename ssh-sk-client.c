@@ -49,13 +49,20 @@ static char module_path[PATH_MAX + 1];
 static char *
 find_helper_in_module_path(void)
 {
+	wchar_t path[PATH_MAX + 1];
 	DWORD n;
 	char *ep;
 
 	memset(module_path, 0, sizeof(module_path));
-	if ((n = GetModuleFileNameA(NULL, module_path,
-	    sizeof(module_path) - 1)) == 0 || n >= sizeof(module_path) - 1) {
-		error_f("GetModuleFileNameA failed");
+	memset(path, 0, sizeof(path));
+	if ((n = GetModuleFileNameW(NULL, path, PATH_MAX)) == 0 ||
+	    n >= PATH_MAX) {
+		error_f("GetModuleFileNameW failed");
+		return NULL;
+	}
+	if (wcstombs_s(NULL, module_path, sizeof(module_path), path,
+	    sizeof(module_path) - 1) != 0) {
+		error_f("wcstombs_s failed");
 		return NULL;
 	}
 	if ((ep = strrchr(module_path, '\\')) == NULL) {
