@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version 2.0
+Set-StrictMode -Version 2.0
 If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -Force
 
@@ -231,30 +231,26 @@ function Start-OpenSSHBootstrap
     {
         # msbuildtools have a different path for visual studio versions older than 2017
         # for visual studio versions newer than 2017, logic needs to be expanded to update the year in the path accordingly
-        if ($VS2017Path -ne $null)
+        if ($VS2019Path -or $VS2017Path)
         {
-            $env:vctargetspath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2017\BuildTools\Common7\IDE\VC\VCTargets"
+            $year = "2017"
+            if ($VS2019Path)
+            {
+                $year = "2019"
+            }
+            $env:vctargetspath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\${year}\BuildTools\Common7\IDE\VC\VCTargets"
         }
     }
 
-    $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"
-
-    if ($VS2019Path -or $VS2017Path)
+    #use vs2017 build tool if exists
+    if($VS2019Path -or $VS2017Path)
     {
-        # Use VS2019 or VS2017 build tools if installed.
-        if (-not (Test-Path $sdkPath))
-        {
-            $packageName = "windows-sdk-8.1"
-            Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
-            choco install $packageName -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
-        }
-
         if(-not (Test-Path $VcVars))
         {
             Write-BuildMsg -AsError -ErrorAction Stop -Message "VC++ 2015.3 v140 toolset are not installed."   
         }
     }
-    elseif (!$VS2015Path -or (-not (Test-Path $VcVars)) -or (-not (Test-Path $sdkPath))) {
+    elseif (!$VS2015Path -or (-not (Test-Path $VcVars))) {
         $packageName = "vcbuildtools"
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
         choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK" -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
@@ -291,7 +287,7 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsVerbose -Message 'VC++ 2015 Build Tools already present.'
     }
 
-    if($NativeHostArch.ToLower().Startswith('arm') -and ($VS2019Path -or $VS2017Path))
+    if($NativeHostArch.ToLower().Startswith('arm') -and !$VS2019Path -and !$VS2017Path)
     {
         #TODO: Install VS2019 or VS2017 build tools
         Write-BuildMsg -AsError -ErrorAction Stop -Message "The required msbuild 15.0 is not installed on the machine."
@@ -654,7 +650,6 @@ function Get-VS2019BuildToolPath
     {
         return $null
     }
-
     return $toolAvailable[0].FullName
 }
 
@@ -672,7 +667,6 @@ function Get-VS2017BuildToolPath
     {
         return $null
     }
-
     return $toolAvailable[0].FullName
 }
 
@@ -689,7 +683,6 @@ function Get-VS2015BuildToolPath
     {
         return $null
     }
-
     return $toolAvailable[0].FullName
 }
 
