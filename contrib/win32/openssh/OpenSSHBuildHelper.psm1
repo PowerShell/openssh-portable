@@ -214,7 +214,9 @@ function Start-OpenSSHBootstrap
         $packageName = "windows-sdk-10.1"
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
         choco install $packageName --version=$Win10SDKVerChoco -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
-        if($LASTEXITCODE -ne 0)
+        # check that sdk was properly installed
+        $sdkVersion = Get-Windows10SDKVersion
+        if($sdkVersion -eq $null)
         {
             Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
         }
@@ -227,8 +229,13 @@ function Start-OpenSSHBootstrap
         $env:vctargetspath = "${env:ProgramFiles(x86)}\MSBuild\Microsoft.Cpp\v4.0\v140"
         if (-not (Test-Path $env:vctargetspath)) 
         {
-        Write-BuildMsg -AsInfo -Message "installing visualcpp-build-tools"
-        choco install visualcpp-build-tools --version 14.0.25420.1 -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
+            Write-BuildMsg -AsInfo -Message "installing visualcpp-build-tools"
+            choco install visualcpp-build-tools --version 14.0.25420.1 -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
+            # check that build-tools were properly installed
+            if(-not (Test-Path $env:vctargetspath))
+            {
+                Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
+            }
         }
     }
     else
@@ -305,6 +312,11 @@ function Start-OpenSSHBootstrap
             $packageName = "windows-sdk-10.1"
             Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
             choco install $packageName --version=$Win10SDKVerChoco --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
+            $win10sdk = Get-Windows10SDKVersion
+            if($win10sdk -eq $null)
+            {
+                Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
+            }
         }
     }
 
