@@ -118,21 +118,21 @@ done:
 }
 
 /*
- * in current_user sub tree under key_name key
+ * in user_root sub tree under key_name key
  * remove all sub keys with value name value_name_to_remove
  * and value data value_data_to_remove
  */
 static int
-remove_matching_subkeys_from_registry(HKEY user_root, wchar_t* key_name, wchar_t* value_name_to_remove, char *value_data_to_remove) {
+remove_matching_subkeys_from_registry(HKEY user_root, wchar_t const* key_name, wchar_t const* value_name_to_remove, char const* value_data_to_remove) {
 	int index = 0, success = 0;
 	DWORD data_len;
 	HKEY root = 0, sub = 0;
 	char *data = NULL;
 	wchar_t sub_name[MAX_KEY_LENGTH];
 	DWORD sub_name_len = MAX_KEY_LENGTH;
+	LSTATUS retCode;
 
 	if (RegOpenKeyExW(user_root, key_name, 0, DELETE | KEY_ENUMERATE_SUB_KEYS | KEY_WOW64_64KEY, &root) != 0) {
-		success = 1;
 		goto done;
 	}
 
@@ -142,7 +142,7 @@ remove_matching_subkeys_from_registry(HKEY user_root, wchar_t* key_name, wchar_t
 			RegCloseKey(sub);
 			sub = NULL;
 		}
-		if (RegEnumKeyExW(root, index++, sub_name, &sub_name_len, NULL, NULL, NULL, NULL) == 0) {
+		if ((retCode = RegEnumKeyExW(root, index++, sub_name, &sub_name_len, NULL, NULL, NULL, NULL)) == 0) {
 			if (RegOpenKeyExW(root, sub_name, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub) == 0 &&
 				RegQueryValueExW(sub, value_name_to_remove, 0, NULL, NULL, &data_len) == 0) {
 
@@ -161,10 +161,12 @@ remove_matching_subkeys_from_registry(HKEY user_root, wchar_t* key_name, wchar_t
 				}
 			}
 		}
-		else
+		else {
+			if (retCode == ERROR_NO_MORE_ITEMS)
+				success = 1;
 			break;
+		}
 	}
-	success = 1;
 done:
 	if (data)
 		free(data);
@@ -176,11 +178,11 @@ done:
 }
 
 /*
- * in current_user sub tree under key_name key
+ * in user_root sub tree under key_name key
  * check whether sub_key_name sub key exists
  */
 static int
-is_reg_sub_key_exists(HKEY user_root, wchar_t* key_name, char* sub_key_name) {
+is_reg_sub_key_exists(HKEY user_root, wchar_t const* key_name, char const* sub_key_name) {
 	int rv = 0;
 	HKEY root = 0, sub = 0;
 
@@ -370,15 +372,18 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 	wchar_t sub_name[MAX_KEY_LENGTH];
 	DWORD sub_name_len = MAX_KEY_LENGTH;
 	DWORD pin_len, epin_len, provider_len;
-	char *pin = NULL, *epin = NULL, *provider = NULL;
+	char *pin = NULL, *npin = NULL, *epin = NULL, *provider = NULL;
 	HKEY root = 0, sub = 0, user_root = 0;
 	struct sshkey **keys = NULL;
+	SECURITY_ATTRIBUTES sa = { 0, NULL, 0 };
 
 	pkcs11_init(0);
 
-	if (get_user_root(con, &user_root) != 0 ||
-		RegOpenKeyExW(user_root, SSH_PKCS11_PROVIDERS_ROOT, 0, STANDARD_RIGHTS_READ | KEY_ENUMERATE_SUB_KEYS | KEY_WOW64_64KEY, &root) != 0) {
-		success = 1;
+	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
+	sa.nLength = sizeof(sa);
+	if ((!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL, SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sa.nLength)) ||
+		get_user_root(con, &user_root) != 0 ||
+		RegCreateKeyExW(user_root, SSH_PKCS11_PROVIDERS_ROOT, 0, 0, 0, KEY_WRITE | STANDARD_RIGHTS_READ | KEY_ENUMERATE_SUB_KEYS | KEY_WOW64_64KEY, &sa, &root, NULL) != 0) {
 		goto done;
 	}
 
@@ -394,10 +399,14 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 				RegQueryValueExW(sub, L"pin", 0, NULL, NULL, &epin_len) == 0) {
 				if (provider)
 					free(provider);
-				if (pin)
+				if (pin) {
+					SecureZeroMemory(pin, sizeof(pin));
 					free(pin);
-				if (epin)
+				}
+				if (epin) {
+					SecureZeroMemory(epin, sizeof(epin));
 					free(epin);
+				}
 				provider = NULL;
 				pin = NULL;
 				epin = NULL;
@@ -410,9 +419,10 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 				provider[provider_len] = '\0';
 				epin[epin_len] = '\0';
 				if (convert_blob(con, epin, epin_len, &pin, &pin_len, 0) != 0 ||
-					(pin = realloc(pin, pin_len + 1)) == NULL) {
+					(npin = realloc(pin, pin_len + 1)) == NULL) {
 					goto done;
 				}
+				pin = npin;
 				pin[pin_len] = '\0';
 				count = pkcs11_add_provider(provider, pin, &keys, NULL);
 				for (i = 0; i < count; i++) {
@@ -462,10 +472,14 @@ done:
 	pkcs11_terminate();
 	if (provider)
 		free(provider);
-	if (pin)
+	if (pin) {
+		SecureZeroMemory(pin, sizeof(pin));
 		free(pin);
-	if (epin)
+	}
+	if (epin) {
+		SecureZeroMemory(epin, sizeof(epin));
 		free(epin);
+	}
 	if (user_root)
 		RegCloseKey(user_root);
 	if (root)
@@ -555,8 +569,11 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 	HKEY reg = 0, sub = 0, user_root = 0;
 	SECURITY_ATTRIBUTES sa = { 0, NULL, 0 };
 
+	pkcs11_init(0);
+
 	if ((r = sshbuf_get_cstring(request, &provider, &provider_len)) != 0 ||
-		(r = sshbuf_get_cstring(request, &pin, &pin_len)) != 0) {
+		(r = sshbuf_get_cstring(request, &pin, &pin_len)) != 0 ||
+		pin_len > 256) {
 		debug("add smartcard request is invalid");
 		request_invalid = 1;
 		goto done;
@@ -576,8 +593,6 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 		is_reg_sub_key_exists(user_root, SSH_PKCS11_PROVIDERS_ROOT, canonical_provider))
 		goto done;
 
-	pkcs11_init(0);
-
 	count = pkcs11_add_provider(canonical_provider, pin, &keys, NULL);
 	if (count <= 0) {
 		debug("failed to add key to store");
@@ -585,6 +600,12 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 	}
 	for (i = 0; i < count; i++) {
 		key = keys[i];
+		if (sa.lpSecurityDescriptor)
+			LocalFree(sa.lpSecurityDescriptor);
+		if (reg)
+			RegCloseKey(reg);
+		if (sub)
+			RegCloseKey(sub);
 		memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
 		sa.nLength = sizeof(sa);
 		if ((!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL, SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sa.nLength)) ||
@@ -607,7 +628,6 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 	sa.nLength = sizeof(sa);
 	if ((!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL, SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sa.nLength)) ||
 		convert_blob(con, pin, (DWORD)pin_len, &epin, (DWORD*)&epin_len, 1) != 0 ||
-		get_user_root(con, &user_root) != 0 ||
 		RegCreateKeyExW(user_root, SSH_PKCS11_PROVIDERS_ROOT, 0, 0, 0, KEY_WRITE | KEY_WOW64_64KEY, &sa, &reg, NULL) != 0 ||
 		RegCreateKeyExA(reg, canonical_provider, 0, 0, 0, KEY_WRITE | KEY_WOW64_64KEY, &sa, &sub, NULL) != 0 ||
 		RegSetValueExW(sub, L"provider", 0, REG_BINARY, canonical_provider, (DWORD)strlen(canonical_provider)) != 0 ||
@@ -632,22 +652,29 @@ done:
 		if (canonical_provider)
 			RegDeleteKeyExA(reg, canonical_provider, KEY_WOW64_64KEY, 0);
 	}
+
 	pkcs11_terminate();
 
 	if (sa.lpSecurityDescriptor)
 		LocalFree(sa.lpSecurityDescriptor);
 	for (i = 0; i < count; i++)
 		sshkey_free(keys[i]);
+	if (keys)
+		free(keys);
 	if (thumbprint)
 		free(thumbprint);
 	if (pubkey_blob)
 		free(pubkey_blob);
 	if (provider)
 		free(provider);
-	if (pin)
+	if (pin) {
+		SecureZeroMemory(pin, sizeof(pin));
 		free(pin);
-	if (epin)
+	}
+	if (epin) {
+		SecureZeroMemory(epin, sizeof(epin));
 		free(epin);
+	}
 	if (user_root)
 		RegCloseKey(user_root);
 	if (reg)
@@ -681,10 +708,9 @@ int process_remove_smartcard_key(struct sshbuf* request, struct sshbuf* response
 	if (canonical_provider[0] == '/')
 		memmove(canonical_provider, canonical_provider + 1, strlen(canonical_provider));
 
-	if (get_user_root(con, &user_root) != 0) {
-		success = 1;
+	if (get_user_root(con, &user_root) != 0 ||
+		!is_reg_sub_key_exists(user_root, SSH_PKCS11_PROVIDERS_ROOT, canonical_provider))
 		goto done;
-	}
 
 	if (remove_matching_subkeys_from_registry(user_root, SSH_KEYS_ROOT, L"comment", canonical_provider) != 0 ||
 		remove_matching_subkeys_from_registry(user_root, SSH_PKCS11_PROVIDERS_ROOT, L"provider", canonical_provider) != 0) {
