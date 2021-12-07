@@ -214,6 +214,10 @@ function Start-OpenSSHBootstrap
         $packageName = "windows-sdk-10.1"
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
         choco install $packageName --version=$Win10SDKVerChoco -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
+        if($LASTEXITCODE -ne 0)
+        {
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
+        }
     }
 
     # Using the Win 10 SDK, the x86/x64 builds with VS2015 need vctargetspath to be set.
@@ -233,12 +237,12 @@ function Start-OpenSSHBootstrap
         # for visual studio versions newer than 2017, logic needs to be expanded to update the year in the path accordingly
         if ($VS2019Path -or $VS2017Path)
         {
-            $year = "2017"
+            $VSPathYear = "2017"
             if ($VS2019Path)
             {
-                $year = "2019"
+                $VSPathYear = "2019"
             }
-            $env:vctargetspath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\${year}\BuildTools\Common7\IDE\VC\VCTargets"
+            $env:vctargetspath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\${VSPathYear}\BuildTools\Common7\IDE\VC\VCTargets"
         }
     }
 
