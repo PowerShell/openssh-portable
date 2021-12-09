@@ -52,6 +52,8 @@ Notes on FIDO2 support
 
     $ alias ssh=/mnt/c/.../path/to/ssh.exe
 
+* Note: FIDO2 keys are supported by ssh-agent.
+
 * What definitely doesn't work:
 
   * ssh-keygen -O no-touch-required:
