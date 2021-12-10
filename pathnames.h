@@ -42,6 +42,7 @@
 #define _PATH_HOST_XMSS_KEY_FILE	SSHDIR "/ssh_host_xmss_key"
 #define _PATH_HOST_RSA_KEY_FILE		SSHDIR "/ssh_host_rsa_key"
 #define _PATH_DH_MODULI			SSHDIR "/moduli"
+#define _PATH_MOTD_FILE			SSHDIR "/motd"
 
 #ifndef _PATH_SSH_PROGRAM
 #define _PATH_SSH_PROGRAM		"/usr/bin/ssh"

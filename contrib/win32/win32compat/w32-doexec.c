@@ -39,6 +39,10 @@
 #include "pal_doexec.h"
 #include "misc_internal.h"
 #include "sshTelemetry.h"
+#include "session.h"
+#include "atomicio.h"
+#include "pathnames.h"
+#include "sshfileperm.h"
 
 #ifndef SUBSYSTEM_NONE
 #define SUBSYSTEM_NONE				0
@@ -56,6 +60,7 @@
 /* import */
 extern ServerOptions options;
 extern struct sshauthopt *auth_opts;
+extern struct sshbuf* loginmsg;
 int get_in_chroot();
 char **
 do_setup_env_proxy(struct ssh *, Session *, const char *);
@@ -238,6 +243,43 @@ cleanup:
 	return ret;
 }
 
+void do_loginmsg_windows(int fd) {
+	int r;
+	char* loginmsg_pipe = NULL;
+	if (sshbuf_len(loginmsg) != 0) {
+		if ((r = sshbuf_put_u8(loginmsg, 0)) != 0)
+			fatal_fr(r, "sshbuf_put_u8");
+		loginmsg_pipe = (char*)sshbuf_ptr(loginmsg);
+		if (atomicio(vwrite, fd, loginmsg_pipe, strlen(loginmsg_pipe)) != strlen(loginmsg_pipe))
+			debug("loging msg write failed: %.100s", strerror(errno));
+		sshbuf_reset(loginmsg);
+	}
+}
+
+void do_motd_windows(int fd) {
+	if (options.print_motd) {
+		FILE* f;
+		char buf[256];
+		buf[0] = '\0';
+		if (check_secure_file_permission(_PATH_MOTD_FILE, NULL, 1) == 0) {
+			f = fopen(_PATH_MOTD_FILE, "r");
+			if (f) {
+				//FILE* toChild = fdopen(fd, "wb");
+				while (fgets(buf, sizeof(buf), f))
+					//	fputs(buf, toChild);
+					fclose(f);
+				//write(fd, buf, strlen(buf));
+				if (atomicio(vwrite, fd, buf, strlen(buf)) != strlen(buf))
+					debug("motd write failed: %.100s", strerror(errno));
+			}
+		}
+		else {
+			debug("%s does not have admin-only write permissions, not printing MOTD",
+				_PATH_MOTD_FILE);
+		}
+	}
+}
+
 int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	int pipein[2], pipeout[2], pipeerr[2], ret = -1;
 	char *exec_command = NULL, *posix_cmd_input = NULL, *shell = NULL;
@@ -325,7 +367,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		if (command) {
 			size_t len = strlen(shell) + 1 + strlen(shell_command_option_local) + 1 + strlen(command) + 1;
 			pty_cmd = calloc(1, len);
-
+			
 			strcpy_s(pty_cmd, len, shell);
 			strcat_s(pty_cmd, len, " ");
 			strcat_s(pty_cmd, len, shell_command_option_local);
@@ -447,6 +489,9 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		goto cleanup;
 	}
 	s->pid = pid;
+
+	do_loginmsg_windows(pipeout[1]);
+	do_motd_windows(pipeout[1]);
 
 	/* Close the child sides of the socket pairs. */
 	close(pipein[0]);
