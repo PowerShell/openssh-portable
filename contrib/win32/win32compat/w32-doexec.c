@@ -367,7 +367,6 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		if (command) {
 			size_t len = strlen(shell) + 1 + strlen(shell_command_option_local) + 1 + strlen(command) + 1;
 			pty_cmd = calloc(1, len);
-			
 			strcpy_s(pty_cmd, len, shell);
 			strcat_s(pty_cmd, len, " ");
 			strcat_s(pty_cmd, len, shell_command_option_local);
