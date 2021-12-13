@@ -3,6 +3,13 @@
 # @manojampalam - removed ntrights.exe dependency
 # @bingbing8 - removed secedit.exe dependency
 
+$ErrorActionPreference = 'Stop'
+
+if (!([bool]([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")))
+{
+    throw "You must be running as an administrator, please restart as administrator"
+}
+
 $scriptpath = $MyInvocation.MyCommand.Path
 $scriptdir = Split-Path $scriptpath
 
@@ -48,6 +55,7 @@ finally {
 }
 
 # Fix the registry permissions
+If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\OpenSSHUtils -Force
 Enable-Privilege SeRestorePrivilege | out-null
 
@@ -67,6 +75,13 @@ if (Test-Path $sshAgentRegPath)
     # SDDL - FullAcess to System and Builtin/Admins.
     $sshAgentAcl.SetSecurityDescriptorSddlForm("O:BAG:SYD:P(A;OICI;KA;;;SY)(A;OICI;KA;;;BA)")
     Set-Acl $sshAgentRegPath  $sshAgentAcl
+}
+
+#Fix permissions for moduli file
+$moduliPath = Join-Path $PSScriptRoot "moduli"
+if (Test-Path $moduliPath -PathType Leaf)
+{
+    Repair-ModuliFilePermission -FilePath $moduliPath @psBoundParameters -confirm:$false
 }
 
 #register etw provider
