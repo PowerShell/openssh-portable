@@ -40,7 +40,8 @@
 #pragma warning(push, 3)
 
 #define MAX_KEY_LENGTH 255
-#define MAX_VALUE_NAME 16383
+#define MAX_VALUE_NAME_LENGTH 16383
+#define MAX_VALUE_DATA_LENGTH 2048
 
 /* 
  * get registry root where keys are stored 
@@ -144,7 +145,8 @@ remove_matching_subkeys_from_registry(HKEY user_root, wchar_t const* key_name, w
 		}
 		if ((retCode = RegEnumKeyExW(root, index++, sub_name, &sub_name_len, NULL, NULL, NULL, NULL)) == 0) {
 			if (RegOpenKeyExW(root, sub_name, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub) == 0 &&
-				RegQueryValueExW(sub, value_name_to_remove, 0, NULL, NULL, &data_len) == 0) {
+				RegQueryValueExW(sub, value_name_to_remove, 0, NULL, NULL, &data_len) == 0 &&
+				data_len <= MAX_VALUE_DATA_LENGTH) {
 
 				if (data)
 					free(data);
@@ -400,11 +402,11 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 				if (provider)
 					free(provider);
 				if (pin) {
-					SecureZeroMemory(pin, sizeof(pin));
+					SecureZeroMemory(pin, (DWORD)pin_len);
 					free(pin);
 				}
 				if (epin) {
-					SecureZeroMemory(epin, sizeof(epin));
+					SecureZeroMemory(epin, (DWORD)epin_len);
 					free(epin);
 				}
 				provider = NULL;
@@ -428,6 +430,7 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 				for (i = 0; i < count; i++) {
 					add_key(keys[i], provider);
 				}
+				free(keys);
 			}
 		}
 		else
@@ -473,11 +476,11 @@ done:
 	if (provider)
 		free(provider);
 	if (pin) {
-		SecureZeroMemory(pin, sizeof(pin));
+		SecureZeroMemory(pin, (DWORD)pin_len);
 		free(pin);
 	}
 	if (epin) {
-		SecureZeroMemory(epin, sizeof(epin));
+		SecureZeroMemory(epin, (DWORD)epin_len);
 		free(epin);
 	}
 	if (user_root)
@@ -602,10 +605,14 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 		key = keys[i];
 		if (sa.lpSecurityDescriptor)
 			LocalFree(sa.lpSecurityDescriptor);
-		if (reg)
+		if (reg) {
 			RegCloseKey(reg);
-		if (sub)
+			reg = NULL;
+		}
+		if (sub) {
 			RegCloseKey(sub);
+			sub = NULL;
+		}
 		memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
 		sa.nLength = sizeof(sa);
 		if ((!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL, SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sa.nLength)) ||
@@ -668,11 +675,11 @@ done:
 	if (provider)
 		free(provider);
 	if (pin) {
-		SecureZeroMemory(pin, sizeof(pin));
+		SecureZeroMemory(pin, (DWORD)pin_len);
 		free(pin);
 	}
 	if (epin) {
-		SecureZeroMemory(epin, sizeof(epin));
+		SecureZeroMemory(epin, (DWORD)epin_len);
 		free(epin);
 	}
 	if (user_root)
