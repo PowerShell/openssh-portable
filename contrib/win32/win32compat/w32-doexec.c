@@ -243,19 +243,6 @@ cleanup:
 	return ret;
 }
 
-void do_loginmsg_windows(int fd) {
-	int r;
-	char* loginmsg_pipe = NULL;
-	if (sshbuf_len(loginmsg) != 0) {
-		if ((r = sshbuf_put_u8(loginmsg, 0)) != 0)
-			fatal_fr(r, "sshbuf_put_u8");
-		loginmsg_pipe = (char*)sshbuf_ptr(loginmsg);
-		if (atomicio(vwrite, fd, loginmsg_pipe, strlen(loginmsg_pipe)) != strlen(loginmsg_pipe))
-			debug("loging msg write failed: %.100s", strerror(errno));
-		sshbuf_reset(loginmsg);
-	}
-}
-
 void do_motd_windows(int fd) {
 	if (options.print_motd) {
 		FILE* f;
@@ -264,17 +251,15 @@ void do_motd_windows(int fd) {
 		if (check_secure_file_permission(_PATH_MOTD_FILE, NULL, 1) == 0) {
 			f = fopen(_PATH_MOTD_FILE, "r");
 			if (f) {
-				//FILE* toChild = fdopen(fd, "wb");
-				while (fgets(buf, sizeof(buf), f))
-					//	fputs(buf, toChild);
-					fclose(f);
-				//write(fd, buf, strlen(buf));
-				if (atomicio(vwrite, fd, buf, strlen(buf)) != strlen(buf))
-					debug("motd write failed: %.100s", strerror(errno));
+				while (fgets(buf, sizeof(buf), f)) {
+					if (atomicio(vwrite, fd, buf, strlen(buf)) != strlen(buf))
+						debug("motd write failed: %.100s", strerror(errno));
+				}
+				fclose(f);
 			}
 		}
 		else {
-			debug("%s does not have admin-only write permissions, not printing MOTD",
+			logit("Warning: %s does not have admin-only write permissions, not printing MOTD",
 				_PATH_MOTD_FILE);
 		}
 	}
@@ -490,7 +475,6 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	}
 	s->pid = pid;
 
-	do_loginmsg_windows(pipeout[1]);
 	do_motd_windows(pipeout[1]);
 
 	/* Close the child sides of the socket pairs. */
