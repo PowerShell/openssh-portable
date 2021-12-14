@@ -687,6 +687,7 @@ sk_enroll(uint32_t alg, const uint8_t *challenge, size_t challenge_len,
 	}
 	*enroll_response = NULL;
 #ifdef WINDOWS
+	/* Don't overwrite existing credentials on FIDO authenticators. */
 	arc4random_buf(user_id, sizeof(user_id));
 #else
 	memset(user_id, 0, sizeof(user_id));
