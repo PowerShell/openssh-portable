@@ -733,12 +733,31 @@ sk_enroll(uint32_t alg, const uint8_t *challenge, size_t challenge_len,
 		skdebug(__func__, "fido_cred_set_type: %s", fido_strerr(r));
 		goto out;
 	}
+#ifndef WINDOWS
+	if (sha256_mem(challenge, challenge_len,
+	    chall_hash, sizeof(chall_hash)) != 0) {
+		skdebug(__func__, "hash challenge failed");
+		goto out;
+	}
+	if ((r = fido_cred_set_clientdata_hash(cred, chall_hash,
+	    sizeof(chall_hash))) != FIDO_OK) {
+		skdebug(__func__, "fido_cred_set_clientdata_hash: %s",
+		    fido_strerr(r));
+		goto out;
+	}
+#else
+	/*
+	 * webauthn.dll (windows://hello in libfido2) requires the unhashed
+	 * clientdata body, so we use fido_cred_set_clientdata() instead of
+	 * fido_cred_set_clientdata_hash().
+	 */
 	if ((r = fido_cred_set_clientdata(cred, challenge,
 	    challenge_len)) != FIDO_OK) {
 		skdebug(__func__, "fido_cred_set_clientdata: %s",
 		    fido_strerr(r));
 		goto out;
 	}
+#endif
 	if ((r = fido_cred_set_rk(cred, (flags & SSH_SK_RESIDENT_KEY) != 0 ?
 	    FIDO_OPT_TRUE : FIDO_OPT_OMIT)) != FIDO_OK) {
 		skdebug(__func__, "fido_cred_set_rk: %s", fido_strerr(r));
@@ -984,6 +1003,9 @@ sk_sign(uint32_t alg, const uint8_t *data, size_t datalen,
 	char *device = NULL;
 	struct sk_usbhid *sk = NULL;
 	struct sk_sign_response *response = NULL;
+#ifndef WINDOWS
+	uint8_t message[32];
+#endif
 	int ret = SSH_SK_ERR_GENERAL;
 	int r;
 
@@ -996,6 +1018,14 @@ sk_sign(uint32_t alg, const uint8_t *data, size_t datalen,
 	*sign_response = NULL;
 	if (check_sign_load_resident_options(options, &device) != 0)
 		goto out; /* error already logged */
+#ifndef WINDOWS
+	/* hash data to be signed before it goes to the security key */
+	/* This happens elsewhere on Windows; see note below. */
+	if ((r = sha256_mem(data, datalen, message, sizeof(message))) != 0) {
+		skdebug(__func__, "hash message failed");
+		goto out;
+	}
+#endif
 	if (device != NULL)
 		sk = sk_open(device);
 #ifdef WINDOWS
@@ -1023,12 +1053,26 @@ sk_sign(uint32_t alg, const uint8_t *data, size_t datalen,
 		skdebug(__func__, "fido_assert_new failed");
 		goto out;
 	}
+#ifndef WINDOWS
+	if ((r = fido_assert_set_clientdata_hash(assert, message,
+	    sizeof(message))) != FIDO_OK) {
+		skdebug(__func__, "fido_assert_set_clientdata_hash: %s",
+		    fido_strerr(r));
+		goto out;
+	}
+#else
+	/*
+	 * webauthn.dll (windows://hello in libfido2) requires the unhashed
+	 * clientdata body, so we use fido_assert_set_clientdata() instead of
+	 * fido_assert_set_clientdata_hash().
+	 */
 	if ((r = fido_assert_set_clientdata(assert, data,
 	    datalen)) != FIDO_OK) {
 		skdebug(__func__, "fido_assert_set_clientdata: %s",
 		    fido_strerr(r));
 		goto out;
 	}
+#endif
 	if ((r = fido_assert_set_rp(assert, application)) != FIDO_OK) {
 		skdebug(__func__, "fido_assert_set_rp: %s", fido_strerr(r));
 		goto out;
