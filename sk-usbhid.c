@@ -1113,6 +1113,9 @@ sk_sign(uint32_t alg, const uint8_t *data, size_t datalen,
 	response = NULL;
 	ret = 0;
  out:
+#ifndef WINDOWS
+	explicit_bzero(message, sizeof(message));
+#endif
 	free(device);
 	if (response != NULL) {
 		free(response->sig_r);
