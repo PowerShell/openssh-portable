@@ -399,20 +399,6 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 			if (RegOpenKeyExW(root, sub_name, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub) == 0 &&
 				RegQueryValueExW(sub, L"provider", 0, NULL, NULL, &provider_len) == 0 &&
 				RegQueryValueExW(sub, L"pin", 0, NULL, NULL, &epin_len) == 0) {
-				if (provider)
-					free(provider);
-				if (pin) {
-					SecureZeroMemory(pin, (DWORD)pin_len);
-					free(pin);
-				}
-				if (epin) {
-					SecureZeroMemory(epin, (DWORD)epin_len);
-					free(epin);
-				}
-				provider = NULL;
-				pin = NULL;
-				epin = NULL;
-
 				if ((epin = malloc(epin_len + 1)) == NULL ||
 					(provider = malloc(provider_len + 1)) == NULL ||
 					RegQueryValueExW(sub, L"provider", 0, NULL, provider, &provider_len) != 0 ||
@@ -431,6 +417,19 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 					add_key(keys[i], provider);
 				}
 				free(keys);
+				if (provider)
+					free(provider);
+				if (pin) {
+					SecureZeroMemory(pin, (DWORD)pin_len);
+					free(pin);
+				}
+				if (epin) {
+					SecureZeroMemory(epin, (DWORD)epin_len);
+					free(epin);
+				}
+				provider = NULL;
+				pin = NULL;
+				epin = NULL;
 			}
 		}
 		else
