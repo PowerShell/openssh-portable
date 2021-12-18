@@ -69,6 +69,19 @@ void send_auth_telemetry(const int status, const char* auth_type)
     TraceLoggingUnregister(g_hProvider1);
 }
 
+void send_auth_method_telemetry(const char* auth_methods)
+{
+    TraceLoggingRegister(g_hProvider1);
+    TraceLoggingWrite(
+        g_hProvider1,
+        "AuthMethods",
+        TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
+        TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
+        TraceLoggingString(auth_methods, "authMethodsConfigured")
+    );
+    TraceLoggingUnregister(g_hProvider1);
+}
+
 void send_encryption_telemetry(const char* direction, 
     const char* cipher, const char* kex, const char* mac, 
     const char* comp, const char* host_key, 
@@ -164,44 +177,21 @@ void send_ssh_connection_telemetry(const char* conn, const char* port)
     TraceLoggingUnregister(g_hProvider1);
 }
 
-void send_sshd_config_telemetry(const int num_auth_methods, 
-    const char** auth_methods)
+void send_sshd_connection_telemetry(const char* conn)
 {
-    char* auth_buffer = NULL;
-    if (num_auth_methods == 0) {
-        auth_buffer = (char*)malloc(5 * sizeof(char));
-        strcpy_s(auth_buffer, 5, "none");
-    }
-    else {
-        // concatenate all the auth methods into a 
-        // single string to pass to tracelogging
-        size_t buffer_size = (size_t)num_auth_methods;
-        for (int i = 0; i < num_auth_methods; i++) {
-            buffer_size += strlen(auth_methods[i]);
-        }
-        auth_buffer = (char*)malloc((buffer_size + 1) * sizeof(char));
-        auth_buffer[0] = '\0';
-        for (int i = 0; i < num_auth_methods; i++) {
-            strcat_s(auth_buffer, buffer_size, auth_methods[i]);
-            if (i < num_auth_methods - 1) {
-                strcat_s(auth_buffer, buffer_size, ",");
-            }
-        }
-    }
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
         g_hProvider1,
         "SSHD",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingString(auth_buffer, "authMethods")
+        TraceLoggingString(conn, "connStatus")
     );
     TraceLoggingUnregister(g_hProvider1);
-    free(auth_buffer);
 }
 
-void send_ssh_version_telemetry(const char* ssh_version, const char* peer_version,
-    const char* remote_protocol_supported)
+void send_ssh_version_telemetry(const char* ssh_version, 
+    const char* peer_version, const char* remote_protocol_error)
 {
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
@@ -210,7 +200,7 @@ void send_ssh_version_telemetry(const char* ssh_version, const char* peer_versio
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
         TraceLoggingString(ssh_version, "ourVersion"),
-        TraceLoggingString(remote_protocol_supported, "remoteProtocolError"),
+        TraceLoggingString(remote_protocol_error, "remoteProtocolError"),
         TraceLoggingString(peer_version, "peerVersion")
     );
     TraceLoggingUnregister(g_hProvider1);

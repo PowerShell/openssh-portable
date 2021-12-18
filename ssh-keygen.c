@@ -1746,6 +1746,9 @@ do_ca_sign(struct passwd *pw, const char *ca_key_path, int prefer_agent,
 	struct ssh_identitylist *agent_ids;
 	size_t j;
 	struct notifier_ctx *notifier = NULL;
+#ifdef WINDOWS
+	int retried = 0;
+#endif
 
 #ifdef ENABLE_PKCS11
 	pkcs11_init(1);
@@ -1781,12 +1784,14 @@ do_ca_sign(struct passwd *pw, const char *ca_key_path, int prefer_agent,
 	} else {
 		/* CA key is assumed to be a private key on the filesystem */
 		ca = load_identity(tmp, NULL);
+#ifndef WINDOWS
 		if (sshkey_is_sk(ca) &&
 		    (ca->sk_flags & SSH_SK_USER_VERIFICATION_REQD)) {
 			if ((pin = read_passphrase("Enter PIN for CA key: ",
 			    RP_ALLOW_STDIN)) == NULL)
 				fatal_f("couldn't read PIN");
 		}
+#endif
 	}
 	free(tmp);
 
@@ -1848,6 +1853,9 @@ do_ca_sign(struct passwd *pw, const char *ca_key_path, int prefer_agent,
 			    &agent_fd)) != 0)
 				fatal_r(r, "Couldn't certify %s via agent", tmp);
 		} else {
+#ifdef WINDOWS
+ retry:
+#endif
 			if (sshkey_is_sk(ca) &&
 			    (ca->sk_flags & SSH_SK_USER_PRESENCE_REQD)) {
 				notifier = notify_start(0,
@@ -1857,6 +1865,17 @@ do_ca_sign(struct passwd *pw, const char *ca_key_path, int prefer_agent,
 			r = sshkey_certify(public, ca, key_type_name,
 			    sk_provider, pin);
 			notify_complete(notifier, "User presence confirmed");
+#ifdef WINDOWS
+			if (r == SSH_ERR_KEY_WRONG_PASSPHRASE &&
+			    pin == NULL && !retried && sshkey_is_sk(ca) &&
+			    (ca->sk_flags & SSH_SK_USER_VERIFICATION_REQD)) {
+				if ((pin = read_passphrase("Enter PIN for CA "
+				    "key: ", RP_ALLOW_STDIN)) == NULL)
+					fatal_f("couldn't read PIN");
+				retried = 1;
+				goto retry;
+			}
+#endif
 			if (r != 0)
 				fatal_r(r, "Couldn't certify key %s", tmp);
 		}
@@ -2530,6 +2549,7 @@ sign_one(struct sshkey *signkey, const char *filename, int fd,
 			fprintf(stderr, "Signing file %s\n", filename);
 	}
 	if (signer == NULL && sshkey_is_sk(signkey)) {
+#ifndef WINDOWS
 		if ((signkey->sk_flags & SSH_SK_USER_VERIFICATION_REQD)) {
 			xasprintf(&prompt, "Enter PIN for %s key: ",
 			    sshkey_type(signkey));
@@ -2537,6 +2557,7 @@ sign_one(struct sshkey *signkey, const char *filename, int fd,
 			    RP_ALLOW_STDIN)) == NULL)
 				fatal_f("couldn't read PIN");
 		}
+#endif
 		if ((signkey->sk_flags & SSH_SK_USER_PRESENCE_REQD)) {
 			if ((fp = sshkey_fingerprint(signkey, fingerprint_hash,
 			    SSH_FP_DEFAULT)) == NULL)
@@ -3615,6 +3636,7 @@ main(int argc, char **argv)
 		}
 		if ((attest = sshbuf_new()) == NULL)
 			fatal("sshbuf_new failed");
+#ifndef WINDOWS
 		if ((sk_flags &
 		    (SSH_SK_USER_VERIFICATION_REQD|SSH_SK_RESIDENT_KEY))) {
 			passphrase = read_passphrase("Enter PIN for "
@@ -3622,6 +3644,9 @@ main(int argc, char **argv)
 		} else {
 			passphrase = NULL;
 		}
+#else
+		passphrase = NULL;
+#endif
 		for (i = 0 ; ; i++) {
 			fflush(stdout);
 			r = sshsk_enroll(type, sk_provider, sk_device,

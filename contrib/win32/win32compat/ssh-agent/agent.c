@@ -257,7 +257,6 @@ get_con_client_info(struct agent_connection* con)
 	DWORD reg_dom_len = 0, info_len = 0, sid_size;
 	DWORD sshd_sid_len = 0;
 	PSID sshd_sid = NULL;
-	SID_NAME_USE nuse;
 	HANDLE client_primary_token = NULL, client_impersonation_token = NULL, client_process_handle = NULL;
 	TOKEN_USER* info = NULL;
 	BOOL isMember = FALSE;
