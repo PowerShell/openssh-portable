@@ -31,6 +31,7 @@
 
 #include "agent.h"
 #include "agent-request.h"
+#include "config.h"
 #include <sddl.h>
 #ifdef ENABLE_PKCS11
 #include "ssh-pkcs11.h"
@@ -296,7 +297,7 @@ static int sign_blob(const struct sshkey *pubkey, u_char ** sig, size_t *siglen,
 	DWORD regdatalen = 0, keyblob_len = 0;
 	struct sshbuf* tmpbuf = NULL;
 	char *keyblob = NULL;
-  const char *sk_provider = NULL;
+	const char *sk_provider = NULL;
 #ifdef ENABLE_PKCS11
 	int is_pkcs11_key = 0;
 #endif /* ENABLE_PKCS11 */
@@ -330,7 +331,7 @@ static int sign_blob(const struct sshkey *pubkey, u_char ** sig, size_t *siglen,
 	else if (flags & SSH_AGENT_RSA_SHA2_512)
 		algo = "rsa-sha2-512";
 
-  if (sshkey_is_sk(prikey))
+	if (sshkey_is_sk(prikey))
 		sk_provider = "internal";
 	if (sshkey_sign(prikey, sig, siglen, blob, blen, algo, sk_provider, NULL, 0) != 0) {
 		debug("cannot sign using retrieved key");

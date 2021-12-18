@@ -30,6 +30,7 @@
  */
 #include "agent.h"
 #include "agent-request.h"
+#include "config.h"
 
 #ifdef ENABLE_PKCS11
 #include "ssh-pkcs11.h"
