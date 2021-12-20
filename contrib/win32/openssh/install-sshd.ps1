@@ -2,6 +2,7 @@
 # @friism - Fixed issue with invalid SDDL on Set-Acl
 # @manojampalam - removed ntrights.exe dependency
 # @bingbing8 - removed secedit.exe dependency
+# @tessgauthier - added permissions check for %programData%/ssh
 
 $ErrorActionPreference = 'Stop'
 
@@ -82,6 +83,19 @@ $moduliPath = Join-Path $PSScriptRoot "moduli"
 if (Test-Path $moduliPath -PathType Leaf)
 {
     Repair-ModuliFilePermission -FilePath $moduliPath @psBoundParameters -confirm:$false
+}
+
+#If %programData%/ssh folder already exists, fix permissions
+$sshProgDataPath = Join-Path $env:ProgramData "ssh"
+if (Test-Path $sshProgDataPath)
+{
+    $sshProgDataAcl=Get-Acl $sshProgDataPath
+    # Folder permission is FullAccess to System and Builtin/Admins and read only access to Authenticated users
+    $sshProgDataAcl.SetSecurityDescriptorSddlForm("O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;AU)")
+    Set-Acl $sshProgDataPath $sshProgDataAcl
+    # key files should only allow FullAccess to System and Builtin/Admins
+    $sshProgDataAcl.SetSecurityDescriptorSddlForm("O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
+    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Include "*key*" -Force | Set-Acl -AclObject $sshProgDataAcl
 }
 
 #register etw provider
