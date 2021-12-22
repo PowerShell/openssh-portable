@@ -206,7 +206,6 @@ function Start-OpenSSHBootstrap
         [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
     }    
 
-    #$vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
     $sdkVersion = Get-Windows10SDKVersion
 
     if ($null -eq $sdkVersion) 
@@ -356,13 +355,6 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsVerbose -Message 'VC++ 2015 Build Tools already present.'
     }
 
-    $script:vcPath = $item.FullName
-    Write-BuildMsg -AsVerbose -Message "vcPath: $script:vcPath" -Silent:$silent
-    if ((Test-Path -Path "$script:vcPath\vcvarsall.bat") -eq $false)
-    {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "Could not find Visual Studio vcvarsall.bat at $script:vcPath, which means some required develop kits are missing on the machine." 
-    }
-
     if($NativeHostArch.ToLower().Startswith('arm') -and !$VS2019Path -and !$VS2017Path)
     {
         #TODO: Install VS2019 or VS2017 build tools
@@ -383,6 +375,13 @@ function Start-OpenSSHBootstrap
                 Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
             }
         }
+    }
+
+    $script:vcPath = $item.FullName
+    Write-BuildMsg -AsVerbose -Message "vcPath: $script:vcPath" -Silent:$silent
+    if ((Test-Path -Path "$script:vcPath\vcvarsall.bat") -eq $false)
+    {
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "Could not find Visual Studio vcvarsall.bat at $script:vcPath, which means some required develop kits are missing on the machine." 
     }
 }
 
