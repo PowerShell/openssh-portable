@@ -43,24 +43,85 @@
 
 /* #define DEBUG_SK 1 */
 
+#ifdef WINDOWS
+static char module_path[PATH_MAX + 1];
+
+static char *
+find_helper_in_module_path(void)
+{
+	wchar_t path[PATH_MAX + 1];
+	DWORD n;
+	char *ep;
+
+	memset(module_path, 0, sizeof(module_path));
+	memset(path, 0, sizeof(path));
+	if ((n = GetModuleFileNameW(NULL, path, PATH_MAX)) == 0 ||
+	    n >= PATH_MAX) {
+		error_f("GetModuleFileNameW failed");
+		return NULL;
+	}
+	if (wcstombs_s(NULL, module_path, sizeof(module_path), path,
+	    sizeof(module_path) - 1) != 0) {
+		error_f("wcstombs_s failed");
+		return NULL;
+	}
+	if ((ep = strrchr(module_path, '\\')) == NULL) {
+		error_f("couldn't locate trailing \\");
+		return NULL;
+	}
+	*(++ep) = '\0'; /* trim */
+	strlcat(module_path, "ssh-sk-helper.exe", sizeof(module_path) - 1);
+
+	return module_path;
+}
+
+static char *
+find_helper(void)
+{
+	char *helper;
+	char module_path[PATH_MAX + 1];
+	char *ep;
+	DWORD n;
+
+	if ((helper = getenv("SSH_SK_HELPER")) == NULL || strlen(helper) == 0) {
+		if ((helper = find_helper_in_module_path()) == NULL)
+			helper = _PATH_SSH_SK_HELPER;
+	}
+	if (!path_absolute(helper)) {
+		error_f("helper \"%s\" unusable: path not absolute", helper);
+		return NULL;
+	}
+	debug_f("using \"%s\" as helper", helper);
+
+	return helper;
+}
+#endif /* WINDOWS */
+
 static int
 start_helper(int *fdp, pid_t *pidp, void (**osigchldp)(int))
 {
-#ifndef ENABLE_SK
-	/* TODO - This is added temporarily to resolve build errors.
-	 * The below logic has to be converted using posix_internal() APIs as windows doesn't support fork.
-	 */
-	return SSH_ERR_SYSTEM_ERROR;
-#else
 	void (*osigchld)(int);
 	int oerrno, pair[2];
 	pid_t pid;
 	char *helper, *verbosity = NULL;
+#ifdef WINDOWS
+	int r, actions_inited = 0;
+	char *av[3];
+	posix_spawn_file_actions_t actions;
+#endif
 
 	*fdp = -1;
 	*pidp = 0;
 	*osigchldp = SIG_DFL;
+#ifdef WINDOWS
+	r = SSH_ERR_SYSTEM_ERROR;
+	pair[0] = pair[1] = -1;
+#endif
 
+#ifdef WINDOWS
+	if ((helper = find_helper()) == NULL)
+		goto out;
+#else
 	helper = getenv("SSH_SK_HELPER");
 	if (helper == NULL || strlen(helper) == 0)
 		helper = _PATH_SSH_SK_HELPER;
@@ -70,6 +131,8 @@ start_helper(int *fdp, pid_t *pidp, void (**osigchldp)(int))
 		errno = oerrno;
 		return SSH_ERR_SYSTEM_ERROR;
 	}
+#endif
+
 #ifdef DEBUG_SK
 	verbosity = "-vvv";
 #endif
@@ -77,9 +140,39 @@ start_helper(int *fdp, pid_t *pidp, void (**osigchldp)(int))
 	/* Start helper */
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == -1) {
 		error("socketpair: %s", strerror(errno));
+#ifdef WINDOWS
+		goto out;
+#else
 		return SSH_ERR_SYSTEM_ERROR;
+#endif
 	}
 	osigchld = ssh_signal(SIGCHLD, SIG_DFL);
+
+#ifdef WINDOWS
+	if (posix_spawn_file_actions_init(&actions) != 0) {
+		error_f("posix_spawn_file_actions_init failed");
+		goto out;
+	}
+	actions_inited = 1;
+	if (posix_spawn_file_actions_adddup2(&actions, pair[1],
+	    STDIN_FILENO) != 0 ||
+	    posix_spawn_file_actions_adddup2(&actions, pair[1],
+	    STDOUT_FILENO) != 0) {
+		error_f("posix_spawn_file_actions_adddup2 failed");
+		goto out;
+	}
+#endif
+
+#ifdef WINDOWS
+	av[0] = helper;
+	av[1] = verbosity;
+	av[2] = NULL;
+	if (posix_spawnp((pid_t *)&pid, av[0], &actions, NULL, av, NULL) != 0) {
+		error_f("posix_spawnp failed");
+		goto out;
+	}
+	r = 0;
+#else
 	if ((pid = fork()) == -1) {
 		oerrno = errno;
 		error("fork: %s", strerror(errno));
@@ -105,12 +198,24 @@ start_helper(int *fdp, pid_t *pidp, void (**osigchldp)(int))
 		_exit(1);
 	}
 	close(pair[1]);
-
+#endif
 	/* success */
 	debug3_f("started pid=%ld", (long)pid);
 	*fdp = pair[0];
 	*pidp = pid;
 	*osigchldp = osigchld;
+#ifdef WINDOWS
+	pair[0] = -1;
+out:
+	if (pair[0] != -1)
+		close(pair[0]);
+	if (pair[1] != -1)
+		close(pair[1]);
+	if (actions_inited)
+		posix_spawn_file_actions_destroy(&actions);
+
+	return r;
+#else
 	return 0;
 #endif
 }

@@ -32,6 +32,9 @@
 #include "sshsig.h"
 #include "ssherr.h"
 #include "sshkey.h"
+#ifdef WINDOWS
+#include "sk-api.h" /* XXX for SSH_SK_USER_VERIFICATION_REQD */
+#endif
 #include "match.h"
 #include "digest.h"
 
@@ -563,6 +566,10 @@ sshsig_sign_fd(struct sshkey *key, const char *hashalg,
 {
 	struct sshbuf *b = NULL;
 	int r = SSH_ERR_INTERNAL_ERROR;
+#ifdef WINDOWS
+	int retried = 0;
+	char *pin = NULL, *prompt = NULL;
+#endif
 
 	if (hashalg == NULL)
 		hashalg = HASHALG_DEFAULT;
@@ -572,12 +579,38 @@ sshsig_sign_fd(struct sshkey *key, const char *hashalg,
 		error_fr(r, "hash_file");
 		return r;
 	}
+#ifdef WINDOWS
+ retry:
+#endif
 	if ((r = sshsig_wrap_sign(key, hashalg, sk_provider, sk_pin, b,
-	    sig_namespace, out, signer, signer_ctx)) != 0)
+	    sig_namespace, out, signer, signer_ctx)) != 0) {
+#ifdef WINDOWS
+		if (r == SSH_ERR_KEY_WRONG_PASSPHRASE && signer == NULL &&
+		    sshkey_is_sk(key) && sk_pin == NULL && !retried &&
+		    (key->sk_flags & SSH_SK_USER_VERIFICATION_REQD)) {
+			xasprintf(&prompt, "Enter PIN for %s key: ",
+			    sshkey_type(key));
+			if ((pin = read_passphrase(prompt,
+			    RP_ALLOW_STDIN)) == NULL) {
+				debug_f("couldn't read PIN");
+				goto out;
+			}
+			sk_pin = pin;
+			retried = 1;
+			goto retry;
+		}
+		error_fr(r, "sshsig_wrap_sign");
+#endif
 		goto out;
+	}
 	/* success */
 	r = 0;
  out:
+#ifdef WINDOWS
+	free(prompt);
+	if (pin != NULL)
+		freezero(pin, strlen(pin));
+#endif
 	sshbuf_free(b);
 	return r;
 }
