@@ -208,6 +208,7 @@ static int sign_blob(const struct sshkey *pubkey, u_char ** sig, size_t *siglen,
 	DWORD regdatalen = 0, keyblob_len = 0;
 	struct sshbuf* tmpbuf = NULL;
 	char *keyblob = NULL;
+	const char *sk_provider = NULL;
 
 	*sig = NULL;
 	*siglen = 0;
@@ -230,8 +231,14 @@ static int sign_blob(const struct sshkey *pubkey, u_char ** sig, size_t *siglen,
 	else if (flags & SSH_AGENT_RSA_SHA2_512)
 		algo = "rsa-sha2-512";
 
-	if (sshkey_private_deserialize(tmpbuf, &prikey) != 0 ||
-	    sshkey_sign(prikey, sig, siglen, blob, blen, algo, NULL, NULL, 0) != 0) {
+	if (sshkey_private_deserialize(tmpbuf, &prikey) != 0) {
+		debug("cannot deserialize key");
+		goto done;
+	}
+	if (sshkey_is_sk(prikey))
+		sk_provider = "internal";
+	if (sshkey_sign(prikey, sig, siglen, blob, blen, algo, sk_provider,
+	    NULL, 0) != 0) {
 		debug("cannot sign using retrieved key");
 		goto done;
 	}

@@ -347,7 +347,7 @@ add_file(int agent_fd, const char *filename, int key_only, int qflag,
 		}
 		ssh_free_identitylist(idlist);
 	}
-
+#ifndef WINDOWS
 	if (sshkey_is_sk(private)) {
 		if (skprovider == NULL) {
 			fprintf(stderr, "Cannot load FIDO key %s "
@@ -363,7 +363,10 @@ add_file(int agent_fd, const char *filename, int key_only, int qflag,
 		/* Don't send provider constraint for other keys */
 		skprovider = NULL;
 	}
-
+#else
+	if (!sshkey_is_sk(private))
+		skprovider = NULL;
+#endif
 	if ((r = ssh_add_identity_constrained(agent_fd, private, comment,
 	    lifetime, confirm, maxsign, skprovider)) == 0) {
 		ret = 0;
@@ -796,7 +799,7 @@ main(int argc, char **argv)
 		goto done;
 	}
 
-#ifdef ENABLE_SK_INTERNAL
+#if !defined(WINDOWS) && defined(ENABLE_SK_INTERNAL)
 	if (skprovider == NULL)
 		skprovider = "internal";
 #endif
