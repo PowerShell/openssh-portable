@@ -93,9 +93,16 @@ if (Test-Path $sshProgDataPath)
     # Folder permission is FullAccess to System and Builtin/Admins and read only access to Authenticated users
     $sshProgDataAcl.SetSecurityDescriptorSddlForm("O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;AU)")
     Set-Acl $sshProgDataPath $sshProgDataAcl
-    # key files should only allow FullAccess to System and Builtin/Admins
+    # private key files and log folder/files should only allow FullAccess to System and Builtin/Admins
+    $restricted_files = @("ssh_host_dsa_key", "ssh_host_ecdsa_key", "ssh_host_ed25519_key", "ssh_host_rsa_key")
+    $sshProgDataAcl.SetSecurityDescriptorSddlForm("O:BAD:PAI(A;;FA;;;SY)(A;;FA;;;BA)")
+    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Include $restricted_files -Force | Set-Acl -AclObject $sshProgDataAcl
     $sshProgDataAcl.SetSecurityDescriptorSddlForm("O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
-    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Include "*key*" -Force | Set-Acl -AclObject $sshProgDataAcl
+    $log_folder = Join-Path $sshProgDataPath "logs"
+    if (Test-Path $log_folder)
+    {
+        Set-Acl $log_folder $sshProgDataAcl 
+    }
 }
 
 #register etw provider
