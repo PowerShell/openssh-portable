@@ -43,6 +43,8 @@ $everyoneSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKno
 
 $currentUserSid = Get-UserSID -User "$($env:USERDOMAIN)\$($env:USERNAME)"
 
+$authenticatedUserSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::AuthenticatedUserSid)
+
 #Taken from P/Invoke.NET with minor adjustments.
  $definition = @'
 using System;
@@ -220,6 +222,42 @@ function Repair-ModuliFilePermission
 
 <#
     .Synopsis
+    Repair-SshFolderFilePermission
+    Repair the file owner and Permission of ssh folder/files 
+#>
+
+function Repair-SshFolderFilePermission
+{
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
+    param (
+        [parameter(Mandatory=$true)]     
+        [ValidateNotNullOrEmpty()]     
+        [string]$FilePath) 
+
+        Repair-FilePermission -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid -ReadAccessOK $authenticatedUserSid -ReadAccessNeeded $authenticatedUserSid @psBoundParameters       
+}
+
+<#
+    .Synopsis
+    Repair-PrivateKeyPermission
+    Repair the file owner and Permission of private keys in the ssh folder 
+#>
+
+function Repair-PrivateKeyPermission
+{
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
+    param (
+        [parameter(Mandatory=$true)]     
+        [ValidateNotNullOrEmpty()]     
+        [string]$FilePath) 
+
+        Repair-FilePermission -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid @psBoundParameters      
+}
+
+
+
+<#
+    .Synopsis
     Repair-UserKeyPermission
     Repair the file owner and Permission of user config
     -FilePath: The path of the private user key
@@ -280,7 +318,7 @@ function Repair-FilePermission
         [System.Security.Principal.SecurityIdentifier[]] $ReadAccessNeeded = $null
     )
 
-    if(-not (Test-Path $FilePath -PathType Leaf))
+    if(-not (Test-Path $FilePath))
     {
         Write-host "$FilePath not found" -ForegroundColor Yellow
         return
@@ -726,4 +764,4 @@ function Enable-Privilege {
     $type[0]::EnablePrivilege($Privilege, $Disable)
 }
 
-Export-ModuleMember -Function Repair-FilePermission, Repair-SshdConfigPermission, Repair-SshdHostKeyPermission, Repair-AuthorizedKeyPermission, Repair-UserKeyPermission, Repair-UserSshConfigPermission, Enable-Privilege, Get-UserAccount, Get-UserSID, Repair-AdministratorsAuthorizedKeysPermission, Repair-ModuliFilePermission
+Export-ModuleMember -Function Repair-FilePermission, Repair-SshdConfigPermission, Repair-SshdHostKeyPermission, Repair-AuthorizedKeyPermission, Repair-UserKeyPermission, Repair-UserSshConfigPermission, Enable-Privilege, Get-UserAccount, Get-UserSID, Repair-AdministratorsAuthorizedKeysPermission, Repair-ModuliFilePermission, Repair-SshFolderFilePermission, Repair-PrivateKeyPermission

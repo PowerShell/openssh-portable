@@ -85,23 +85,25 @@ if (Test-Path $moduliPath -PathType Leaf)
     Repair-ModuliFilePermission -FilePath $moduliPath @psBoundParameters -confirm:$false
 }
 
-#If %programData%/ssh folder already exists, fix permissions
-$sshProgDataPath = Join-Path $env:ProgramData "ssh"
+#If %programData%/ssh folder already exists, verify permissions and fix, if necessary
+$sshProgDataPath = Join-Path $env:ProgramData "sshTest"
 if (Test-Path $sshProgDataPath)
 {
-    $sshProgDataAcl=Get-Acl $sshProgDataPath
-    # Folder permission is FullAccess to System and Builtin/Admins and read only access to Authenticated users
-    $sshProgDataAcl.SetSecurityDescriptorSddlForm("O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;AU)")
-    Set-Acl $sshProgDataPath $sshProgDataAcl
-    # private key files and log folder/files should only allow FullAccess to System and Builtin/Admins
-    $restricted_files = @("ssh_host_dsa_key", "ssh_host_ecdsa_key", "ssh_host_ed25519_key", "ssh_host_rsa_key")
-    $sshProgDataAcl.SetSecurityDescriptorSddlForm("O:BAD:PAI(A;;FA;;;SY)(A;;FA;;;BA)")
-    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Include $restricted_files -Force | Set-Acl -AclObject $sshProgDataAcl
-    $sshProgDataAcl.SetSecurityDescriptorSddlForm("O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)")
-    $log_folder = Join-Path $sshProgDataPath "logs"
-    if (Test-Path $log_folder)
+    # Folder permission is FullAccess to System and Builtin/Admins and read only access to Authenticated users, if user allows
+    Repair-SshFolderFilePermission -FilePath $sshProgDataPath @psBoundParameters
+    # All files besides private key files and log folder/files should have same permissions as ssh folder, if user allows
+    $restricted_files = @("ssh_host_dsa_key", "ssh_host_ecdsa_key", "ssh_host_ed25519_key", "ssh_host_rsa_key", "*.logs")
+    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Exclude $restricted_files -File -Force | ForEach-Object {
+        Repair-SshFolderFilePermission -FilePath $_.FullName @psBoundParameters
+    } 
+    # private key files and log folder/files should only allow FullAccess to System and Builtin/Admins, if user allows 
+    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Include $restricted_files -File -Force | ForEach-Object {
+        Repair-PrivateKeyPermission -FilePath $_.FullName @psBoundParameters
+    }
+    $logFolder = Join-Path $sshProgDataPath "logs"
+    if (Test-Path $logFolder)
     {
-        Set-Acl $log_folder $sshProgDataAcl 
+        Repair-PrivateKeyPermission -FilePath $logFolder @psBoundParameters
     }
 }
 
