@@ -254,67 +254,29 @@ function Start-OpenSSHBootstrap
 
     # check for corresponding build tools in the following vs order: 2019, 2017, 2015
     # environment variable is set upon install up until vs2015 but not for newer versions
-    if($VS2019Path)
+    if ($VS2019Path)
     {
         if ($null -eq $env:VS160COMNTOOLS)
         {
-            $build_tools_path = Get-Item(Join-Path -Path $VS2019Path -ChildPath '../../../../../Common7/Tools/') | % {$_.FullName}
-            if (Test-Path $build_tools_path)
-            {
-                $env:VS160COMNTOOLS = $build_tools_path
-            }
-            else 
-            { 
-                $packageName = "visualstudio2019-workload-vctools"
-                Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
-                choco install $packageName --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
-                $build_tools_path = Get-Item(Join-Path -Path $VS2019Path -ChildPath '../../../../../../BuildTools/Common7/Tools/') | % {$.FullName}
-                if(Test-Path($build_tools_path))
-                {
-                    $env:VS160COMNTOOLS = $build_tools_path
-                }
-                else
-                {
-                    Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
-                } 
-            }
+            $env:VS160COMNTOOLS = Get-BuildToolPath -VSInstallPath $VS2019Path -version "2019"
         }
-        elseif(-not (Test-Path $env:VS160COMNTOOLS))
+        elseif (-not (Test-Path $env:VS160COMNTOOLS))
         {
             Write-BuildMsg -AsError -ErrorAction Stop -Message "$env:VS160COMNTOOLS build tools path is invalid"   
         }
-        $item = Get-Item(Join-Path -Path $env:VS160COMNTOOLS -ChildPath '../../vc/auxiliary/build')
+        $VSBuildToolsPath = Get-Item(Join-Path -Path $env:VS160COMNTOOLS -ChildPath '../../vc/auxiliary/build')
     }
     elseif ($VS2017Path)
     {
         if ($null -eq $env:VS150COMNTOOLS)
         {
-            $build_tools_path = Get-Item(Join-Path -Path $VS2017Path -ChildPath '../../../../../Common7/Tools/') | % {$_.FullName}
-            if (Test-Path $build_tools_path)
-            {
-                $env:VS150COMNTOOLS = $build_tools_path
-            }
-            else 
-            { 
-                $packageName = "visualstudio2017-workload-vctools"
-                Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
-                choco install $packageName --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
-                $build_tools_path = Get-Item(Join-Path -Path $VS2017Path -ChildPath '../../../../../../BuildTools/Common7/Tools/') | % {$.FullName}
-                if(Test-Path($build_tools_path))
-                {
-                    $env:VS150COMNTOOLS = $build_tools_path
-                }
-                else
-                {
-                    Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
-                } 
-            }
+            $env:VS150COMNTOOLS = Get-BuildToolPath -VSInstallPath $VS2017Path -version "2017"
         }
-        elseif(-not (Test-Path $env:VS150COMNTOOLS))
+        elseif (-not (Test-Path $env:VS150COMNTOOLS))
         {
             Write-BuildMsg -AsError -ErrorAction Stop -Message "$env:VS150COMNTOOLS build tools path is invalid"   
         }
-        $item = Get-Item(Join-Path -Path $env:VS150COMNTOOLS -ChildPath '../../vc/auxiliary/build')
+        $VSBuildToolsPath = Get-Item(Join-Path -Path $env:VS150COMNTOOLS -ChildPath '../../vc/auxiliary/build')
     }
     elseif (!$VS2015Path -or ($null -eq $env:VS140COMNTOOLS)) {
         $packageName = "vcbuildtools"
@@ -347,11 +309,11 @@ function Start-OpenSSHBootstrap
         {
             Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $errorCode."
         }
-        $item = Get-Item(Join-Path -Path $env:VS140COMNTOOLS -ChildPath '../../vc')
+        $VSBuildToolsPath = Get-Item(Join-Path -Path $env:VS140COMNTOOLS -ChildPath '../../vc')
     }
     else
     {
-        $item = Get-Item(Join-Path -Path $env:VS140COMNTOOLS -ChildPath '../../vc')
+        $VSBuildToolsPath = Get-Item(Join-Path -Path $env:VS140COMNTOOLS -ChildPath '../../vc')
         Write-BuildMsg -AsVerbose -Message 'VC++ 2015 Build Tools already present.'
     }
 
@@ -377,7 +339,7 @@ function Start-OpenSSHBootstrap
         }
     }
 
-    $script:vcPath = $item.FullName
+    $script:vcPath = $VSBuildToolsPath.FullName
     Write-BuildMsg -AsVerbose -Message "vcPath: $script:vcPath" -Silent:$silent
     if ((Test-Path -Path "$script:vcPath\vcvarsall.bat") -eq $false)
     {
@@ -742,6 +704,30 @@ function Get-VS2015BuildToolPath
         return $null
     }
     return $toolAvailable[0].FullName
+}
+
+function Get-BuildToolPath
+{
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [string]$VSInstallPath,
+        [string]$version)
+
+    $buildToolsPath = Get-Item(Join-Path -Path $VSInstallPath -ChildPath '../../../../../Common7/Tools/') | % {$_.FullName}
+    if (-not (Test-Path $buildToolsPath))
+    {
+        # assumes package name follows this format, as 2019 and 2017 both do
+        $packageName = "visualstudio" + $version + "-workload-vctools"
+        Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
+        choco install $packageName --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
+        $buildToolsPath = Get-Item(Join-Path -Path $VSInstallPath -ChildPath '../../../../../../BuildTools/Common7/Tools/') | % {$.FullName}
+        if (-not (Test-Path($buildToolsPath)))
+        {
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
+        } 
+    }   
+    return $buildToolsPath
 }
 
 function Get-Windows10SDKVersion
