@@ -1,4 +1,4 @@
-﻿Set-StrictMode -Version 2.0
+Set-StrictMode -Version 2.0
 If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\OpenSSHCommonUtils.psm1 -Force
 
@@ -150,6 +150,7 @@ function Start-OpenSSHBootstrap
     [bool] $silent = -not $script:Verbose
     Write-BuildMsg -AsInfo -Message "Checking tools and dependencies" -Silent:$silent
 
+    $Win10SDKVerChoco = "10.1.17763.1"
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
     $newMachineEnvironmentPath = $machinePath   
 
@@ -195,8 +196,9 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsVerbose -Message "$gitCmdPath already present in Path environment variable" -Silent:$silent
     }
 
-    $VS2015Path = Get-VS2015BuildToolPath
+    $VS2019Path = Get-VS2019BuildToolPath
     $VS2017Path = Get-VS2017BuildToolPath
+    $VS2015Path = Get-VS2015BuildToolPath
 
     # Update machine environment path
     if ($newMachineEnvironmentPath -ne $machinePath)
@@ -205,26 +207,64 @@ function Start-OpenSSHBootstrap
     }    
 
     $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
-    $sdkPath = "${env:ProgramFiles(x86)}\Windows Kits\8.1\bin\x86\register_app.vbs"    
-    #use vs2017 build tool if exists
-    if($VS2017Path -ne $null)
-    {
-        If (-not (Test-Path $sdkPath))
-        {
-            $packageName = "windows-sdk-8.1"
-            Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
-            choco install $packageName -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
-        }
+    $sdkVersion = Get-Windows10SDKVersion
 
+    if ($sdkVersion -eq $null) 
+    {
+        $packageName = "windows-sdk-10.1"
+        Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
+        choco install $packageName --version=$Win10SDKVerChoco -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
+        # check that sdk was properly installed
+        $sdkVersion = Get-Windows10SDKVersion
+        if($sdkVersion -eq $null)
+        {
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
+        }
+    }
+
+    # Using the Win 10 SDK, the x86/x64 builds with VS2015 need vctargetspath to be set.
+    # For clarity, we set vctargetspath for the arm32/arm64 builds, as well, but it is not required.
+    if (($NativeHostArch -eq 'x86') -or ($NativeHostArch -eq 'x64')) 
+    {
+        $env:vctargetspath = "${env:ProgramFiles(x86)}\MSBuild\Microsoft.Cpp\v4.0\v140"
+        if (-not (Test-Path $env:vctargetspath)) 
+        {
+            Write-BuildMsg -AsInfo -Message "installing visualcpp-build-tools"
+            choco install visualcpp-build-tools --version 14.0.25420.1 -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
+            # check that build-tools were properly installed
+            if(-not (Test-Path $env:vctargetspath))
+            {
+                Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
+            }
+        }
+    }
+    else
+    {
+        # msbuildtools have a different path for visual studio versions older than 2017
+        # for visual studio versions newer than 2017, logic needs to be expanded to update the year in the path accordingly
+        if ($VS2019Path -or $VS2017Path)
+        {
+            $VSPathYear = "2017"
+            if ($VS2019Path)
+            {
+                $VSPathYear = "2019"
+            }
+            $env:vctargetspath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\${VSPathYear}\BuildTools\Common7\IDE\VC\VCTargets"
+        }
+    }
+
+    #use vs2017 build tool if exists
+    if($VS2019Path -or $VS2017Path)
+    {
         if(-not (Test-Path $VcVars))
         {
             Write-BuildMsg -AsError -ErrorAction Stop -Message "VC++ 2015.3 v140 toolset are not installed."   
         }
     }
-    elseIf (($VS2015Path -eq $null) -or (-not (Test-Path $VcVars)) -or (-not (Test-Path $sdkPath))) {
+    elseif (!$VS2015Path -or (-not (Test-Path $VcVars))) {
         $packageName = "vcbuildtools"
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
-        choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK;Win81SDK_CppBuildSKUV1" -y --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
+        choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK" -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
         $errorCode = $LASTEXITCODE
         if ($errorCode -eq 3010)
         {
@@ -258,10 +298,9 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsVerbose -Message 'VC++ 2015 Build Tools already present.'
     }
 
-    if($NativeHostArch.ToLower().Startswith('arm') -and ($VS2017Path -eq $null))
+    if($NativeHostArch.ToLower().Startswith('arm') -and !$VS2019Path -and !$VS2017Path)
     {
-        
-        #todo, install vs 2017 build tools
+        #TODO: Install VS2019 or VS2017 build tools
         Write-BuildMsg -AsError -ErrorAction Stop -Message "The required msbuild 15.0 is not installed on the machine."
     }
 
@@ -272,14 +311,26 @@ function Start-OpenSSHBootstrap
         {
             $packageName = "windows-sdk-10.1"
             Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
-            choco install $packageName --force --limitoutput --execution-timeout 10000 2>&1 >> $script:BuildLogFile
+            choco install $packageName --version=$Win10SDKVerChoco --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
+            $win10sdk = Get-Windows10SDKVersion
+            if($win10sdk -eq $null)
+            {
+                Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
+            }
         }
     }
 
     # Ensure the VS C toolset is installed
-    if ($null -eq $env:VS140COMNTOOLS)
+    if (!$env:VS140COMNTOOLS)
     {
-        Write-BuildMsg -AsError -ErrorAction Stop -Message "Cannot find Visual Studio 2015 Environment variable VS140COMNTOOlS."
+        if (Test-Path $vcVars)
+        {
+            $env:VS140COMNTOOLS = Split-Path $vcVars
+        }
+        else
+        {
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "Cannot find Visual Studio 2015 Environment variable VS140COMNTOOlS."
+        }
     }
 
     $item = Get-Item(Join-Path -Path $env:VS140COMNTOOLS -ChildPath '../../vc')
@@ -319,10 +370,10 @@ function Start-OpenSSHPackage
 
     $buildDir = Join-Path $repositoryRoot ("bin\" + $folderName + "\" + $Configuration)
     $payload =  "sshd.exe", "ssh.exe", "ssh-agent.exe", "ssh-add.exe", "sftp.exe"
-    $payload += "sftp-server.exe", "scp.exe", "ssh-shellhost.exe", "ssh-keygen.exe", "ssh-keyscan.exe" 
+    $payload += "sftp-server.exe", "scp.exe", "ssh-shellhost.exe", "ssh-keygen.exe", "ssh-keyscan.exe", "ssh-sk-helper.exe"
     $payload += "sshd_config_default", "install-sshd.ps1", "uninstall-sshd.ps1"
     $payload += "FixHostFilePermissions.ps1", "FixUserFilePermissions.ps1", "OpenSSHUtils.psm1", "OpenSSHUtils.psd1"
-    $payload += "openssh-events.man", "moduli"
+    $payload += "openssh-events.man", "moduli", "LICENSE.txt"
 
     $packageName = "OpenSSH-Win64"
     if ($NativeHostArch -ieq 'x86') {
@@ -510,7 +561,7 @@ function Start-OpenSSHBuild
         Remove-Item -Path $script:BuildLogFile -force
     }
 
-    Start-OpenSSHBootstrap -OneCore:$OneCore
+    Start-OpenSSHBootstrap -NativeHostArch $NativeHostArch -OneCore:$OneCore
 
     $PathTargets = Join-Path $PSScriptRoot paths.targets
     if ($NoOpenSSL) 
@@ -569,14 +620,26 @@ function Start-OpenSSHBuild
     {
         $cmdMsg += "/noconlog"
     }
-    
-    $msbuildCmd = Get-VS2017BuildToolPath
-    if($msbuildCmd -eq $null)
+
+    if ($msbuildCmd = Get-VS2019BuildToolPath)
     {
-        $msbuildCmd = Get-VS2015BuildToolPath
+        Write-BuildMsg -AsInfo -Message "Using MSBuild path: $msbuildCmd"
     }
-    
+    elseif ($msbuildCmd = Get-VS2017BuildToolPath)
+    {
+        Write-BuildMsg -AsInfo -Message "Using MSBuild path: $msbuildCmd"
+    }
+    elseif ($msbuildCmd = Get-VS2015BuildToolPath)
+    {
+        Write-BuildMsg -AsInfo -Message "Using MSBuild path: $msbuildCmd"
+    }
+    else
+    {
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "MSBuild not found"
+    }
+
     Write-BuildMsg -AsInfo -Message "Starting Open SSH build; Build Log: $($script:BuildLogFile)."
+    Write-BuildMsg -AsInfo -Message "$msbuildCmd $cmdMsg"
 
     & "$msbuildCmd" $cmdMsg
     $errorCode = $LASTEXITCODE
@@ -589,8 +652,26 @@ function Start-OpenSSHBuild
     Write-BuildMsg -AsInfo -Message "SSH build successful."
 }
 
+function Get-VS2019BuildToolPath
+{
+    # TODO: Should use vswhere: https://github.com/microsoft/vswhere/wiki/Find-MSBuild
+    $searchPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2019\*\MSBuild\Current\Bin"
+    if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
+    {
+        $searchPath += "\amd64"
+    }
+    $toolAvailable = @()
+    $toolAvailable += Get-ChildItem -path $searchPath\* -Filter "MSBuild.exe" -ErrorAction SilentlyContinue
+    if($toolAvailable.count -eq 0)
+    {
+        return $null
+    }
+    return $toolAvailable[0].FullName
+}
+
 function Get-VS2017BuildToolPath
 {
+    # TODO: Should use vswhere: https://github.com/microsoft/vswhere/wiki/Find-MSBuild
     $searchPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2017\*\MSBuild\15.0\Bin"
     if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
     {
@@ -602,7 +683,7 @@ function Get-VS2017BuildToolPath
     {
         return $null
     }
-   return $toolAvailable[0].FullName
+    return $toolAvailable[0].FullName
 }
 
 function Get-VS2015BuildToolPath
@@ -618,24 +699,21 @@ function Get-VS2015BuildToolPath
     {
         return $null
     }
-   return $toolAvailable[0].FullName
+    return $toolAvailable[0].FullName
 }
 
 function Get-Windows10SDKVersion
-{   
+{  
+   #Temporary fix - Onecore builds are failing with latest windows 10 SDK (10.0.18362.0)
+   $requiredSDKVersion = [version]"10.0.17763.0" 
    ## Search for latest windows sdk available on the machine
-   $windowsSDKPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Lib"
-   $minSDKVersion = [version]"10.0.14393.0"
-   $versionsAvailable = @()
-   #Temporary fix - Onecore builds are failing with latest widows 10 SDK (10.0.18362.0)
-   $maxSDKVersion = [version]"10.0.17763.0"
-   $versionsAvailable = Get-ChildItem $windowsSDKPath | ? {$_.Name.StartsWith("10.")} | % {$version = [version]$_.Name; if(($version.CompareTo($minSDKVersion) -ge 0) -and ($version.CompareTo($maxSDKVersion) -le 0)) {$version}}
-   if(0 -eq $versionsAvailable.count)
-   {
-        return $null
+   $windowsSDKPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin\$requiredSDKVersion\x86\register_app.vbs"
+   if (test-path $windowsSDKPath) {
+       return $requiredSDKVersion
    }
-   $versionsAvailable = $versionsAvailable | Sort-Object -Descending
-   return $versionsAvailable[0]
+   else {
+       return $null
+   }
 }
 
 function Get-BuildLogFile
