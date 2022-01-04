@@ -252,8 +252,8 @@ function Start-OpenSSHBootstrap
         }
     }
 
-    # check for corresponding build tools in the following vs order: 2019, 2017, 2015
-    # environment variable is set upon install up until vs2015 but not for newer versions
+    # check for corresponding build tools in the following VS order: 2019, 2017, 2015
+    # environment variable is set upon install up until VS2015 but not for newer versions
     if ($VS2019Path)
     {
         if ($null -eq $env:VS160COMNTOOLS)
