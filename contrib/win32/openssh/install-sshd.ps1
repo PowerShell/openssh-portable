@@ -85,25 +85,30 @@ if (Test-Path $moduliPath -PathType Leaf)
     Repair-ModuliFilePermission -FilePath $moduliPath @psBoundParameters -confirm:$false
 }
 
-#If %programData%/ssh folder already exists, verify permissions and fix, if necessary
-$sshProgDataPath = Join-Path $env:ProgramData "sshTest"
+# If %programData%/ssh folder already exists, verify permissions and fix, if necessary
+$sshProgDataPath = Join-Path $env:ProgramData "ssh"
 if (Test-Path $sshProgDataPath)
 {
     # Folder permission is FullAccess to System and Builtin/Admins and read only access to Authenticated users, if user allows
     Repair-SshFolderFilePermission -FilePath $sshProgDataPath @psBoundParameters
-    # All files besides private key files and log folder/files should have same permissions as ssh folder, if user allows
-    $restricted_files = @("ssh_host_dsa_key", "ssh_host_ecdsa_key", "ssh_host_ed25519_key", "ssh_host_rsa_key", "*.logs")
-    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Exclude $restricted_files -File -Force | ForEach-Object {
+    # All files besides private key files and log folder should have same permissions as ssh folder, if user allows
+    $privateKeyFiles = @("ssh_host_dsa_key", "ssh_host_ecdsa_key", "ssh_host_ed25519_key", "ssh_host_rsa_key")
+    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Exclude ($privateKeyFiles + "*.log") -File -Force | ForEach-Object {
         Repair-SshFolderFilePermission -FilePath $_.FullName @psBoundParameters
     } 
-    # private key files and log folder/files should only allow FullAccess to System and Builtin/Admins, if user allows 
-    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Include $restricted_files -File -Force | ForEach-Object {
+    # Private key files should only allow FullAccess to System and Builtin/Admins, if user allows 
+    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Include $privateKeyFiles -Force | ForEach-Object {
         Repair-PrivateKeyPermission -FilePath $_.FullName @psBoundParameters
     }
+    # Log folder and log files created by sshd only allow FullAccess to System and Buildin/Admins, 
+    # However if read access has been added for other users, that is ok
     $logFolder = Join-Path $sshProgDataPath "logs"
     if (Test-Path $logFolder)
     {
-        Repair-PrivateKeyPermission -FilePath $logFolder @psBoundParameters
+        Repair-ModuliFilePermission -FilePath $logFolder @psBoundParameters
+        Get-ChildItem -Path $logFolder -Recurse -Force | ForEach-Object {
+            Repair-ModuliFilePermission -FilePath $_.FullName @psBoundParameters
+        }
     }
 }
 
