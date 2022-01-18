@@ -206,17 +206,16 @@ function Start-OpenSSHBootstrap
         [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
     }    
 
-    $vcVars = "${env:ProgramFiles(x86)}\Microsoft Visual Studio 14.0\Common7\Tools\vsvars32.bat"
     $sdkVersion = Get-Windows10SDKVersion
 
-    if ($sdkVersion -eq $null) 
+    if ($null -eq $sdkVersion) 
     {
         $packageName = "windows-sdk-10.1"
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
         choco install $packageName --version=$Win10SDKVerChoco -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
         # check that sdk was properly installed
         $sdkVersion = Get-Windows10SDKVersion
-        if($sdkVersion -eq $null)
+        if($null -eq $sdkVersion)
         {
             Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
         }
@@ -253,15 +252,33 @@ function Start-OpenSSHBootstrap
         }
     }
 
-    #use vs2017 build tool if exists
-    if($VS2019Path -or $VS2017Path)
+    # check for corresponding build tools in the following VS order: 2019, 2017, 2015
+    # environment variable is set upon install up until VS2015 but not for newer versions
+    if ($VS2019Path)
     {
-        if(-not (Test-Path $VcVars))
+        if ($null -eq $env:VS160COMNTOOLS)
         {
-            Write-BuildMsg -AsError -ErrorAction Stop -Message "VC++ 2015.3 v140 toolset are not installed."   
+            $env:VS160COMNTOOLS = Get-BuildToolPath -VSInstallPath $VS2019Path -version "2019"
         }
+        elseif (-not (Test-Path $env:VS160COMNTOOLS))
+        {
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "$env:VS160COMNTOOLS build tools path is invalid"   
+        }
+        $VSBuildToolsPath = Get-Item(Join-Path -Path $env:VS160COMNTOOLS -ChildPath '../../vc/auxiliary/build')
     }
-    elseif (!$VS2015Path -or (-not (Test-Path $VcVars))) {
+    elseif ($VS2017Path)
+    {
+        if ($null -eq $env:VS150COMNTOOLS)
+        {
+            $env:VS150COMNTOOLS = Get-BuildToolPath -VSInstallPath $VS2017Path -version "2017"
+        }
+        elseif (-not (Test-Path $env:VS150COMNTOOLS))
+        {
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "$env:VS150COMNTOOLS build tools path is invalid"   
+        }
+        $VSBuildToolsPath = Get-Item(Join-Path -Path $env:VS150COMNTOOLS -ChildPath '../../vc/auxiliary/build')
+    }
+    elseif (!$VS2015Path -or ($null -eq $env:VS140COMNTOOLS)) {
         $packageName = "vcbuildtools"
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
         choco install $packageName -ia "/InstallSelectableItems VisualCppBuildTools_ATLMFC_SDK;VisualCppBuildTools_NETFX_SDK" -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
@@ -292,9 +309,11 @@ function Start-OpenSSHBootstrap
         {
             Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $errorCode."
         }
+        $VSBuildToolsPath = Get-Item(Join-Path -Path $env:VS140COMNTOOLS -ChildPath '../../vc')
     }
     else
     {
+        $VSBuildToolsPath = Get-Item(Join-Path -Path $env:VS140COMNTOOLS -ChildPath '../../vc')
         Write-BuildMsg -AsVerbose -Message 'VC++ 2015 Build Tools already present.'
     }
 
@@ -307,35 +326,20 @@ function Start-OpenSSHBootstrap
     if($OneCore -or ($NativeHostArch.ToLower().Startswith('arm')))
     {
         $win10sdk = Get-Windows10SDKVersion
-        if($win10sdk -eq $null)
+        if($null -eq $win10sdk)
         {
             $packageName = "windows-sdk-10.1"
             Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
             choco install $packageName --version=$Win10SDKVerChoco --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
             $win10sdk = Get-Windows10SDKVersion
-            if($win10sdk -eq $null)
+            if($null -eq $win10sdk)
             {
                 Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
             }
         }
     }
 
-    # Ensure the VS C toolset is installed
-    if (!$env:VS140COMNTOOLS)
-    {
-        if (Test-Path $vcVars)
-        {
-            $env:VS140COMNTOOLS = Split-Path $vcVars
-        }
-        else
-        {
-            Write-BuildMsg -AsError -ErrorAction Stop -Message "Cannot find Visual Studio 2015 Environment variable VS140COMNTOOlS."
-        }
-    }
-
-    $item = Get-Item(Join-Path -Path $env:VS140COMNTOOLS -ChildPath '../../vc')
-
-    $script:vcPath = $item.FullName
+    $script:vcPath = $VSBuildToolsPath.FullName
     Write-BuildMsg -AsVerbose -Message "vcPath: $script:vcPath" -Silent:$silent
     if ((Test-Path -Path "$script:vcPath\vcvarsall.bat") -eq $false)
     {
@@ -584,7 +588,7 @@ function Start-OpenSSHBuild
         $arch = $NativeHostArch.ToUpper()
         $nodeName = "WindowsSDKDesktop$($arch)Support"
         $node = $xml.Project.PropertyGroup.ChildNodes | where {$_.Name -eq $nodeName}
-        if($node -eq $null)
+        if($null -eq $node)
         {
             $newElement =$xml.CreateElement($nodeName, $xml.Project.xmlns)
             $newNode = $xml.Project.PropertyGroup.AppendChild($newElement)
@@ -700,6 +704,30 @@ function Get-VS2015BuildToolPath
         return $null
     }
     return $toolAvailable[0].FullName
+}
+
+function Get-BuildToolPath
+{
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [string]$VSInstallPath,
+        [string]$version)
+
+    $buildToolsPath = Get-Item(Join-Path -Path $VSInstallPath -ChildPath '../../../../../Common7/Tools/') | % {$_.FullName}
+    if (-not (Test-Path $buildToolsPath))
+    {
+        # assumes package name follows this format, as 2019 and 2017 both do
+        $packageName = "visualstudio" + $version + "-workload-vctools"
+        Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
+        choco install $packageName --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
+        $buildToolsPath = Get-Item(Join-Path -Path $VSInstallPath -ChildPath '../../../../../../BuildTools/Common7/Tools/') | % {$.FullName}
+        if (-not (Test-Path($buildToolsPath)))
+        {
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
+        } 
+    }   
+    return $buildToolsPath
 }
 
 function Get-Windows10SDKVersion

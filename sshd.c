@@ -494,14 +494,14 @@ privsep_preauth_child(void)
 	}
 }
 
-void
+static void
 send_rexec_state(int, struct sshbuf *);
 static void send_config_state(int fd, struct sshbuf *conf)
 {
 	send_rexec_state(fd, conf);
 }
 
-void
+static void
 recv_rexec_state(int, struct sshbuf *);
 static void recv_config_state(int fd, struct sshbuf *conf)
 {
