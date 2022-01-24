@@ -95,7 +95,15 @@ public class AdjPriv
 }
 '@
  
-$type = Add-Type $definition -PassThru -ErrorAction SilentlyContinue
+try
+{
+    $type = Add-Type $definition -PassThru -ErrorAction SilentlyContinue
+}
+catch
+{
+    # Powershell 7 does not add a type if it already exists
+    $type = [AdjPriv]
+}
 
 <#
     .Synopsis
