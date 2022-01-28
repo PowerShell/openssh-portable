@@ -4,7 +4,7 @@
     <OpenSSH-Src-Path>$(SolutionDir)..\..\..\</OpenSSH-Src-Path>
     <OpenSSH-Bin-Path>$(SolutionDir)..\..\..\bin\</OpenSSH-Bin-Path>
     <OpenSSH-Lib-Path>$(SolutionDir)lib\</OpenSSH-Lib-Path>
-    <LibreSSLVersion>3.3.3.0</LibreSSLVersion>
+    <LibreSSLVersion>3.4.2.0</LibreSSLVersion>
     <ZLibVersion>1.2.11</ZLibVersion>
     <fido2Version>1.9.0</fido2Version>
     <LibreSSL-Path>$(SolutionDir)\LibreSSL\sdk\</LibreSSL-Path>
