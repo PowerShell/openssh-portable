@@ -222,42 +222,6 @@ function Repair-ModuliFilePermission
 
 <#
     .Synopsis
-    Repair-SshFolderFilePermission
-    Repair the file owner and Permission of ssh folder/files 
-#>
-
-function Repair-SshFolderFilePermission
-{
-    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
-    param (
-        [parameter(Mandatory=$true)]     
-        [ValidateNotNullOrEmpty()]     
-        [string]$FilePath) 
-
-        Repair-FilePermission -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid -ReadAccessOK $authenticatedUserSid -ReadAccessNeeded $authenticatedUserSid @psBoundParameters       
-}
-
-<#
-    .Synopsis
-    Repair-PrivateKeyPermission
-    Repair the file owner and Permission of private keys in the ssh folder 
-#>
-
-function Repair-PrivateKeyPermission
-{
-    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
-    param (
-        [parameter(Mandatory=$true)]     
-        [ValidateNotNullOrEmpty()]     
-        [string]$FilePath) 
-
-        Repair-FilePermission -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid @psBoundParameters      
-}
-
-
-
-<#
-    .Synopsis
     Repair-UserKeyPermission
     Repair the file owner and Permission of user config
     -FilePath: The path of the private user key
@@ -300,6 +264,46 @@ function Repair-UserSshConfigPermission
 
 <#
     .Synopsis
+    Repair-SSHFolderPermission
+    Repair the file owner and permission of ssh folder & any files inside it
+#>
+function Repair-SSHFolderPermission
+{
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
+    param (
+        [parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]        
+        [string]$sshProgDataPath)
+
+    # SSH Folder - owner: Admins; full access: System, Admins; read/readandexecute/synchronize permissable: Authenticated Users
+    Repair-FilePermission -FilePath $sshProgDataPath -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid -ReadAndExecuteOK $authenticatedUserSid
+    # Files in SSH Folder (excluding key & log files) - owner: Admins; full access: System, Admins; read/readandexecute/synchronize permissable: Authenticated Users
+    $publicKeyFiles = @("ssh_host_dsa_key.pub", "ssh_host_ecdsa_key.pub", "ssh_host_ed25519_key.pub", "ssh_host_rsa_key.pub")
+    $privateKeyFiles = @("ssh_host_dsa_key", "ssh_host_ecdsa_key", "ssh_host_ed25519_key", "ssh_host_rsa_key")
+    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Exclude ($privateKeyFiles + $publicKeyFiles + "*.log") -File -Force | ForEach-Object {
+        Repair-FilePermission -FilePath $_.FullName -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid -ReadAndExecuteOK $authenticatedUserSid
+    } 
+    # Private key files - owner: System; full access: System, Admins; 
+    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Include $privateKeyFiles -Force | ForEach-Object {
+        Repair-FilePermission -FilePath $_.FullName -Owners $systemSid -FullAccessNeeded $systemSid, $adminsSid
+    }
+    # Public key files - owner: System; full access: System, Admins; read access permissable: Authenticated Users
+    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Include $publicKeyFiles -Force | ForEach-Object {
+        Repair-FilePermission -FilePath $_.FullName -Owners $systemSid -FullAccessNeeded $systemSid, $adminsSid -ReadAccessOK $authenticatedUserSid
+    }
+    # Log folder/files - owner: Admins; full access: System, Admins; read access permissable: any user
+    $logFolder = Join-Path $sshProgDataPath "logs"
+    if (Test-Path $logFolder)
+    {
+        Repair-ModuliFilePermission -FilePath $logFolder
+        Get-ChildItem -Path $logFolder -Recurse -Force | ForEach-Object {
+            Repair-ModuliFilePermission -FilePath $_.FullName
+        }
+    }
+}
+
+<#
+    .Synopsis
     Repair-FilePermissionInternal
     Only validate owner and ACEs of the file
 #>
@@ -315,7 +319,8 @@ function Repair-FilePermission
         [System.Security.Principal.SecurityIdentifier[]] $AnyAccessOK = $null,
         [System.Security.Principal.SecurityIdentifier[]] $FullAccessNeeded = $null,
         [System.Security.Principal.SecurityIdentifier[]] $ReadAccessOK = $null,
-        [System.Security.Principal.SecurityIdentifier[]] $ReadAccessNeeded = $null
+        [System.Security.Principal.SecurityIdentifier[]] $ReadAccessNeeded = $null,
+        [System.Security.Principal.SecurityIdentifier[]] $ReadAndExecuteOK = $null
     )
 
     if(-not (Test-Path $FilePath))
@@ -349,7 +354,8 @@ function Repair-FilePermissionInternal {
         [System.Security.Principal.SecurityIdentifier[]] $AnyAccessOK = $null,
         [System.Security.Principal.SecurityIdentifier[]] $FullAccessNeeded = $null,
         [System.Security.Principal.SecurityIdentifier[]] $ReadAccessOK = $null,
-        [System.Security.Principal.SecurityIdentifier[]] $ReadAccessNeeded = $null
+        [System.Security.Principal.SecurityIdentifier[]] $ReadAccessNeeded = $null,
+        [System.Security.Principal.SecurityIdentifier[]] $ReadAndExecuteOK = $null
     )
 
     $acl = Get-Acl $FilePath
@@ -383,6 +389,7 @@ function Repair-FilePermissionInternal {
 
     $ReadAccessPerm = ([System.UInt32] [System.Security.AccessControl.FileSystemRights]::Read.value__) -bor `
                     ([System.UInt32] [System.Security.AccessControl.FileSystemRights]::Synchronize.value__)
+    $ReadAndExecuteAccessPerm = $ReadAccessPerm -bor ([System.UInt32] [System.Security.AccessControl.FileSystemRights]::ReadAndExecute.value__)
     $FullControlPerm = [System.UInt32] [System.Security.AccessControl.FileSystemRights]::FullControl.value__
 
     #system and admin groups can have any access to the file; plus the account in the AnyAccessOK list
@@ -484,6 +491,47 @@ function Repair-FilePermissionInternal {
         {
             #ignore those accounts listed in the AnyAccessOK list.
             continue;
+        }
+        # Handle ReadAndExecute list and make sure they are only granted Read, ReadAndExecute, Synchronize access
+        elseif($ReadAndExecuteOK -contains $IdentityReferenceSid)
+        {
+            if (-not ($a.AccessControlType.Equals([System.Security.AccessControl.AccessControlType]::Allow)) -or `
+            (-not (([System.UInt32]$a.FileSystemRights.value__) -band (-bnot $ReadAndExecuteAccessPerm))))
+            {
+                continue;
+            }
+            
+            if($a.IsInherited)
+            {
+                if($needChange)    
+                {
+                    Enable-Privilege SeRestorePrivilege | out-null
+                    Set-Acl -Path $FilePath -AclObject $acl -Confirm:$false
+                }
+                
+                return Remove-RuleProtection @paras
+            }
+            $caption = "'$($a.IdentityReference)' has the following access to '$FilePath': '$($a.FileSystemRights)'."
+            $prompt = "Shall I make it ReadAndExecute, and Synchronize only?"
+            $description = "Set'$($a.IdentityReference)' Read access only to '$FilePath'. "
+
+            if($pscmdlet.ShouldProcess($description, $prompt, $caption))
+            {
+                $needChange = $true
+                $ace = New-Object System.Security.AccessControl.FileSystemAccessRule `
+                    ($IdentityReferenceSid, "ReadAndExecute, Synchronize", "None", "None", "Allow")
+                          
+                $acl.SetAccessRule($ace)
+                Write-Host "'$($a.IdentityReference)' now has ReadAndExecute, Synchronize access to '$FilePath'. " -ForegroundColor Green
+            }
+            else
+            {
+                $health = $false
+                if(-not $PSBoundParameters.ContainsKey("WhatIf"))
+                {
+                    Write-Host "'$($a.IdentityReference)' still has these access to '$FilePath': '$($a.FileSystemRights)'." -ForegroundColor Yellow
+                }
+            }
         }
         #If everyone is in the ReadAccessOK list, any user can have read access;
         # below block make sure they are granted Read access only
@@ -679,7 +727,7 @@ function Remove-RuleProtection
         [string]$FilePath
     )
     $message = "Need to remove the inheritance before repair the rules."
-    $prompt = "Shall I remove the inheritace?"
+    $prompt = "Shall I remove the inheritance?"
     $description = "Remove inheritance of '$FilePath'."
 
     if($pscmdlet.ShouldProcess($description, $prompt, $message))
@@ -764,4 +812,4 @@ function Enable-Privilege {
     $type[0]::EnablePrivilege($Privilege, $Disable)
 }
 
-Export-ModuleMember -Function Repair-FilePermission, Repair-SshdConfigPermission, Repair-SshdHostKeyPermission, Repair-AuthorizedKeyPermission, Repair-UserKeyPermission, Repair-UserSshConfigPermission, Enable-Privilege, Get-UserAccount, Get-UserSID, Repair-AdministratorsAuthorizedKeysPermission, Repair-ModuliFilePermission, Repair-SshFolderFilePermission, Repair-PrivateKeyPermission
+Export-ModuleMember -Function Repair-FilePermission, Repair-SshdConfigPermission, Repair-SshdHostKeyPermission, Repair-AuthorizedKeyPermission, Repair-UserKeyPermission, Repair-UserSshConfigPermission, Enable-Privilege, Get-UserAccount, Get-UserSID, Repair-AdministratorsAuthorizedKeysPermission, Repair-ModuliFilePermission, Repair-SSHFolderPermission
