@@ -118,9 +118,13 @@ generate_s4u_user_token(wchar_t* user_cpn, int impersonation) {
 
 		/* trusted mode - used for impersonation */
 		LSA_OPERATIONAL_MODE mode;
-		InitLsaString(&logon_process_name, "sshd");
-		if ((ret = LsaRegisterLogonProcess(&logon_process_name, &lsa_handle, &mode)) != STATUS_SUCCESS)
+		InitLsaString(&logon_process_name, __progname);
+		if ((ret = LsaRegisterLogonProcess(&logon_process_name, &lsa_handle, &mode)) != STATUS_SUCCESS) {
+			ULONG winError = LsaNtStatusToWinError(ret);
+			error_f("LsaRegisterLogonProcess failed with error:%d", winError);
+
 			goto done;
+		}
 	}
 	else {
 		/* untrusted mode - used for information lookup */
