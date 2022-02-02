@@ -423,11 +423,17 @@ Describe "Setup Tests" -Tags "Setup" {
             ($sshdSvc.RequiredServices).Count | Should Be 0
         }
         
-        It "$tC.$tI - Validate RequiredPrivileges of ssh-agent" {            
+        It "$tC.$tI - Validate RequiredPrivileges of ssh-agent" {
+            $expected = @("SeAssignPrimaryTokenPrivilege", "SeTcbPrivilege", "SeBackupPrivilege", "SeRestorePrivilege", "SeImpersonatePrivilege")
             $a = sc.exe qprivs ssh-agent 256
             $p = @($a | % { if($_ -match "Se[\w]+Privilege" ) {$start = $_.IndexOf("Se");$_.Substring($start, $_.length-$start)}})
-            $p.count | Should Be 1
-            $p[0] | Should Be "SeImpersonatePrivilege"
+            $expected | % {
+                $p -contains $_ | Should be $true
+            }
+
+            $p | % {
+                $expected -contains $_ | Should be $true
+            }
         }
 
         It "$tC.$tI - Validate RequiredPrivileges of sshd" {

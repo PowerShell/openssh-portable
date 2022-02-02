@@ -36,6 +36,8 @@
 
 #define BUFSIZE 5 * 1024
 
+char* sshagent_con_username;
+
 static HANDLE ioc_port = NULL;
 static BOOL debug_mode = FALSE;
 
@@ -192,8 +194,10 @@ agent_cleanup_connection(struct agent_connection* con)
 	CloseHandle(ioc_port);
 	ioc_port = NULL;
 
-	if(sshagent_con_username)
+	if(sshagent_con_username) {
 		free(sshagent_con_username);
+		sshagent_con_username = NULL;
+	}
 }
 
 void 
