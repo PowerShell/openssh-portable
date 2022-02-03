@@ -275,29 +275,25 @@ function Repair-SSHFolderPermission
         [ValidateNotNullOrEmpty()]        
         [string]$sshProgDataPath)
 
-    # SSH Folder - owner: Admins; full access: System, Admins; read/readandexecute/synchronize permissable: Authenticated Users
-    Repair-FilePermission -FilePath $sshProgDataPath -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid -ReadAndExecuteOK $authenticatedUserSid
-    # Files in SSH Folder (excluding key & log files) - owner: Admins; full access: System, Admins; read/readandexecute/synchronize permissable: Authenticated Users
-    $publicKeyFiles = @("ssh_host_dsa_key.pub", "ssh_host_ecdsa_key.pub", "ssh_host_ed25519_key.pub", "ssh_host_rsa_key.pub")
+    # SSH Folder - owner: System or Admins; full access: System, Admins; read or readandexecute/synchronize permissible: Authenticated Users
+    Repair-FilePermission -FilePath $sshProgDataPath -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid,$systemSid -ReadAndExecuteOK $authenticatedUserSid
+    # Files in SSH Folder (excluding private key & log files) 
+    # owner: System or Admins; full access: System, Admins; read/readandexecute/synchronize permissable: Authenticated Users
     $privateKeyFiles = @("ssh_host_dsa_key", "ssh_host_ecdsa_key", "ssh_host_ed25519_key", "ssh_host_rsa_key")
-    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Exclude ($privateKeyFiles + $publicKeyFiles + "*.log") -File -Force | ForEach-Object {
-        Repair-FilePermission -FilePath $_.FullName -Owners $adminsSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteOK $authenticatedUserSid
+    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Exclude ($privateKeyFiles + "*.log") -File -Force | ForEach-Object {
+        Repair-FilePermission -FilePath $_.FullName -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteOK $authenticatedUserSid
     } 
-    # Private key files - owner: System; full access: System, Admins; 
+    # Private key files - owner: System or Admins; full access: System, Admins; 
     Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Include $privateKeyFiles -Force | ForEach-Object {
-        Repair-FilePermission -FilePath $_.FullName -Owners $systemSid -FullAccessNeeded $systemSid, $adminsSid
+        Repair-FilePermission -FilePath $_.FullName -Owners $adminsSid, $systemSid -FullAccessNeeded $systemSid, $adminsSid
     }
-    # Public key files - owner: System; full access: System, Admins; read access permissable: Authenticated Users
-    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Include $publicKeyFiles -Force | ForEach-Object {
-        Repair-FilePermission -FilePath $_.FullName -Owners $systemSid -FullAccessNeeded $systemSid, $adminsSid -ReadAccessOK $authenticatedUserSid
-    }
-    # Log folder/files - owner: System or Admins; full access: System, Admins; read access permissable: any user
+    # Log folder/files - owner: System or Admins; full access: System, Admins; read or readandexecute/synchronize permissible: any user
     $logFolder = Join-Path $sshProgDataPath "logs"
     if (Test-Path $logFolder)
     {
-        Repair-FilePermission -FilePath $logFolder -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAccessOK $everyoneSid 
+        Repair-FilePermission -FilePath $logFolder -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteOK $everyoneSid 
         Get-ChildItem -Path $logFolder -Recurse -Force | ForEach-Object {
-            Repair-FilePermission -FilePath $_.FullName -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAccessOK $everyoneSid 
+            Repair-FilePermission -FilePath $_.FullName -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteOK $everyoneSid 
         }
     }
 }
@@ -371,6 +367,7 @@ function Repair-FilePermissionInternal {
         $caption = "Current owner: '$($acl.Owner)'. '$newOwner' should own '$FilePath'."
         $prompt = "Shall I set the file owner?"
         $description = "Set '$newOwner' as owner of '$FilePath'."
+        Write-Host "$caption $description $prompt" -ForegroundColor Yellow
         if($pscmdlet.ShouldProcess($description, $prompt, $caption))
         {
             Enable-Privilege SeRestorePrivilege | out-null
@@ -492,9 +489,10 @@ function Repair-FilePermissionInternal {
             #ignore those accounts listed in the AnyAccessOK list.
             continue;
         }
-        # Handle ReadAndExecute list and make sure they are only granted Read, ReadAndExecute, Synchronize access
+        # Handle ReadAndExecuteOK list and make sure they are only granted Read or ReadAndExecute & Synchronize access
         elseif($ReadAndExecuteOK -contains $IdentityReferenceSid)
         {
+            # checks if user access is already either: Read or ReadAndExecute & Synchronize
             if (-not ($a.AccessControlType.Equals([System.Security.AccessControl.AccessControlType]::Allow)) -or `
             (-not (([System.UInt32]$a.FileSystemRights.value__) -band (-bnot $ReadAndExecuteAccessPerm))))
             {
