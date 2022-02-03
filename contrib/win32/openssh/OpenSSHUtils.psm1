@@ -367,7 +367,6 @@ function Repair-FilePermissionInternal {
         $caption = "Current owner: '$($acl.Owner)'. '$newOwner' should own '$FilePath'."
         $prompt = "Shall I set the file owner?"
         $description = "Set '$newOwner' as owner of '$FilePath'."
-        Write-Host "$caption $description $prompt" -ForegroundColor Yellow
         if($pscmdlet.ShouldProcess($description, $prompt, $caption))
         {
             Enable-Privilege SeRestorePrivilege | out-null
