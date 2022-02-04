@@ -291,9 +291,9 @@ function Repair-SSHFolderPermission
     $logFolder = Join-Path $sshProgDataPath "logs"
     if (Test-Path $logFolder)
     {
-        Repair-FilePermission -FilePath $logFolder -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteOK $everyoneSid 
+        Repair-FilePermission -FilePath $logFolder -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteOK $everyoneSid, $authenticatedUserSid
         Get-ChildItem -Path $logFolder -Recurse -Force | ForEach-Object {
-            Repair-FilePermission -FilePath $_.FullName -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteOK $everyoneSid 
+            Repair-FilePermission -FilePath $_.FullName -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteOK $everyoneSid, $authenticatedUserSid 
         }
     }
 }
