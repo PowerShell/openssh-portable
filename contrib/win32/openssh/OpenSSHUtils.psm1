@@ -276,12 +276,12 @@ function Repair-SSHFolderPermission
         [string]$sshProgDataPath)
 
     # SSH Folder - owner: System or Admins; full access: System, Admins; read or readandexecute/synchronize permissible: Authenticated Users
-    Repair-FilePermission -FilePath $sshProgDataPath -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid,$systemSid -ReadAndExecuteOK $authenticatedUserSid
+    Repair-FilePermission -FilePath $sshProgDataPath -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid,$systemSid -ReadAndExecuteAccessOK $authenticatedUserSid
     # Files in SSH Folder (excluding private key & log files) 
     # owner: System or Admins; full access: System, Admins; read/readandexecute/synchronize permissable: Authenticated Users
     $privateKeyFiles = @("ssh_host_dsa_key", "ssh_host_ecdsa_key", "ssh_host_ed25519_key", "ssh_host_rsa_key")
     Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Exclude ($privateKeyFiles + "*.log") -File -Force | ForEach-Object {
-        Repair-FilePermission -FilePath $_.FullName -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteOK $authenticatedUserSid
+        Repair-FilePermission -FilePath $_.FullName -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteAccessOK $authenticatedUserSid
     } 
     # Private key files - owner: System or Admins; full access: System, Admins; 
     Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Include $privateKeyFiles -Force | ForEach-Object {
@@ -291,9 +291,9 @@ function Repair-SSHFolderPermission
     $logFolder = Join-Path $sshProgDataPath "logs"
     if (Test-Path $logFolder)
     {
-        Repair-FilePermission -FilePath $logFolder -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteOK $everyoneSid, $authenticatedUserSid
+        Repair-FilePermission -FilePath $logFolder -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteAccessOK $everyoneSid, $authenticatedUserSid
         Get-ChildItem -Path $logFolder -Recurse -Force | ForEach-Object {
-            Repair-FilePermission -FilePath $_.FullName -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteOK $everyoneSid, $authenticatedUserSid 
+            Repair-FilePermission -FilePath $_.FullName -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteAccessOK $everyoneSid, $authenticatedUserSid 
         }
     }
 }
@@ -316,7 +316,7 @@ function Repair-FilePermission
         [System.Security.Principal.SecurityIdentifier[]] $FullAccessNeeded = $null,
         [System.Security.Principal.SecurityIdentifier[]] $ReadAccessOK = $null,
         [System.Security.Principal.SecurityIdentifier[]] $ReadAccessNeeded = $null,
-        [System.Security.Principal.SecurityIdentifier[]] $ReadAndExecuteOK = $null
+        [System.Security.Principal.SecurityIdentifier[]] $ReadAndExecuteAccessOK = $null
     )
 
     if(-not (Test-Path $FilePath))
@@ -351,7 +351,7 @@ function Repair-FilePermissionInternal {
         [System.Security.Principal.SecurityIdentifier[]] $FullAccessNeeded = $null,
         [System.Security.Principal.SecurityIdentifier[]] $ReadAccessOK = $null,
         [System.Security.Principal.SecurityIdentifier[]] $ReadAccessNeeded = $null,
-        [System.Security.Principal.SecurityIdentifier[]] $ReadAndExecuteOK = $null
+        [System.Security.Principal.SecurityIdentifier[]] $ReadAndExecuteAccessOK = $null
     )
 
     $acl = Get-Acl $FilePath
@@ -488,8 +488,8 @@ function Repair-FilePermissionInternal {
             #ignore those accounts listed in the AnyAccessOK list.
             continue;
         }
-        # Handle ReadAndExecuteOK list and make sure they are only granted Read or ReadAndExecute & Synchronize access
-        elseif($ReadAndExecuteOK -contains $IdentityReferenceSid)
+        # Handle ReadAndExecuteAccessOK list and make sure they are only granted Read or ReadAndExecute & Synchronize access
+        elseif($ReadAndExecuteAccessOK -contains $IdentityReferenceSid)
         {
             # checks if user access is already either: Read or ReadAndExecute & Synchronize
             if (-not ($a.AccessControlType.Equals([System.Security.AccessControl.AccessControlType]::Allow)) -or `
