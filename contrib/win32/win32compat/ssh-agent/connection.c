@@ -34,7 +34,6 @@
 
 #ifdef ENABLE_PKCS11
 #include "ssh-pkcs11.h"
-#define ENABLE_PKCS11
 #endif
 
 #pragma warning(push, 3)

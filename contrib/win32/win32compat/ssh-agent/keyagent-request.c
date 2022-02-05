@@ -35,7 +35,6 @@
 #include <sddl.h>
 #ifdef ENABLE_PKCS11
 #include "ssh-pkcs11.h"
-#define ENABLE_PKCS11
 #endif
 
 #pragma warning(push, 3)
@@ -416,7 +415,18 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 				}
 				pin = npin;
 				pin[pin_len] = '\0';
+
+				if (con->client_type <= ADMIN_USER) {
+					if (ImpersonateLoggedOnUser(con->client_impersonation_token) == FALSE) {
+						error_f("ImpersonateLoggedOnUser failed");
+						goto done;
+					}
+				}
+
 				count = pkcs11_add_provider(provider, pin, &keys, NULL);
+
+				RevertToSelf();
+
 				for (i = 0; i < count; i++) {
 					add_key(keys[i], provider);
 				}
@@ -464,8 +474,7 @@ done:
 			    sshbuf_put_string(response, signature, slen) != 0) {
 				r = -1;
 			}
-		} else
-			if (sshbuf_put_u8(response, SSH_AGENT_FAILURE) != 0)
+		} else if (sshbuf_put_u8(response, SSH_AGENT_FAILURE) != 0)
 				r = -1;
 	}
 
@@ -599,7 +608,17 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 		is_reg_sub_key_exists(user_root, SSH_PKCS11_PROVIDERS_ROOT, canonical_provider))
 		goto done;
 
+	if (con->client_type <= ADMIN_USER) {
+		if (ImpersonateLoggedOnUser(con->client_impersonation_token) == FALSE) {
+			error_f("ImpersonateLoggedOnUser failed");
+			goto done;
+		}
+	}
+
 	count = pkcs11_add_provider(canonical_provider, pin, &keys, NULL);
+
+	RevertToSelf();
+
 	if (count <= 0) {
 		debug("failed to add key to store");
 		goto done;

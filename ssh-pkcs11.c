@@ -77,12 +77,14 @@ struct pkcs11_key {
 	int			keyid_len;
 };
 
+#ifdef WINDOWS
 struct pkcs11_keyinfo {
 	TAILQ_ENTRY(pkcs11_keyinfo) next;
 	struct sshkey	*key;
 	char		*providername;
 };
 TAILQ_HEAD(, pkcs11_keyinfo) pkcs11_keylist;
+#endif
 
 int pkcs11_interactive = 0;
 
@@ -103,7 +105,9 @@ pkcs11_init(int interactive)
 {
 	pkcs11_interactive = interactive;
 	TAILQ_INIT(&pkcs11_providers);
+#ifdef WINDOWS
 	TAILQ_INIT(&pkcs11_keylist);
+#endif
 	return (0);
 }
 
@@ -1696,6 +1700,7 @@ pkcs11_add_provider(char *provider_id, char *pin, struct sshkey ***keyp,
 	return (nkeys);
 }
 
+#ifdef WINDOWS
 void
 add_key(struct sshkey *k, char *name)
 {
@@ -1723,7 +1728,7 @@ del_all_keys()
 
 /* lookup matching 'private' key */
 struct sshkey *
-	lookup_key(const struct sshkey *k)
+lookup_key(const struct sshkey *k)
 {
 	struct pkcs11_keyinfo *ki;
 
@@ -1735,6 +1740,7 @@ struct sshkey *
 	}
 	return (NULL);
 }
+#endif
 
 #ifdef WITH_PKCS11_KEYGEN
 struct sshkey *
