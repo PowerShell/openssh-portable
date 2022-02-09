@@ -44,6 +44,7 @@
 /* #define DEBUG_SK 1 */
 
 #ifdef WINDOWS
+extern char *sshagent_con_username = NULL;
 static char module_path[PATH_MAX + 1];
 
 static char *
@@ -167,9 +168,18 @@ start_helper(int *fdp, pid_t *pidp, void (**osigchldp)(int))
 	av[0] = helper;
 	av[1] = verbosity;
 	av[2] = NULL;
-	if (posix_spawnp((pid_t *)&pid, av[0], &actions, NULL, av, NULL) != 0) {
-		error_f("posix_spawnp failed");
-		goto out;
+
+	if (sshagent_con_username) {
+		debug_f("sshagent_con_username:%s", sshagent_con_username);
+		if (__posix_spawn_asuser((pid_t *)&pid, av[0], &actions, NULL, av, NULL, sshagent_con_username) != 0) {
+			error_f("__posix_spawn_asuser failed for username:%s", sshagent_con_username);
+			goto out;
+		}
+	} else {
+		if (posix_spawnp((pid_t *)&pid, av[0], &actions, NULL, av, NULL) != 0) {
+			error_f("posix_spawnp failed");
+			goto out;
+		}
 	}
 	r = 0;
 #else

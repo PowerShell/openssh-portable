@@ -13,10 +13,10 @@
     <LibreSSL-arm64-Path>$(SolutionDir)\LibreSSL\bin\desktop\arm64\</LibreSSL-arm64-Path>
     <LibreSSL-arm-Path>$(SolutionDir)\LibreSSL\bin\desktop\arm\</LibreSSL-arm-Path>
     <fido2-Path>$(SolutionDir)\libfido2\</fido2-Path>
-    <fido2-x86-Path>$(SolutionDir)\libfido2\Win32\Release\v143\static\</fido2-x86-Path>
-    <fido2-x64-Path>$(SolutionDir)\libfido2\Win64\Release\v143\static\</fido2-x64-Path>
-    <fido2-arm64-Path>$(SolutionDir)\libfido2\ARM64\Release\v143\static\</fido2-arm64-Path>
-    <fido2-arm-Path>$(SolutionDir)\libfido2\ARM\Release\v143\static\</fido2-arm-Path>
+    <fido2-x86-Path>$(SolutionDir)\libfido2\Win32\Release\static\</fido2-x86-Path>
+    <fido2-x64-Path>$(SolutionDir)\libfido2\Win64\Release\static\</fido2-x64-Path>
+    <fido2-arm64-Path>$(SolutionDir)\libfido2\ARM64\Release\static\</fido2-arm64-Path>
+    <fido2-arm-Path>$(SolutionDir)\libfido2\ARM\Release\static\</fido2-arm-Path>
     <ZLib-Path>$(SolutionDir)\ZLib\sdk\</ZLib-Path>
     <ZLib-x86-Path>$(SolutionDir)\ZLib\bin\x86\</ZLib-x86-Path>
     <ZLib-x64-Path>$(SolutionDir)\ZLib\bin\x64\</ZLib-x64-Path>

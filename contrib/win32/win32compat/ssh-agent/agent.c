@@ -32,7 +32,11 @@
 #include <sddl.h>
 #include <UserEnv.h>
 #include "..\misc_internal.h"
+#include <pwd.h>
+
 #define BUFSIZE 5 * 1024
+
+char* sshagent_con_username;
 
 static HANDLE ioc_port = NULL;
 static BOOL debug_mode = FALSE;
@@ -182,13 +186,18 @@ agent_cleanup_connection(struct agent_connection* con)
 {
 	debug("connection %p clean up", con);
 	CloseHandle(con->pipe_handle);
-        if (con->client_impersonation_token)
-                CloseHandle(con->client_impersonation_token);
+	if (con->client_impersonation_token)
+			CloseHandle(con->client_impersonation_token);
 	if (con->client_process_handle)
 		CloseHandle(con->client_process_handle);
 	free(con);
 	CloseHandle(ioc_port);
 	ioc_port = NULL;
+
+	if(sshagent_con_username) {
+		free(sshagent_con_username);
+		sshagent_con_username = NULL;
+	}
 }
 
 void 
@@ -288,6 +297,13 @@ get_con_client_info(struct agent_connection* con)
 		r = 0;
 		goto done;
 	}
+
+	// Get username
+	sshagent_con_username= get_username(info->User.Sid);
+	if (sshagent_con_username)
+		debug_f("sshagent_con_username: %s", sshagent_con_username);
+	else
+		error_f("Failed to get the userName");
 
 	/* check if its admin */
 	{

@@ -78,8 +78,30 @@ do_setup_env_proxy(struct ssh *, Session *, const char *);
 		goto cleanup;					\
 } while(0)
 
+
+static char*
+get_registry_operation_error_message(const LONG error_code) 
+{
+	char* message = NULL;
+	wchar_t* wmessage = NULL;
+	DWORD length = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER, NULL, error_code, 0, (wchar_t*)&wmessage, 0, NULL);
+	if (length == 0)
+		return NULL;
+
+	if (wmessage[length - 1] == L'\n')
+		wmessage[length - 1] = L'\0';
+	if (length > 1 && wmessage[length - 2] == L'\r')
+		wmessage[length - 2] = L'\0';
+
+	message = utf16_to_utf8(wmessage);
+	LocalFree(wmessage);
+
+	return message;
+}
+
 /* TODO  - built env var set and pass it along with CreateProcess */
-/* set user environment variables from user profile */
+/* Set environment variables with values from the registry */
+/* Ensure that environment of new connections reflect the current state of the machine */
 static void
 setup_session_user_vars(wchar_t* profile_path)
 {
@@ -90,6 +112,10 @@ setup_session_user_vars(wchar_t* profile_path)
 	wchar_t *data = NULL, *data_expanded = NULL, *path_value = NULL, *to_apply;
 	DWORD type, name_chars = 256, data_chars = 0, data_expanded_chars = 0, required, i = 0;
 	LONG ret;
+	char *error_message;
+
+	/*These whitelisted environment variables should not be overwritten with the value from the registry*/
+	wchar_t* whitelist[] = { L"PROCESSOR_ARCHITECTURE", L"USERNAME" };
 
 	SetEnvironmentVariableW(L"USERPROFILE", profile_path);
 
@@ -107,66 +133,103 @@ setup_session_user_vars(wchar_t* profile_path)
 	SetEnvironmentVariableW(L"LOCALAPPDATA", path);
 	swprintf_s(path, _countof(path), L"%s\\AppData\\Roaming", profile_path);
 	SetEnvironmentVariableW(L"APPDATA", path);
+	
+	for (int j = 0; j < 2; j++)
+	{
+		/* First update the environment variables with the value from the System Environment, and then User. */
+		/* User variables overwrite the value of system variables with the same name (Except Path) */
+		if (j == 0)
+			ret = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", 0, KEY_QUERY_VALUE, &reg_key);
+		else
+			ret = RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE, &reg_key);
 
-	ret = RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE, &reg_key);
-	if (ret != ERROR_SUCCESS)
-		//error("Error retrieving user environment variables. RegOpenKeyExW returned %d", ret);
-		return;
-	else while (1) {
-		to_apply = NULL;
-		required = data_chars * sizeof(wchar_t);
-		name_chars = 256;
-		ret = RegEnumValueW(reg_key, i++, name, &name_chars, 0, &type, (LPBYTE)data, &required);
-		if (ret == ERROR_NO_MORE_ITEMS)
-			break;
-		else if (ret == ERROR_MORE_DATA || required > data_chars * 2) {
-			if (data != NULL)
-				free(data);
-			data = xmalloc(required);
-			data_chars = required / 2;
-			i--;
+		if (ret != ERROR_SUCCESS) {
+			error_message = get_registry_operation_error_message(ret);
+			error("Unable to open Registry Key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"), error_message);
+			if (error_message)
+				free(error_message);
 			continue;
 		}
-		else if (ret != ERROR_SUCCESS)
-			break;
-
-		if (type == REG_SZ)
-			to_apply = data;
-		else if (type == REG_EXPAND_SZ) {
-			required = ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
-			if (required > data_expanded_chars) {
-				if (data_expanded)
-					free(data_expanded);
-				data_expanded = xmalloc(required * 2);
-				data_expanded_chars = required;
-				ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+		
+		while (1) {
+			to_apply = NULL;
+			required = data_chars * sizeof(wchar_t);
+			name_chars = 256;
+			ret = RegEnumValueW(reg_key, i++, name, &name_chars, 0, &type, (LPBYTE)data, &required);
+			if (ret == ERROR_NO_MORE_ITEMS)
+				break;
+			else if (ret == ERROR_MORE_DATA || required > data_chars * 2) {
+				if (data != NULL)
+					free(data);
+				data = xmalloc(required);
+				data_chars = required / 2;
+				i--;
+				continue;
 			}
-			to_apply = data_expanded;
-		}
-
-		if (_wcsicmp(name, L"PATH") == 0) {
-			if ((required = GetEnvironmentVariableW(L"PATH", NULL, 0)) != 0) {
-				/* "required" includes null term */
-				path_value = xmalloc((wcslen(to_apply) + 1 + required) * 2);
-				GetEnvironmentVariableW(L"PATH", path_value, required);
-				path_value[required - 1] = L';';
-				GOTO_CLEANUP_ON_ERR(memcpy_s(path_value + required, (wcslen(to_apply) + 1) * 2, to_apply, (wcslen(to_apply) + 1) * 2));
-				to_apply = path_value;
+			else if (ret != ERROR_SUCCESS) {
+				error_message = get_registry_operation_error_message(ret);
+				error("Failed to enumerate the value for registry key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"), error_message);
+				if (error_message)
+					free(error_message);
+				break;
 			}
 
+			if (type == REG_SZ)
+				to_apply = data;
+			else if (type == REG_EXPAND_SZ) {
+				required = ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+				if (required > data_expanded_chars) {
+					if (data_expanded)
+						free(data_expanded);
+					data_expanded = xmalloc(required * 2);
+					data_expanded_chars = required;
+					ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+				}
+				to_apply = data_expanded;
+			}
+
+			/* Ensure that variables in the whitelist are not being overwritten with the value from the registry */
+			for (int k = 0; k < ARRAYSIZE(whitelist); k++) {
+				if (_wcsicmp(name, whitelist[k]) == 0)
+				{
+					to_apply = NULL;
+				}
+			}
+
+			/* Path is a special case. The System Path value is preppended to the User Path value */
+			if (_wcsicmp(name, L"PATH") == 0 && j == 1) {
+				if ((required = GetEnvironmentVariableW(L"PATH", NULL, 0)) != 0) {
+					size_t user_path_size = wcslen(to_apply) + 1;
+					path_value = xmalloc((required + user_path_size) * 2);
+					GetEnvironmentVariableW(L"PATH", path_value, required);
+					path_value[required - 1] = L';';
+					GOTO_CLEANUP_ON_ERR(memcpy_s(path_value + required, user_path_size * 2, to_apply, user_path_size * 2));
+					to_apply = path_value;
+				}
+			}
+
+			if (to_apply)
+				SetEnvironmentVariableW(name, to_apply);
+				
 		}
-		if (to_apply)
-			SetEnvironmentVariableW(name, to_apply);
+	cleanup:
+		if (reg_key)
+			RegCloseKey(reg_key);
+		if (data)
+			free(data);
+		if (data_expanded)
+			free(data_expanded);
+		if (path_value)
+			free(path_value);
+		i = 0;
+		data = NULL; 
+		data_expanded = NULL; 
+		path_value = NULL;
+		name_chars = 256; 
+		data_chars = 0; 
+		data_expanded_chars = 0;
+		reg_key = 0;
 	}
-cleanup:
-	if (reg_key)
-		RegCloseKey(reg_key);
-	if (data)
-		free(data);
-	if (data_expanded)
-		free(data_expanded);
-	if (path_value)
-		free(path_value);
 }
 
 static int

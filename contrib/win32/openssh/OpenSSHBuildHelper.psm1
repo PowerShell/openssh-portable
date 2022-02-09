@@ -233,7 +233,7 @@ function Start-OpenSSHBootstrap
             # check that build-tools were properly installed
             if(-not (Test-Path $env:vctargetspath))
             {
-                Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
+                Write-BuildMsg -AsError -ErrorAction Stop -Message "visualcpp-build-tools installation failed with error code $LASTEXITCODE."
             }
         }
     }

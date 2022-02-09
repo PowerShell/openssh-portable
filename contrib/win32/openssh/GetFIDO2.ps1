@@ -36,7 +36,7 @@ Write-Host "override:$override"
 
 $zip_path = Join-Path $PSScriptRoot "libfido2.zip"
 
-$release_url = "https://developers.yubico.com/libfido2/Releases/libfido2-$version-win.zip"
+$release_url = "https://github.com/PowerShell/libfido2/releases/download/$version/libfido2.zip"
 Write-Host "release_url:$release_url"
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor `
@@ -51,13 +51,12 @@ if(-not (Test-Path $zip_path))
 }
 
 # XXX check pgp sig?
-Expand-Archive -Path $zip_path -DestinationPath $destDir -Force -ErrorAction SilentlyContinue -ErrorVariable e
+Expand-Archive -Path $zip_path -DestinationPath $destDir\libfido2 -Force -ErrorAction SilentlyContinue -ErrorVariable e
 if($e -ne $null)
 {
     throw "Error when expand zip file. libfido2 version:$version"
 }
 
-Rename-Item -Path $destDir\libfido2-$version-win -NewName libfido2
 Remove-Item $zip_path -Force -ErrorAction SilentlyContinue
 
 Write-Host "Succesfully downloaded libfido2 version:$version"

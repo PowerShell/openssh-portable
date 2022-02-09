@@ -2,6 +2,7 @@
 # @friism - Fixed issue with invalid SDDL on Set-Acl
 # @manojampalam - removed ntrights.exe dependency
 # @bingbing8 - removed secedit.exe dependency
+# @tessgauthier - added permissions check for %programData%/ssh
 
 $ErrorActionPreference = 'Stop'
 
@@ -84,13 +85,20 @@ if (Test-Path $moduliPath -PathType Leaf)
     Repair-ModuliFilePermission -FilePath $moduliPath @psBoundParameters -confirm:$false
 }
 
+# If %programData%/ssh folder already exists, verify and, if necessary and approved by user, fix permissions 
+$sshProgDataPath = Join-Path $env:ProgramData "ssh"
+if (Test-Path $sshProgDataPath)
+{
+    Repair-SSHFolderPermission -sshProgDataPath $sshProgDataPath
+}
+
 #register etw provider
 wevtutil im `"$etwman`"
 
 $agentDesc = "Agent to hold private keys used for public key authentication."
 New-Service -Name ssh-agent -DisplayName "OpenSSH Authentication Agent" -BinaryPathName `"$sshagentpath`" -Description $agentDesc -StartupType Manual | Out-Null
 sc.exe sdset ssh-agent "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)(A;;RP;;;AU)"
-sc.exe privs ssh-agent SeImpersonatePrivilege
+sc.exe privs ssh-agent SeAssignPrimaryTokenPrivilege/SeTcbPrivilege/SeBackupPrivilege/SeRestorePrivilege/SeImpersonatePrivilege
 
 $sshdDesc = "SSH protocol based service to provide secure encrypted communications between two untrusted hosts over an insecure network."
 New-Service -Name sshd -DisplayName "OpenSSH SSH Server" -BinaryPathName `"$sshdpath`" -Description $sshdDesc -StartupType Manual | Out-Null
