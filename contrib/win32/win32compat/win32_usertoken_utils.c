@@ -401,13 +401,12 @@ get_current_user_token()
 {
 	HANDLE current_token = 0;
 	HANDLE primary_token = 0;
-
-	int session_id = 0;
 	PHANDLE user_token = 0;
 	PHANDLE token_dup = 0;
-
 	PWTS_SESSION_INFO session_info = 0;
 	DWORD count = 0, i = 0;
+	int session_id = 0;
+	BOOL ret = FALSE;
 
 	// Get the list of all terminal sessions
 	WTSEnumerateSessions(WTS_CURRENT_SERVER_HANDLE, 0, 1,
@@ -430,16 +429,16 @@ get_current_user_token()
 	WTSFreeMemory(session_info);
 
 	// Get token of the logged in user by the active session ID
-	BOOL bRet = WTSQueryUserToken(session_id, &current_token);
-	if (bRet == FALSE)
+	ret = WTSQueryUserToken(session_id, &current_token);
+	if (ret == FALSE)
 	{
 		return 0;
 	}
 
-	bRet = DuplicateTokenEx(current_token,
+	ret = DuplicateTokenEx(current_token,
 		TOKEN_ASSIGN_PRIMARY | TOKEN_ALL_ACCESS,
 		0, SecurityImpersonation, TokenPrimary, &primary_token);
-	if (bRet == FALSE)
+	if (ret == FALSE)
 	{
 		return 0;
 	}

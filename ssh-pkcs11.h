@@ -22,6 +22,7 @@
 #define	SSH_PKCS11_ERR_PIN_REQUIRED		4
 #define	SSH_PKCS11_ERR_PIN_LOCKED		5
 
+
 int             pkcs11_init(int);
 void            pkcs11_terminate(void);
 int             pkcs11_add_provider(char *, char *, struct sshkey ***, char ***);

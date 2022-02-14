@@ -473,8 +473,7 @@ done:
 			    sshbuf_put_string(response, signature, slen) != 0) {
 				r = -1;
 			}
-		} else
-			if (sshbuf_put_u8(response, SSH_AGENT_FAILURE) != 0)
+		} else if (sshbuf_put_u8(response, SSH_AGENT_FAILURE) != 0)
 				r = -1;
 	}
 
