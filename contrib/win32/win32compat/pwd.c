@@ -330,6 +330,21 @@ cleanup:
 	return ret;
 }
 
+char *
+get_username(const PSID sid)
+{
+	if (!sid) {
+		error_f("sid is NULL");
+		return NULL;
+	}
+
+	struct passwd *p = get_passwd(NULL, sid);
+	if (p && p->pw_name)
+		return strdup(p->pw_name);
+	else
+		return NULL;
+}
+
 struct passwd*
 w32_getpwnam(const char *user_utf8)
 {

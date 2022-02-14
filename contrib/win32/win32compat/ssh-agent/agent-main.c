@@ -121,6 +121,9 @@ wmain(int argc, wchar_t **argv)
 	fix_cwd();
 	if (!StartServiceCtrlDispatcherW(dispatch_table)) {
 		if (GetLastError() == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT) {
+			/* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */
+			sanitise_stdfd();
+
 			/* 
 			 * agent is not spawned by SCM 
 			 * Its either started in debug mode or a worker child 

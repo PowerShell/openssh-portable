@@ -53,6 +53,7 @@ typedef void EditLine;
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #ifdef HAVE_UTIL_H
 # include <util.h>
@@ -2601,7 +2602,7 @@ main(int argc, char **argv)
 
 #ifdef WINDOWS
 		addargs(&args, "sftp-server.exe");
-#elif
+#else
 		addargs(&args, "sftp-server");
 #endif // WINDOWS
 
