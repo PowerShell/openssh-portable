@@ -35,7 +35,6 @@
 #include <sddl.h>
 #ifdef ENABLE_PKCS11
 #include "ssh-pkcs11.h"
-#define ENABLE_PKCS11
 #endif
 
 #pragma warning(push, 3)
@@ -49,6 +48,16 @@
  * user keys are stored in user's hive
  * while system keys (host keys) in HKLM
  */
+
+extern struct sshkey *
+lookup_key(const struct sshkey *k);
+
+extern void
+add_key(struct sshkey *k, char *name);
+
+extern void
+del_all_keys();
+
 static int
 get_user_root(struct agent_connection* con, HKEY *root)
 {

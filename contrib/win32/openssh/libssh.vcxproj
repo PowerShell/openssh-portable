@@ -417,7 +417,6 @@
       <ExcludedFromBuild Condition="$(UseOpenSSL)==false">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-ed25519.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)ssh-pkcs11.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-rsa.c">
       <ExcludedFromBuild Condition="$(UseOpenSSL)==false">true</ExcludedFromBuild>
     </ClCompile>

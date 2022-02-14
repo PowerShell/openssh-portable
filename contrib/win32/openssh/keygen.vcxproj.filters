@@ -30,6 +30,9 @@
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-sk-client.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="$(OpenSSH-Src-Path)ssh-pkcs11.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="version.rc">

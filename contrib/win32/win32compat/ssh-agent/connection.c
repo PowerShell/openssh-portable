@@ -32,11 +32,6 @@
 #include "agent-request.h"
 #include "config.h"
 
-#ifdef ENABLE_PKCS11
-#include "ssh-pkcs11.h"
-#define ENABLE_PKCS11
-#endif
-
 #pragma warning(push, 3)
 
 int process_request(struct agent_connection*);

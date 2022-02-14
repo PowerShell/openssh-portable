@@ -48,6 +48,7 @@
 #include <Strsafe.h>
 #include <sddl.h>
 #include <ntstatus.h>
+#include <wtsapi32.h>
 #include "misc_internal.h"
 #include "lsa_missingdefs.h"
 #include "Debug.h"
@@ -393,6 +394,57 @@ done:
 		free(process_sid);
 
 	return token;
+}
+
+PHANDLE
+get_current_user_token()
+{
+	HANDLE current_token = 0;
+	HANDLE primary_token = 0;
+
+	int session_id = 0;
+	PHANDLE user_token = 0;
+	PHANDLE token_dup = 0;
+
+	PWTS_SESSION_INFO session_info = 0;
+	DWORD count = 0, i = 0;
+
+	// Get the list of all terminal sessions
+	WTSEnumerateSessions(WTS_CURRENT_SERVER_HANDLE, 0, 1,
+		&session_info, &count);
+
+	int data_size = sizeof(WTS_SESSION_INFO);
+
+	// look over obtained list in search of the active session
+	for (i = 0; i < count; ++i)
+	{
+		WTS_SESSION_INFO si = session_info[i];
+		if (WTSActive == si.State)
+		{
+			// If the current session is active, store its ID
+			session_id = si.SessionId;
+			break;
+		}
+	}
+
+	WTSFreeMemory(session_info);
+
+	// Get token of the logged in user by the active session ID
+	BOOL bRet = WTSQueryUserToken(session_id, &current_token);
+	if (bRet == FALSE)
+	{
+		return 0;
+	}
+
+	bRet = DuplicateTokenEx(current_token,
+		TOKEN_ASSIGN_PRIMARY | TOKEN_ALL_ACCESS,
+		0, SecurityImpersonation, TokenPrimary, &primary_token);
+	if (bRet == FALSE)
+	{
+		return 0;
+	}
+
+	return primary_token;
 }
 
 int 
