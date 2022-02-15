@@ -167,6 +167,9 @@
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
+	<Lib>
+      <AdditionalDependencies>Wtsapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -202,6 +205,9 @@
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
+	<Lib>
+      <AdditionalDependencies>Wtsapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
     <ClCompile>
@@ -218,6 +224,9 @@
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
+	<Lib>
+      <AdditionalDependencies>Wtsapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -236,6 +245,9 @@
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
+	<Lib>
+      <AdditionalDependencies>Wtsapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -254,6 +266,9 @@
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
+	<Lib>
+      <AdditionalDependencies>Wtsapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <ClCompile>
@@ -272,6 +287,9 @@
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
+	<Lib>
+      <AdditionalDependencies>Wtsapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
     <ClCompile>
@@ -290,6 +308,9 @@
       <ControlFlowGuard>Guard</ControlFlowGuard>
       <AdditionalOptions>/Gy %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
+	<Lib>
+      <AdditionalDependencies>Wtsapi32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\w32fd.c" />

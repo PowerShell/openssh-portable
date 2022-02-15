@@ -396,7 +396,7 @@ done:
 	return token;
 }
 
-PHANDLE
+HANDLE
 get_current_user_token()
 {
 	HANDLE current_token = 0;

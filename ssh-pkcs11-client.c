@@ -41,6 +41,7 @@
 #include "sshbuf.h"
 #include "log.h"
 #include "misc.h"
+#include "misc_internal.h"
 #include "sshkey.h"
 #include "authfd.h"
 #include "atomicio.h"
