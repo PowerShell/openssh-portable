@@ -77,15 +77,6 @@ struct pkcs11_key {
 	int			keyid_len;
 };
 
-#ifdef WINDOWS
-struct pkcs11_keyinfo {
-	TAILQ_ENTRY(pkcs11_keyinfo) next;
-	struct sshkey	*key;
-	char		*providername;
-};
-TAILQ_HEAD(, pkcs11_keyinfo) pkcs11_keylist;
-#endif
-
 int pkcs11_interactive = 0;
 
 #ifdef HAVE_EC_KEY_METHOD_NEW
@@ -105,9 +96,6 @@ pkcs11_init(int interactive)
 {
 	pkcs11_interactive = interactive;
 	TAILQ_INIT(&pkcs11_providers);
-#ifdef WINDOWS
-	TAILQ_INIT(&pkcs11_keylist);
-#endif
 	return (0);
 }
 
@@ -1699,48 +1687,6 @@ pkcs11_add_provider(char *provider_id, char *pin, struct sshkey ***keyp,
 
 	return (nkeys);
 }
-
-#ifdef WINDOWS
-void
-add_key(struct sshkey *k, char *name)
-{
-	struct pkcs11_keyinfo *ki;
-
-	ki = xcalloc(1, sizeof(*ki));
-	ki->providername = xstrdup(name);
-	ki->key = k;
-	TAILQ_INSERT_TAIL(&pkcs11_keylist, ki, next);
-}
-
-void
-del_all_keys()
-{
-	struct pkcs11_keyinfo *ki, *nxt;
-
-	for (ki = TAILQ_FIRST(&pkcs11_keylist); ki; ki = nxt) {
-		nxt = TAILQ_NEXT(ki, next);
-		TAILQ_REMOVE(&pkcs11_keylist, ki, next);
-		free(ki->providername);
-		sshkey_free(ki->key);
-		free(ki);
-	}
-}
-
-/* lookup matching 'private' key */
-struct sshkey *
-lookup_key(const struct sshkey *k)
-{
-	struct pkcs11_keyinfo *ki;
-
-	TAILQ_FOREACH(ki, &pkcs11_keylist, next) {
-		debug("check %p %s", ki, ki->providername);
-		if (sshkey_equal(k, ki->key)) {
-			return (ki->key);
-		}
-	}
-	return (NULL);
-}
-#endif
 
 #ifdef WITH_PKCS11_KEYGEN
 struct sshkey *

@@ -1071,7 +1071,7 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 	if (strstr(cmd, "sshd.exe")) {
 		flags |= DETACHED_PROCESS;
 	}
-	if (strstr(cmd, "helper.exe")) {
+	if (strstr(cmd, "ssh-sk-helper.exe") || strstr(cmd, "ssh-pkcs11-helper.exe")) {
 		flags |= CREATE_NO_WINDOW;
 	}
 	if (is_bash_test_env()) {

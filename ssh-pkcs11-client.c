@@ -41,7 +41,6 @@
 #include "sshbuf.h"
 #include "log.h"
 #include "misc.h"
-#include "misc_internal.h"
 #include "sshkey.h"
 #include "authfd.h"
 #include "atomicio.h"
@@ -54,6 +53,7 @@
 #include "pkcs11.h"
 
 static char module_path[PATH_MAX + 1];
+extern int sshagent_client_pid;
 
 struct pkcs11_provider {
 	char			*name;
@@ -420,6 +420,7 @@ pkcs11_start_helper(void)
 	int r, actions_inited = 0;
 	char *av[3];
 	posix_spawn_file_actions_t actions;
+	HANDLE client_token = NULL, client_process_handle = NULL;
 
 	r = SSH_ERR_SYSTEM_ERROR;
 	pair[0] = pair[1] = -1;
@@ -462,11 +463,15 @@ pkcs11_start_helper(void)
 	av[0] = helper;
 	av[1] = verbosity;
 	av[2] = NULL;
-	HANDLE user_token = NULL;
 
-	if ((user_token = get_current_user_token()) == NULL ||
-		posix_spawnp_as_user((pid_t *)&pid, av[0], &actions, NULL, av, NULL, user_token) != 0) {
-		error("posix_spawnp_as_user failed");
+	if ((client_process_handle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, sshagent_client_pid)) == NULL ||
+		OpenProcessToken(client_process_handle, TOKEN_QUERY | TOKEN_ASSIGN_PRIMARY, &client_token) == FALSE) {
+		error_f("failed retrieve user token of the client process");
+		goto out;
+
+	}
+	if (posix_spawnp_as_user((pid_t *)&pid, av[0], &actions, NULL, av, NULL, client_token) != 0) {
+		error_f("failed to spwan process %s", av[0]);
 		goto out;
 	}
 	fd = pair[0];
@@ -499,6 +504,8 @@ pkcs11_start_helper(void)
 	/* success */
 	debug3_f("started pid=%ld", (long)pid);
 out:
+	if (client_token)
+		CloseHandle(client_token);
 	return r;
 }
 
@@ -556,9 +563,11 @@ pkcs11_add_provider(char *name, char *pin, struct sshkey ***keysp,
 		nkeys = -1;
 	}
 
+#ifdef WINDOWS
 	p = xcalloc(1, sizeof(*p));
 	p->name = xstrdup(name);
 	TAILQ_INSERT_TAIL(&pkcs11_providers, p, next);
+#endif /* WINDOWS */
 	sshbuf_free(msg);
 	return (nkeys);
 }

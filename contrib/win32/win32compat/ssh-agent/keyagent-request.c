@@ -260,7 +260,7 @@ process_add_identity(struct sshbuf* request, struct sshbuf* response, struct age
 	    RegSetValueExW(sub, L"pub", 0, REG_BINARY, pubkey_blob, (DWORD)pubkey_blob_len) != 0 ||
 	    RegSetValueExW(sub, L"type", 0, REG_DWORD, (BYTE*)&key->type, 4) != 0 ||
 	    RegSetValueExW(sub, L"comment", 0, REG_BINARY, comment, (DWORD)comment_len) != 0 ) {
-		debug("failed to add key to store");
+		error("failed to add key to store");
 		goto done;
 	}
 
@@ -328,8 +328,10 @@ static int sign_blob(const struct sshkey *pubkey, u_char ** sig, size_t *siglen,
 			RegQueryValueExW(sub, NULL, 0, NULL, regdata, &regdatalen) != ERROR_SUCCESS ||
 			convert_blob(con, regdata, regdatalen, &keyblob, &keyblob_len, FALSE) != 0 ||
 			(tmpbuf = sshbuf_from(keyblob, keyblob_len)) == NULL ||
-			sshkey_private_deserialize(tmpbuf, &prikey) != 0)
+			sshkey_private_deserialize(tmpbuf, &prikey) != 0) {
+				error("cannot retrieve and deserialize key from registry");
 				goto done;
+			}
 #ifdef ENABLE_PKCS11
 	}
 	else
@@ -343,7 +345,7 @@ static int sign_blob(const struct sshkey *pubkey, u_char ** sig, size_t *siglen,
 	if (sshkey_is_sk(prikey))
 		sk_provider = "internal";
 	if (sshkey_sign(prikey, sig, siglen, blob, blen, algo, sk_provider, NULL, 0) != 0) {
-		debug("cannot sign using retrieved key");
+		error("cannot sign using retrieved key");
 		goto done;
 	}
 
@@ -588,13 +590,13 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 	if ((r = sshbuf_get_cstring(request, &provider, &provider_len)) != 0 ||
 		(r = sshbuf_get_cstring(request, &pin, &pin_len)) != 0 ||
 		pin_len > 256) {
-		debug("add smartcard request is invalid");
+		error("add smartcard request is invalid");
 		request_invalid = 1;
 		goto done;
 	}
 
 	if (realpath(provider, canonical_provider) == NULL) {
-		debug("failed PKCS#11 add of \"%.100s\": realpath: %s",
+		error("failed PKCS#11 add of \"%.100s\": realpath: %s",
 			provider, strerror(errno));
 		request_invalid = 1;
 		goto done;
@@ -635,7 +637,7 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 			RegSetValueExW(sub, L"pub", 0, REG_BINARY, pubkey_blob, (DWORD)pubkey_blob_len) != 0 ||
 			RegSetValueExW(sub, L"type", 0, REG_DWORD, (BYTE*)&key->type, 4) != 0 ||
 			RegSetValueExW(sub, L"comment", 0, REG_BINARY, canonical_provider, (DWORD)strlen(canonical_provider)) != 0) {
-			debug("failed to add key to store");
+			error("failed to add key to store");
 			goto done;
 		}
 	}
@@ -650,7 +652,7 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 		RegCreateKeyExA(reg, canonical_provider, 0, 0, 0, KEY_WRITE | KEY_WOW64_64KEY, &sa, &sub, NULL) != 0 ||
 		RegSetValueExW(sub, L"provider", 0, REG_BINARY, canonical_provider, (DWORD)strlen(canonical_provider)) != 0 ||
 		RegSetValueExW(sub, L"pin", 0, REG_BINARY, epin, (DWORD)epin_len) != 0) {
-		debug("failed to add pkcs11 provider to store");
+		error("failed to add pkcs11 provider to store");
 		goto done;
 	}
 
@@ -710,13 +712,13 @@ int process_remove_smartcard_key(struct sshbuf* request, struct sshbuf* response
 
 	if ((r = sshbuf_get_cstring(request, &provider, NULL)) != 0 ||
 		(r = sshbuf_get_cstring(request, &pin, NULL)) != 0) {
-		debug("remove smartcard request is invalid");
+		error("remove smartcard request is invalid");
 		request_invalid = 1;
 		goto done;
 	}
 
 	if (realpath(provider, canonical_provider) == NULL) {
-		debug("failed PKCS#11 add of \"%.100s\": realpath: %s",
+		error("failed PKCS#11 add of \"%.100s\": realpath: %s",
 			provider, strerror(errno));
 		request_invalid = 1;
 		goto done;

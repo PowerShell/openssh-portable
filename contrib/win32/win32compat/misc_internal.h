@@ -66,7 +66,6 @@ void invalid_parameter_handler(const wchar_t *, const wchar_t *, const wchar_t *
 void to_lower_case(char *s);
 void to_wlower_case(wchar_t *s);
 HANDLE get_user_token(const char* user, int impersonation);
-HANDLE get_current_user_token();
 int load_user_profile(HANDLE user_token, char* user);
 int create_directory_withsddl(wchar_t *path, wchar_t *sddl);
 int is_absolute_path(const char *);
