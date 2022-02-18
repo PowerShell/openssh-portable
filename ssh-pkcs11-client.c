@@ -53,7 +53,8 @@
 #include "pkcs11.h"
 
 static char module_path[PATH_MAX + 1];
-extern int sshagent_client_pid;
+extern char* sshagent_con_username;
+extern HANDLE sshagent_client_primary_token;
 
 struct pkcs11_provider {
 	char			*name;
@@ -172,15 +173,6 @@ find_helper(void)
 static int fd = -1;
 static pid_t pid = -1;
 
-#ifdef WINDOWS
-static void
-pkcs11_terminate_helper() {
-	HANDLE helper = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
-	TerminateProcess(helper, 1);
-	CloseHandle(helper);
-}
-#endif /* WINDOWS */
-
 static void
 send_msg(struct sshbuf *m)
 {
@@ -251,10 +243,20 @@ pkcs11_terminate(void)
 		pkcs11_del_provider(p->name);
 		TAILQ_REMOVE(&pkcs11_providers, p, next);
 	}
-	pkcs11_terminate_helper();
+
+	if (pid != -1) {
+		kill(pid, SIGTERM);
+		waitpid(pid, NULL, 0);
+		pid = -1;
+	}
 #endif /* WINDOWS */
+
 	if (fd >= 0)
 		close(fd);
+
+#ifdef WINDOWS
+	fd = -1;
+#endif
 }
 
 static int
@@ -464,13 +466,17 @@ pkcs11_start_helper(void)
 	av[1] = verbosity;
 	av[2] = NULL;
 
-	if ((client_process_handle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, sshagent_client_pid)) == NULL ||
-		OpenProcessToken(client_process_handle, TOKEN_QUERY | TOKEN_ASSIGN_PRIMARY, &client_token) == FALSE) {
-		error_f("failed retrieve user token of the client process");
+	if (!sshagent_con_username) {
+		error_f("sshagent_con_username is NULL");
 		goto out;
-
 	}
-	if (posix_spawnp_as_user((pid_t *)&pid, av[0], &actions, NULL, av, NULL, client_token) != 0) {
+
+	if (!sshagent_client_primary_token) {
+		error_f("sshagent_client_primary_token is NULL for user:%s", sshagent_con_username);
+		goto out;
+	}
+
+	if (posix_spawnp_as_user((pid_t *)&pid, av[0], &actions, NULL, av, NULL, sshagent_client_primary_token) != 0) {
 		error_f("failed to spwan process %s", av[0]);
 		goto out;
 	}

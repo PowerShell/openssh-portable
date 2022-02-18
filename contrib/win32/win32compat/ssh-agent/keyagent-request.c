@@ -605,15 +605,21 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 	// Remove 'drive root' if exists
 	if (canonical_provider[0] == '/')
 		memmove(canonical_provider, canonical_provider + 1, strlen(canonical_provider));
-	if (get_user_root(con, &user_root) != 0 ||
-		is_reg_sub_key_exists(user_root, SSH_PKCS11_PROVIDERS_ROOT, canonical_provider))
-		goto done;
 
 	count = pkcs11_add_provider(canonical_provider, pin, &keys, NULL);
 	if (count <= 0) {
-		debug("failed to add key to store");
+		error_f("failed to add key to store. count:%d", count);
 		goto done;
 	}
+
+	// If HKCU registry already has the provider then remove the provider and associated keys.
+	// This allows customers to add new keys.
+	if (get_user_root(con, &user_root) != 0 ||
+		is_reg_sub_key_exists(user_root, SSH_PKCS11_PROVIDERS_ROOT, canonical_provider)) {
+		remove_matching_subkeys_from_registry(user_root, SSH_KEYS_ROOT, L"comment", canonical_provider);
+		remove_matching_subkeys_from_registry(user_root, SSH_PKCS11_PROVIDERS_ROOT, L"provider", canonical_provider);
+	}
+
 	for (i = 0; i < count; i++) {
 		key = keys[i];
 		if (sa.lpSecurityDescriptor)
@@ -637,7 +643,7 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 			RegSetValueExW(sub, L"pub", 0, REG_BINARY, pubkey_blob, (DWORD)pubkey_blob_len) != 0 ||
 			RegSetValueExW(sub, L"type", 0, REG_DWORD, (BYTE*)&key->type, 4) != 0 ||
 			RegSetValueExW(sub, L"comment", 0, REG_BINARY, canonical_provider, (DWORD)strlen(canonical_provider)) != 0) {
-			error("failed to add key to store");
+			error_f("failed to add key to store");
 			goto done;
 		}
 	}

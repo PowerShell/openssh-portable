@@ -48,6 +48,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-dss.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-ecdsa.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-ed25519.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)ssh-pkcs11.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-rsa.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sshbuf-getput-basic.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sshbuf-getput-crypto.c" />

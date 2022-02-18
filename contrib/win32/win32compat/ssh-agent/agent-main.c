@@ -113,6 +113,8 @@ fix_cwd()
 	_wchdir(path);
 }
 
+extern void sanitise_stdfd(void);
+
 int 
 wmain(int argc, wchar_t **argv) 
 {
