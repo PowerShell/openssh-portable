@@ -47,10 +47,139 @@
 #include "ssh-pkcs11.h"
 #include "ssherr.h"
 
+#ifdef WINDOWS
+#include "openbsd-compat/sys-queue.h"
+#define CRYPTOKI_COMPAT
+#include "pkcs11.h"
+
+static char module_path[PATH_MAX + 1];
+extern int sshagent_client_pid;
+
+struct pkcs11_provider {
+	char			*name;
+	TAILQ_ENTRY(pkcs11_provider) next;
+};
+
+TAILQ_HEAD(, pkcs11_provider) pkcs11_providers;
+
+struct pkcs11_keyinfo {
+	struct sshkey	*key;
+	char		*providername, *label;
+	TAILQ_ENTRY(pkcs11_keyinfo) next;
+};
+
+TAILQ_HEAD(, pkcs11_keyinfo) pkcs11_keylist;
+
+#define MAX_MSG_LENGTH		10240 /*XXX*/
+
+/* input and output queue */
+struct sshbuf *iqueue;
+struct sshbuf *oqueue;
+
+void
+add_key(struct sshkey *k, char *name)
+{
+	struct pkcs11_keyinfo *ki;
+
+	ki = xcalloc(1, sizeof(*ki));
+	ki->providername = xstrdup(name);
+	ki->key = k;
+	TAILQ_INSERT_TAIL(&pkcs11_keylist, ki, next);
+}
+
+void
+del_all_keys()
+{
+	struct pkcs11_keyinfo *ki, *nxt;
+
+	for (ki = TAILQ_FIRST(&pkcs11_keylist); ki; ki = nxt) {
+		nxt = TAILQ_NEXT(ki, next);
+		TAILQ_REMOVE(&pkcs11_keylist, ki, next);
+		free(ki->providername);
+		sshkey_free(ki->key);
+		free(ki);
+	}
+}
+
+/* lookup matching 'private' key */
+struct sshkey *
+lookup_key(const struct sshkey *k)
+{
+	struct pkcs11_keyinfo *ki;
+
+	TAILQ_FOREACH(ki, &pkcs11_keylist, next) {
+		debug("check %p %s %s", ki, ki->providername, ki->label);
+		if (sshkey_equal(k, ki->key))
+			return (ki->key);
+	}
+	return (NULL);
+}
+
+static char *
+find_helper_in_module_path(void)
+{
+	wchar_t path[PATH_MAX + 1];
+	DWORD n;
+	char *ep;
+
+	memset(module_path, 0, sizeof(module_path));
+	memset(path, 0, sizeof(path));
+	if ((n = GetModuleFileNameW(NULL, path, PATH_MAX)) == 0 ||
+		n >= PATH_MAX) {
+		error_f("GetModuleFileNameW failed");
+		return NULL;
+	}
+	if (wcstombs_s(NULL, module_path, sizeof(module_path), path,
+		sizeof(module_path) - 1) != 0) {
+		error_f("wcstombs_s failed");
+		return NULL;
+	}
+	if ((ep = strrchr(module_path, '\\')) == NULL) {
+		error_f("couldn't locate trailing \\");
+		return NULL;
+	}
+	*(++ep) = '\0'; /* trim */
+	strlcat(module_path, "ssh-pkcs11-helper.exe", sizeof(module_path) - 1);
+
+	return module_path;
+}
+
+static char *
+find_helper(void)
+{
+	char *helper;
+	char module_path[PATH_MAX + 1];
+	char *ep;
+	DWORD n;
+
+	if ((helper = getenv("SSH_PKCS11_HELPER")) == NULL || strlen(helper) == 0) {
+		if ((helper = find_helper_in_module_path()) == NULL)
+			helper = _PATH_SSH_PKCS11_HELPER;
+	}
+	if (!path_absolute(helper)) {
+		error_f("helper \"%s\" unusable: path not absolute", helper);
+		return NULL;
+	}
+	debug_f("using \"%s\" as helper", helper);
+
+	return helper;
+}
+
+#endif /* WINDOWS */
+
 /* borrows code from sftp-server and ssh-agent */
 
 static int fd = -1;
 static pid_t pid = -1;
+
+#ifdef WINDOWS
+static void
+pkcs11_terminate_helper() {
+	HANDLE helper = OpenProcess(PROCESS_TERMINATE, FALSE, pid);
+	TerminateProcess(helper, 1);
+	CloseHandle(helper);
+}
+#endif /* WINDOWS */
 
 static void
 send_msg(struct sshbuf *m)
@@ -104,12 +233,26 @@ recv_msg(struct sshbuf *m)
 int
 pkcs11_init(int interactive)
 {
+#ifdef WINDOWS
+	TAILQ_INIT(&pkcs11_providers);
+	TAILQ_INIT(&pkcs11_keylist);
+#endif /* WINDOWS */
 	return (0);
 }
 
 void
 pkcs11_terminate(void)
 {
+#ifdef WINDOWS
+	struct pkcs11_provider *p;
+
+	while ((p = TAILQ_FIRST(&pkcs11_providers)) != NULL) {
+		// Send message to helper to gracefully unload providers
+		pkcs11_del_provider(p->name);
+		TAILQ_REMOVE(&pkcs11_providers, p, next);
+	}
+	pkcs11_terminate_helper();
+#endif /* WINDOWS */
 	if (fd >= 0)
 		close(fd);
 }
@@ -273,6 +416,23 @@ pkcs11_start_helper(void)
 {
 	int pair[2];
 	char *helper, *verbosity = NULL;
+#ifdef WINDOWS
+	int r, actions_inited = 0;
+	char *av[3];
+	posix_spawn_file_actions_t actions;
+	HANDLE client_token = NULL, client_process_handle = NULL;
+
+	r = SSH_ERR_SYSTEM_ERROR;
+	pair[0] = pair[1] = -1;
+
+	if ((helper = find_helper()) == NULL)
+		goto out;
+#endif /* WINDOWS */
+
+
+#ifdef DEBUG_PKCS11
+	verbosity = "-vvv";
+#endif
 
 	if (log_level_get() >= SYSLOG_LEVEL_DEBUG1)
 		verbosity = "-vvv";
@@ -286,6 +446,37 @@ pkcs11_start_helper(void)
 		error("socketpair: %s", strerror(errno));
 		return (-1);
 	}
+#ifdef WINDOWS
+	if (posix_spawn_file_actions_init(&actions) != 0) {
+		error_f("posix_spawn_file_actions_init failed");
+		goto out;
+	}
+	actions_inited = 1;
+	if (posix_spawn_file_actions_adddup2(&actions, pair[1],
+		STDIN_FILENO) != 0 ||
+		posix_spawn_file_actions_adddup2(&actions, pair[1],
+			STDOUT_FILENO) != 0) {
+		error_f("posix_spawn_file_actions_adddup2 failed");
+		goto out;
+	}
+
+	av[0] = helper;
+	av[1] = verbosity;
+	av[2] = NULL;
+
+	if ((client_process_handle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, sshagent_client_pid)) == NULL ||
+		OpenProcessToken(client_process_handle, TOKEN_QUERY | TOKEN_ASSIGN_PRIMARY, &client_token) == FALSE) {
+		error_f("failed retrieve user token of the client process");
+		goto out;
+
+	}
+	if (posix_spawnp_as_user((pid_t *)&pid, av[0], &actions, NULL, av, NULL, client_token) != 0) {
+		error_f("failed to spwan process %s", av[0]);
+		goto out;
+	}
+	fd = pair[0];
+	r = 0;
+#else
 	if ((pid = fork()) == -1) {
 		error("fork: %s", strerror(errno));
 		return (-1);
@@ -309,6 +500,13 @@ pkcs11_start_helper(void)
 	close(pair[1]);
 	fd = pair[0];
 	return (0);
+#endif
+	/* success */
+	debug3_f("started pid=%ld", (long)pid);
+out:
+	if (client_token)
+		CloseHandle(client_token);
+	return r;
 }
 
 int
@@ -322,6 +520,7 @@ pkcs11_add_provider(char *name, char *pin, struct sshkey ***keysp,
 	size_t blen;
 	u_int nkeys, i;
 	struct sshbuf *msg;
+	struct pkcs11_provider *p;
 
 	if (fd < 0 && pkcs11_start_helper() < 0)
 		return (-1);
@@ -363,6 +562,12 @@ pkcs11_add_provider(char *name, char *pin, struct sshkey ***keysp,
 	} else {
 		nkeys = -1;
 	}
+
+#ifdef WINDOWS
+	p = xcalloc(1, sizeof(*p));
+	p->name = xstrdup(name);
+	TAILQ_INSERT_TAIL(&pkcs11_providers, p, next);
+#endif /* WINDOWS */
 	sshbuf_free(msg);
 	return (nkeys);
 }

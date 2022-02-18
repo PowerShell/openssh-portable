@@ -7,6 +7,8 @@
     <LibreSSLVersion>3.4.2.0</LibreSSLVersion>
     <ZLibVersion>1.2.11</ZLibVersion>
     <fido2Version>1.10.0</fido2Version>
+    <!--libcbor version is not used in the bulid; it is needed for pipeline compliance tasks-->  
+    <libcborVersion>0.8.0</libcborVersion> 
     <LibreSSL-Path>$(SolutionDir)\LibreSSL\sdk\</LibreSSL-Path>
     <LibreSSL-x86-Path>$(SolutionDir)\LibreSSL\bin\desktop\x86\</LibreSSL-x86-Path>
     <LibreSSL-x64-Path>$(SolutionDir)\LibreSSL\bin\desktop\x64\</LibreSSL-x64-Path>

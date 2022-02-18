@@ -37,6 +37,7 @@
 #define BUFSIZE 5 * 1024
 
 char* sshagent_con_username;
+int sshagent_client_pid;
 
 static HANDLE ioc_port = NULL;
 static BOOL debug_mode = FALSE;
@@ -277,6 +278,7 @@ get_con_client_info(struct agent_connection* con)
 		error("cannot retrieve client impersonation token");
 		goto done;
 	}
+	sshagent_client_pid = client_pid;
 
 	if (GetTokenInformation(client_primary_token, TokenUser, NULL, 0, &info_len) == TRUE ||
 		(info = (TOKEN_USER*)malloc(info_len)) == NULL ||
