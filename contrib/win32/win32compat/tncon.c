@@ -188,7 +188,12 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 					}
 
 					if (isConsoleVTSeqAvailable) {
-						if (inputRecord.Event.KeyEvent.uChar.UnicodeChar != L'\0') {
+						// Ctrl+Space & Ctrl+@ generate a NULL character but should still be sent
+						DWORD dwControlKeyState = inputRecord.Event.KeyEvent.dwControlKeyState;
+						DWORD dwCtrlPressed = (dwControlKeyState & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED));
+						BOOL nullKeyPressed = LOBYTE(VkKeyScanW(0)) == inputRecord.Event.KeyEvent.wVirtualKeyCode;
+						BOOL sendNullFlag = dwCtrlPressed && nullKeyPressed;
+						if (inputRecord.Event.KeyEvent.uChar.UnicodeChar != L'\0' || sendNullFlag) {
 							n = WideCharToMultiByte(
 								CP_UTF8,
 								0,
