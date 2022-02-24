@@ -40,7 +40,6 @@
 #include "ansiprsr.h"
 #include "tncon.h"
 #include "tnnet.h"
-#include "debug.h"
 
 extern bool gbVTAppMode;
 extern BOOL isAnsiParsingRequired;
