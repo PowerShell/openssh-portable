@@ -40,6 +40,7 @@
 #include "ansiprsr.h"
 #include "tncon.h"
 #include "tnnet.h"
+#include "debug.h"
 
 extern bool gbVTAppMode;
 extern BOOL isAnsiParsingRequired;
@@ -188,12 +189,7 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 					}
 
 					if (isConsoleVTSeqAvailable) {
-						// Ctrl+Space & Ctrl+@ generate a NULL character but should still be sent
-						DWORD dwControlKeyState = inputRecord.Event.KeyEvent.dwControlKeyState;
-						DWORD dwCtrlPressed = (dwControlKeyState & (LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED));
-						BOOL nullKeyPressed = LOBYTE(VkKeyScanW(0)) == inputRecord.Event.KeyEvent.wVirtualKeyCode;
-						BOOL sendNullFlag = dwCtrlPressed && nullKeyPressed;
-						if (inputRecord.Event.KeyEvent.uChar.UnicodeChar != L'\0' || sendNullFlag) {
+						if (inputRecord.Event.KeyEvent.uChar.UnicodeChar != L'\0' || inputRecord.Event.KeyEvent.wVirtualScanCode == 0) {
 							n = WideCharToMultiByte(
 								CP_UTF8,
 								0,
