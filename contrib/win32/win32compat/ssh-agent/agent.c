@@ -28,6 +28,7 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#include "config.h"
 #include "agent.h"
 #include <sddl.h>
 #include <UserEnv.h>
@@ -37,6 +38,7 @@
 #define BUFSIZE 5 * 1024
 
 char* sshagent_con_username;
+HANDLE sshagent_client_primary_token;
 
 static HANDLE ioc_port = NULL;
 static BOOL debug_mode = FALSE;
@@ -198,6 +200,12 @@ agent_cleanup_connection(struct agent_connection* con)
 		free(sshagent_con_username);
 		sshagent_con_username = NULL;
 	}
+#ifdef ENABLE_PKCS11
+	if (sshagent_client_primary_token)
+		CloseHandle(sshagent_client_primary_token);
+
+	pkcs11_terminate();
+#endif
 }
 
 void 
@@ -296,6 +304,11 @@ get_con_client_info(struct agent_connection* con)
 		con->client_type = SERVICE;
 		r = 0;
 		goto done;
+	}
+
+	// Get client primary token
+	if (DuplicateTokenEx(client_primary_token, TOKEN_QUERY | TOKEN_ASSIGN_PRIMARY | TOKEN_DUPLICATE, NULL, SecurityImpersonation, TokenPrimary, &sshagent_client_primary_token) == FALSE) {
+		error_f("Failed to duplicate the primary token. error:%d", GetLastError());
 	}
 
 	// Get username

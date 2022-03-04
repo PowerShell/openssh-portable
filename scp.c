@@ -1262,7 +1262,14 @@ source(int argc, char **argv)
 	off_t i, statbytes;
 	size_t amt, nr;
 	int fd = -1, haderr, indx;
+#ifdef WINDOWS
+	/* PATH_MAX is too large on Windows.*/
+	/* Allocate memory dynamically for encname and buf to avoid stack overflow on recursive calls.*/
+	char *last, *name, *buf = NULL, *encname = NULL;
+	size_t encname_len, buf_len, tmp_len;
+#else
 	char *last, *name, buf[PATH_MAX + 128], encname[PATH_MAX];
+#endif
 	int len;
 
 	for (indx = 0; indx < argc; ++indx) {
@@ -1274,7 +1281,20 @@ source(int argc, char **argv)
 		if ((fd = open(name, O_RDONLY|O_NONBLOCK, 0)) == -1)
 			goto syserr;
 		if (strchr(name, '\n') != NULL) {
+#ifdef WINDOWS
+			if (!encname) {
+				encname_len = ((2 * len) < PATH_MAX) ? 2 * len : PATH_MAX;
+				encname = xmalloc(encname_len);
+			}
+			while ((tmp_len = strnvis(encname, name, encname_len, VIS_NL)) >= encname_len) {
+				if (tmp_len >= PATH_MAX)
+					break;
+				encname_len = tmp_len + 1;
+				encname = xreallocarray(encname, encname_len, sizeof(char));
+			}
+#else
 			strnvis(encname, name, sizeof(encname), VIS_NL);
+#endif
 			name = encname;
 		}
 		if (fstat(fd, &stb) == -1) {
@@ -1309,9 +1329,27 @@ syserr:			run_err("%s: %s", name, strerror(errno));
 				goto next;
 		}
 #define	FILEMODEMASK	(S_ISUID|S_ISGID|S_IRWXU|S_IRWXG|S_IRWXO)
+#ifdef WINDOWS
+		if (!buf) 
+		{
+			/*Set the initial size of buf to "strlen(last) + 20" based on multiple tests that*/
+			/*inidicate that this is usually enough. If not enough, more space will be allocated below.*/
+			buf_len = ((strlen(last) + 20) < PATH_MAX) ? strlen(last) + 20 : PATH_MAX;
+			buf = xmalloc(buf_len);
+		}
+		while ((tmp_len = snprintf(buf, buf_len, "C%04o %lld %s\n",
+		      (u_int) (stb.st_mode & FILEMODEMASK),
+			  (long long)stb.st_size, last)) >= buf_len) {
+			if (tmp_len >= PATH_MAX)
+				break;
+			buf_len = tmp_len + 1;
+			buf = xreallocarray(buf, buf_len, sizeof(char));
+		}
+#else
 		snprintf(buf, sizeof buf, "C%04o %lld %s\n",
 		    (u_int) (stb.st_mode & FILEMODEMASK),
 		    (long long)stb.st_size, last);
+#endif
 		if (verbose_mode)
 			fmprintf(stderr, "Sending file modes: %s", buf);
 		(void) atomicio(vwrite, remout, buf, strlen(buf));
@@ -1363,6 +1401,12 @@ next:			if (fd != -1) {
 		if (showprogress)
 			stop_progress_meter();
 	}
+#ifdef WINDOWS
+	if (encname)
+		free(encname);
+	if (buf)
+		free(buf);
+#endif
 }
 
 void
@@ -1370,7 +1414,16 @@ rsource(char *name, struct stat *statp)
 {
 	DIR *dirp;
 	struct dirent *dp;
+#ifndef WINDOWS
 	char *last, *vect[1], path[PATH_MAX];
+#else
+	/* PATH_MAX is too large on Windows.*/
+	/* Allocate memory dynamically for path to avoid stack overflow on recursive calls.*/
+	char *last, *vect[1], *path;
+	size_t path_len = 260, len;
+
+	path = xmalloc(path_len);
+#endif
 
 	if (!(dirp = opendir(name))) {
 		run_err("%s: %s", name, strerror(errno));
@@ -1387,8 +1440,19 @@ rsource(char *name, struct stat *statp)
 			return;
 		}
 	}
+#ifdef WINDOWS
+	while ((len = snprintf(path, path_len, "D%04o %d %.1024s\n",
+		  (u_int)(statp->st_mode & FILEMODEMASK), 0, last)) >= path_len)
+	{
+		if (len >= PATH_MAX)
+			break;
+		path_len = len + 1;
+		path = xreallocarray(path, path_len, sizeof(char));
+	}
+#else
 	(void) snprintf(path, sizeof path, "D%04o %d %.1024s\n",
 	    (u_int) (statp->st_mode & FILEMODEMASK), 0, last);
+#endif
 	if (verbose_mode)
 		fmprintf(stderr, "Entering directory: %s", path);
 	(void) atomicio(vwrite, remout, path, strlen(path));
@@ -1401,14 +1465,29 @@ rsource(char *name, struct stat *statp)
 			continue;
 		if (!strcmp(dp->d_name, ".") || !strcmp(dp->d_name, ".."))
 			continue;
+#ifdef WINDOWS
+		if (strlen(name) + 1 + strlen(dp->d_name) >= PATH_MAX - 1) {
+#else 
 		if (strlen(name) + 1 + strlen(dp->d_name) >= sizeof(path) - 1) {
+#endif
 			run_err("%s/%s: name too long", name, dp->d_name);
 			continue;
 		}
+#ifdef WINDOWS
+		while ((len = snprintf(path, path_len, "%s/%s", name, dp->d_name)) >= path_len) {
+			path_len = len + 1;
+			path = xreallocarray(path, path_len, sizeof(char));
+		}
+#else
 		(void) snprintf(path, sizeof path, "%s/%s", name, dp->d_name);
+#endif
 		vect[0] = path;
 		source(1, vect);
 	}
+#ifdef WINDOWS
+	if (path)
+		free(path);
+#endif
 	(void) closedir(dirp);
 	(void) atomicio(vwrite, remout, "E\n", 2);
 	(void) response();
@@ -1694,6 +1773,22 @@ bad:			run_err("%s: %s", np, strerror(errno));
 		if (!wrerr && (!exists || S_ISREG(stb.st_mode)) &&
 		    ftruncate(ofd, size) != 0)
 			note_err("%s: truncate: %s", np, strerror(errno));
+#ifdef WINDOWS
+		/* When p flag is used, set timestamps before setting the
+		 * mode to avoid error caused by when the mode is set to
+		 * "read-only" and timestamps can't be set.*/
+		if (setimes && !wrerr) {
+			setimes = 0;
+			if (utimes(np, tv) == -1) {
+				note_err("%s: set times: %s",
+					np, strerror(errno));
+			}
+		}
+		/* When the file descriptor (ofd) is closed, the Accessed
+		 * timestamp gets updated. Therefore, when the p flag is 
+		 * used, the inherited Accessed timestamp is overwritten.
+		 * However, the Modify timestamp is inherited correctly.*/
+#endif
 		if (pflag) {
 			if (exists || omode != mode)
 #ifdef HAVE_FCHMOD
@@ -1720,6 +1815,7 @@ bad:			run_err("%s: %s", np, strerror(errno));
 		(void) response();
 		if (showprogress)
 			stop_progress_meter();
+#ifndef WINDOWS
 		if (setimes && !wrerr) {
 			setimes = 0;
 			if (utimes(np, tv) == -1) {
@@ -1727,6 +1823,7 @@ bad:			run_err("%s: %s", np, strerror(errno));
 				    np, strerror(errno));
 			}
 		}
+#endif
 		/* If no error was noted then signal success for this file */
 		if (note_err(NULL) == 0)
 			(void) atomicio(vwrite, remout, "", 1);

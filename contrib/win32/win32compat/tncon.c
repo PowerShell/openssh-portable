@@ -188,7 +188,7 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 					}
 
 					if (isConsoleVTSeqAvailable) {
-						if (inputRecord.Event.KeyEvent.uChar.UnicodeChar != L'\0') {
+						if (inputRecord.Event.KeyEvent.uChar.UnicodeChar != L'\0' || inputRecord.Event.KeyEvent.wVirtualScanCode == 0) {
 							n = WideCharToMultiByte(
 								CP_UTF8,
 								0,

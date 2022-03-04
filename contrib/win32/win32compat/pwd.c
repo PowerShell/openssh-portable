@@ -340,7 +340,7 @@ get_username(const PSID sid)
 
 	struct passwd *p = get_passwd(NULL, sid);
 	if (p && p->pw_name)
-		return strdup(p->pw_name);
+		return _strdup(p->pw_name);
 	else
 		return NULL;
 }
