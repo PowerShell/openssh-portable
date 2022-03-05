@@ -44,6 +44,7 @@
 /* #define DEBUG_SK 1 */
 
 #ifdef WINDOWS
+extern HANDLE sshagent_client_primary_token = NULL;
 extern char *sshagent_con_username = NULL;
 static char module_path[PATH_MAX + 1];
 
@@ -171,8 +172,13 @@ start_helper(int *fdp, pid_t *pidp, void (**osigchldp)(int))
 
 	if (sshagent_con_username) {
 		debug_f("sshagent_con_username:%s", sshagent_con_username);
-		if (__posix_spawn_asuser((pid_t *)&pid, av[0], &actions, NULL, av, NULL, sshagent_con_username) != 0) {
-			error_f("__posix_spawn_asuser failed for username:%s", sshagent_con_username);
+		if (!sshagent_client_primary_token) {
+			error_f("sshagent_client_primary_token is NULL for user:%s", sshagent_con_username);
+			goto out;
+		}
+
+		if (posix_spawnp_as_user((pid_t*)&pid, av[0], &actions, NULL, av, NULL, sshagent_client_primary_token) != 0) {
+			error_f("failed to spwan process %s", av[0]);
 			goto out;
 		}
 	} else {
