@@ -149,6 +149,8 @@
 #define HAVE_FIDO_DEV_SUPPORTS_CRED_PROT
 #define HAVE_FIDO_DEV_GET_TOUCH_BEGIN
 #define HAVE_FIDO_DEV_GET_TOUCH_STATUS
+#define HAVE_FIDO_CRED_SET_CLIENTDATA
+#define HAVE_FIDO_ASSERT_SET_CLIENTDATA
 
 /* File names may not contain backslash characters */
 /* #undef FILESYSTEM_NO_BACKSLASH */
