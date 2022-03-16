@@ -166,6 +166,9 @@ process_request(struct agent_connection* con)
 		r = process_remove_smartcard_key(request, response, con);
 		break;
 #endif /* ENABLE_PKCS11 */
+	case SSH_AGENTC_EXTENSION:
+		r = process_extension(request, response, con);
+		break;
 	default:
 		debug("unknown agent request %d", type);
 		r = -1;

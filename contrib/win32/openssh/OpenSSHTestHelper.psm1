@@ -15,7 +15,7 @@ $PubKeyUser = "sshtest_pubkeyuser"
 $PasswdUser = "sshtest_passwduser"
 $AdminUser = "sshtest_adminuser"
 $NonAdminUser = "sshtest_nonadminuser"
-$OpenSSHTestAccountsPassword = "P@ssw0rd_1"
+$OpenSSHTestAccountsPassword = "Bulldog_123456"
 $OpenSSHTestAccounts = $Script:SSOUser, $Script:PubKeyUser, $Script:PasswdUser, $Script:AdminUser, $Script:NonAdminUser
 $SSHDTestSvcName = "sshdTestSvc"
 

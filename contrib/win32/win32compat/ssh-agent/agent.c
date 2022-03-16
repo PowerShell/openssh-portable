@@ -50,6 +50,11 @@ static OVERLAPPED ol;
 static 	HANDLE pipe;
 static	SECURITY_ATTRIBUTES sa;
 
+static size_t nsession_ids;
+static struct hostkey_sid *session_ids;
+static struct dest_constraint *dest_constraints;
+static size_t ndest_constraints;
+
 static void
 agent_cleanup() 
 {
@@ -192,6 +197,14 @@ agent_cleanup_connection(struct agent_connection* con)
 			CloseHandle(con->client_impersonation_token);
 	if (con->client_process_handle)
 		CloseHandle(con->client_process_handle);
+
+	for (int i = 0; i < con->nsession_ids; i++) {
+		sshkey_free(con->session_ids[i].key);
+		sshbuf_free(con->session_ids[i].sid);
+	}
+	free(con->session_ids);
+	con->nsession_ids = 0;
+	
 	free(con);
 	CloseHandle(ioc_port);
 	ioc_port = NULL;
@@ -200,6 +213,7 @@ agent_cleanup_connection(struct agent_connection* con)
 		free(sshagent_con_username);
 		sshagent_con_username = NULL;
 	}
+
 #ifdef ENABLE_PKCS11
 	if (sshagent_client_primary_token)
 		CloseHandle(sshagent_client_primary_token);
@@ -337,6 +351,7 @@ get_con_client_info(struct agent_connection* con)
 	r = 0;
 done:
 	debug("client type: %s", con_type_to_string(con));
+	con->nsession_ids = 0;
 
 	if (sshd_sid)
 		free(sshd_sid);

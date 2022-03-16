@@ -66,6 +66,16 @@ int w32_kill(int pid, int sig);
 int w32_sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
 #define sigprocmask(a,b,c) w32_sigprocmask((a), (b), (c))
 
+struct sigaction {
+    void     (*sa_handler)(int);
+    void     (*sa_sigaction)(int, void *, void *);
+    sigset_t   sa_mask;
+    int        sa_flags;
+    void     (*sa_restorer)(void); /* reserved */
+};
+
+int sigaction(int signum, const struct sigaction * act, struct sigaction * oldact);
+
 #define SIGINT	W32_SIGINT		
 #define SIGSEGV	W32_SIGSEGV		
 #define SIGPIPE	W32_SIGPIPE		
@@ -90,6 +100,8 @@ int w32_sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
 #define SIG_DFL	W32_SIG_DFL
 #define SIG_IGN	W32_SIG_IGN
 #define SIG_ERR W32_SIG_ERR
+
+#define _NSIG (W32_SIGMAX + 1)
 
 /* TOTO - implement http://www.manpagez.com/man/3/sys_siglist/*/
 #undef NSIG

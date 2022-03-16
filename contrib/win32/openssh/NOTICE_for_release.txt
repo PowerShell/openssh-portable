@@ -1,0 +1,728 @@
+NOTICES AND INFORMATION
+Do Not Translate or Localize
+
+This software incorporates material from third parties. Microsoft makes certain
+open source code available at https://3rdpartysource.microsoft.com, or you may
+send a check or money order for US $5.00, including the product name, the open
+source component name, and version number, to:
+
+Source Code Compliance Team
+Microsoft Corporation
+One Microsoft Way
+Redmond, WA 98052
+USA
+
+Notwithstanding any other terms, you may reverse engineer this software to the
+extent required to debug changes to any libraries licensed under the GNU Lesser
+General Public License.
+
+
+Component
+OpenSSH
+
+Open Source License/Copyright Notice.
+
+The licences which components of this software fall under are as
+follows.  First, we will summarize and say that all components
+are under a BSD licence, or a licence more free than that.
+
+OpenSSH contains no GPL code.
+
+1)
+     * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
+     *                    All rights reserved
+     *
+     * As far as I am concerned, the code I have written for this software
+     * can be used freely for any purpose.  Any derived versions of this
+     * software must be clearly marked as such, and if the derived work is
+     * incompatible with the protocol description in the RFC file, it must be
+     * called by a name other than "ssh" or "Secure Shell".
+
+    [Tatu continues]
+     *  However, I am not implying to give any licenses to any patents or
+     * copyrights held by third parties, and the software includes parts that
+     * are not under my direct control.  As far as I know, all included
+     * source code is used in accordance with the relevant license agreements
+     * and can be used freely for any purpose (the GNU license being the most
+     * restrictive); see below for details.
+
+    [However, none of that term is relevant at this point in time.  All of
+    these restrictively licenced software components which he talks about
+    have been removed from OpenSSH, i.e.,
+
+     - RSA is no longer included, found in the OpenSSL library
+     - IDEA is no longer included, its use is deprecated
+     - DES is now external, in the OpenSSL library
+     - GMP is no longer used, and instead we call BN code from OpenSSL
+     - Zlib is now external, in a library
+     - The make-ssh-known-hosts script is no longer included
+     - TSS has been removed
+     - MD5 is now external, in the OpenSSL library
+     - RC4 support has been replaced with ARC4 support from OpenSSL
+     - Blowfish is now external, in the OpenSSL library
+
+    [The licence continues]
+
+    Note that any information and cryptographic algorithms used in this
+    software are publicly available on the Internet and at any major
+    bookstore, scientific library, and patent office worldwide.  More
+    information can be found e.g. at "http://www.cs.hut.fi/crypto".
+
+    The legal status of this program is some combination of all these
+    permissions and restrictions.  Use only at your own responsibility.
+    You will be responsible for any legal consequences yourself; I am not
+    making any claims whether possessing or using this is legal or not in
+    your country, and I am not taking any responsibility on your behalf.
+
+
+			    NO WARRANTY
+
+    BECAUSE THE PROGRAM IS LICENSED FREE OF CHARGE, THERE IS NO WARRANTY
+    FOR THE PROGRAM, TO THE EXTENT PERMITTED BY APPLICABLE LAW.  EXCEPT WHEN
+    OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR OTHER PARTIES
+    PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED
+    OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+    MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.  THE ENTIRE RISK AS
+    TO THE QUALITY AND PERFORMANCE OF THE PROGRAM IS WITH YOU.  SHOULD THE
+    PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF ALL NECESSARY SERVICING,
+    REPAIR OR CORRECTION.
+
+    IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
+    WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MAY MODIFY AND/OR
+    REDISTRIBUTE THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES,
+    INCLUDING ANY GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING
+    OUT OF THE USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED
+    TO LOSS OF DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY
+    YOU OR THIRD PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER
+    PROGRAMS), EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGES.
+
+3)
+    ssh-keyscan was contributed by David Mazieres under a BSD-style
+    license.
+
+     * Copyright 1995, 1996 by David Mazieres <dm@lcs.mit.edu>.
+     *
+     * Modification and redistribution in source and binary forms is
+     * permitted provided that due credit is given to the author and the
+     * OpenBSD project by leaving this copyright notice intact.
+
+4)
+    The Rijndael implementation by Vincent Rijmen, Antoon Bosselaers
+    and Paulo Barreto is in the public domain and distributed
+    with the following license:
+
+     * @version 3.0 (December 2000)
+     *
+     * Optimised ANSI C code for the Rijndael cipher (now AES)
+     *
+     * @author Vincent Rijmen <vincent.rijmen@esat.kuleuven.ac.be>
+     * @author Antoon Bosselaers <antoon.bosselaers@esat.kuleuven.ac.be>
+     * @author Paulo Barreto <paulo.barreto@terra.com.br>
+     *
+     * This code is hereby placed in the public domain.
+     *
+     * THIS SOFTWARE IS PROVIDED BY THE AUTHORS ''AS IS'' AND ANY EXPRESS
+     * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+     * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+     * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE
+     * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+     * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+     * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+     * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+     * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+     * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+     * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+5)
+    One component of the ssh source code is under a 3-clause BSD license,
+    held by the University of California, since we pulled these parts from
+    original Berkeley code.
+
+     * Copyright (c) 1983, 1990, 1992, 1993, 1995
+     *      The Regents of the University of California.  All rights reserved.
+     *
+     * Redistribution and use in source and binary forms, with or without
+     * modification, are permitted provided that the following conditions
+     * are met:
+     * 1. Redistributions of source code must retain the above copyright
+     *    notice, this list of conditions and the following disclaimer.
+     * 2. Redistributions in binary form must reproduce the above copyright
+     *    notice, this list of conditions and the following disclaimer in the
+     *    documentation and/or other materials provided with the distribution.
+     * 3. Neither the name of the University nor the names of its contributors
+     *    may be used to endorse or promote products derived from this software
+     *    without specific prior written permission.
+     *
+     * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+     * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+     * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+     * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+     * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+     * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+     * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+     * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+     * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+     * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+     * SUCH DAMAGE.
+
+6)
+    Remaining components of the software are provided under a standard
+    2-term BSD licence with the following names as copyright holders:
+
+	Markus Friedl
+	Theo de Raadt
+	Niels Provos
+	Dug Song
+	Aaron Campbell
+	Damien Miller
+	Kevin Steves
+	Daniel Kouril
+	Wesley Griffin
+	Per Allansson
+	Nils Nordman
+	Simon Wilkinson
+
+    Portable OpenSSH additionally includes code from the following copyright
+    holders, also under the 2-term BSD license:
+
+	Ben Lindstrom
+	Tim Rice
+	Andre Lucas
+	Chris Adams
+	Corinna Vinschen
+	Cray Inc.
+	Denis Parker
+	Gert Doering
+	Jakob Schlyter
+	Jason Downs
+	Juha Yrjölä
+	Michael Stone
+	Networks Associates Technology, Inc.
+	Solar Designer
+	Todd C. Miller
+	Wayne Schroeder
+	William Jones
+	Darren Tucker
+	Sun Microsystems
+	The SCO Group
+	Daniel Walsh
+	Red Hat, Inc
+	Simon Vallet / Genoscope
+
+     * Redistribution and use in source and binary forms, with or without
+     * modification, are permitted provided that the following conditions
+     * are met:
+     * 1. Redistributions of source code must retain the above copyright
+     *    notice, this list of conditions and the following disclaimer.
+     * 2. Redistributions in binary form must reproduce the above copyright
+     *    notice, this list of conditions and the following disclaimer in the
+     *    documentation and/or other materials provided with the distribution.
+     *
+     * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+     * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+     * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+     * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+     * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+     * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+     * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+     * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+     * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+     * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+8) Portable OpenSSH contains the following additional licenses:
+
+    a) md5crypt.c, md5crypt.h
+
+	 * "THE BEER-WARE LICENSE" (Revision 42):
+	 * <phk@login.dknet.dk> wrote this file.  As long as you retain this
+	 * notice you can do whatever you want with this stuff. If we meet
+	 * some day, and you think this stuff is worth it, you can buy me a
+	 * beer in return.   Poul-Henning Kamp
+
+    b) snprintf replacement
+
+	* Copyright Patrick Powell 1995
+	* This code is based on code written by Patrick Powell
+	* (papowell@astart.com) It may be used for any purpose as long as this
+	* notice remains intact on all source code distributions
+
+    c) Compatibility code (openbsd-compat)
+
+       Apart from the previously mentioned licenses, various pieces of code
+       in the openbsd-compat/ subdirectory are licensed as follows:
+
+       Some code is licensed under a 3-term BSD license, to the following
+       copyright holders:
+
+	Todd C. Miller
+	Theo de Raadt
+	Damien Miller
+	Eric P. Allman
+	The Regents of the University of California
+	Constantin S. Svintsoff
+
+	* Redistribution and use in source and binary forms, with or without
+	* modification, are permitted provided that the following conditions
+	* are met:
+	* 1. Redistributions of source code must retain the above copyright
+	*    notice, this list of conditions and the following disclaimer.
+	* 2. Redistributions in binary form must reproduce the above copyright
+	*    notice, this list of conditions and the following disclaimer in the
+	*    documentation and/or other materials provided with the distribution.
+	* 3. Neither the name of the University nor the names of its contributors
+	*    may be used to endorse or promote products derived from this software
+	*    without specific prior written permission.
+	*
+	* THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+	* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+	* IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+	* ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+	* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+	* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+	* OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+	* HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+	* LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+	* OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+	* SUCH DAMAGE.
+
+       Some code is licensed under an ISC-style license, to the following
+       copyright holders:
+
+	Internet Software Consortium.
+	Todd C. Miller
+	Reyk Floeter
+	Chad Mynhier
+
+	* Permission to use, copy, modify, and distribute this software for any
+	* purpose with or without fee is hereby granted, provided that the above
+	* copyright notice and this permission notice appear in all copies.
+	*
+	* THE SOFTWARE IS PROVIDED "AS IS" AND TODD C. MILLER DISCLAIMS ALL
+	* WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES
+	* OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL TODD C. MILLER BE LIABLE
+	* FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+	* WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
+	* OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+	* CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+       Some code is licensed under a MIT-style license to the following
+       copyright holders:
+
+	Free Software Foundation, Inc.
+
+	* Permission is hereby granted, free of charge, to any person obtaining a  *
+	* copy of this software and associated documentation files (the            *
+	* "Software"), to deal in the Software without restriction, including      *
+	* without limitation the rights to use, copy, modify, merge, publish,      *
+	* distribute, distribute with modifications, sublicense, and/or sell       *
+	* copies of the Software, and to permit persons to whom the Software is    *
+	* furnished to do so, subject to the following conditions:                 *
+	*                                                                          *
+	* The above copyright notice and this permission notice shall be included  *
+	* in all copies or substantial portions of the Software.                   *
+	*                                                                          *
+	* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS  *
+	* OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF               *
+	* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.   *
+	* IN NO EVENT SHALL THE ABOVE COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,   *
+	* DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR    *
+	* OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR    *
+	* THE USE OR OTHER DEALINGS IN THE SOFTWARE.                               *
+	*                                                                          *
+	* Except as contained in this notice, the name(s) of the above copyright   *
+	* holders shall not be used in advertising or otherwise to promote the     *
+	* sale, use or other dealings in this Software without prior written       *
+	* authorization.                                                           *
+	****************************************************************************/
+
+       The Blowfish cipher implementation is licensed by Niels Provis under
+       a 4-clause BSD license:
+
+         * Blowfish - a fast block cipher designed by Bruce Schneier
+         *
+         * Copyright 1997 Niels Provos <provos@physnet.uni-hamburg.de>
+         * All rights reserved.
+         *
+         * Redistribution and use in source and binary forms, with or without
+         * modification, are permitted provided that the following conditions
+         * are met:
+         * 1. Redistributions of source code must retain the above copyright
+         *    notice, this list of conditions and the following disclaimer.
+         * 2. Redistributions in binary form must reproduce the above copyright
+         *    notice, this list of conditions and the following disclaimer in the
+         *    documentation and/or other materials provided with the distribution.
+         * 3. All advertising materials mentioning features or use of this software
+         *    must display the following acknowledgement:
+         *      This product includes software developed by Niels Provos.
+         * 4. The name of the author may not be used to endorse or promote products
+         *    derived from this software without specific prior written permission.
+         *
+         * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+         * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+         * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+         * IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+         * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+         * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+         * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+         * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+         * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+         * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+       Some replacement code is licensed by the NetBSD foundation under a
+       2-clause BSD license:
+
+         * Copyright (c) 2001 The NetBSD Foundation, Inc.
+         * All rights reserved.
+         *
+         * This code is derived from software contributed to The NetBSD Foundation
+         * by Todd Vierling.
+         *
+         * Redistribution and use in source and binary forms, with or without
+         * modification, are permitted provided that the following conditions
+         * are met:
+         * 1. Redistributions of source code must retain the above copyright
+         *    notice, this list of conditions and the following disclaimer.
+         * 2. Redistributions in binary form must reproduce the above copyright
+         *    notice, this list of conditions and the following disclaimer in the
+         *    documentation and/or other materials provided with the distribution.
+         *
+         * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
+         * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+         * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+         * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
+         * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+         * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+         * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+         * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+         * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+         * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+         * POSSIBILITY OF SUCH DAMAGE.
+
+------
+$OpenBSD: LICENCE,v 1.20 2017/04/30 23:26:16 djm Exp $
+
+Additional Attribution.
+
+Tatu Ylonen <ylo@cs.hut.fi> - Creator of SSH
+
+Aaron Campbell, Bob Beck, Markus Friedl, Niels Provos,
+Theo de Raadt, and Dug Song - Creators of OpenSSH
+
+Ahsan Rashid <arms@sco.com> - UnixWare long passwords
+Alain St-Denis <Alain.St-Denis@ec.gc.ca> - Irix fix
+Alexandre Oliva <oliva@lsd.ic.unicamp.br> - AIX fixes
+Andre Lucas <andre@ae-35.com> - new login code, many fixes
+Andreas Steinmetz <ast@domdv.de> - Shadow password expiry support
+Andrew McGill <andrewm@datrix.co.za> - SCO fixes
+Andrew Morgan <morgan@transmeta.com> - PAM bugfixes
+Andrew Stribblehill <a.d.stribblehill@durham.ac.uk> - Bugfixes
+Andy Sloane <andy@guildsoftware.com> - bugfixes
+Aran Cox <acox@cv.telegroup.com> - SCO bugfixes
+Arkadiusz Miskiewicz <misiek@pld.org.pl> - IPv6 compat fixes
+Ben Lindstrom <mouring@eviladmin.org> - NeXT support
+Ben Taylor <bent@clark.net> - Solaris debugging and fixes
+Bratislav ILICH <bilic@zepter.ru> - Configure fix
+Charles Levert <charles@comm.polymtl.ca> - SunOS 4 & bug fixes
+Chip Salzenberg <chip@valinux.com> - Assorted patches
+Chris Adams <cmadams@hiwaay.net> - OSF SIA support
+Chris Saia <csaia@wtower.com> - SuSE packaging
+Chris, the Young One <cky@pobox.com> - Password auth fixes
+Christos Zoulas <christos@zoulas.com> - Autoconf fixes
+Chun-Chung Chen <cjj@u.washington.edu> - RPM fixes
+Corinna Vinschen <vinschen@redhat.com> - Cygwin support
+Chad Mynhier <mynhier@interstel.net> - Solaris Process Contract support
+Dan Brosemer <odin@linuxfreak.com> - Autoconf support, build fixes
+Darren Hall <dhall@virage.org> - AIX patches
+Darren Tucker <dtucker@zip.com.au> - AIX BFF package scripts
+David Agraz <dagraz@jahoopa.com> - Build fixes
+David Del Piero <David.DelPiero@qed.qld.gov.au> - bug fixes
+David Hesprich <darkgrue@gue-tech.org> - Configure fixes
+David Rankin <drankin@bohemians.lexington.ky.us> - libwrap, AIX, NetBSD fixes
+Dag-Erling Smørgrav <des at freebsd.org> - Challenge-Response PAM code.
+Dhiraj Gulati <dgulati@sco.com> - UnixWare long passwords
+Ed Eden <ede370@stl.rural.usda.gov> - configure fixes
+Garrick James <garrick@james.net> - configure fixes
+Gary E. Miller <gem@rellim.com> - SCO support
+Ged Lodder <lodder@yacc.com.au> - HPUX fixes and enhancements
+Gert Doering <gd@hilb1.medat.de> - bug and portability fixes
+HARUYAMA Seigo <haruyama@unixuser.org> - Translations & doc fixes
+Hideaki YOSHIFUJI <yoshfuji@ecei.tohoku.ac.jp> - IPv6 and bug fixes
+Hiroshi Takekawa <takekawa@sr3.t.u-tokyo.ac.jp> - Configure fixes
+Holger Trapp <Holger.Trapp@Informatik.TU-Chemnitz.DE> - KRB4/AFS config patch
+IWAMURO Motonori <iwa@mmp.fujitsu.co.jp> - bugfixes
+Jani Hakala <jahakala@cc.jyu.fi> - Patches
+Jarno Huuskonen <jhuuskon@hytti.uku.fi> - Bugfixes
+Jim Knoble <jmknoble@pobox.com> - Many patches
+Jonchen (email unknown) - the original author of PAM support of SSH
+Juergen Keil <jk@tools.de> - scp bugfixing
+KAMAHARA Junzo <kamahara@cc.kshosen.ac.jp> - Configure fixes
+Kees Cook <cook@cpoint.net> - scp fixes
+Kenji Miyake <kenji@miyake.org> - Configure fixes
+Kevin Cawlfield <cawlfiel@us.ibm.com> - AIX fixes.
+Kevin O'Connor <kevin_oconnor@standardandpoors.com> - RSAless operation
+Kevin Steves <stevesk@pobox.com> - HP support, bugfixes, improvements
+Kiyokazu SUTO <suto@ks-and-ks.ne.jp> - Bugfixes
+Larry Jones <larry.jones@sdrc.com> - Bugfixes
+Lutz Jaenicke <Lutz.Jaenicke@aet.TU-Cottbus.DE> - Bugfixes
+Marc G. Fournier <marc.fournier@acadiau.ca> - Solaris patches
+Mark D. Baushke <mdb@juniper.net> - bug fixes
+Martin Johansson <fatbob@acc.umu.se> - Linux fixes
+Mark D. Roth <roth+openssh@feep.net> - Features, bug fixes
+Mark Miller <markm@swoon.net> - Bugfixes
+Matt Richards <v2matt@btv.ibm.com> - AIX patches
+Michael Steffens <michael_steffens at hp.com> - HP-UX fixes
+Michael Stone <mstone@cs.loyola.edu> - Irix enhancements
+Nakaji Hiroyuki <nakaji@tutrp.tut.ac.jp> - Sony News-OS patch
+Nalin Dahyabhai <nalin.dahyabhai@pobox.com> - PAM environment patch
+Nate Itkin <nitkin@europa.com> - SunOS 4.1.x fixes
+Niels Kristian Bech Jensen <nkbj@image.dk> - Assorted patches
+Pavel Kankovsky <peak@argo.troja.mff.cuni.cz> - Security fixes
+Pavel Troller <patrol@omni.sinus.cz> - Bugfixes
+Pekka Savola <pekkas@netcore.fi> - Bugfixes
+Peter Kocks <peter.kocks@baygate.com> - Makefile fixes
+Peter Stuge <stuge@cdy.org> - mdoc2man.awk script
+Phil Hands <phil@hands.com> - Debian scripts, assorted patches
+Phil Karn <karn@ka9q.ampr.org> - Autoconf fixes
+Philippe WILLEM <Philippe.WILLEM@urssaf.fr> - Bugfixes
+Phill Camp <P.S.S.Camp@ukc.ac.uk> - login code fix
+Rip Loomis <loomisg@cist.saic.com> - Solaris package support, fixes
+Robert Dahlem <Robert.Dahlem at siemens.com> - Reliant Unix fixes
+Roumen Petrov <openssh@roumenpetrov.info> - Compile & configure fixes
+SAKAI Kiyotaka <ksakai@kso.netwk.ntt-at.co.jp> - Multiple bugfixes
+Simon Wilkinson <sxw@dcs.ed.ac.uk> - PAM fixes, Compat with MIT KrbV
+Solar Designer <solar@openwall.com> - many patches and technical assistance
+Svante Signell <svante.signell@telia.com> - Bugfixes
+Thomas Neumann <tom@smart.ruhr.de> - Shadow passwords
+Tim Rice <tim@multitalents.net> - Portability & SCO fixes
+Tobias Oetiker <oetiker@ee.ethz.ch> - Bugfixes
+Tom Bertelson's <tbert@abac.com> - AIX auth fixes
+Tor-Ake Fransson <torake@hotmail.com> - AIX support
+Tudor Bosman <tudorb@jm.nu> - MD5 password support
+Udo Schweigert <ust@cert.siemens.de> - ReliantUNIX support
+Wendy Palm <wendyp at cray.com> - Cray support.
+Zack Weinberg <zack@wolery.cumb.org> - GNOME askpass enhancement
+
+
+Component
+LibreSSL
+
+Open Source License/Copyright Notice.
+
+  LibReSSL files are retained under the copyright of the authors. New
+  additions are ISC licensed as per OpenBSD's normal licensing policy,
+  or are placed in the public domain. 
+
+  The OpenSSL code is distributed under the terms of the original OpenSSL
+  licenses which follow:
+
+  LICENSE ISSUES
+  ==============
+
+  The OpenSSL toolkit stays under a dual license, i.e. both the conditions of
+  the OpenSSL License and the original SSLeay license apply to the toolkit.
+  See below for the actual license texts.  In case of any license issues
+  related to OpenSSL please contact openssl-core@openssl.org.
+
+  OpenSSL License
+  ---------------
+
+/* ====================================================================
+ * Copyright (c) 1998-2011 The OpenSSL Project.  All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer. 
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ *
+ * 3. All advertising materials mentioning features or use of this
+ *    software must display the following acknowledgment:
+ *    "This product includes software developed by the OpenSSL Project
+ *    for use in the OpenSSL Toolkit. (http://www.openssl.org/)"
+ *
+ * 4. The names "OpenSSL Toolkit" and "OpenSSL Project" must not be used to
+ *    endorse or promote products derived from this software without
+ *    prior written permission. For written permission, please contact
+ *    openssl-core@openssl.org.
+ *
+ * 5. Products derived from this software may not be called "OpenSSL"
+ *    nor may "OpenSSL" appear in their names without prior written
+ *    permission of the OpenSSL Project.
+ *
+ * 6. Redistributions of any form whatsoever must retain the following
+ *    acknowledgment:
+ *    "This product includes software developed by the OpenSSL Project
+ *    for use in the OpenSSL Toolkit (http://www.openssl.org/)"
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE OpenSSL PROJECT ``AS IS'' AND ANY
+ * EXPRESSED OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE OpenSSL PROJECT OR
+ * ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ * OF THE POSSIBILITY OF SUCH DAMAGE.
+ * ====================================================================
+ *
+ * This product includes cryptographic software written by Eric Young
+ * (eay@cryptsoft.com).  This product includes software written by Tim
+ * Hudson (tjh@cryptsoft.com).
+ *
+ */
+
+ Original SSLeay License
+ -----------------------
+
+/* Copyright (C) 1995-1998 Eric Young (eay@cryptsoft.com)
+ * All rights reserved.
+ *
+ * This package is an SSL implementation written
+ * by Eric Young (eay@cryptsoft.com).
+ * The implementation was written so as to conform with Netscapes SSL.
+ * 
+ * This library is free for commercial and non-commercial use as long as
+ * the following conditions are aheared to.  The following conditions
+ * apply to all code found in this distribution, be it the RC4, RSA,
+ * lhash, DES, etc., code; not just the SSL code.  The SSL documentation
+ * included with this distribution is covered by the same copyright terms
+ * except that the holder is Tim Hudson (tjh@cryptsoft.com).
+ * 
+ * Copyright remains Eric Young's, and as such any Copyright notices in
+ * the code are not to be removed.
+ * If this package is used in a product, Eric Young should be given attribution
+ * as the author of the parts of the library used.
+ * This can be in the form of a textual message at program startup or
+ * in documentation (online or textual) provided with the package.
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. All advertising materials mentioning features or use of this software
+ *    must display the following acknowledgement:
+ *    "This product includes cryptographic software written by
+ *     Eric Young (eay@cryptsoft.com)"
+ *    The word 'cryptographic' can be left out if the rouines from the library
+ *    being used are not cryptographic related :-).
+ * 4. If you include any Windows specific code (or a derivative thereof) from 
+ *    the apps directory (application code) you must include an acknowledgement:
+ *    "This product includes software written by Tim Hudson (tjh@cryptsoft.com)"
+ * 
+ * THIS SOFTWARE IS PROVIDED BY ERIC YOUNG ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ * 
+ * The licence and distribution terms for any publically available version or
+ * derivative of this code cannot be changed.  i.e. this code cannot simply be
+ * copied and put under another distribution licence
+ * [including the GNU Public Licence.]
+ */
+
+
+Component
+ZLib
+
+Open Source License/Copyright Notice.
+
+  Copyright (C) 1995-2017 Jean-loup Gailly and Mark Adler
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+
+  Jean-loup Gailly        Mark Adler
+  jloup@gzip.org          madler@alumni.caltech.edu
+
+
+Component
+libfido2
+
+Open Source License/Copyright Notice.
+
+Copyright (c) 2018-2022 Yubico AB. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   1. Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+   2. Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in
+      the documentation and/or other materials provided with the
+      distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+Component
+libcbor
+
+Open Source License/Copyright Notice.
+
+MIT License
+
+Copyright (c) 2014-2017 Pavel Kalvoda
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

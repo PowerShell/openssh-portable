@@ -36,6 +36,7 @@
 #ifdef ENABLE_PKCS11
 #include "ssh-pkcs11.h"
 #endif
+#include "xmalloc.h"
 
 #pragma warning(push, 3)
 
@@ -839,7 +840,127 @@ done:
 	return r;
 }
 
+extern int timingsafe_bcmp(const void* b1, const void* b2, size_t n);
 
+static int
+buf_equal(const struct sshbuf *a, const struct sshbuf *b)
+{
+	if (sshbuf_ptr(a) == NULL || sshbuf_ptr(b) == NULL)
+		return SSH_ERR_INVALID_ARGUMENT;
+	if (sshbuf_len(a) != sshbuf_len(b))
+		return SSH_ERR_INVALID_FORMAT;
+	if (timingsafe_bcmp(sshbuf_ptr(a), sshbuf_ptr(b), sshbuf_len(a)) != 0)
+		return SSH_ERR_INVALID_FORMAT;
+	return 0;
+}
+
+static int
+process_ext_session_bind(struct sshbuf* request, struct agent_connection* con)
+{
+	int r, sid_match, key_match;
+	struct sshkey *key = NULL;
+	struct sshbuf *sid = NULL, *sig = NULL;
+	char *fp = NULL;
+	size_t i;
+	u_char fwd = 0;
+
+	debug2_f("entering");
+	if ((r = sshkey_froms(request, &key)) != 0 ||
+	    (r = sshbuf_froms(request, &sid)) != 0 ||
+	    (r = sshbuf_froms(request, &sig)) != 0 ||
+	    (r = sshbuf_get_u8(request, &fwd)) != 0) {
+		error_fr(r, "parse");
+		goto out;
+	}
+	if ((fp = sshkey_fingerprint(key, SSH_FP_HASH_DEFAULT,
+	    SSH_FP_DEFAULT)) == NULL)
+		fatal_f("fingerprint failed");
+	/* check signature with hostkey on session ID */
+	if ((r = sshkey_verify(key, sshbuf_ptr(sig), sshbuf_len(sig),
+	    sshbuf_ptr(sid), sshbuf_len(sid), NULL, 0, NULL)) != 0) {
+		error_fr(r, "sshkey_verify for %s %s", sshkey_type(key), fp);
+		goto out;
+	}
+	/* check whether sid/key already recorded */
+	for (i = 0; i < con->nsession_ids; i++) {
+		if (!con->session_ids[i].forwarded) {
+			error_f("attempt to bind session ID to socket "
+			    "previously bound for authentication attempt");
+			r = -1;
+			goto out;
+		}
+		sid_match = buf_equal(sid, con->session_ids[i].sid) == 0;
+		key_match = sshkey_equal(key, con->session_ids[i].key);
+		if (sid_match && key_match) {
+			debug_f("session ID already recorded for %s %s",
+			    sshkey_type(key), fp);
+			r = 0;
+			goto out;
+		} else if (sid_match) {
+			error_f("session ID recorded against different key "
+			    "for %s %s", sshkey_type(key), fp);
+			r = -1;
+			goto out;
+		}
+		/*
+		 * new sid with previously-seen key can happen, e.g. multiple
+		 * connections to the same host.
+		 */
+	}
+	/* record new key/sid */
+	if (con->nsession_ids >= AGENT_MAX_SESSION_IDS) {
+		error_f("too many session IDs recorded");
+		goto out;
+	}
+	con->session_ids = xrecallocarray(con->session_ids, con->nsession_ids,
+	    con->nsession_ids + 1, sizeof(*con->session_ids));
+	i = con->nsession_ids++;
+	debug_f("recorded %s %s (slot %zu of %d)", sshkey_type(key), fp, i,
+	    AGENT_MAX_SESSION_IDS);
+	con->session_ids[i].key = key;
+	con->session_ids[i].forwarded = fwd != 0;
+	key = NULL; /* transferred */
+	/* can't transfer sid; it's refcounted and scoped to request's life */
+	if ((con->session_ids[i].sid = sshbuf_new()) == NULL)
+		fatal_f("sshbuf_new");
+	if ((r = sshbuf_putb(con->session_ids[i].sid, sid)) != 0)
+		fatal_fr(r, "sshbuf_putb session ID");
+	/* success */
+	r = 0;
+ out:
+	sshkey_free(key);
+	sshbuf_free(sid);
+	sshbuf_free(sig);
+	return r == 0 ? 1 : 0;
+}
+
+int
+process_extension(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con)
+{
+	int r, success = 0;
+	char *name;
+
+	debug2_f("entering");
+	if ((r = sshbuf_get_cstring(request, &name, NULL)) != 0) {
+		error_fr(r, "parse");
+		goto send;
+	}
+	if (strcmp(name, "session-bind@openssh.com") == 0)
+		success = process_ext_session_bind(request, con);
+	else
+		debug_f("unsupported extension \"%s\"", name);
+	free(name);
+send:
+	if ((r = sshbuf_put_u32(response, 1) != 0) ||
+		((r = sshbuf_put_u8(response, success ? SSH_AGENT_SUCCESS : SSH_AGENT_FAILURE)) != 0))
+		fatal_fr(r, "compose");
+
+	r = success ? 0 : -1;
+	
+	return r;
+}
+
+#if 0
 int process_keyagent_request(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con) 
 {
 	u_char type;
@@ -873,5 +994,6 @@ int process_keyagent_request(struct sshbuf* request, struct sshbuf* response, st
 		return -1;		
 	}
 }
+#endif
 
 #pragma warning(pop)

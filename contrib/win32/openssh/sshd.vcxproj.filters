@@ -84,9 +84,6 @@
     <ClCompile Include="$(OpenSSH-Src-Path)loginrec.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(OpenSSH-Src-Path)md5crypt.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)monitor.c">
       <Filter>Source Files</Filter>
     </ClCompile>

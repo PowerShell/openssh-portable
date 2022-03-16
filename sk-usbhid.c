@@ -1,4 +1,4 @@
-/* $OpenBSD: sk-usbhid.c,v 1.29 2021/02/18 02:15:07 djm Exp $ */
+/* $OpenBSD: sk-usbhid.c,v 1.38 2022/02/07 01:25:12 djm Exp $ */
 /*
  * Copyright (c) 2019 Markus Friedl
  * Copyright (c) 2020 Pedro Martelletto
@@ -29,6 +29,15 @@
 #include <time.h>
 #ifdef HAVE_SHA2_H
 #include <sha2.h>
+#endif
+
+/*
+ * Almost every use of OpenSSL in this file is for ECDSA-NISTP256.
+ * This is strictly a larger hammer than necessary, but it reduces changes
+ * with upstream.
+ */
+#ifndef OPENSSL_HAS_ECC
+# undef WITH_OPENSSL
 #endif
 
 #ifdef WITH_OPENSSL
@@ -102,6 +111,9 @@
 		(*pr) = sig->r; \
 		(*ps) = sig->s; \
 	} while (0)
+#endif
+#ifndef FIDO_ERR_OPERATION_DENIED
+#define FIDO_ERR_OPERATION_DENIED 0x27
 #endif
 
 struct sk_usbhid {
@@ -300,12 +312,16 @@ sk_touch_poll(struct sk_usbhid **skv, size_t nsk, int *touch, size_t *idx)
 	return 0;
 }
 
+#if !defined(HAVE_FIDO_ASSERT_SET_CLIENTDATA) || \
+    !defined(HAVE_FIDO_CRED_SET_CLIENTDATA)
 /* Calculate SHA256(m) */
 static int
 sha256_mem(const void *m, size_t mlen, u_char *d, size_t dlen)
 {
 #ifdef WITH_OPENSSL
 	u_int mdlen;
+#else
+	SHA2_CTX ctx;
 #endif
 
 	if (dlen != 32)
@@ -315,10 +331,55 @@ sha256_mem(const void *m, size_t mlen, u_char *d, size_t dlen)
 	if (!EVP_Digest(m, mlen, d, &mdlen, EVP_sha256(), NULL))
 		return -1;
 #else
-	SHA256Data(m, mlen, d);
+	SHA256Init(&ctx);
+	SHA256Update(&ctx, (const uint8_t *)m, mlen);
+	SHA256Final(d, &ctx);
 #endif
 	return 0;
 }
+#endif /* !HAVE_FIDO_ASSERT_SET_CLIENTDATA || !HAVE_FIDO_CRED_SET_CLIENTDATA */
+
+#ifndef HAVE_FIDO_CRED_SET_CLIENTDATA
+static int
+fido_cred_set_clientdata(fido_cred_t *cred, const u_char *ptr, size_t len)
+{
+	uint8_t d[32];
+	int r;
+
+	if (sha256_mem(ptr, len, d, sizeof(d)) != 0) {
+		skdebug(__func__, "hash challenge failed");
+		return FIDO_ERR_INTERNAL;
+	}
+	r = fido_cred_set_clientdata_hash(cred, d, sizeof(d));
+	explicit_bzero(d, sizeof(d));
+	if (r != FIDO_OK) {
+		skdebug(__func__, "fido_cred_set_clientdata_hash failed: %s",
+		    fido_strerr(r));
+	}
+	return r;
+}
+#endif /* HAVE_FIDO_CRED_SET_CLIENTDATA */
+
+#ifndef HAVE_FIDO_ASSERT_SET_CLIENTDATA
+static int
+fido_assert_set_clientdata(fido_assert_t *assert, const u_char *ptr, size_t len)
+{
+	uint8_t d[32];
+	int r;
+
+	if (sha256_mem(ptr, len, d, sizeof(d)) != 0) {
+		skdebug(__func__, "hash challenge failed");
+		return FIDO_ERR_INTERNAL;
+	}
+	r = fido_assert_set_clientdata_hash(assert, d, sizeof(d));
+	explicit_bzero(d, sizeof(d));
+	if (r != FIDO_OK) {
+		skdebug(__func__, "fido_assert_set_clientdata_hash failed: %s",
+		    fido_strerr(r));
+	}
+	return r;
+}
+#endif /* HAVE_FIDO_ASSERT_SET_CLIENTDATA */
 
 /* Check if the specified key handle exists on a given sk. */
 static int
@@ -326,20 +387,16 @@ sk_try(const struct sk_usbhid *sk, const char *application,
     const uint8_t *key_handle, size_t key_handle_len)
 {
 	fido_assert_t *assert = NULL;
-	/* generate an invalid signature on FIDO2 tokens */
-	const char *data = "";
-	uint8_t message[32];
 	int r = FIDO_ERR_INTERNAL;
+	uint8_t message[32];
 
-	if (sha256_mem(data, strlen(data), message, sizeof(message)) != 0) {
-		skdebug(__func__, "hash message failed");
-		goto out;
-	}
+	memset(message, '\0', sizeof(message));
 	if ((assert = fido_assert_new()) == NULL) {
 		skdebug(__func__, "fido_assert_new failed");
 		goto out;
 	}
-	if ((r = fido_assert_set_clientdata_hash(assert, message,
+	/* generate an invalid signature on FIDO2 tokens */
+	if ((r = fido_assert_set_clientdata(assert, message,
 	    sizeof(message))) != FIDO_OK) {
 		skdebug(__func__, "fido_assert_set_clientdata_hash: %s",
 		    fido_strerr(r));
@@ -370,18 +427,62 @@ sk_try(const struct sk_usbhid *sk, const char *application,
 	return r != FIDO_OK ? -1 : 0;
 }
 
+static int
+check_sk_options(fido_dev_t *dev, const char *opt, int *ret)
+{
+	fido_cbor_info_t *info;
+	char * const *name;
+	const bool *value;
+	size_t len, i;
+	int r;
+
+	*ret = -1;
+
+	if (!fido_dev_is_fido2(dev)) {
+		skdebug(__func__, "device is not fido2");
+		return 0;
+	}
+	if ((info = fido_cbor_info_new()) == NULL) {
+		skdebug(__func__, "fido_cbor_info_new failed");
+		return -1;
+	}
+	if ((r = fido_dev_get_cbor_info(dev, info)) != FIDO_OK) {
+		skdebug(__func__, "fido_dev_get_cbor_info: %s", fido_strerr(r));
+		fido_cbor_info_free(&info);
+		return -1;
+	}
+	name = fido_cbor_info_options_name_ptr(info);
+	value = fido_cbor_info_options_value_ptr(info);
+	len = fido_cbor_info_options_len(info);
+	for (i = 0; i < len; i++) {
+		if (!strcmp(name[i], opt)) {
+			*ret = value[i];
+			break;
+		}
+	}
+	fido_cbor_info_free(&info);
+	if (*ret == -1)
+		skdebug(__func__, "option %s is unknown", opt);
+	else
+		skdebug(__func__, "option %s is %s", opt, *ret ? "on" : "off");
+
+	return 0;
+}
+
 static struct sk_usbhid *
 sk_select_by_cred(const fido_dev_info_t *devlist, size_t ndevs,
     const char *application, const uint8_t *key_handle, size_t key_handle_len)
 {
 	struct sk_usbhid **skv, *sk;
 	size_t skvcnt, i;
+	int internal_uv;
 
 	if ((skv = sk_openv(devlist, ndevs, &skvcnt)) == NULL) {
 		skdebug(__func__, "sk_openv failed");
 		return NULL;
 	}
-	if (skvcnt == 1) {
+	if (skvcnt == 1 && check_sk_options(skv[0]->dev, "uv",
+	    &internal_uv) == 0 && internal_uv != -1) {
 		sk = skv[0];
 		skv[0] = NULL;
 		goto out;
@@ -621,6 +722,7 @@ fidoerr_to_skerr(int fidoerr)
 		return SSH_SK_ERR_UNSUPPORTED;
 	case FIDO_ERR_PIN_REQUIRED:
 	case FIDO_ERR_PIN_INVALID:
+	case FIDO_ERR_OPERATION_DENIED:
 		return SSH_SK_ERR_PIN_REQUIRED;
 	default:
 		return -1;
@@ -674,6 +776,7 @@ sk_enroll(uint32_t alg, const uint8_t *challenge, size_t challenge_len,
 	struct sk_enroll_response *response = NULL;
 	size_t len;
 	int credprot;
+	int internal_uv;
 	int cose_alg;
 	int ret = SSH_SK_ERR_GENERAL;
 	int r;
@@ -721,6 +824,7 @@ sk_enroll(uint32_t alg, const uint8_t *challenge, size_t challenge_len,
 	}
 	
 	if (sk == NULL) {
+		ret = SSH_SK_ERR_DEVICE_NOT_FOUND;
 		skdebug(__func__, "failed to find sk");
 		goto out;
 	}
@@ -734,14 +838,9 @@ sk_enroll(uint32_t alg, const uint8_t *challenge, size_t challenge_len,
 		goto out;
 	}
 #ifndef WINDOWS
-	if (sha256_mem(challenge, challenge_len,
-	    chall_hash, sizeof(chall_hash)) != 0) {
-		skdebug(__func__, "hash challenge failed");
-		goto out;
-	}
-	if ((r = fido_cred_set_clientdata_hash(cred, chall_hash,
-	    sizeof(chall_hash))) != FIDO_OK) {
-		skdebug(__func__, "fido_cred_set_clientdata_hash: %s",
+	if ((r = fido_cred_set_clientdata(cred,
+	    challenge, challenge_len)) != FIDO_OK) {
+		skdebug(__func__, "fido_cred_set_clientdata: %s",
 		    fido_strerr(r));
 		goto out;
 	}
@@ -821,6 +920,14 @@ sk_enroll(uint32_t alg, const uint8_t *challenge, size_t challenge_len,
 	if ((response = calloc(1, sizeof(*response))) == NULL) {
 		skdebug(__func__, "calloc response failed");
 		goto out;
+	}
+	response->flags = flags;
+	if ((flags & SSH_SK_USER_VERIFICATION_REQD)) {
+		if (check_sk_options(sk->dev, "uv", &internal_uv) == 0 &&
+		    internal_uv != -1) {
+			/* user verification handled by token */
+			response->flags &= ~SSH_SK_USER_VERIFICATION_REQD;
+		}
 	}
 	if (pack_public_key(alg, cred, response) != 0) {
 		skdebug(__func__, "pack_public_key failed");
@@ -1006,7 +1113,7 @@ sk_sign(uint32_t alg, const uint8_t *data, size_t datalen,
 #ifndef WINDOWS
 	uint8_t message[32];
 #endif
-	int ret = SSH_SK_ERR_GENERAL;
+	int ret = SSH_SK_ERR_GENERAL, internal_uv;
 	int r;
 
 	fido_init(SSH_FIDO_INIT_ARG);
@@ -1018,14 +1125,6 @@ sk_sign(uint32_t alg, const uint8_t *data, size_t datalen,
 	*sign_response = NULL;
 	if (check_sign_load_resident_options(options, &device) != 0)
 		goto out; /* error already logged */
-#ifndef WINDOWS
-	/* hash data to be signed before it goes to the security key */
-	/* This happens elsewhere on Windows; see note below. */
-	if ((r = sha256_mem(data, datalen, message, sizeof(message))) != 0) {
-		skdebug(__func__, "hash message failed");
-		goto out;
-	}
-#endif
 	if (device != NULL)
 		sk = sk_open(device);
 #ifdef WINDOWS
@@ -1046,6 +1145,7 @@ sk_sign(uint32_t alg, const uint8_t *data, size_t datalen,
 		sk = sk_probe(application, key_handle, key_handle_len);
 #endif
 	if (sk == NULL) {
+		ret = SSH_SK_ERR_DEVICE_NOT_FOUND;
 		skdebug(__func__, "failed to find sk");
 		goto out;
 	}
@@ -1054,9 +1154,9 @@ sk_sign(uint32_t alg, const uint8_t *data, size_t datalen,
 		goto out;
 	}
 #ifndef WINDOWS
-	if ((r = fido_assert_set_clientdata_hash(assert, message,
-	    sizeof(message))) != FIDO_OK) {
-		skdebug(__func__, "fido_assert_set_clientdata_hash: %s",
+	if ((r = fido_assert_set_clientdata(assert,
+	    data, datalen)) != FIDO_OK)  {
+		skdebug(__func__, "fido_assert_set_clientdata: %s",
 		    fido_strerr(r));
 		goto out;
 	}
@@ -1088,11 +1188,20 @@ sk_sign(uint32_t alg, const uint8_t *data, size_t datalen,
 		skdebug(__func__, "fido_assert_set_up: %s", fido_strerr(r));
 		goto out;
 	}
-	if (pin == NULL && (flags & SSH_SK_USER_VERIFICATION_REQD) &&
-	    (r = fido_assert_set_uv(assert, FIDO_OPT_TRUE)) != FIDO_OK) {
-		skdebug(__func__, "fido_assert_set_uv: %s", fido_strerr(r));
-		ret = FIDO_ERR_PIN_REQUIRED;
-		goto out;
+	if (pin == NULL && (flags & SSH_SK_USER_VERIFICATION_REQD)) {
+		if (check_sk_options(sk->dev, "uv", &internal_uv) < 0 ||
+		    internal_uv != 1) {
+			skdebug(__func__, "check_sk_options uv");
+			ret = SSH_SK_ERR_PIN_REQUIRED;
+			goto out;
+		}
+		if ((r = fido_assert_set_uv(assert,
+		    FIDO_OPT_TRUE)) != FIDO_OK) {
+			skdebug(__func__, "fido_assert_set_uv: %s",
+			    fido_strerr(r));
+			ret = fidoerr_to_skerr(r);
+			goto out;
+		}
 	}
 	if ((r = fido_dev_get_assert(sk->dev, assert, pin)) != FIDO_OK) {
 		skdebug(__func__, "fido_dev_get_assert: %s", fido_strerr(r));
@@ -1113,9 +1222,6 @@ sk_sign(uint32_t alg, const uint8_t *data, size_t datalen,
 	response = NULL;
 	ret = 0;
  out:
-#ifndef WINDOWS
-	explicit_bzero(message, sizeof(message));
-#endif
 	free(device);
 	if (response != NULL) {
 		free(response->sig_r);
@@ -1131,13 +1237,15 @@ static int
 read_rks(struct sk_usbhid *sk, const char *pin,
     struct sk_resident_key ***rksp, size_t *nrksp)
 {
-	int ret = SSH_SK_ERR_GENERAL, r = -1;
+	int ret = SSH_SK_ERR_GENERAL, r = -1, internal_uv;
 	fido_credman_metadata_t *metadata = NULL;
 	fido_credman_rp_t *rp = NULL;
 	fido_credman_rk_t *rk = NULL;
-	size_t i, j, nrp, nrk;
+	size_t i, j, nrp, nrk, user_id_len;
 	const fido_cred_t *cred;
+	const char *rp_id, *rp_name, *user_name;
 	struct sk_resident_key *srk = NULL, **tmp;
+	const u_char *user_id;
 
 	if (pin == NULL) {
 		skdebug(__func__, "no PIN specified");
@@ -1146,6 +1254,10 @@ read_rks(struct sk_usbhid *sk, const char *pin,
 	}
 	if ((metadata = fido_credman_metadata_new()) == NULL) {
 		skdebug(__func__, "alloc failed");
+		goto out;
+	}
+	if (check_sk_options(sk->dev, "uv", &internal_uv) != 0) {
+		skdebug(__func__, "check_sk_options failed");
 		goto out;
 	}
 
@@ -1179,12 +1291,16 @@ read_rks(struct sk_usbhid *sk, const char *pin,
 
 	/* Iterate over RP IDs that have resident keys */
 	for (i = 0; i < nrp; i++) {
+		rp_id = fido_credman_rp_id(rp, i);
+		rp_name = fido_credman_rp_name(rp, i);
 		skdebug(__func__, "rp %zu: name=\"%s\" id=\"%s\" hashlen=%zu",
-		    i, fido_credman_rp_name(rp, i), fido_credman_rp_id(rp, i),
+		    i, rp_name == NULL ? "(none)" : rp_name,
+		    rp_id == NULL ? "(none)" : rp_id,
 		    fido_credman_rp_id_hash_len(rp, i));
 
 		/* Skip non-SSH RP IDs */
-		if (strncasecmp(fido_credman_rp_id(rp, i), "ssh:", 4) != 0)
+		if (rp_id == NULL ||
+		    strncasecmp(fido_credman_rp_id(rp, i), "ssh:", 4) != 0)
 			continue;
 
 		fido_credman_rk_free(&rk);
@@ -1208,17 +1324,23 @@ read_rks(struct sk_usbhid *sk, const char *pin,
 				skdebug(__func__, "no RK in slot %zu", j);
 				continue;
 			}
-			skdebug(__func__, "Device %s RP \"%s\" slot %zu: "
-			    "type %d flags 0x%02x prot 0x%02x", sk->path,
-			    fido_credman_rp_id(rp, i), j, fido_cred_type(cred),
+			if ((user_name = fido_cred_user_name(cred)) == NULL)
+				user_name = "";
+			user_id = fido_cred_user_id_ptr(cred);
+			user_id_len = fido_cred_user_id_len(cred);
+			skdebug(__func__, "Device %s RP \"%s\" user \"%s\" "
+			    "uidlen %zu slot %zu: type %d flags 0x%02x "
+			    "prot 0x%02x", sk->path, rp_id, user_name,
+			    user_id_len, j, fido_cred_type(cred),
 			    fido_cred_flags(cred), fido_cred_prot(cred));
 
 			/* build response entry */
 			if ((srk = calloc(1, sizeof(*srk))) == NULL ||
 			    (srk->key.key_handle = calloc(1,
 			    fido_cred_id_len(cred))) == NULL ||
-			    (srk->application = strdup(fido_credman_rp_id(rp,
-			    i))) == NULL) {
+			    (srk->application = strdup(rp_id)) == NULL ||
+			    (user_id_len > 0 &&
+			     (srk->user_id = calloc(1, user_id_len)) == NULL)) {
 				skdebug(__func__, "alloc sk_resident_key");
 				goto out;
 			}
@@ -1226,6 +1348,9 @@ read_rks(struct sk_usbhid *sk, const char *pin,
 			srk->key.key_handle_len = fido_cred_id_len(cred);
 			memcpy(srk->key.key_handle, fido_cred_id_ptr(cred),
 			    srk->key.key_handle_len);
+			srk->user_id_len = user_id_len;
+			if (srk->user_id_len != 0)
+				memcpy(srk->user_id, user_id, srk->user_id_len);
 
 			switch (fido_cred_type(cred)) {
 			case COSE_ES256:
@@ -1240,7 +1365,8 @@ read_rks(struct sk_usbhid *sk, const char *pin,
 				goto out; /* XXX free rk and continue */
 			}
 
-			if (fido_cred_prot(cred) == FIDO_CRED_PROT_UV_REQUIRED)
+			if (fido_cred_prot(cred) == FIDO_CRED_PROT_UV_REQUIRED
+			    && internal_uv == -1)
 				srk->flags |=  SSH_SK_USER_VERIFICATION_REQD;
 
 			if ((r = pack_public_key(srk->alg, cred,
@@ -1266,6 +1392,7 @@ read_rks(struct sk_usbhid *sk, const char *pin,
 		free(srk->application);
 		freezero(srk->key.public_key, srk->key.public_key_len);
 		freezero(srk->key.key_handle, srk->key.key_handle_len);
+		freezero(srk->user_id, srk->user_id_len);
 		freezero(srk, sizeof(*srk));
 	}
 	fido_credman_rp_free(&rp);
@@ -1296,6 +1423,7 @@ sk_load_resident_keys(const char *pin, struct sk_option **options,
 	else
 		sk = sk_probe(NULL, NULL, 0);
 	if (sk == NULL) {
+		ret = SSH_SK_ERR_DEVICE_NOT_FOUND;
 		skdebug(__func__, "failed to find sk");
 		goto out;
 	}
@@ -1318,6 +1446,7 @@ sk_load_resident_keys(const char *pin, struct sk_option **options,
 		free(rks[i]->application);
 		freezero(rks[i]->key.public_key, rks[i]->key.public_key_len);
 		freezero(rks[i]->key.key_handle, rks[i]->key.key_handle_len);
+		freezero(rks[i]->user_id, rks[i]->user_id_len);
 		freezero(rks[i], sizeof(*rks[i]));
 	}
 	free(rks);

@@ -87,7 +87,7 @@ try
 		Set-ItemProperty -Path $registryPath -Name $dfltShell -Value $ShellPath -Force
 		$out = (Get-ItemProperty -Path $registryPath -Name $dfltShell -ErrorAction SilentlyContinue)
 		if ($out.$dfltShell -ne $ShellPath) {
-			Write-Output "Failed to set HKLM:\Software\OpenSSH\DefaultShell to $ShellPath"
+			Write-Error "Failed to set HKLM:\Software\OpenSSH\DefaultShell to $ShellPath"
 			exit
 		}
 
@@ -104,7 +104,14 @@ try
 
 	# Prepend shell path to User PATH in the registry so that SSHD authenticated child process can inherit it.
 	# We can probably delete the logic above to add it to the process PATH, but there is no need.
-	[System.Environment]::SetEnvironmentVariable('Path', $TEST_SHELL_DIR + ";" + $OriginalSystemPath, [System.EnvironmentVariableTarget]::Machine)
+	[System.Environment]::SetEnvironmentVariable('Path', $TEST_SHELL_DIR + ";" + $OpenSSHBinPath + ";" + $OriginalSystemPath, [System.EnvironmentVariableTarget]::Machine)
+
+	# set SSH askpass 
+	$TEST_SSH_ASKPASS = Join-Path $BashTestsPath "pesterTests\utilities\askpass_util\askpass_util.exe" 
+	if (!(Test-Path $TEST_SSH_ASKPASS)) {
+		Write-Error "SSHAskpass:$TEST_SSH_ASKPASS doesn't exist"
+		exit
+	}
 
 	$BashTestsPath = $BashTestsPath -replace "\\","/"
 	Push-location $BashTestsPath
@@ -142,6 +149,8 @@ try
 	$env:TEST_SSH_SCP = $OpenSSHBinPath_shell_fmt+"/scp.exe"
 	$env:BUILDDIR = $BUILDDIR
 	$env:TEST_WINDOWS_SSH = 1
+	$env:TEST_SSH_ASKPASS = $TEST_SSH_ASKPASS
+
 	$user = &"$env:windir\system32\whoami.exe"
 	if($user.Contains($env:COMPUTERNAME.ToLower())) {
 		# for local accounts, skip COMPUTERNAME

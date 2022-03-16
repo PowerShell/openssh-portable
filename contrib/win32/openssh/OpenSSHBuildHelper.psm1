@@ -377,7 +377,7 @@ function Start-OpenSSHPackage
     $payload += "sftp-server.exe", "scp.exe", "ssh-shellhost.exe", "ssh-keygen.exe", "ssh-keyscan.exe", "ssh-sk-helper.exe"
     $payload += "sshd_config_default", "install-sshd.ps1", "uninstall-sshd.ps1"
     $payload += "FixHostFilePermissions.ps1", "FixUserFilePermissions.ps1", "OpenSSHUtils.psm1", "OpenSSHUtils.psd1"
-    $payload += "openssh-events.man", "moduli", "LICENSE.txt"
+    $payload += "openssh-events.man", "moduli", "LICENSE.txt", "NOTICE.txt"
 
     $packageName = "OpenSSH-Win64"
     if ($NativeHostArch -ieq 'x86') {

@@ -169,7 +169,7 @@ Match User matchuser
 #>
      Context "Tests of AllowGroups, AllowUsers, DenyUsers, DenyGroups" {
         BeforeAll {            
-            $password = "Bull_dog1"
+            $password = "Bull_dog123456"
 
             $allowUser1 = "allowuser1"
             $allowUser2 = "allowuser2"

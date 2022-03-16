@@ -163,8 +163,6 @@ w32_sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
 	return 0;
 }
 
-
-
 int
 w32_raise(int sig)
 {
@@ -321,4 +319,34 @@ sw_initialize()
 	if (sw_init_timer() != 0)
 		return -1;
 	return 0;
+}
+
+/*
+ * This is a minimal implementation of sigaction.
+ * This is added to retrieve the current signal handler without actually setting the new signal handler, unlike w32_signal.
+ * The child process doesn't inherit the signal hanlders.
+*/
+int
+sigaction(int signum, const struct sigaction * act, struct sigaction * oldact)
+{
+	int r = -1;
+	if (signum == SIGKILL || signum == SIGSTOP) {
+		error_f("sigaction shouldn't be called for signum:%d", signum);
+		errno = EINVAL;
+		goto done;
+	}
+	
+	if (signum >= W32_SIGMAX) {
+		errno = EINVAL;
+		return r;
+	}
+
+	if (act)
+		oldact->sa_handler = w32_signal(signum, act->sa_handler);
+	else if (oldact)
+		oldact->sa_handler = sig_handlers[signum];
+
+	r = 0;
+done:
+	return r;
 }

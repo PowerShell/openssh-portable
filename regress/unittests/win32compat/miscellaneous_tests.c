@@ -78,7 +78,7 @@ test_sanitizedpath()
 	ASSERT_INT_EQ(retValue, 0);
 	free(ret);
 
-	char win32prgdir_len = strlen(win32prgdir_utf8);
+	size_t win32prgdir_len = strlen(win32prgdir_utf8);
 	char *tmp_path = malloc(win32prgdir_len + 2); /* 1-NULL and 1-adding "/" */
 	tmp_path[0] = '/';
 	strcpy(tmp_path+1, win32prgdir_utf8);
