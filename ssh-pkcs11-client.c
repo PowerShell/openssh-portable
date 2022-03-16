@@ -53,7 +53,7 @@
 #include "pkcs11.h"
 
 static char module_path[PATH_MAX + 1];
-extern char* sshagent_con_username;
+extern char *sshagent_con_username;
 extern HANDLE sshagent_client_primary_token;
 
 struct pkcs11_provider {
