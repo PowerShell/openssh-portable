@@ -12,6 +12,12 @@
                 </File>
             </Component>
             <Component>
+                <File Name="LICENSE.txt" />
+            </Component>
+            <Component>
+                <File Name="NOTICE.txt" />
+            </Component>
+            <Component>
                 <File Name="scp.exe" KeyPath="yes" />
                 <File Name="scp.pdb" />
             </Component>
