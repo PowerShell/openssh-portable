@@ -1189,8 +1189,9 @@ sk_sign(uint32_t alg, const uint8_t *data, size_t datalen,
 		goto out;
 	}
 	if (pin == NULL && (flags & SSH_SK_USER_VERIFICATION_REQD)) {
-		if (check_sk_options(sk->dev, "uv", &internal_uv) < 0 ||
-		    internal_uv != 1) {
+		if (fido_dev_is_winhello(sk->dev) == false &&
+		    (check_sk_options(sk->dev, "uv", &internal_uv) < 0 ||
+		    internal_uv != 1)) {
 			skdebug(__func__, "check_sk_options uv");
 			ret = SSH_SK_ERR_PIN_REQUIRED;
 			goto out;
