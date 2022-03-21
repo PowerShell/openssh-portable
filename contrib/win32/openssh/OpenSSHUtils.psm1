@@ -273,7 +273,7 @@ function Repair-UserSshConfigPermission
 <#
     .Synopsis
     Repair-SSHFolderPermission
-    Repair the file owner and permission of ProgramData\ssh folder
+    Repair the folder owner and permission of ProgramData\ssh folder
 #>
 function Repair-SSHFolderPermission
 {
@@ -283,14 +283,13 @@ function Repair-SSHFolderPermission
         [ValidateNotNullOrEmpty()]        
         [string]$FilePath)
 
-    # SSH Folder - owner: System or Admins; full access: System, Admins; read or readandexecute/synchronize permissible: Authenticated Users
     Repair-FilePermission -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid,$systemSid -ReadAndExecuteAccessOK $authenticatedUserSid @psBoundParameters
 }
 
 <#
     .Synopsis
-    Repair-SSHFilePermission
-    Repair the file owner and permission of files inside ProgramData\ssh folder
+    Repair-SSHFolderFilePermission
+    Repair the file owner and permission of general files inside ProgramData\ssh folder
 #>
 function Repair-SSHFolderFilePermission
 {
@@ -300,14 +299,13 @@ function Repair-SSHFolderFilePermission
         [ValidateNotNullOrEmpty()]        
         [string]$FilePath)
 
-
     Repair-FilePermission -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteAccessOK $authenticatedUserSid @psBoundParameters
 }
 
 <#
     .Synopsis
-    Repair-SSHFilePermission
-    Repair the file owner and permission of files inside ProgramData\ssh folder
+    Repair-SSHFolderPrivateKeyPermission
+    Repair the file owner and permission of private key files inside ProgramData\ssh folder
 #>
 function Repair-SSHFolderPrivateKeyPermission
 {
@@ -316,7 +314,6 @@ function Repair-SSHFolderPrivateKeyPermission
         [parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]        
         [string]$FilePath)
-
 
     Repair-FilePermission -Owners $adminsSid, $systemSid -FullAccessNeeded $systemSid, $adminsSid @psBoundParameters
 }

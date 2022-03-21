@@ -93,6 +93,7 @@ if (Test-Path $moduliPath -PathType Leaf)
 $sshProgDataPath = Join-Path $env:ProgramData "ssh"
 if (Test-Path $sshProgDataPath)
 {
+    # SSH Folder - owner: System or Admins; full access: System, Admins; read or readandexecute/synchronize permissible: Authenticated Users
     Repair-SSHFolderPermission -FilePath $sshProgDataPath @psBoundParameters
     # Files in SSH Folder (excluding private key files) 
     # owner: System or Admins; full access: System, Admins; read/readandexecute/synchronize permissable: Authenticated Users
