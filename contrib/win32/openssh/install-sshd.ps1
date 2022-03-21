@@ -4,6 +4,10 @@
 # @bingbing8 - removed secedit.exe dependency
 # @tessgauthier - added permissions check for %programData%/ssh
 
+[CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
+param ()
+Set-StrictMode -Version 2.0
+
 $ErrorActionPreference = 'Stop'
 
 if (!([bool]([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")))
@@ -82,14 +86,24 @@ if (Test-Path $sshAgentRegPath)
 $moduliPath = Join-Path $PSScriptRoot "moduli"
 if (Test-Path $moduliPath -PathType Leaf)
 {
-    Repair-ModuliFilePermission -FilePath $moduliPath @psBoundParameters -confirm:$false
+    Repair-ModuliFilePermission -FilePath $moduliPath @psBoundParameters
 }
 
 # If %programData%/ssh folder already exists, verify and, if necessary and approved by user, fix permissions 
 $sshProgDataPath = Join-Path $env:ProgramData "ssh"
 if (Test-Path $sshProgDataPath)
 {
-    Repair-SSHFolderPermission -sshProgDataPath $sshProgDataPath
+    Repair-SSHFolderPermission -FilePath $sshProgDataPath @psBoundParameters
+    # Files in SSH Folder (excluding private key files) 
+    # owner: System or Admins; full access: System, Admins; read/readandexecute/synchronize permissable: Authenticated Users
+    $privateKeyFiles = @("ssh_host_dsa_key", "ssh_host_ecdsa_key", "ssh_host_ed25519_key", "ssh_host_rsa_key")
+    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Exclude ($privateKeyFiles) -Force | ForEach-Object {
+        Repair-SSHFolderFilePermission -FilePath $_.FullName @psBoundParameters
+    }
+    # Private key files - owner: System or Admins; full access: System, Admins
+    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Include $privateKeyFiles -Force | ForEach-Object {
+        Repair-SSHFolderPrivateKeyPermission -FilePath $_.FullName @psBoundParameters
+    }
 }
 
 #register etw provider

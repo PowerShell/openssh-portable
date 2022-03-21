@@ -273,7 +273,7 @@ function Repair-UserSshConfigPermission
 <#
     .Synopsis
     Repair-SSHFolderPermission
-    Repair the file owner and permission of ssh folder & any files inside it
+    Repair the file owner and permission of ProgramData\ssh folder
 #>
 function Repair-SSHFolderPermission
 {
@@ -281,20 +281,44 @@ function Repair-SSHFolderPermission
     param (
         [parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]        
-        [string]$sshProgDataPath)
+        [string]$FilePath)
 
     # SSH Folder - owner: System or Admins; full access: System, Admins; read or readandexecute/synchronize permissible: Authenticated Users
-    Repair-FilePermission -FilePath $sshProgDataPath -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid,$systemSid -ReadAndExecuteAccessOK $authenticatedUserSid
-    # Files in SSH Folder (excluding private key files) 
-    # owner: System or Admins; full access: System, Admins; read/readandexecute/synchronize permissable: Authenticated Users
-    $privateKeyFiles = @("ssh_host_dsa_key", "ssh_host_ecdsa_key", "ssh_host_ed25519_key", "ssh_host_rsa_key")
-    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Exclude ($privateKeyFiles) -Force | ForEach-Object {
-        Repair-FilePermission -FilePath $_.FullName -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteAccessOK $authenticatedUserSid
-    } 
-    # Private key files - owner: System or Admins; full access: System, Admins
-    Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Include $privateKeyFiles -Force | ForEach-Object {
-        Repair-FilePermission -FilePath $_.FullName -Owners $adminsSid, $systemSid -FullAccessNeeded $systemSid, $adminsSid
-    }
+    Repair-FilePermission -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid,$systemSid -ReadAndExecuteAccessOK $authenticatedUserSid @psBoundParameters
+}
+
+<#
+    .Synopsis
+    Repair-SSHFilePermission
+    Repair the file owner and permission of files inside ProgramData\ssh folder
+#>
+function Repair-SSHFolderFilePermission
+{
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
+    param (
+        [parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]        
+        [string]$FilePath)
+
+
+    Repair-FilePermission -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteAccessOK $authenticatedUserSid @psBoundParameters
+}
+
+<#
+    .Synopsis
+    Repair-SSHFilePermission
+    Repair the file owner and permission of files inside ProgramData\ssh folder
+#>
+function Repair-SSHFolderPrivateKeyPermission
+{
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
+    param (
+        [parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]        
+        [string]$FilePath)
+
+
+    Repair-FilePermission -Owners $adminsSid, $systemSid -FullAccessNeeded $systemSid, $adminsSid @psBoundParameters
 }
 
 <#
@@ -808,4 +832,4 @@ function Enable-Privilege {
     $type[0]::EnablePrivilege($Privilege, $Disable)
 }
 
-Export-ModuleMember -Function Repair-FilePermission, Repair-SshdConfigPermission, Repair-SshdHostKeyPermission, Repair-AuthorizedKeyPermission, Repair-UserKeyPermission, Repair-UserSshConfigPermission, Enable-Privilege, Get-UserAccount, Get-UserSID, Repair-AdministratorsAuthorizedKeysPermission, Repair-ModuliFilePermission, Repair-SSHFolderPermission
+Export-ModuleMember -Function Repair-FilePermission, Repair-SshdConfigPermission, Repair-SshdHostKeyPermission, Repair-AuthorizedKeyPermission, Repair-UserKeyPermission, Repair-UserSshConfigPermission, Enable-Privilege, Get-UserAccount, Get-UserSID, Repair-AdministratorsAuthorizedKeysPermission, Repair-ModuliFilePermission, Repair-SSHFolderPermission, Repair-SSHFolderFilePermission, Repair-SSHFolderPrivateKeyPermission
