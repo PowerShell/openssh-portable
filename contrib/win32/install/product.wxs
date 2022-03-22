@@ -32,7 +32,11 @@
 
         <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="$(var.ProgramFilesFolder)" Name="Program Files">
-                <Directory Id="INSTALLFOLDER" Name="OpenSSH" />
+                <Directory Id="INSTALLFOLDER" Name="OpenSSH" >
+                    <Directory Id="MANIFESTFOLDER" Name="_manifest" >
+                        <Directory Id="SPDXFOLDER" Name="spdx_2.2" />
+                    </Directory>
+                </Directory>
             </Directory>
         </Directory>
     </Product>

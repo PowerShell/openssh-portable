@@ -3,29 +3,24 @@
         <!-- KeyPath is necessary for multi-file components to identify the key file - preferrably versioned. -->
         <ComponentGroup Id="Client" Directory="INSTALLFOLDER">
             <ComponentGroupRef Id="Shared" />
+            <ComponentGroupRef Id="Manifest" />
             <Component>
                 <File Name="ssh.exe" KeyPath="yes" />
-                <File Name="ssh.pdb" />
             </Component>
             <Component>
                 <File Name="sftp.exe" KeyPath="yes" />
-                <File Name="sftp.pdb" />
             </Component>
             <Component>
                 <File Name="ssh-add.exe" KeyPath="yes" />
-                <File Name="ssh-add.pdb" />
             </Component>
             <Component>
                 <File Name="ssh-keyscan.exe" KeyPath="yes" />
-                <File Name="ssh-keyscan.pdb" />
             </Component>
             <Component>
                 <File Name="ssh-sk-helper.exe" KeyPath="yes" />
-                <File Name="ssh-sk-helper.pdb" />
             </Component>
             <Component>
                 <File Name="ssh-pkcs11-helper.exe" KeyPath="yes" />
-                <File Name="ssh-pkcs11-helper.pdb" />
             </Component>
             <Component Id="ClientPATH" Guid="F07FFA0C-B5CF-45A3-9013-A7420DDFD654">
                 <!-- Use same property condition as PowerShell. We can use a shared component GUID here because there should be only one installed on a system. -->
