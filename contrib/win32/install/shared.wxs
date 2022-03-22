@@ -12,6 +12,12 @@
                 </File>
             </Component>
             <Component>
+                <File Name="LICENSE.txt" />
+            </Component>
+            <Component>
+                <File Name="NOTICE.txt" />
+            </Component>
+            <Component>
                 <File Name="scp.exe" KeyPath="yes" />
                 <File Name="scp.pdb" />
             </Component>
@@ -57,7 +63,7 @@
         </ComponentGroup>
 
         <!-- Automatically add custom actions if referencing the Shared component group. -->
-        <SetProperty Id="SetPrivilegesOnSshAgent" Value="&quot;[SystemFolder]sc.exe&quot; privs ssh-agent SeImpersonatePrivilege" Sequence="execute" Before="SetPrivilegesOnSshAgent" />
+        <SetProperty Id="SetPrivilegesOnSshAgent" Value="&quot;[SystemFolder]sc.exe&quot; privs ssh-agent SeAssignPrimaryTokenPrivilege/SeTcbPrivilege/SeBackupPrivilege/SeRestorePrivilege/SeImpersonatePrivilege" Sequence="execute" Before="SetPrivilegesOnSshAgent" />
         <CustomAction Id="SetPrivilegesOnSshAgent" BinaryKey="WixCA" DllEntry="WixQuietExec" Execute="deferred" Return="check" Impersonate="no" />
         <InstallExecuteSequence>
             <Custom Action="SetPrivilegesOnSshAgent" After="InstallServices"><![CDATA[&Server = 3]]></Custom>

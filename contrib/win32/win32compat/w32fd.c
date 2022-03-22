@@ -1074,7 +1074,15 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 	if (strstr(cmd, "sshd.exe")) {
 		flags |= DETACHED_PROCESS;
 	}
-	if (strstr(cmd, "ssh-pkcs11-helper.exe") || is_bash_test_env()) {
+
+	char* fidoDebug = NULL;
+	size_t len = 0;
+	_dupenv_s(&fidoDebug, &len, "FIDO_DEBUG");
+
+	if (is_bash_test_env() ||
+		(strstr(cmd, "ssh-pkcs11-helper.exe")) ||
+		((fidoDebug == NULL) && strstr(cmd, "ssh-sk-helper.exe"))) {
+		debug3("Creating process with CREATE_NO_WINDOW");
 		flags |= CREATE_NO_WINDOW;
 	}
 	
