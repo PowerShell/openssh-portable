@@ -86,7 +86,7 @@ if (Test-Path $sshAgentRegPath)
 $moduliPath = Join-Path $PSScriptRoot "moduli"
 if (Test-Path $moduliPath -PathType Leaf)
 {
-    Repair-ModuliFilePermission -FilePath $moduliPath @psBoundParameters -confirm:$false
+    Repair-ModuliFilePermission -FilePath $moduliPath -confirm:$false
 }
 
 # If %programData%/ssh folder already exists, verify and, if necessary and approved by user, fix permissions 
