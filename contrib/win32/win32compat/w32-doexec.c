@@ -251,7 +251,7 @@ setup_session_env(struct ssh *ssh, Session* s)
 		_snprintf(buf, ARRAYSIZE(buf), "%s@%s", s->pw->pw_name, getenv("COMPUTERNAME"));
 		UTF8_TO_UTF16_WITH_CLEANUP(tmp, buf);
 		/* escape $ characters as $$ to distinguish from special prompt characters */
-		for (int i = 0, j = 0; i < wcslen(tmp) && j < ARRAYSIZE(wbuf) - 1; i++) {
+		for (size_t i = 0, j = 0; i < wcslen(tmp) && j < ARRAYSIZE(wbuf) - 1; i++) {
 			wbuf[j] = tmp[i];
 			if (wbuf[j++] == L'$')
 				wbuf[j++] = L'$';
@@ -388,20 +388,25 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		if (command) {
 			size_t len = strlen(shell) + 1 + strlen(shell_command_option_local) + 1 + strlen(command) + 1;
 			pty_cmd = calloc(1, len);
-
-			strcpy_s(pty_cmd, len, shell);
-			strcat_s(pty_cmd, len, " ");
-			strcat_s(pty_cmd, len, shell_command_option_local);
-			strcat_s(pty_cmd, len, " ");
-			strcat_s(pty_cmd, len, command);
+			if (pty_cmd != NULL)
+			{
+				strcpy_s(pty_cmd, len, shell);
+				strcat_s(pty_cmd, len, " ");
+				strcat_s(pty_cmd, len, shell_command_option_local);
+				strcat_s(pty_cmd, len, " ");
+				strcat_s(pty_cmd, len, command);
+			}
 		} else {
 			if (shell_arguments) {
 				size_t len = strlen(shell) + 1 + strlen(shell_arguments) + 1;
 				pty_cmd = calloc(1, len);
 
-				strcpy_s(pty_cmd, len, shell);
-				strcat_s(pty_cmd, len, " ");
-				strcat_s(pty_cmd, len, shell_arguments);
+				if (pty_cmd != NULL)
+				{
+					strcpy_s(pty_cmd, len, shell);
+					strcat_s(pty_cmd, len, " ");
+					strcat_s(pty_cmd, len, shell_arguments);
+				}
 			}
 			else
 				pty_cmd = shell;

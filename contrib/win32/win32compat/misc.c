@@ -1480,6 +1480,20 @@ localtime_r(const time_t *timep, struct tm *result)
 	return localtime_s(result, timep) == 0 ? result : NULL;
 }
 
+struct tm *
+w32_localtime(const time_t* sourceTime)
+{
+	struct tm destTime;
+	return localtime_s(&destTime, sourceTime) == 0 ? &destTime : NULL;
+}
+
+char*
+w32_ctime(const time_t* sourceTime)
+{
+	char destTime[26];
+	return ctime_s(destTime, 26, sourceTime) == 0 ? destTime : NULL;
+}
+
 void
 freezero(void *ptr, size_t sz)
 {
@@ -1658,12 +1672,21 @@ lookup_sid(const wchar_t* name_utf16, PSID psid, DWORD * psid_len)
 		debug3_f("local user name is same as machine name");
 		size_t name_size = wcslen(name_utf16) * 2U + 2U;
 		name_utf16_modified = malloc(name_size * sizeof(wchar_t));
-		name_utf16_modified[0] = L'\0';
-		wcscat_s(name_utf16_modified, name_size, name_utf16);
-		wcscat_s(name_utf16_modified, name_size, L"\\");
-		wcscat_s(name_utf16_modified, name_size, name_utf16);
+		if (name_utf16_modified == NULL)
+		{
+			errno = ENOMEM;
+			error_f("Failed to allocate memory");
+			goto cleanup;
+		}
+		else
+		{
+			name_utf16_modified[0] = L'\0';
+			wcscat_s(name_utf16_modified, name_size, name_utf16);
+			wcscat_s(name_utf16_modified, name_size, L"\\");
+			wcscat_s(name_utf16_modified, name_size, name_utf16);
 
-		ret = lookup_sid(name_utf16_modified, psid, psid_len);
+			ret = lookup_sid(name_utf16_modified, psid, psid_len);
+		}
 	}
 	else {
 		if (psid_len != NULL)

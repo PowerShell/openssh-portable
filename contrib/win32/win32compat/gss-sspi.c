@@ -907,8 +907,8 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 	/* if requested, translate the expiration time to number of second */
 	if (time_rec != NULL) {
 		FILETIME current_time;
-		SystemTimeToFileTime(&current_time_system, &current_time);
-		*time_rec = (OM_uint32)(expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
+		if (SystemTimeToFileTime(&current_time_system, &current_time) != 0)
+			*time_rec = (OM_uint32)(expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
 	}
 
 	/* only do checks on the finalized context (no continue needed) */

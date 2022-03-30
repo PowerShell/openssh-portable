@@ -151,7 +151,7 @@ w32_kill(int pid, int sig)
 int
 waitpid(int pid, int *status, int options)
 {
-	DWORD index, ret, ret_id, exit_code, timeout = 0;
+	DWORD index, ret, ret_id, exit_code = 0, timeout = 0;
 	HANDLE process = NULL;
 
 	debug5("waitpid - pid:%d, options:%d", pid, options);

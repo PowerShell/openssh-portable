@@ -991,6 +991,11 @@ auth_restrict_session(struct ssh *ssh)
 
 	/* A blank sshauthopt defaults to permitting nothing */
 	restricted = sshauthopt_new();
+#ifdef WINDOWS
+	if (restricted == NULL)
+		fatal_f("unable to allocate new sshauthopt");
+#endif
+
 	restricted->permit_pty_flag = 1;
 	restricted->restricted = 1;
 
