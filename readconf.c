@@ -951,13 +951,13 @@ process_config_line_depth(Options *options, struct passwd *pw, const char *host,
 {
 	char *str, **charptr, *endofnumber, *keyword, *arg, *arg2, *p;
 	char **cpptr, ***cppptr, fwdarg[256];
-	u_int i, *uintptr, uvalue, max_entries = 0;
+	u_int *uintptr, uvalue, max_entries = 0;
 	int r, oactive, negated, opcode, *intptr, value, value2, cmdline = 0;
 	int remotefwd, dynamicfwd;
 	LogLevel *log_level_ptr;
 	SyslogFacility *log_facility_ptr;
 	long long val64;
-	size_t len;
+	size_t len, i;
 	struct Forward fwd;
 	const struct multistate *multistate_ptr;
 	struct allowed_cname *cname;
