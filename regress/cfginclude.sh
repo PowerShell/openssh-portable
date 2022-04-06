@@ -1,4 +1,4 @@
-#	$OpenBSD: cfginclude.sh,v 1.3 2021/06/08 06:52:43 djm Exp $
+#	$OpenBSD: cfginclude.sh,v 1.2 2016/05/03 15:30:46 dtucker Exp $
 #	Placed in the Public Domain.
 
 tid="config include"
@@ -10,7 +10,7 @@ cat > $OBJ/ssh_config.i << _EOF
 Match host a
 	Hostname aa
 
-Match host b # comment
+Match host b
 	Hostname bb
 	Include $OBJ/ssh_config.i.*
 
@@ -19,10 +19,10 @@ Match host c
 	Hostname cc
 
 Match host m
-	Include $OBJ/ssh_config.i.* # comment
+	Include $OBJ/ssh_config.i.*
 
 Host d
-	Hostname dd # comment
+	Hostname dd
 
 Host e
 	Hostname ee
@@ -47,17 +47,17 @@ Match host a
 Match host b
 	Hostname bbb
 
-Match host c # comment
+Match host c
 	Hostname ccc
 
-Host d # comment
+Host d
 	Hostname ddd
 
 Host e
 	Hostname eee
 
 Host f
-	Hostname fff # comment
+	Hostname fff
 _EOF
 
 cat > $OBJ/ssh_config.i.2 << _EOF
@@ -150,7 +150,7 @@ trial a aa
 
 # cleanup
 rm -f $OBJ/ssh_config.i $OBJ/ssh_config.i.* $OBJ/ssh_config.out
-#	$OpenBSD: cfginclude.sh,v 1.3 2021/06/08 06:52:43 djm Exp $
+#	$OpenBSD: cfginclude.sh,v 1.2 2016/05/03 15:30:46 dtucker Exp $
 #	Placed in the Public Domain.
 
 tid="config include"
@@ -193,11 +193,11 @@ cat > $OBJ/ssh_config.i.1 << _EOF
 Match host a
 	Hostname aaa
 
-Match host b # comment
+Match host b
 	Hostname bbb
 
 Match host c
-	Hostname ccc # comment
+	Hostname ccc
 
 Host d
 	Hostname ddd
@@ -228,8 +228,8 @@ Host e
 Host f
 	Hostname ffff
 
-Match all # comment
-	Hostname xxxx # comment
+Match all
+	Hostname xxxx
 _EOF
 
 trial() {

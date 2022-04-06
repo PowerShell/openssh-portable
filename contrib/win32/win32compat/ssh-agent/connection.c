@@ -30,7 +30,6 @@
  */
 #include "agent.h"
 #include "agent-request.h"
-#include "config.h"
 
 #pragma warning(push, 3)
 
@@ -156,18 +155,6 @@ process_request(struct agent_connection* con)
 		break;
 	case SSH2_AGENTC_REMOVE_ALL_IDENTITIES:
 		r = process_remove_all(request, response, con);
-		break;
-#ifdef ENABLE_PKCS11
-	case SSH_AGENTC_ADD_SMARTCARD_KEY:
-	case SSH_AGENTC_ADD_SMARTCARD_KEY_CONSTRAINED:
-		r = process_add_smartcard_key(request, response, con);
-		break;
-	case SSH_AGENTC_REMOVE_SMARTCARD_KEY:
-		r = process_remove_smartcard_key(request, response, con);
-		break;
-#endif /* ENABLE_PKCS11 */
-	case SSH_AGENTC_EXTENSION:
-		r = process_extension(request, response, con);
 		break;
 	default:
 		debug("unknown agent request %d", type);

@@ -9,17 +9,17 @@ Match host a
 
 Match host b
 	Banner /bb
-	Include $OBJ/sshd_config.i.* # comment
+	Include $OBJ/sshd_config.i.*
 
 Match host c
-	Include $OBJ/sshd_config.i.* # comment
+	Include $OBJ/sshd_config.i.*
 	Banner /cc
 
 Match host m
 	Include $OBJ/sshd_config.i.*
 
 Match Host d
-	Banner /dd # comment
+	Banner /dd
 
 Match Host e
 	Banner /ee
@@ -64,7 +64,7 @@ Match host a
 Match host b
 	Banner /bbbb
 
-Match host c # comment
+Match host c
 	Banner /cccc
 
 Match Host d

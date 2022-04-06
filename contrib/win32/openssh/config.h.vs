@@ -137,21 +137,6 @@
 /* Enable for PKCS#11 support */
 #define ENABLE_PKCS11 1
 
-/* Enable for U2F/FIDO support */
-#define ENABLE_SK
-
-/* Enable for built-in U2F/FIDO support */
-#define ENABLE_SK_INTERNAL
-
-/* Define for discoverable credential support */
-#define HAVE_FIDO_CRED_PROT
-#define HAVE_FIDO_CRED_SET_PROT
-#define HAVE_FIDO_DEV_SUPPORTS_CRED_PROT
-#define HAVE_FIDO_DEV_GET_TOUCH_BEGIN
-#define HAVE_FIDO_DEV_GET_TOUCH_STATUS
-#define HAVE_FIDO_CRED_SET_CLIENTDATA
-#define HAVE_FIDO_ASSERT_SET_CLIENTDATA
-
 /* File names may not contain backslash characters */
 /* #undef FILESYSTEM_NO_BACKSLASH */
 
@@ -1731,4 +1716,3 @@
 #define HAVE_DECL_MEMMEM 0
 #define WITH_ZLIB
 #define _PATH_TTY "conin$"
-#define HAVE_STRUCT_POLLFD_FD 1

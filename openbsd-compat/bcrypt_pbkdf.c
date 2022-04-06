@@ -1,4 +1,4 @@
-/* $OpenBSD: bcrypt_pbkdf.c,v 1.16 2020/08/02 18:35:48 tb Exp $ */
+/* $OpenBSD: bcrypt_pbkdf.c,v 1.13 2015/01/12 03:20:04 tedu Exp $ */
 /*
  * Copyright (c) 2013 Ted Unangst <tedu@openbsd.org>
  *
@@ -17,13 +17,12 @@
 
 /* OPENBSD ORIGINAL: lib/libutil/bcrypt_pbkdf.c */
 
-/* This version has been modified to use SHA512 from SUPERCOP */
-
 #include "includes.h"
 
 #ifndef HAVE_BCRYPT_PBKDF
 
 #include <sys/types.h>
+#include <sys/param.h>
 
 #ifdef HAVE_STDLIB_H
 # include <stdlib.h>
@@ -49,7 +48,7 @@
  * function with the following modifications:
  * 1. The input password and salt are preprocessed with SHA512.
  * 2. The output length is expanded to 256 bits.
- * 3. Subsequently the magic string to be encrypted is lengthened and modifed
+ * 3. Subsequently the magic string to be encrypted is lengthened and modified
  *    to "OxychromaticBlowfishSwatDynamite"
  * 4. The hash function is defined to perform 64 rounds of initial state
  *    expansion. (More rounds are performed by iterating the hash.)
@@ -70,10 +69,10 @@
 #define BCRYPT_HASHSIZE (BCRYPT_WORDS * 4)
 
 static void
-bcrypt_hash(uint8_t *sha2pass, uint8_t *sha2salt, uint8_t *out)
+bcrypt_hash(u_int8_t *sha2pass, u_int8_t *sha2salt, u_int8_t *out)
 {
 	blf_ctx state;
-	uint8_t ciphertext[BCRYPT_HASHSIZE] =
+	u_int8_t ciphertext[BCRYPT_HASHSIZE] =
 	    "OxychromaticBlowfishSwatDynamite";
 	uint32_t cdata[BCRYPT_WORDS];
 	int i;
@@ -94,7 +93,7 @@ bcrypt_hash(uint8_t *sha2pass, uint8_t *sha2salt, uint8_t *out)
 		cdata[i] = Blowfish_stream2word(ciphertext, sizeof(ciphertext),
 		    &j);
 	for (i = 0; i < 64; i++)
-		blf_enc(&state, cdata, BCRYPT_WORDS / 2);
+		blf_enc(&state, cdata, sizeof(cdata) / (sizeof(uint64_t)));
 
 	/* copy out */
 	for (i = 0; i < BCRYPT_WORDS; i++) {
@@ -111,26 +110,26 @@ bcrypt_hash(uint8_t *sha2pass, uint8_t *sha2salt, uint8_t *out)
 }
 
 int
-bcrypt_pbkdf(const char *pass, size_t passlen, const uint8_t *salt, size_t saltlen,
-    uint8_t *key, size_t keylen, unsigned int rounds)
+bcrypt_pbkdf(const char *pass, size_t passlen, const u_int8_t *salt, size_t saltlen,
+    u_int8_t *key, size_t keylen, unsigned int rounds)
 {
-	uint8_t sha2pass[SHA512_DIGEST_LENGTH];
-	uint8_t sha2salt[SHA512_DIGEST_LENGTH];
-	uint8_t out[BCRYPT_HASHSIZE];
-	uint8_t tmpout[BCRYPT_HASHSIZE];
-	uint8_t *countsalt;
+	u_int8_t sha2pass[SHA512_DIGEST_LENGTH];
+	u_int8_t sha2salt[SHA512_DIGEST_LENGTH];
+	u_int8_t out[BCRYPT_HASHSIZE];
+	u_int8_t tmpout[BCRYPT_HASHSIZE];
+	u_int8_t *countsalt;
 	size_t i, j, amt, stride;
 	uint32_t count;
 	size_t origkeylen = keylen;
 
 	/* nothing crazy */
 	if (rounds < 1)
-		goto bad;
+		return -1;
 	if (passlen == 0 || saltlen == 0 || keylen == 0 ||
 	    keylen > sizeof(out) * sizeof(out) || saltlen > 1<<20)
-		goto bad;
+		return -1;
 	if ((countsalt = calloc(1, saltlen + 4)) == NULL)
-		goto bad;
+		return -1;
 	stride = (keylen + sizeof(out) - 1) / sizeof(out);
 	amt = (keylen + stride - 1) / stride;
 
@@ -174,15 +173,9 @@ bcrypt_pbkdf(const char *pass, size_t passlen, const uint8_t *salt, size_t saltl
 	}
 
 	/* zap */
-	freezero(countsalt, saltlen + 4);
 	explicit_bzero(out, sizeof(out));
-	explicit_bzero(tmpout, sizeof(tmpout));
+	free(countsalt);
 
 	return 0;
-
-bad:
-	/* overwrite with random in case caller doesn't check return code */
-	arc4random_buf(key, keylen);
-	return -1;
 }
 #endif /* HAVE_BCRYPT_PBKDF */

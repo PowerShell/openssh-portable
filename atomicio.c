@@ -28,6 +28,7 @@
 
 #include "includes.h"
 
+#include <sys/param.h>
 #include <sys/uio.h>
 
 #include <errno.h>

@@ -39,8 +39,6 @@
 
 #ifndef HAVE_ARC4RANDOM
 
-#define MINIMUM(a, b)    (((a) < (b)) ? (a) : (b))
-
 #ifdef WITH_OPENSSL
 #include <openssl/rand.h>
 #include <openssl/err.h>
@@ -103,7 +101,7 @@ getrnd(u_char *s, size_t len) {
 static void
 getrnd(u_char *s, size_t len)
 {
-	int fd, save_errno;
+	int fd;
 	ssize_t r;
 	size_t o = 0;
 
@@ -112,14 +110,8 @@ getrnd(u_char *s, size_t len)
 		return;
 #endif /* HAVE_GETRANDOM */
 
-	if ((fd = open(SSH_RANDOM_DEV, O_RDONLY)) == -1) {
-		save_errno = errno;
-		/* Try egd/prngd before giving up. */
-		if (seed_from_prngd(s, len) == 0)
-			return;
-		fatal("Couldn't open %s: %s", SSH_RANDOM_DEV,
-		    strerror(save_errno));
-	}
+	if ((fd = open(SSH_RANDOM_DEV, O_RDONLY)) == -1)
+		fatal("Couldn't open %s: %s", SSH_RANDOM_DEV, strerror(errno));
 	while (o < len) {
 		r = read(fd, s + o, len - o);
 		if (r < 0) {
@@ -186,7 +178,7 @@ _rs_rekey(u_char *dat, size_t datlen)
 	if (dat) {
 		size_t i, m;
 
-		m = MINIMUM(datlen, KEYSZ + IVSZ);
+		m = MIN(datlen, KEYSZ + IVSZ);
 		for (i = 0; i < m; i++)
 			rs_buf[i] ^= dat[i];
 	}
@@ -205,7 +197,7 @@ _rs_random_buf(void *_buf, size_t n)
 	_rs_stir_if_needed(n);
 	while (n > 0) {
 		if (rs_have > 0) {
-			m = MINIMUM(n, rs_have);
+			m = MIN(n, rs_have);
 			memcpy(buf, rs_buf + RSBUFSZ - rs_have, m);
 			memset(rs_buf + RSBUFSZ - rs_have, 0, m);
 			buf += m;
@@ -246,7 +238,7 @@ arc4random_addrandom(u_char *dat, int datlen)
 	if (!rs_initialized)
 		_rs_stir();
 	while (datlen > 0) {
-		m = MINIMUM(datlen, KEYSZ + IVSZ);
+		m = MIN(datlen, KEYSZ + IVSZ);
 		_rs_rekey(dat, m);
 		dat += m;
 		datlen -= m;

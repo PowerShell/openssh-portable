@@ -41,7 +41,6 @@ struct passwd *w32_getpwuid(uid_t uid);
 struct passwd *w32_getpwnam(const char *username);
 struct passwd *getpwent(void);
 void endpwent(void);
-char *get_username(const PSID sid);
 
 #define getpwuid w32_getpwuid
 #define getpwnam w32_getpwnam

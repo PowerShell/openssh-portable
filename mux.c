@@ -1,4 +1,4 @@
-/* $OpenBSD: mux.c,v 1.92 2022/01/11 01:26:47 djm Exp $ */
+/* $OpenBSD: mux.c,v 1.87 2021/04/03 06:18:40 djm Exp $ */
 /*
  * Copyright (c) 2002-2008 Damien Miller <djm@openbsd.org>
  *
@@ -71,7 +71,9 @@
 /* from ssh.c */
 extern int tty_flag;
 extern Options options;
+extern int stdin_null_flag;
 extern char *host;
+extern int subsystem_flag;
 extern struct sshbuf *command;
 extern volatile sig_atomic_t quit_pending;
 
@@ -450,6 +452,14 @@ mux_master_process_new_session(struct ssh *ssh, u_int rid,
 	if (cctx->want_tty && tcgetattr(new_fd[0], &cctx->tio) == -1)
 		error_f("tcgetattr: %s", strerror(errno));
 
+	/* enable nonblocking unless tty */
+	if (!isatty(new_fd[0]))
+		set_nonblock(new_fd[0]);
+	if (!isatty(new_fd[1]))
+		set_nonblock(new_fd[1]);
+	if (!isatty(new_fd[2]))
+		set_nonblock(new_fd[2]);
+
 	window = CHAN_SES_WINDOW_DEFAULT;
 	packetmax = CHAN_SES_PACKET_DEFAULT;
 	if (cctx->want_tty) {
@@ -459,7 +469,7 @@ mux_master_process_new_session(struct ssh *ssh, u_int rid,
 
 	nc = channel_new(ssh, "session", SSH_CHANNEL_OPENING,
 	    new_fd[0], new_fd[1], new_fd[2], window, packetmax,
-	    CHAN_EXTENDED_WRITE, "client-session", CHANNEL_NONBLOCK_STDIO);
+	    CHAN_EXTENDED_WRITE, "client-session", /*nonblock*/0);
 
 	nc->ctl_chan = c->self;		/* link session -> control channel */
 	c->remote_id = nc->self;	/* link control -> session channel */
@@ -1015,8 +1025,13 @@ mux_master_process_stdio_fwd(struct ssh *ssh, u_int rid,
 		}
 	}
 
-	nc = channel_connect_stdio_fwd(ssh, chost, cport, new_fd[0], new_fd[1],
-	    CHANNEL_NONBLOCK_STDIO);
+	/* enable nonblocking unless tty */
+	if (!isatty(new_fd[0]))
+		set_nonblock(new_fd[0]);
+	if (!isatty(new_fd[1]))
+		set_nonblock(new_fd[1]);
+
+	nc = channel_connect_stdio_fwd(ssh, chost, cport, new_fd[0], new_fd[1]);
 	free(chost);
 
 	nc->ctl_chan = c->self;		/* link session -> control channel */
@@ -1864,7 +1879,7 @@ mux_client_request_session(int fd)
 {
 	struct sshbuf *m;
 	char *e;
-	const char *term = NULL;
+	const char *term;
 	u_int echar, rid, sid, esid, exitval, type, exitval_seen;
 	extern char **environ;
 	int r, i, rawmode;
@@ -1878,13 +1893,11 @@ mux_client_request_session(int fd)
 
 	ssh_signal(SIGPIPE, SIG_IGN);
 
-	if (options.stdin_null && stdfd_devnull(1, 0, 0) == -1)
+	if (stdin_null_flag && stdfd_devnull(1, 0, 0) == -1)
 		fatal_f("stdfd_devnull failed");
 
-	if ((term = lookup_env_in_list("TERM", options.setenv,
-	    options.num_setenv)) == NULL || *term == '\0')
-		term = getenv("TERM");
-
+	if ((term = getenv("TERM")) == NULL)
+		term = "";
 	echar = 0xffffffff;
 	if (options.escape_char != SSH_ESCAPECHAR_NONE)
 	    echar = (u_int)options.escape_char;
@@ -1897,9 +1910,9 @@ mux_client_request_session(int fd)
 	    (r = sshbuf_put_u32(m, tty_flag)) != 0 ||
 	    (r = sshbuf_put_u32(m, options.forward_x11)) != 0 ||
 	    (r = sshbuf_put_u32(m, options.forward_agent)) != 0 ||
-	    (r = sshbuf_put_u32(m, options.session_type == SESSION_TYPE_SUBSYSTEM)) != 0 ||
+	    (r = sshbuf_put_u32(m, subsystem_flag)) != 0 ||
 	    (r = sshbuf_put_u32(m, echar)) != 0 ||
-	    (r = sshbuf_put_cstring(m, term == NULL ? "" : term)) != 0 ||
+	    (r = sshbuf_put_cstring(m, term)) != 0 ||
 	    (r = sshbuf_put_stringb(m, command)) != 0)
 		fatal_fr(r, "request");
 
@@ -2037,7 +2050,7 @@ mux_client_request_session(int fd)
 	} else
 		debug2("Received exit status from master %d", exitval);
 
-	if (tty_flag && options.log_level >= SYSLOG_LEVEL_INFO)
+	if (tty_flag && options.log_level != SYSLOG_LEVEL_QUIET)
 		fprintf(stderr, "Shared connection to %s closed.\r\n", host);
 
 	exit(exitval);
@@ -2101,7 +2114,7 @@ mux_client_request_stdio_fwd(int fd)
 
 	ssh_signal(SIGPIPE, SIG_IGN);
 
-	if (options.stdin_null && stdfd_devnull(1, 0, 0) == -1)
+	if (stdin_null_flag && stdfd_devnull(1, 0, 0) == -1)
 		fatal_f("stdfd_devnull failed");
 
 	if ((m = sshbuf_new()) == NULL)

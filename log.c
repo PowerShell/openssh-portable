@@ -1,4 +1,4 @@
-/* $OpenBSD: log.c,v 1.60 2021/09/16 15:11:19 djm Exp $ */
+/* $OpenBSD: log.c,v 1.58 2021/04/15 16:24:31 markus Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -351,7 +351,6 @@ do_log(LogLevel level, int force, const char *suffix, const char *fmt,
 	int pri = LOG_INFO;
 	int saved_errno = errno;
 	log_handler_fn *tmp_handler;
-	const char *progname = argv0 != NULL ? argv0 : __progname;
 
 	if (!force && level > log_level)
 		return;
@@ -409,18 +408,16 @@ do_log(LogLevel level, int force, const char *suffix, const char *fmt,
 		tmp_handler(level, force, fmtbuf, log_handler_ctx);
 		log_handler = tmp_handler;
 	} else if (log_on_stderr) {
-		snprintf(msgbuf, sizeof msgbuf, "%s%s%.*s\r\n",
-		    (log_on_stderr > 1) ? progname : "",
-		    (log_on_stderr > 1) ? ": " : "",
+		snprintf(msgbuf, sizeof msgbuf, "%.*s\r\n",
 		    (int)sizeof msgbuf - 3, fmtbuf);
 		(void)write(log_stderr_fd, msgbuf, strlen(msgbuf));
 	} else {
 #if defined(HAVE_OPENLOG_R) && defined(SYSLOG_DATA_INIT)
-		openlog_r(progname, LOG_PID, log_facility, &sdata);
+		openlog_r(argv0 ? argv0 : __progname, LOG_PID, log_facility, &sdata);
 		syslog_r(pri, &sdata, "%.500s", fmtbuf);
 		closelog_r(&sdata);
 #else
-		openlog(progname, LOG_PID, log_facility);
+		openlog(argv0 ? argv0 : __progname, LOG_PID, log_facility);
 		syslog(pri, "%.500s", fmtbuf);
 		closelog();
 #endif
@@ -474,9 +471,8 @@ sshlogv(const char *file, const char *func, int line, int showfunc,
 	const char *cp;
 	size_t i;
 
-	snprintf(tag, sizeof(tag), "%.48s:%.48s():%d (pid=%ld)",
-	    (cp = strrchr(file, '/')) == NULL ? file : cp + 1, func, line,
-	    (long)getpid());
+	snprintf(tag, sizeof(tag), "%.48s:%.48s():%d",
+	    (cp = strrchr(file, '/')) == NULL ? file : cp + 1, func, line);
 	for (i = 0; i < nlog_verbose; i++) {
 		if (match_pattern_list(tag, log_verbose[i], 0) == 1) {
 			forced = 1;

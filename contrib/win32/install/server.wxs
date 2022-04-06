@@ -3,15 +3,17 @@
         <!-- KeyPath is necessary for multi-file components to identify the key file - preferrably versioned. -->
         <ComponentGroup Id="Server" Directory="INSTALLFOLDER">
             <ComponentGroupRef Id="Shared" />
-            <ComponentGroupRef Id="Manifest" />
             <Component>
                 <File Name="sftp-server.exe" KeyPath="yes" />
+                <File Name="sftp-server.pdb" />
             </Component>
             <Component>
                 <File Name="ssh-shellhost.exe" KeyPath="yes" />
+                <File Name="ssh-shellhost.pdb" />
             </Component>
             <Component>
                 <File Id="sshd.exe" Name="sshd.exe" KeyPath="yes" />
+                <File Name="sshd.pdb" />
                 <RegistryKey Root="HKLM" Key="SOFTWARE\OpenSSH" ForceCreateOnInstall="yes">
                     <PermissionEx Sddl="O:BAG:SYD:P(A;OICI;KR;;;AU)(A;OICI;KA;;;SY)(A;OICI;KA;;;BA)" />
                     <!-- ssh-agent-associated key should only be created if the Server feature is installed. -->

@@ -1,4 +1,4 @@
-/* $OpenBSD: serverloop.c,v 1.231 2022/01/22 00:49:34 djm Exp $ */
+/* $OpenBSD: serverloop.c,v 1.226 2021/04/03 06:18:41 djm Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -50,9 +50,6 @@
 #include <fcntl.h>
 #include <pwd.h>
 #include <limits.h>
-#ifdef HAVE_POLL_H
-#include <poll.h>
-#endif
 #include <signal.h>
 #include <string.h>
 #include <termios.h>
@@ -91,6 +88,11 @@ extern int use_privsep;
 
 static int no_more_sessions = 0; /* Disallow further sessions. */
 
+/*
+ * This SIGCHLD kludge is used to detect when the child exits.  The server
+ * will exit after that, as soon as forwarded connections have terminated.
+ */
+
 static volatile sig_atomic_t child_terminated = 0;	/* The child has terminated. */
 
 /* Cleanup on signals (!use_privsep case only) */
@@ -113,11 +115,59 @@ bind_permitted(int port, uid_t uid)
 	return 1;
 }
 
+/*
+ * we write to this pipe if a SIGCHLD is caught in order to avoid
+ * the race between select() and child_terminated
+ */
+static int notify_pipe[2];
+static void
+notify_setup(void)
+{
+	if (pipe(notify_pipe) == -1) {
+		error("pipe(notify_pipe) failed %s", strerror(errno));
+	} else if ((fcntl(notify_pipe[0], F_SETFD, FD_CLOEXEC) == -1) ||
+	    (fcntl(notify_pipe[1], F_SETFD, FD_CLOEXEC) == -1)) {
+		error("fcntl(notify_pipe, F_SETFD) failed %s", strerror(errno));
+		close(notify_pipe[0]);
+		close(notify_pipe[1]);
+	} else {
+		set_nonblock(notify_pipe[0]);
+		set_nonblock(notify_pipe[1]);
+		return;
+	}
+	notify_pipe[0] = -1;	/* read end */
+	notify_pipe[1] = -1;	/* write end */
+}
+static void
+notify_parent(void)
+{
+	if (notify_pipe[1] != -1)
+		(void)write(notify_pipe[1], "", 1);
+}
+static void
+notify_prepare(fd_set *readset)
+{
+	if (notify_pipe[0] != -1)
+		FD_SET(notify_pipe[0], readset);
+}
+static void
+notify_done(fd_set *readset)
+{
+	char c;
+
+	if (notify_pipe[0] != -1 && FD_ISSET(notify_pipe[0], readset))
+		while (read(notify_pipe[0], &c, 1) != -1)
+			debug2_f("reading");
+}
+
 /*ARGSUSED*/
 static void
 sigchld_handler(int sig)
 {
+	int save_errno = errno;
 	child_terminated = 1;
+	notify_parent();
+	errno = save_errno;
 }
 
 /*ARGSUSED*/
@@ -161,31 +211,27 @@ client_alive_check(struct ssh *ssh)
 }
 
 /*
- * Sleep in ppoll() until we can do something.
- * Optionally, a maximum time can be specified for the duration of
- * the wait (0 = infinite).
+ * Sleep in select() until we can do something.  This will initialize the
+ * select masks.  Upon return, the masks will indicate which descriptors
+ * have data or can accept data.  Optionally, a maximum time can be specified
+ * for the duration of the wait (0 = infinite).
  */
 static void
 wait_until_can_do_something(struct ssh *ssh,
-    int connection_in, int connection_out, struct pollfd **pfdp,
-    u_int *npfd_allocp, u_int *npfd_activep, u_int64_t max_time_ms,
-    sigset_t *sigsetp, int *conn_in_readyp, int *conn_out_readyp)
+    int connection_in, int connection_out,
+    fd_set **readsetp, fd_set **writesetp, int *maxfdp,
+    u_int *nallocp, u_int64_t max_time_ms)
 {
-	struct timespec ts, *tsp;
+	struct timeval tv, *tvp;
 	int ret;
 	time_t minwait_secs = 0;
 	int client_alive_scheduled = 0;
-	u_int p;
 	/* time we last heard from the client OR sent a keepalive */
 	static time_t last_client_time;
 
-	*conn_in_readyp = *conn_out_readyp = 0;
-
-	/* Prepare channel poll. First two pollfd entries are reserved */
-	channel_prepare_poll(ssh, pfdp, npfd_allocp, npfd_activep,
-	    2, &minwait_secs);
-	if (*npfd_activep < 2)
-		fatal_f("bad npfd %u", *npfd_activep); /* shouldn't happen */
+	/* Allocate and update select() masks for channel descriptors. */
+	channel_prepare_select(ssh, readsetp, writesetp, maxfdp,
+	    nallocp, &minwait_secs);
 
 	/* XXX need proper deadline system for rekey/client alive */
 	if (minwait_secs != 0)
@@ -215,11 +261,15 @@ wait_until_can_do_something(struct ssh *ssh,
 	/* wrong: bad condition XXX */
 	if (channel_not_very_much_buffered_data())
 #endif
-	/* Monitor client connection on reserved pollfd entries */
-	(*pfdp)[0].fd = connection_in;
-	(*pfdp)[0].events = POLLIN;
-	(*pfdp)[1].fd = connection_out;
-	(*pfdp)[1].events = ssh_packet_have_data_to_write(ssh) ? POLLOUT : 0;
+	FD_SET(connection_in, *readsetp);
+	notify_prepare(*readsetp);
+
+	/*
+	 * If we have buffered packet data going to the client, mark that
+	 * descriptor.
+	 */
+	if (ssh_packet_have_data_to_write(ssh))
+		FD_SET(connection_out, *writesetp);
 
 	/*
 	 * If child has terminated and there is enough buffer space to read
@@ -230,41 +280,38 @@ wait_until_can_do_something(struct ssh *ssh,
 			max_time_ms = 100;
 
 	if (max_time_ms == 0)
-		tsp = NULL;
+		tvp = NULL;
 	else {
-		ts.tv_sec = max_time_ms / 1000;
-		ts.tv_nsec = 1000000 * (max_time_ms % 1000);
-		tsp = &ts;
+		tv.tv_sec = max_time_ms / 1000;
+		tv.tv_usec = 1000 * (max_time_ms % 1000);
+		tvp = &tv;
 	}
 
 	/* Wait for something to happen, or the timeout to expire. */
-	ret = ppoll(*pfdp, *npfd_activep, tsp, sigsetp);
+	ret = select((*maxfdp)+1, *readsetp, *writesetp, NULL, tvp);
 
 	if (ret == -1) {
-		for (p = 0; p < *npfd_activep; p++)
-			(*pfdp)[p].revents = 0;
+		memset(*readsetp, 0, *nallocp);
+		memset(*writesetp, 0, *nallocp);
 		if (errno != EINTR)
-			fatal_f("ppoll: %.100s", strerror(errno));
-		return;
-	}
-
-	*conn_in_readyp = (*pfdp)[0].revents != 0;
-	*conn_out_readyp = (*pfdp)[1].revents != 0;
-
-	if (client_alive_scheduled) {
+			error("select: %.100s", strerror(errno));
+	} else if (client_alive_scheduled) {
 		time_t now = monotime();
 
 		/*
-		 * If the ppoll timed out, or returned for some other reason
+		 * If the select timed out, or returned for some other reason
 		 * but we haven't heard from the client in time, send keepalive.
 		 */
 		if (ret == 0 || (last_client_time != 0 && last_client_time +
 		    options.client_alive_interval <= now)) {
 			client_alive_check(ssh);
 			last_client_time = now;
-		} else if (*conn_in_readyp)
+		} else if (FD_ISSET(connection_in, *readsetp)) {
 			last_client_time = now;
+		}
 	}
+
+	notify_done(*readsetp);
 }
 
 /*
@@ -272,40 +319,48 @@ wait_until_can_do_something(struct ssh *ssh,
  * in buffers and processed later.
  */
 static int
-process_input(struct ssh *ssh, int connection_in)
+process_input(struct ssh *ssh, fd_set *readset, int connection_in)
 {
-	int r;
+	int r, len;
+	char buf[16384];
 
-	if ((r = ssh_packet_process_read(ssh, connection_in)) == 0)
-		return 0; /* success */
-	if (r == SSH_ERR_SYSTEM_ERROR) {
-		if (errno == EAGAIN || errno == EINTR || errno == EWOULDBLOCK)
-			return 0;
-		if (errno == EPIPE) {
+	/* Read and buffer any input data from the client. */
+	if (FD_ISSET(connection_in, readset)) {
+		len = read(connection_in, buf, sizeof(buf));
+		if (len == 0) {
 			verbose("Connection closed by %.100s port %d",
 			    ssh_remote_ipaddr(ssh), ssh_remote_port(ssh));
 			return -1;
+		} else if (len == -1) {
+			if (errno == EINTR || errno == EAGAIN ||
+			    errno == EWOULDBLOCK)
+				return 0;
+			verbose("Read error from remote host %s port %d: %s",
+			    ssh_remote_ipaddr(ssh), ssh_remote_port(ssh),
+			    strerror(errno));
+			cleanup_exit(255);
 		}
-		verbose("Read error from remote host %s port %d: %s",
-		    ssh_remote_ipaddr(ssh), ssh_remote_port(ssh),
-		    strerror(errno));
-		cleanup_exit(255);
+		/* Buffer any received data. */
+		if ((r = ssh_packet_process_incoming(ssh, buf, len)) != 0)
+			fatal_fr(r, "ssh_packet_process_incoming");
 	}
-	return -1;
+	return 0;
 }
 
 /*
  * Sends data from internal buffers to client program stdin.
  */
 static void
-process_output(struct ssh *ssh, int connection_out)
+process_output(struct ssh *ssh, fd_set *writeset, int connection_out)
 {
 	int r;
 
 	/* Send any buffered packet data to the client. */
-	if ((r = ssh_packet_write_poll(ssh)) != 0) {
-		sshpkt_fatal(ssh, r, "%s: ssh_packet_write_poll",
-		    __func__);
+	if (FD_ISSET(connection_out, writeset)) {
+		if ((r = ssh_packet_write_poll(ssh)) != 0) {
+			sshpkt_fatal(ssh, r, "%s: ssh_packet_write_poll",
+			    __func__);
+		}
 	}
 }
 
@@ -319,8 +374,13 @@ static void
 collect_children(struct ssh *ssh)
 {
 	pid_t pid;
+	sigset_t oset, nset;
 	int status;
 
+	/* block SIGCHLD while we check for dead children */
+	sigemptyset(&nset);
+	sigaddset(&nset, SIGCHLD);
+	sigprocmask(SIG_BLOCK, &nset, &oset);
 	if (child_terminated) {
 		debug("Received SIGCHLD.");
 		while ((pid = waitpid(-1, &status, WNOHANG)) > 0 ||
@@ -329,22 +389,19 @@ collect_children(struct ssh *ssh)
 				session_close_by_pid(ssh, pid, status);
 		child_terminated = 0;
 	}
+	sigprocmask(SIG_SETMASK, &oset, NULL);
 }
 
 void
 server_loop2(struct ssh *ssh, Authctxt *authctxt)
 {
-	struct pollfd *pfd = NULL;
-	u_int npfd_alloc = 0, npfd_active = 0;
-	int r, conn_in_ready, conn_out_ready;
-	u_int connection_in, connection_out;
+	fd_set *readset = NULL, *writeset = NULL;
+	int max_fd;
+	u_int nalloc = 0, connection_in, connection_out;
 	u_int64_t rekey_timeout_ms = 0;
-	sigset_t bsigset, osigset;
 
 	debug("Entering interactive session for SSH2.");
 
-	if (sigemptyset(&bsigset) == -1 || sigaddset(&bsigset, SIGCHLD) == -1)
-		error_f("bsigset setup: %s", strerror(errno));
 	ssh_signal(SIGCHLD, sigchld_handler);
 	child_terminated = 0;
 	connection_in = ssh_packet_get_connection_in(ssh);
@@ -355,6 +412,11 @@ server_loop2(struct ssh *ssh, Authctxt *authctxt)
 		ssh_signal(SIGINT, sigterm_handler);
 		ssh_signal(SIGQUIT, sigterm_handler);
 	}
+
+	notify_setup();
+
+	max_fd = MAXIMUM(connection_in, connection_out);
+	max_fd = MAXIMUM(max_fd, notify_pipe[0]);
 
 	server_init_dispatch(ssh);
 
@@ -372,19 +434,8 @@ server_loop2(struct ssh *ssh, Authctxt *authctxt)
 			rekey_timeout_ms = 0;
 		}
 
-		/*
-		 * Block SIGCHLD while we check for dead children, then pass
-		 * the old signal mask through to ppoll() so that it'll wake
-		 * up immediately if a child exits after we've called waitpid().
-		 */
-		if (sigprocmask(SIG_BLOCK, &bsigset, &osigset) == -1)
-			error_f("bsigset sigprocmask: %s", strerror(errno));
-		collect_children(ssh);
 		wait_until_can_do_something(ssh, connection_in, connection_out,
-		    &pfd, &npfd_alloc, &npfd_active, rekey_timeout_ms, &osigset,
-		    &conn_in_ready, &conn_out_ready);
-		if (sigprocmask(SIG_UNBLOCK, &bsigset, &osigset) == -1)
-			error_f("osigset sigprocmask: %s", strerror(errno));
+		    &readset, &writeset, &max_fd, &nalloc, rekey_timeout_ms);
 
 		if (received_sigterm) {
 			logit("Exiting on signal %d", (int)received_sigterm);
@@ -392,19 +443,17 @@ server_loop2(struct ssh *ssh, Authctxt *authctxt)
 			cleanup_exit(255);
 		}
 
+		collect_children(ssh);
 		if (!ssh_packet_is_rekeying(ssh))
-			channel_after_poll(ssh, pfd, npfd_active);
-		if (conn_in_ready &&
-		    process_input(ssh, connection_in) < 0)
+			channel_after_select(ssh, readset, writeset);
+		if (process_input(ssh, readset, connection_in) < 0)
 			break;
-		/* A timeout may have triggered rekeying */
-		if ((r = ssh_packet_check_rekey(ssh)) != 0)
-			fatal_fr(r, "cannot start rekeying");
-		if (conn_out_ready)
-			process_output(ssh, connection_out);
+		process_output(ssh, writeset, connection_out);
 	}
 	collect_children(ssh);
-	free(pfd);
+
+	free(readset);
+	free(writeset);
 
 	/* free all channels, no more reads and writes */
 	channel_free_all(ssh);
@@ -684,17 +733,16 @@ server_input_hostkeys_prove(struct ssh *ssh, struct sshbuf **respp)
 	struct sshbuf *resp = NULL;
 	struct sshbuf *sigbuf = NULL;
 	struct sshkey *key = NULL, *key_pub = NULL, *key_prv = NULL;
-	int r, ndx, success = 0;
+	int r, ndx, kexsigtype, use_kexsigtype, success = 0;
 	const u_char *blob;
-	const char *sigalg, *kex_rsa_sigalg = NULL;
 	u_char *sig = 0;
 	size_t blen, slen;
 
 	if ((resp = sshbuf_new()) == NULL || (sigbuf = sshbuf_new()) == NULL)
 		fatal_f("sshbuf_new");
-	if (sshkey_type_plain(sshkey_type_from_name(
-	    ssh->kex->hostkey_alg)) == KEY_RSA)
-		kex_rsa_sigalg = ssh->kex->hostkey_alg;
+
+	kexsigtype = sshkey_type_plain(
+	    sshkey_type_from_name(ssh->kex->hostkey_alg));
 	while (ssh_packet_remaining(ssh) > 0) {
 		sshkey_free(key);
 		key = NULL;
@@ -727,24 +775,16 @@ server_input_hostkeys_prove(struct ssh *ssh, struct sshbuf **respp)
 		 * For RSA keys, prefer to use the signature type negotiated
 		 * during KEX to the default (SHA1).
 		 */
-		sigalg = NULL;
-		if (sshkey_type_plain(key->type) == KEY_RSA) {
-			if (kex_rsa_sigalg != NULL)
-				sigalg = kex_rsa_sigalg;
-			else if (ssh->kex->flags & KEX_RSA_SHA2_512_SUPPORTED)
-				sigalg = "rsa-sha2-512";
-			else if (ssh->kex->flags & KEX_RSA_SHA2_256_SUPPORTED)
-				sigalg = "rsa-sha2-256";
-		}
-		debug3_f("sign %s key (index %d) using sigalg %s",
-		    sshkey_type(key), ndx, sigalg == NULL ? "default" : sigalg);
+		use_kexsigtype = kexsigtype == KEY_RSA &&
+		    sshkey_type_plain(key->type) == KEY_RSA;
 		if ((r = sshbuf_put_cstring(sigbuf,
 		    "hostkeys-prove-00@openssh.com")) != 0 ||
 		    (r = sshbuf_put_stringb(sigbuf,
 		    ssh->kex->session_id)) != 0 ||
 		    (r = sshkey_puts(key, sigbuf)) != 0 ||
 		    (r = ssh->kex->sign(ssh, key_prv, key_pub, &sig, &slen,
-		    sshbuf_ptr(sigbuf), sshbuf_len(sigbuf), sigalg)) != 0 ||
+		    sshbuf_ptr(sigbuf), sshbuf_len(sigbuf),
+		    use_kexsigtype ? ssh->kex->hostkey_alg : NULL)) != 0 ||
 		    (r = sshbuf_put_string(resp, sig, slen)) != 0) {
 			error_fr(r, "assemble signature");
 			goto out;

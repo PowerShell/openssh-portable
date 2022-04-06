@@ -43,8 +43,7 @@ sshsk_sign(const char *provider_path, struct sshkey *key,
 
 int
 sshsk_load_resident(const char *provider_path, const char *device,
-    const char *pin, u_int flags, struct sshsk_resident_key ***srksp,
-    size_t *nsrksp)
+    const char *pin, struct sshkey ***keysp, size_t *nkeysp)
 {
 	return SSH_ERR_FEATURE_UNSUPPORTED;
 }

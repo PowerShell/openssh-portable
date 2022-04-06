@@ -28,17 +28,11 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include "config.h"
 #include "agent.h"
 #include <sddl.h>
 #include <UserEnv.h>
 #include "..\misc_internal.h"
-#include <pwd.h>
-
 #define BUFSIZE 5 * 1024
-
-char* sshagent_con_username;
-HANDLE sshagent_client_primary_token;
 
 static HANDLE ioc_port = NULL;
 static BOOL debug_mode = FALSE;
@@ -49,11 +43,6 @@ static HANDLE event_stop_agent;
 static OVERLAPPED ol;
 static 	HANDLE pipe;
 static	SECURITY_ATTRIBUTES sa;
-
-static size_t nsession_ids;
-static struct hostkey_sid *session_ids;
-static struct dest_constraint *dest_constraints;
-static size_t ndest_constraints;
 
 static void
 agent_cleanup() 
@@ -193,33 +182,13 @@ agent_cleanup_connection(struct agent_connection* con)
 {
 	debug("connection %p clean up", con);
 	CloseHandle(con->pipe_handle);
-	if (con->client_impersonation_token)
-			CloseHandle(con->client_impersonation_token);
+        if (con->client_impersonation_token)
+                CloseHandle(con->client_impersonation_token);
 	if (con->client_process_handle)
 		CloseHandle(con->client_process_handle);
-
-	for (int i = 0; i < con->nsession_ids; i++) {
-		sshkey_free(con->session_ids[i].key);
-		sshbuf_free(con->session_ids[i].sid);
-	}
-	free(con->session_ids);
-	con->nsession_ids = 0;
-	
 	free(con);
 	CloseHandle(ioc_port);
 	ioc_port = NULL;
-
-	if(sshagent_con_username) {
-		free(sshagent_con_username);
-		sshagent_con_username = NULL;
-	}
-
-#ifdef ENABLE_PKCS11
-	if (sshagent_client_primary_token)
-		CloseHandle(sshagent_client_primary_token);
-
-	pkcs11_terminate();
-#endif
 }
 
 void 
@@ -320,18 +289,6 @@ get_con_client_info(struct agent_connection* con)
 		goto done;
 	}
 
-	// Get client primary token
-	if (DuplicateTokenEx(client_primary_token, TOKEN_QUERY | TOKEN_ASSIGN_PRIMARY | TOKEN_DUPLICATE, NULL, SecurityImpersonation, TokenPrimary, &sshagent_client_primary_token) == FALSE) {
-		error_f("Failed to duplicate the primary token. error:%d", GetLastError());
-	}
-
-	// Get username
-	sshagent_con_username= get_username(info->User.Sid);
-	if (sshagent_con_username)
-		debug_f("sshagent_con_username: %s", sshagent_con_username);
-	else
-		error_f("Failed to get the userName");
-
 	/* check if its admin */
 	{
 		sid_size = SECURITY_MAX_SID_SIZE;
@@ -351,7 +308,6 @@ get_con_client_info(struct agent_connection* con)
 	r = 0;
 done:
 	debug("client type: %s", con_type_to_string(con));
-	con->nsession_ids = 0;
 
 	if (sshd_sid)
 		free(sshd_sid);

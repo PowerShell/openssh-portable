@@ -4,6 +4,7 @@
         <ComponentGroup Id="Shared" Directory="INSTALLFOLDER">
             <Component>
                 <File Name="libcrypto.dll" KeyPath="yes" />
+                <File Name="libcrypto.pdb" />
             </Component>
             <Component>
                 <File Name="moduli">
@@ -11,28 +12,12 @@
                 </File>
             </Component>
             <Component>
-                <File Name="LICENSE.txt" />
-            </Component>
-            <Component>
-                <File Name="NOTICE.txt" />
-            </Component>
-            <Component>
-                <File Name="FixHostFilePermissions.ps1" />
-            </Component>
-            <Component>
-                <File Name="OpenSSHUtils.psd1" />
-            </Component>
-            <Component>
-                <File Name="FixUserFilePermissions.ps1" />
-            </Component>
-            <Component>
-                <File Name="OpenSSHUtils.psm1" />
-            </Component>
-            <Component>
                 <File Name="scp.exe" KeyPath="yes" />
+                <File Name="scp.pdb" />
             </Component>
             <Component>
                 <File Name="ssh-keygen.exe" KeyPath="yes" />
+                <File Name="ssh-keygen.pdb" />
             </Component>
 
             <!-- ssh-agent is useful in both client and server scenarios. -->
@@ -44,6 +29,7 @@
             <Component>
                 <!-- Define the File/@Id to reference in util:EventManifest/@ResourceFile above. -->
                 <File Id="ssh_agent.exe" Name="ssh-agent.exe" KeyPath="yes" />
+                <File Name="ssh-agent.pdb" />
                 <ServiceInstall
                     Name="ssh-agent"
                     DisplayName="OpenSSH Authentication Agent"
@@ -70,17 +56,8 @@
             </Component>
         </ComponentGroup>
 
-        <ComponentGroup Id="Manifest" Directory="SPDXFOLDER">
-             <Component>
-                <File Name="manifest.spdx.json" Source="_manifest\spdx_2.2\manifest.spdx.json" KeyPath="yes" />
-            </Component>
-            <Component>
-                <File Name="manifest.spdx.json.sha256" Source="_manifest\spdx_2.2\manifest.spdx.json.sha256" KeyPath="yes" />
-            </Component>
-        </ComponentGroup>
-
         <!-- Automatically add custom actions if referencing the Shared component group. -->
-        <SetProperty Id="SetPrivilegesOnSshAgent" Value="&quot;[SystemFolder]sc.exe&quot; privs ssh-agent SeAssignPrimaryTokenPrivilege/SeTcbPrivilege/SeBackupPrivilege/SeRestorePrivilege/SeImpersonatePrivilege" Sequence="execute" Before="SetPrivilegesOnSshAgent" />
+        <SetProperty Id="SetPrivilegesOnSshAgent" Value="&quot;[SystemFolder]sc.exe&quot; privs ssh-agent SeImpersonatePrivilege" Sequence="execute" Before="SetPrivilegesOnSshAgent" />
         <CustomAction Id="SetPrivilegesOnSshAgent" BinaryKey="WixCA" DllEntry="WixQuietExec" Execute="deferred" Return="check" Impersonate="no" />
         <InstallExecuteSequence>
             <Custom Action="SetPrivilegesOnSshAgent" After="InstallServices"><![CDATA[&Server = 3]]></Custom>

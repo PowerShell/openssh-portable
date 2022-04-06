@@ -1,4 +1,4 @@
-/* $OpenBSD: ssh-sk-helper.c,v 1.12 2021/10/28 02:54:18 djm Exp $ */
+/* $OpenBSD: ssh-sk-helper.c,v 1.11 2020/10/18 11:32:02 djm Exp $ */
 /*
  * Copyright (c) 2019 Google LLC
  *
@@ -112,20 +112,10 @@ process_sign(struct sshbuf *req)
 
 	if ((r = sshkey_private_deserialize(kbuf, &key)) != 0)
 		fatal_r(r, "%s: Unable to parse private key", __progname);
-#ifndef WINDOWS
 	if (!sshkey_is_sk(key)) {
 		fatal("%s: Unsupported key type %s",
 		    __progname, sshkey_ssh_name(key));
 	}
-#else
-	if (!sshkey_is_sk(key) || key->sk_application == NULL) {
-		fatal("%s: Unsupported key type %s",
-		    __progname, sshkey_ssh_name(key));
-	}
-	if (strncmp(key->sk_application, "ssh:", 4) != 0) {
-		fatal("%s: web-origin key", __progname);
-	}
-#endif
 
 	debug_f("ready to sign with key %s, provider %s: "
 	    "msg len %zu, compat 0x%lx", sshkey_type(key),
@@ -184,10 +174,6 @@ process_enroll(struct sshbuf *req)
 
 	if (type > INT_MAX)
 		fatal("%s: bad type %u", __progname, type);
-#ifdef WINDOWS
-	if (application == NULL || strncmp(application, "ssh:", 4) != 0)
-		fatal("%s: bogus application", __progname);
-#endif
 	if (sshbuf_len(challenge) == 0) {
 		sshbuf_free(challenge);
 		challenge = NULL;
@@ -230,17 +216,15 @@ process_load_resident(struct sshbuf *req)
 	int r;
 	char *provider, *pin, *device;
 	struct sshbuf *kbuf, *resp;
-	struct sshsk_resident_key **srks = NULL;
-	size_t nsrks = 0, i;
-	u_int flags;
+	struct sshkey **keys = NULL;
+	size_t nkeys = 0, i;
 
 	if ((kbuf = sshbuf_new()) == NULL)
 		fatal("%s: sshbuf_new failed", __progname);
 
 	if ((r = sshbuf_get_cstring(req, &provider, NULL)) != 0 ||
 	    (r = sshbuf_get_cstring(req, &device, NULL)) != 0 ||
-	    (r = sshbuf_get_cstring(req, &pin, NULL)) != 0 ||
-	    (r = sshbuf_get_u32(req, &flags)) != 0)
+	    (r = sshbuf_get_cstring(req, &pin, NULL)) != 0)
 		fatal_r(r, "%s: parse", __progname);
 	if (sshbuf_len(req) != 0)
 		fatal("%s: trailing data in request", __progname);
@@ -248,9 +232,9 @@ process_load_resident(struct sshbuf *req)
 	null_empty(&device);
 	null_empty(&pin);
 
-	if ((r = sshsk_load_resident(provider, device, pin, flags,
-	    &srks, &nsrks)) != 0) {
-		resp = reply_error(r, "sshsk_load_resident failed: %s",
+	if ((r = sshsk_load_resident(provider, device, pin,
+	    &keys, &nkeys)) != 0) {
+		resp = reply_error(r, " sshsk_load_resident failed: %s",
 		    ssh_err(r));
 		goto out;
 	}
@@ -261,27 +245,21 @@ process_load_resident(struct sshbuf *req)
 	if ((r = sshbuf_put_u32(resp, SSH_SK_HELPER_LOAD_RESIDENT)) != 0)
 		fatal_r(r, "%s: compose", __progname);
 
-	for (i = 0; i < nsrks; i++) {
-#ifdef WINDOWS
-		if (srks[i]->key->sk_application == NULL ||
-		    strncmp(srks[i]->key->sk_application, "ssh:", 4) != 0)
-			fatal("%s: non-ssh application", __progname);
-#endif
-		debug_f("key %zu %s %s uidlen %zu", i,
-		    sshkey_type(srks[i]->key), srks[i]->key->sk_application,
-		    srks[i]->user_id_len);
+	for (i = 0; i < nkeys; i++) {
+		debug_f("key %zu %s %s", i, sshkey_type(keys[i]),
+		    keys[i]->sk_application);
 		sshbuf_reset(kbuf);
-		if ((r = sshkey_private_serialize(srks[i]->key, kbuf)) != 0)
+		if ((r = sshkey_private_serialize(keys[i], kbuf)) != 0)
 			fatal_r(r, "%s: encode key", __progname);
 		if ((r = sshbuf_put_stringb(resp, kbuf)) != 0 ||
-		    (r = sshbuf_put_cstring(resp, "")) != 0 || /* comment */
-		    (r = sshbuf_put_string(resp, srks[i]->user_id,
-		    srks[i]->user_id_len)) != 0)
+		    (r = sshbuf_put_cstring(resp, "")) != 0) /* comment */
 			fatal_r(r, "%s: compose key", __progname);
 	}
 
  out:
-	sshsk_free_resident_keys(srks, nsrks);
+	for (i = 0; i < nkeys; i++)
+		sshkey_free(keys[i]);
+	free(keys);
 	sshbuf_free(kbuf);
 	free(provider);
 	if (pin != NULL)

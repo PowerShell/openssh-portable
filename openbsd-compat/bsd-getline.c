@@ -39,7 +39,7 @@
 #include "file.h"
 #endif
 
-#if !defined(HAVE_GETLINE) || defined(BROKEN_GETLINE)
+#if !HAVE_GETLINE
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>

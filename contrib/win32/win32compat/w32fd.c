@@ -697,9 +697,6 @@ w32_fcntl(int fd, int cmd, ... /* arg */)
 	case F_SETFD:
 		ret = w32_io_process_fd_flags(fd_table.w32_ios[fd], va_arg(valist, int));
 		break;
-	case F_DUPFD:
-		ret = dup(fd);
-		break;
 	default:
 		errno = EINVAL;
 		debug3("fcntl - ERROR not supported cmd:%d", cmd);
@@ -1075,14 +1072,7 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 		flags |= DETACHED_PROCESS;
 	}
 
-	char* fidoDebug = NULL;
-	size_t len = 0;
-	_dupenv_s(&fidoDebug, &len, "FIDO_DEBUG");
-
-	if (is_bash_test_env() ||
-		(strstr(cmd, "ssh-pkcs11-helper.exe")) ||
-		((fidoDebug == NULL) && strstr(cmd, "ssh-sk-helper.exe"))) {
-		debug3("Creating process with CREATE_NO_WINDOW");
+	if (is_bash_test_env()) {
 		flags |= CREATE_NO_WINDOW;
 	}
 	
@@ -1318,16 +1308,4 @@ int
 posix_spawnp(pid_t *pidp, const char *file, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[])
 {
 	return posix_spawn_internal(pidp, file, file_actions, attrp, argv, envp, NULL, FALSE);
-}
-
-int
-posix_spawn_as_user(pid_t *pidp, const char *file, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], HANDLE user_token)
-{
-	return posix_spawn_internal(pidp, file, file_actions, attrp, argv, envp, user_token, TRUE);
-}
-
-int
-posix_spawnp_as_user(pid_t *pidp, const char *file, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], HANDLE user_token)
-{
-	return posix_spawn_internal(pidp, file, file_actions, attrp, argv, envp, user_token, FALSE);
 }

@@ -1,0 +1,26 @@
+{
+  "Branch": [
+    {
+      "collection": "microsoft",
+      "project": "OS",
+      "repo": "OS.2020",
+      "name": "official/rs_onecore_base2_has3",
+      "completePR":"False",
+      "pullRequestTitle":"OpenSSH new VPack version",
+      "workitem":31596001,
+      "CheckinFiles": 
+      [
+        {
+          "source": "openssh.man",
+          "path": "/onecore/admin/openssh/vpack",
+          "type": "File",
+        }
+      ]
+    }
+  ],
+  "Email": [
+    {
+      "sendTo": "kryalava@microsoft.com;bagajjal@microsoft.com;slee@microsoft.com;daniel.maertens@microsoft.com;tessgauthier@microsoft.com;vthiebaut@microsoft.com"
+    }
+  ]
+}

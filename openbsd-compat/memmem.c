@@ -23,8 +23,6 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/* OPENBSD ORIGINAL: lib/libc/string/memmem.c */
-
 #include "includes.h"
 
 #ifndef HAVE_MEMMEM

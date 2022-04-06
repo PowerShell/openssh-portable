@@ -1,4 +1,4 @@
-/* $OpenBSD: misc.h,v 1.99 2021/11/13 21:14:13 deraadt Exp $ */
+/* $OpenBSD: misc.h,v 1.95 2021/04/03 06:18:40 djm Exp $ */
 
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
@@ -45,7 +45,6 @@ struct ForwardOptions {
 /* misc.c */
 
 char	*chop(char *);
-void	 rtrim(char *);
 void	skip_space(char **);
 char	*strdelim(char **);
 char	*strdelimw(char **);
@@ -71,7 +70,6 @@ int	 parse_user_host_port(const char *, char **, char **, int *);
 int	 parse_uri(const char *, const char *, char **, char **, int *, char **);
 int	 convtime(const char *);
 const char *fmt_timeframe(time_t t);
-int	 tilde_expand(const char *, uid_t, char **);
 char	*tilde_expand_filename(const char *, uid_t);
 
 char	*dollar_expand(int *, const char *string, ...);
@@ -82,7 +80,7 @@ void	 xextendf(char **s, const char *sep, const char *fmt, ...)
     __attribute__((__format__ (printf, 3, 4))) __attribute__((__nonnull__ (3)));
 void	 sanitise_stdfd(void);
 void	 ms_subtract_diff(struct timeval *, int *);
-void	 ms_to_timespec(struct timespec *, int);
+void	 ms_to_timeval(struct timeval *, int);
 void	 monotime_ts(struct timespec *);
 void	 monotime_tv(struct timeval *);
 time_t	 monotime(void);
@@ -123,9 +121,6 @@ void	 addargs(arglist *, char *, ...)
 void	 replacearg(arglist *, u_int, char *, ...)
 	    __attribute__((format(printf, 3, 4)));
 void	 freeargs(arglist *);
-#ifdef WINDOWS
-void	 duplicateargs(arglist *, arglist *);
-#endif
 
 int	 tun_open(int, int, char **);
 
@@ -180,15 +175,9 @@ void mktemp_proto(char *, size_t);
 
 void	 child_set_env(char ***envp, u_int *envsizep, const char *name,
 	    const char *value);
-const char *lookup_env_in_list(const char *env,
-	    char * const *envs, size_t nenvs);
 
-int	 argv_split(const char *, int *, char ***, int);
+int	 argv_split(const char *, int *, char ***);
 char	*argv_assemble(int, char **argv);
-char	*argv_next(int *, char ***);
-void	 argv_consume(int *);
-void	 argv_free(char **, int);
-
 int	 exited_cleanly(pid_t, const char *, const char *, int);
 
 struct stat;

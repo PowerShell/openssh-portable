@@ -39,9 +39,7 @@
 #include <string.h>
 
 extern char **environ;
-#ifndef HAVE_SETENV
 static char **lastenv;				/* last value of environ */
-#endif
 
 /* OpenSSH Portable: __findenv is from getenv.c rev 1.8, made static */
 /*

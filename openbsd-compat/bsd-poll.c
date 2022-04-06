@@ -15,45 +15,40 @@
  */
 
 #include "includes.h"
-#if !defined(HAVE_PPOLL) || !defined(HAVE_POLL) || defined(BROKEN_POLL)
+#if !defined(HAVE_POLL)
 
 #include <sys/types.h>
 #include <sys/time.h>
-#ifdef HAVE_SYS_PARAM_H
-# include <sys/param.h>
-#endif
 #ifdef HAVE_SYS_SELECT_H
 # include <sys/select.h>
 #endif
 
 #include <errno.h>
-#include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include "bsd-poll.h"
 
-#if !defined(HAVE_PPOLL) || defined(BROKEN_POLL)
 /*
- * A minimal implementation of ppoll(2), built on top of pselect(2).
+ * A minimal implementation of poll(2), built on top of select(2).
  *
- * Only supports POLLIN, POLLOUT and POLLPRI flags in pfd.events and
- * revents. Notably POLLERR, POLLHUP and POLLNVAL are not supported.
+ * Only supports POLLIN and POLLOUT flags in pfd.events, and POLLIN, POLLOUT
+ * and POLLERR flags in revents.
  *
  * Supports pfd.fd = -1 meaning "unused" although it's not standard.
  */
 
 int
-ppoll(struct pollfd *fds, nfds_t nfds, const struct timespec *tmoutp,
-    const sigset_t *sigmask)
+poll(struct pollfd *fds, nfds_t nfds, int timeout)
 {
 	nfds_t i;
 	int saved_errno, ret, fd, maxfd = 0;
 	fd_set *readfds = NULL, *writefds = NULL, *exceptfds = NULL;
 	size_t nmemb;
+	struct timeval tv, *tvp = NULL;
 
 	for (i = 0; i < nfds; i++) {
 		fd = fds[i].fd;
-		if (fd != -1 && fd >= FD_SETSIZE) {
+		if (fd >= FD_SETSIZE) {
 			errno = EINVAL;
 			return -1;
 		}
@@ -74,15 +69,24 @@ ppoll(struct pollfd *fds, nfds_t nfds, const struct timespec *tmoutp,
 		fd = fds[i].fd;
 		if (fd == -1)
 			continue;
-		if (fds[i].events & POLLIN)
+		if (fds[i].events & POLLIN) {
 			FD_SET(fd, readfds);
-		if (fds[i].events & POLLOUT)
-			FD_SET(fd, writefds);
-		if (fds[i].events & POLLPRI)
 			FD_SET(fd, exceptfds);
+		}
+		if (fds[i].events & POLLOUT) {
+			FD_SET(fd, writefds);
+			FD_SET(fd, exceptfds);
+		}
 	}
 
-	ret = pselect(maxfd + 1, readfds, writefds, exceptfds, tmoutp, sigmask);
+	/* poll timeout is msec, select is timeval (sec + usec) */
+	if (timeout >= 0) {
+		tv.tv_sec = timeout / 1000;
+		tv.tv_usec = (timeout % 1000) * 1000;
+		tvp = &tv;
+	}
+
+	ret = select(maxfd + 1, readfds, writefds, exceptfds, tvp);
 	saved_errno = errno;
 
 	/* scan through select results and set poll() flags */
@@ -91,12 +95,15 @@ ppoll(struct pollfd *fds, nfds_t nfds, const struct timespec *tmoutp,
 		fds[i].revents = 0;
 		if (fd == -1)
 			continue;
-		if (FD_ISSET(fd, readfds))
+		if (FD_ISSET(fd, readfds)) {
 			fds[i].revents |= POLLIN;
-		if (FD_ISSET(fd, writefds))
+		}
+		if (FD_ISSET(fd, writefds)) {
 			fds[i].revents |= POLLOUT;
-		if (FD_ISSET(fd, exceptfds))
-			fds[i].revents |= POLLPRI;
+		}
+		if (FD_ISSET(fd, exceptfds)) {
+			fds[i].revents |= POLLERR;
+		}
 	}
 
 out:
@@ -107,23 +114,4 @@ out:
 		errno = saved_errno;
 	return ret;
 }
-#endif /* !HAVE_PPOLL || BROKEN_POLL */
-
-#if !defined(HAVE_POLL) || defined(BROKEN_POLL)
-int
-poll(struct pollfd *fds, nfds_t nfds, int timeout)
-{
-	struct timespec ts, *tsp = NULL;
-
-	/* poll timeout is msec, ppoll is timespec (sec + nsec) */
-	if (timeout >= 0) {
-		ts.tv_sec = timeout / 1000;
-		ts.tv_nsec = (timeout % 1000) * 1000000;
-		tsp = &ts;
-	}
-
-	return ppoll(fds, nfds, tsp, NULL);
-}
-#endif /* !HAVE_POLL || BROKEN_POLL */
-
-#endif /* !HAVE_PPOLL || !HAVE_POLL || BROKEN_POLL */
+#endif

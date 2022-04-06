@@ -1,4 +1,4 @@
-/* $OpenBSD: readpass.c,v 1.69 2021/07/23 05:56:47 djm Exp $ */
+/* $OpenBSD: readpass.c,v 1.68 2020/11/10 07:46:20 claudio Exp $ */
 /*
  * Copyright (c) 2001 Markus Friedl.  All rights reserved.
  *
@@ -148,7 +148,7 @@ ssh_askpass(char *askpass, const char *msg, const char *env_hint)
  * Reads a passphrase from /dev/tty with echo turned off/on.  Returns the
  * passphrase (allocated with xmalloc).  Exits if EOF is encountered. If
  * RP_ALLOW_STDIN is set, the passphrase will be read from stdin if no
- * tty is or askpass program is available
+ * tty is available
  */
 char *
 read_passphrase(const char *prompt, int flags)
@@ -177,7 +177,7 @@ read_passphrase(const char *prompt, int flags)
 		use_askpass = 1;
 	else if (flags & RP_ALLOW_STDIN) {
 		if (!isatty(STDIN_FILENO)) {
-			debug_f("stdin is not a tty");
+			debug("read_passphrase: stdin is not a tty");
 			use_askpass = 1;
 		}
 	} else {
@@ -193,7 +193,7 @@ read_passphrase(const char *prompt, int flags)
 			(void)write(ttyfd, &cr, 1);
 			close(ttyfd);
 		} else {
-			debug_f("can't open %s: %s", _PATH_TTY,
+			debug("read_passphrase: can't open %s: %s", _PATH_TTY,
 			    strerror(errno));
 			use_askpass = 1;
 		}

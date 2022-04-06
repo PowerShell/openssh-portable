@@ -1,4 +1,4 @@
-/* 	$OpenBSD: test_convtime.c,v 1.2 2021/12/14 21:25:27 deraadt Exp $ */
+/* 	$OpenBSD: test_convtime.c,v 1.1 2021/03/19 03:25:01 djm Exp $ */
 /*
  * Regress test for misc time conversion functions.
  *
@@ -8,11 +8,9 @@
 #include "includes.h"
 
 #include <sys/types.h>
-#include <limits.h>
+#include <sys/param.h>
 #include <stdio.h>
-#ifdef HAVE_STDINT_H
 #include <stdint.h>
-#endif
 #include <stdlib.h>
 #include <string.h>
 
