@@ -1186,6 +1186,7 @@ fileio_readlink(const char *path, char *buf, size_t bufsiz)
 		errno = ENOMEM;
 		goto cleanup;
 	}
+	memset(reparse_buffer, 0, MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
 
 	/* send a request to the file system to get the real path */
 	DWORD dwBytesReturned = 0;

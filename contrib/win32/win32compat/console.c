@@ -182,7 +182,7 @@ ConEnterRawMode()
 	if (FALSE == isConHostParserEnabled || !SetConsoleMode(GetConsoleOutputHandle(), dwAttributes)) /* Windows NT */
 		isAnsiParsingRequired = TRUE;
 			
-	GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &csbi);
+	BOOL gcsbRet = GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &csbi);
 	
 	/* We track the view port, if conpty is not supported */
 	if (!is_conpty_supported())
@@ -192,6 +192,10 @@ ConEnterRawMode()
 	 *  so that the clearscreen will not erase any lines.
 	 */
 	if (TRUE == isAnsiParsingRequired) {
+		if (gcsbRet == 0)
+		{
+			error("Failed to get console screen buffer info error:%d", GetLastError());
+		}
 		SavedViewRect = csbi.srWindow;
 		debug("console doesn't support the ansi parsing");
 	} else {

@@ -305,6 +305,8 @@ get_con_client_info(struct agent_connection* con)
 		GetTokenInformation(client_primary_token, TokenUser, info, info_len, &info_len) == FALSE)
 		goto done;
 
+	memset(info, 0, info_len);
+	
 	/* check if its localsystem */
 	if (IsWellKnownSid(info->User.Sid, WinLocalSystemSid)) {
 		con->client_type = SYSTEM;

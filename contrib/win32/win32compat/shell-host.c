@@ -1115,6 +1115,7 @@ QueueEvent(DWORD event, HWND hwnd, LONG idObject, LONG idChild)
 
 	EnterCriticalSection(&criticalSection);
 	current = malloc(sizeof(consoleEvent));
+	memset(current, 0, sizeof(consoleEvent));
 	if (current) {
 		if (!head) {
 			current->event = event;

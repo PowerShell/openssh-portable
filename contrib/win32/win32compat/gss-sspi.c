@@ -1072,7 +1072,7 @@ ssh_gssapi_krb5_userok(ssh_gssapi_client *client, char *name)
 	 * onto the next available method.
 	 */
 	struct passwd * user = getpwnam(name);
-	if (_stricmp(client->displayname.value, user->pw_name) != 0) {
+	if (user == NULL || _stricmp(client->displayname.value, user->pw_name) != 0) {
 		/* check failed */
 		debug("sspi user '%s' did not match user-provided, resolved user '%s'", 
 			(char *) client->displayname.value, name);

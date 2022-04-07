@@ -101,6 +101,8 @@ get_user_groups()
 		goto cleanup;
 	}
 
+	memset(group_buf, 0, group_size);
+
 	/* read group sids from logon token -- this will return a list of groups
 	* similar to the data returned when you do a whoami /groups command */
 	if (GetTokenInformation(logon_token, TokenGroups, group_buf, group_size, &group_size) == 0) {

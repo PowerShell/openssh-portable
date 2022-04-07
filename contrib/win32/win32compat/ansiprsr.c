@@ -670,7 +670,7 @@ ParseANSI(unsigned char * pszBuffer, unsigned char * pszBufferEnd, unsigned char
 					}
 				} else if (iParam[0] == 6) {
 					char * szStatus = GetCursorPositionReport();
-					if (respbuf != NULL) {
+					if (szStatus != NULL && respbuf != NULL) {
 						*respbuf = szStatus;
 						if (resplen != NULL)
 							*resplen = strlen(szStatus);

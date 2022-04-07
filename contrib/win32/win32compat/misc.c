@@ -1736,6 +1736,7 @@ get_sid(const char* name)
 			errno = ENOMEM;
 			goto cleanup;
 		}
+		memset(info, 0, info_len);
 
 		if (GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE) {
 			errno = errno_from_Win32LastError();
