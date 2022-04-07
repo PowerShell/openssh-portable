@@ -1483,14 +1483,14 @@ localtime_r(const time_t *timep, struct tm *result)
 struct tm *
 w32_localtime(const time_t* sourceTime)
 {
-	struct tm destTime;
-	return localtime_s(&destTime, sourceTime) == 0 ? &destTime : NULL;
+	struct tm* destTime = (struct tm*)malloc(sizeof(struct tm));
+	return localtime_s(destTime, sourceTime) == 0 ? destTime : NULL;
 }
 
 char*
 w32_ctime(const time_t* sourceTime)
 {
-	char destTime[26];
+	char *destTime = malloc(26);
 	return ctime_s(destTime, 26, sourceTime) == 0 ? destTime : NULL;
 }
 
