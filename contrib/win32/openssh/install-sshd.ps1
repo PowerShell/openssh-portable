@@ -86,7 +86,13 @@ if (Test-Path $sshAgentRegPath)
 $moduliPath = Join-Path $PSScriptRoot "moduli"
 if (Test-Path $moduliPath -PathType Leaf)
 {
-    Repair-ModuliFilePermission -FilePath $moduliPath @psBoundParameters -confirm:$false
+    # if user calls .\install-sshd.ps1 with -confirm, use that
+    # otherwise, need to preserve legacy behavior
+    if (-not $PSBoundParameters.ContainsKey('confirm'))
+    {
+        $PSBoundParameters.add('confirm', $false)
+    }
+    Repair-ModuliFilePermission -FilePath $moduliPath @psBoundParameters
 }
 
 # If %programData%/ssh folder already exists, verify and, if necessary and approved by user, fix permissions 
