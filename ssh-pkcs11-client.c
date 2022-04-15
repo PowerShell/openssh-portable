@@ -509,10 +509,12 @@ pkcs11_start_helper(void)
 #endif
 	/* success */
 	debug3_f("started pid=%ld", (long)pid);
+#ifdef WINDOWS
 out:
 	if (client_token)
 		CloseHandle(client_token);
 	return r;
+#endif
 }
 
 int
