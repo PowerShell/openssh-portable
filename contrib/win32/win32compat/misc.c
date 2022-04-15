@@ -190,7 +190,7 @@ nanosleep(const struct timespec *req, struct timespec *rem)
  * Copyright (c) 2009, 2010 NoMachine
  * All rights reserved
  */
-int
+static int
 gettimeofday(struct timeval *tv, void *tz)
 {
 	union {
@@ -212,7 +212,7 @@ gettimeofday(struct timeval *tv, void *tz)
 	return 0;
 }
 
-void
+static void
 explicit_bzero(void *b, size_t len)
 {
 	SecureZeroMemory(b, len);
@@ -1494,7 +1494,7 @@ w32_ctime(const time_t* sourceTime)
 	return ctime_s(destTime, 26, sourceTime) == 0 ? destTime : NULL;
 }
 
-void
+static void
 freezero(void *ptr, size_t sz)
 {
 	if (ptr == NULL)
