@@ -786,8 +786,14 @@ socketio_connectex(struct w32_io* pio, const struct sockaddr* name, int namelen)
 
 	if (SOCKET_ERROR == bind(pio->sock, tmp_addr, (int)tmp_addr_len)) {
 		errno = errno_from_WSALastError();
-		debug3("connectex - ERROR: bind failed :%d, io:%p", WSAGetLastError(), pio);
-		return -1;
+		/* 
+		 * When use bind_address or bind_interface, this bind will return WSAEINVAL. But it doesn't matter.
+		 * https://docs.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-bind
+		 */
+		if (errno != EINVAL) {
+			debug3("connectex - ERROR: bind failed :%d, io:%p", WSAGetLastError(), pio);
+			return -1;
+		}
 	}
 
 	if (SOCKET_ERROR == WSAIoctl(pio->sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
