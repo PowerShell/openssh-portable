@@ -313,16 +313,18 @@ notify_start(int force_askpass, const char *fmt, ...)
 		free(prompt);
 		return NULL;
 	}
+#ifndef WINDOWS
 	if (pid == 0) {
 		if (stdfd_devnull(1, 1, 0) == -1)
 			fatal_f("stdfd_devnull failed");
 		closefrom(STDERR_FILENO + 1);
 		setenv("SSH_ASKPASS_PROMPT", "none", 1); /* hint to UI */
-		execlp(askpass, askpass, prompt, (char *)NULL);
+		execlp(askpass, askpass, prompt, (char*)NULL);
 		error_f("exec(%s): %s", askpass, strerror(errno));
 		_exit(1);
 		/* NOTREACHED */
 	}
+#endif
  out_ctx:
 	if ((ret = calloc(1, sizeof(*ret))) == NULL) {
 		kill(pid, SIGTERM);

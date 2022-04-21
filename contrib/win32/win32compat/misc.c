@@ -1484,6 +1484,10 @@ struct tm *
 w32_localtime(const time_t* sourceTime)
 {
 	struct tm* destTime = (struct tm*)malloc(sizeof(struct tm));
+	if (destTime == NULL)
+	{
+		return NULL;
+	}
 	return localtime_s(destTime, sourceTime) == 0 ? destTime : NULL;
 }
 
@@ -1491,6 +1495,10 @@ char*
 w32_ctime(const time_t* sourceTime)
 {
 	char *destTime = malloc(26);
+	if (destTime == NULL)
+	{
+		return NULL;
+	}
 	return ctime_s(destTime, 26, sourceTime) == 0 ? destTime : NULL;
 }
 
