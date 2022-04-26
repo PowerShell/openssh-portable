@@ -3,7 +3,7 @@
     <PropertyGroup>
         <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
         <Platform Condition="'$(Platform)' == ''">x64</Platform>
-        <ProductVersion>1.1.0</ProductVersion>
+        <ProductVersion Condition="'$(ProductVersion)' == ''">1.1.0</ProductVersion>
         <OutputName>openssh</OutputName>
         <OutputType>package</OutputType>
         <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
