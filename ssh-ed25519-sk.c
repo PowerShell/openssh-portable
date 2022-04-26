@@ -137,7 +137,7 @@ ssh_ed25519_sk_verify(const struct sshkey *key,
 		r = SSH_ERR_ALLOC_FAIL;
 		goto out;
 	}
-	if ((ret = crypto_sign_ed25519_open(m, &mlen, sm, smlen,
+	if ((ret = crypto_sign_ed25519_open(m, &mlen, sm, smlen, // CodeQL [SM02311]: false positive sm will not be null
 	    key->ed25519_pk)) != 0) {
 		debug2_f("crypto_sign_ed25519_open failed: %d", ret);
 	}

@@ -157,7 +157,7 @@ fuzz_fmt(struct fuzz *fuzz, char *s, size_t n)
 static void
 dump(u_char *p, size_t len)
 {
-	size_t i, j;
+	ssize_t i, j;
 
 	for (i = 0; i < len; i += 16) {
 		fprintf(stderr, "%.4zd: ", i);
@@ -218,7 +218,7 @@ fuzz_begin(u_int strategies, const void *p, size_t l)
 
 	assert(p != NULL);
 	assert(ret != NULL);
-	ret->seed = malloc(l);
+	ret->seed = malloc(l); // CodeQL [SM02311]: false positive assert assures ret will not be null
 	assert(ret->seed != NULL);
 	memcpy(ret->seed, p, l);
 	ret->slen = l;

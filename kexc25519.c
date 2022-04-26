@@ -185,7 +185,7 @@ kex_c25519_dec(struct kex *kex, const struct sshbuf *server_blob,
 		r = SSH_ERR_ALLOC_FAIL;
 		goto out;
 	}
-	if ((r = kexc25519_shared_key_ext(kex->c25519_client_key, server_pub,
+	if ((r = kexc25519_shared_key_ext(kex->c25519_client_key, server_pub, // CodeQL [SM02311]: false positive server_pub will not be null
 	    buf, 0)) < 0)
 		goto out;
 #ifdef DEBUG_KEXECDH

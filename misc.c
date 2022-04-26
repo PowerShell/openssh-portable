@@ -2263,7 +2263,7 @@ safe_path(const char *name, struct stat *stp, const char *pw_dir,
 		}
 
 		/* If are past the homedir then we can stop */
-		if (comparehome && strcmp(homedir, buf) == 0)
+		if (comparehome && strcmp(homedir, buf) == 0) // CodeQL [SM01714] false positive: homedir is null terminated
 			break;
 
 		/*

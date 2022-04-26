@@ -1612,7 +1612,7 @@ channel_before_prepare_io_rdynamic(struct ssh *ssh, Channel *c)
 		return;
 	/* try to guess the protocol */
 	p = sshbuf_ptr(c->output);
-	switch (p[0]) {
+	switch (p[0]) { // CodeQL [SM02311]: false positive p will not be null
 	case 0x04:
 		/* switch input/output for reverse forwarding */
 		ret = channel_decode_socks4(c, c->output, c->input);

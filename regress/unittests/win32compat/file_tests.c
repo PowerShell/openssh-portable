@@ -419,7 +419,7 @@ file_miscellaneous_tests()
 	ASSERT_INT_NE(retValue, -1);
 
 	char *tmp = dup_str(thishost);
-	int len = strlen(tmp);
+	int len = strlen(tmp); // CodeQL [SM02311]: false positive assert assures thishost will not be null
 
 	int f = dup(STDOUT_FILENO);
 	ASSERT_INT_NE(f, -1);

@@ -2095,7 +2095,7 @@ parse_pubkey_algos:
 			goto out;
 		}
 		/* Parse mode in octal format */
-		value = strtol(arg, &endofnumber, 8);
+		value = strtol(arg, &endofnumber, 8); // CodeQL [SM02313]: false positive endofnumber will not be uninitialized
 		if (arg == endofnumber || value < 0 || value > 0777) {
 			error("%.200s line %d: Bad mask.", filename, linenum);
 			goto out;

@@ -1541,7 +1541,7 @@ do_change_comment(struct passwd *pw, const char *identity_comment)
 	    private_key_format != SSHKEY_PRIVATE_OPENSSH) {
 		error("Comments are only supported for keys stored in "
 		    "the new format (-o).");
-		explicit_bzero(passphrase, strlen(passphrase));
+		explicit_bzero(passphrase, strlen(passphrase)); // CodeQL [SM01714] false positive: passphrase is null terminated
 		sshkey_free(private);
 		exit(1);
 	}

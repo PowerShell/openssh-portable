@@ -536,7 +536,7 @@ glob0(const Char *pattern, glob_t *pglob, struct glob_lim *limitp)
 			/* collapse adjacent stars to one,
 			 * to avoid exponential behavior
 			 */
-			if (bufnext == patbuf || bufnext[-1] != M_ALL)
+			if (bufnext == patbuf || bufnext[-1] != M_ALL) // CodeQL [SM01947]: false positive bufnext is more than 1 byte
 				*bufnext++ = M_ALL;
 			break;
 		default:

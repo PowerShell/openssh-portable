@@ -441,7 +441,7 @@ cleanup:
 	if (str_w)
 		free(str_w);
 	if (str_tmp)
-		free(str_tmp);
+		free(str_tmp); // CodeQL [SM01977]: false positive str_tmp has not been previously freed, CodeQL [SM03650]: false positive str_tmp has not been previously freed
 	return ret;
 }
 
@@ -1626,7 +1626,7 @@ lookup_sid(const wchar_t* name_utf16, PSID psid, DWORD * psid_len)
 	wchar_t* name_utf16_modified = NULL;
 	BOOL resolveAsAdminsSid = 0, r;
 
-	LookupAccountNameW(NULL, name_utf16, NULL, &sid_len, dom, &dom_len, &n_use);
+	LookupAccountNameW(NULL, name_utf16, NULL, &sid_len, dom, &dom_len, &n_use); // CodeQL [SM02313]: false positive n_use will not be uninitialized
 
 	if (sid_len == 0 && _wcsicmp(name_utf16, L"administrators") == 0) {
 		CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, NULL, &sid_len);

@@ -606,7 +606,7 @@ kex_input_kexinit(int type, u_int32_t seq, struct ssh *ssh)
 	}
 	ssh_dispatch_set(ssh, SSH2_MSG_KEXINIT, NULL);
 	ptr = sshpkt_ptr(ssh, &dlen);
-	if ((r = sshbuf_put(kex->peer, ptr, dlen)) != 0)
+	if ((r = sshbuf_put(kex->peer, ptr, dlen)) != 0) // CodeQL [SM02311]: false positive ptr will not be null
 		return r;
 
 	/* discard packet */

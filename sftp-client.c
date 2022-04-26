@@ -503,7 +503,7 @@ do_init(int fd_in, int fd_out, u_int transfer_buflen, u_int num_requests,
 		    (r = sshbuf_get_string(msg, &value, &vlen)) != 0)
 			fatal_fr(r, "parse extension");
 		if (strcmp(name, "posix-rename@openssh.com") == 0 &&
-		    strcmp((char *)value, "1") == 0) {
+		    strcmp((char *)value, "1") == 0) { // CodeQL [SM01714] false positive: value is null terminated
 			ret->exts |= SFTP_EXT_POSIX_RENAME;
 			known = 1;
 		} else if (strcmp(name, "statvfs@openssh.com") == 0 &&
@@ -771,7 +771,7 @@ do_lsreaddir(struct sftp_conn *conn, const char *path, int print_flag,
 			if ((r = decode_attrib(msg, &a)) != 0) {
 				error_fr(r, "couldn't decode attrib");
 				free(filename);
-				free(longname);
+				free(longname); // CodeQL [SM01977]: false positive longname has not been previously freed, CodeQL [SM03650]: false positive longname has not been previously freed
 				goto out;
 			}
 

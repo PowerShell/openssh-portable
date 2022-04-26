@@ -338,7 +338,7 @@ _ssh_read_banner(struct ssh *ssh, struct sshbuf *banner)
 		for (;;) {
 			if (j >= sshbuf_len(input))
 				return 0; /* insufficient data in input buf */
-			c = s[j++];
+			c = s[j++]; // CodeQL [SM02311]: false positive s will not be null
 			if (c == '\r') {
 				expect_nl = 1;
 				continue;

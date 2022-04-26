@@ -118,7 +118,7 @@ test_pw()
 
 	struct passwd *pw1 = NULL;
 	char *user = dup_str(pw->pw_name);
-	pw1 = getpwnam(user);
+	pw1 = getpwnam(user); // CodeQL [SM02311]: false positive assert assures user will not be null
 	ASSERT_PTR_NE(pw1, NULL);
 
 	TEST_DONE();

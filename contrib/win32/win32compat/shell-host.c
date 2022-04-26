@@ -891,7 +891,7 @@ ProcessEvent(void *p)
 	if (child_out == INVALID_HANDLE_VALUE || child_out == NULL)
 		return ERROR_INVALID_PARAMETER;
 
-	GetWindowThreadProcessId(hwnd, &dwProcessId);
+	GetWindowThreadProcessId(hwnd, &dwProcessId); // CodeQL [SM02313]: false positive dwProcessId will not be uninitialized
 
 	if (childProcessId != dwProcessId)
 		return ERROR_SUCCESS;

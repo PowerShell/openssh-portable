@@ -1012,6 +1012,10 @@ do_globbed_ls(struct sftp_conn *conn, const char *path,
 	for (nentries = 0; g.gl_pathv[nentries] != NULL; nentries++)
 		;	/* count entries */
 	indices = calloc(nentries, sizeof(*indices));
+	if (indices == NULL)
+	{
+		return -1;
+	}
 	for (i = 0; i < nentries; i++)
 		indices[i] = i;
 
@@ -1486,7 +1490,7 @@ parse_args(const char **cpp, int *ignore_errors, int *disable_echo, int *aflag,
 		if (argc - optidx < 1)
 			goto need_num_arg;
 		errno = 0;
-		ll = strtoll(argv[optidx], &cp2, base);
+		ll = strtoll(argv[optidx], &cp2, base); // CodeQL [SM02313]: false positive cp2 will not be uninitialized
 		if (cp2 == argv[optidx] || *cp2 != '\0' ||
 		    ((ll == LLONG_MIN || ll == LLONG_MAX) && errno == ERANGE) ||
 		    ll < 0 || ll > UINT32_MAX) {

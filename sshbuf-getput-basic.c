@@ -251,7 +251,7 @@ sshbuf_peek_string_direct(const struct sshbuf *buf, const u_char **valp,
 		SSHBUF_DBG(("SSH_ERR_MESSAGE_INCOMPLETE"));
 		return SSH_ERR_MESSAGE_INCOMPLETE;
 	}
-	len = PEEK_U32(p);
+	len = PEEK_U32(p); // CodeQL [SM02311]: false positive p will not be null
 	if (len > SSHBUF_SIZE_MAX - 4) {
 		SSHBUF_DBG(("SSH_ERR_STRING_TOO_LARGE"));
 		return SSH_ERR_STRING_TOO_LARGE;

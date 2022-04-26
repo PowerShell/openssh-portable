@@ -396,7 +396,7 @@ addr_pton_cidr(const char *p, struct xaddr *n, u_int *l)
 	if ((mp = strchr(addrbuf, '/')) != NULL) {
 		*mp = '\0';
 		mp++;
-		masklen = strtoul(mp, &cp, 10);
+		masklen = strtoul(mp, &cp, 10); // CodeQL [SM02313]: false positive cp will not be uninitialized
 		if (*mp == '\0' || *cp != '\0' || masklen > 128)
 			return -1;
 	}
