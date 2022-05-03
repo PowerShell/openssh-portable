@@ -1595,7 +1595,7 @@ am_system()
 
 	if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &proc_token) == FALSE ||
 		GetTokenInformation(proc_token, TokenUser, NULL, 0, &info_len) == TRUE ||
-		(info = (TOKEN_USER*)malloc(info_len)) == NULL ||
+		(info = (TOKEN_USER*)malloc(info_len)) == NULL || // CodeQL [SM02320]: false positive info will be initialized on following line
 		GetTokenInformation(proc_token, TokenUser, info, info_len, &info_len) == FALSE)
 		fatal("unable to know if I am running as system");
 

@@ -1142,7 +1142,7 @@ freeargs(arglist *args)
 
 #ifdef WINDOWS
 void
-duplicateargs(arglist *dest, arglist *source)
+duplicateargs(arglist *dest, const arglist *source)
 {
 	if (!source || !dest)
 		return;
@@ -1878,7 +1878,7 @@ parse_ipqos(const char *cp)
 	}
 	/* Try parsing as an integer */
 	val = strtol(cp, &ep, 0);
-	if (*cp == '\0' || *ep != '\0' || val < 0 || val > 255)
+	if (*cp == '\0' || *ep != '\0' || val <= 0 || val > 255)
 		return -1;
 	return val;
 }

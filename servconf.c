@@ -2393,7 +2393,7 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 			    filename, linenum, keyword);
 		/* Parse mode in octal format */
 		value = strtol(arg, &p, 8);
-		if (arg == p || value < 0 || value > 0777)
+		if (arg == p || value <= 0 || value > 0777)
 			fatal("%s line %d: Invalid %s.",
 			    filename, linenum, keyword);
 		if (*activep)

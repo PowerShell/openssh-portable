@@ -561,7 +561,7 @@ pkcs11_add_provider(char *name, char *pin, struct sshkey ***keysp,
 			if (labelsp)
 				(*labelsp)[i] = label;
 			else
-				free(label);
+				free(label); // CodeQL [SM03650]: false positive label not previously freed
 			free(blob);
 		}
 	} else if (type == SSH2_AGENT_FAILURE) {

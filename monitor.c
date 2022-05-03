@@ -1322,13 +1322,13 @@ monitor_valid_userblob(struct ssh *ssh, const u_char *data, u_int datalen)
 	if ((r = sshbuf_skip_string(b)) != 0 ||	/* service */
 	    (r = sshbuf_get_cstring(b, &cp, NULL)) != 0)
 		fatal_fr(r, "parse method");
-	if (strcmp("publickey", cp) != 0) {
-		if (strcmp("publickey-hostbound-v00@openssh.com", cp) == 0)
+	if (strcmp("publickey", cp) != 0) { // CodeQL [SM03650]: false positive cp populated again in line 1323
+		if (strcmp("publickey-hostbound-v00@openssh.com", cp) == 0) // CodeQL [SM03650]: false positive cp populated again in line 1323
 			hostbound = 1;
 		else
 			fail++;
 	}
-	free(cp);
+	free(cp); // CodeQL [SM03650]: false positive cp populated again in line 1323 and not previously freed
 	if ((r = sshbuf_get_u8(b, &type)) != 0)
 		fatal_fr(r, "parse pktype");
 	if (type == 0)
@@ -1395,7 +1395,7 @@ monitor_valid_hostbasedblob(const u_char *data, u_int datalen,
 		fatal_fr(r, "parse method");
 	if (strcmp(cp, "hostbased") != 0) // CodeQL [SM01977]: false positive cp has not been previously freed, CodeQL [SM03650]: false positive cp has not been previously freed
 		fail++;
-	free(cp);
+	free(cp); // CodeQL [SM03650]: false positive cp populated again in line 1394
 	if ((r = sshbuf_skip_string(b)) != 0 ||	/* pkalg */
 	    (r = sshbuf_skip_string(b)) != 0)	/* pkblob */
 		fatal_fr(r, "parse pk");

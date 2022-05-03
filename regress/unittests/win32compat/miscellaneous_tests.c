@@ -37,8 +37,10 @@ test_path_conversion_utilities()
 
 	char *s = "c:\\testdir\\test";
 	char *windows_style_path = dup_str(s);
+	ASSERT_PTR_NE(windows_style_path, NULL);
 	int len = strlen(windows_style_path);
 	char *backup = malloc(len + 1);
+	ASSERT_PTR_NE(backup, NULL);
 	strncpy(backup, windows_style_path, len);
 	backup[len] = '\0';
 
@@ -80,6 +82,7 @@ test_sanitizedpath()
 
 	size_t win32prgdir_len = strlen(win32prgdir_utf8);
 	char *tmp_path = malloc(win32prgdir_len + 2); /* 1-NULL and 1-adding "/" */
+	ASSERT_PTR_NE(tmp_path, NULL);
 	tmp_path[0] = '/';
 	strcpy(tmp_path+1, win32prgdir_utf8);
 	tmp_path[win32prgdir_len+1] = '\0';

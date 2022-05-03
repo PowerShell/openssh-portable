@@ -145,9 +145,13 @@ setup_session_user_vars(wchar_t* profile_path)
 
 		if (ret != ERROR_SUCCESS) {
 			error_message = get_registry_operation_error_message(ret);
-			error("Unable to open Registry Key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"), error_message);
 			if (error_message)
+			{
+				error("Unable to open Registry Key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"), error_message);
 				free(error_message);
+			}
+			else
+				error("Unable to open Registry Key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"));
 			continue;
 		}
 		
@@ -168,9 +172,13 @@ setup_session_user_vars(wchar_t* profile_path)
 			}
 			else if (ret != ERROR_SUCCESS) {
 				error_message = get_registry_operation_error_message(ret);
-				error("Failed to enumerate the value for registry key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"), error_message);
 				if (error_message)
+				{
+					error("Failed to enumerate the value for registry key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"), error_message);
 					free(error_message);
+				}
+				else
+					error("Failed to enumerate the value for registry key %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"));
 				break;
 			}
 

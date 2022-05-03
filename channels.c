@@ -1166,8 +1166,8 @@ x11_open_helper(struct ssh *ssh, struct sshbuf *b)
 		return 0;
 
 	/* Parse the lengths of variable-length fields. */
-	ucp = sshbuf_mutable_ptr(b);
-	if (ucp[0] == 0x42) {	/* Byte order MSB first. */
+	ucp = sshbuf_mutable_ptr(b); 
+	if (ucp[0] == 0x42) {	// CodeQL [SM02311]: false positive ucp will not be null /* Byte order MSB first. */
 		proto_len = 256 * ucp[6] + ucp[7];
 		data_len = 256 * ucp[8] + ucp[9];
 	} else if (ucp[0] == 0x6c) {	/* Byte order LSB first. */
@@ -1285,7 +1285,7 @@ channel_decode_socks4(Channel *c, struct sshbuf *input, struct sshbuf *output)
 
 	need = 1;
 	/* SOCKS4A uses an invalid IP address 0.0.0.x */
-	if (p[4] == 0 && p[5] == 0 && p[6] == 0 && p[7] != 0) {
+	if (p[4] == 0 && p[5] == 0 && p[6] == 0 && p[7] != 0) { // CodeQL [SM02311]: false positive p will not be null
 		debug2("channel %d: socks4a request", c->self);
 		/* ... and needs an extra string (the hostname) */
 		need = 2;
@@ -1315,7 +1315,7 @@ channel_decode_socks4(Channel *c, struct sshbuf *input, struct sshbuf *output)
 	}
 	have = sshbuf_len(input);
 	p = sshbuf_ptr(input);
-	if (memchr(p, '\0', have) == NULL) {
+	if (memchr(p, '\0', have) == NULL) { // CodeQL [SM02311]: false positive p will not be null
 		error("channel %d: decode socks4: unterminated user", c->self);
 		return -1;
 	}
@@ -1333,7 +1333,7 @@ channel_decode_socks4(Channel *c, struct sshbuf *input, struct sshbuf *output)
 	} else {				/* SOCKS4A: two strings */
 		have = sshbuf_len(input);
 		p = sshbuf_ptr(input);
-		if (memchr(p, '\0', have) == NULL) {
+		if (memchr(p, '\0', have) == NULL) { // CodeQL [SM02311]: false positive p will not be null
 			error("channel %d: decode socks4a: host not nul "
 			    "terminated", c->self);
 			return -1;
@@ -1397,7 +1397,7 @@ channel_decode_socks5(Channel *c, struct sshbuf *input, struct sshbuf *output)
 
 	debug2("channel %d: decode socks5", c->self);
 	p = sshbuf_ptr(input);
-	if (p[0] != 0x05)
+	if (p[0] != 0x05) // CodeQL [SM02311]: false positive p will not be null
 		return -1;
 	have = sshbuf_len(input);
 	if (!(c->flags & SSH_SOCKS5_AUTHDONE)) {
@@ -1551,7 +1551,7 @@ channel_pre_dynamic(struct ssh *ssh, Channel *c)
 	/* try to guess the protocol */
 	p = sshbuf_ptr(c->input);
 	/* XXX sshbuf_peek_u8? */
-	switch (p[0]) {
+	switch (p[0]) { // CodeQL [SM02311]: false positive p will not be null
 	case 0x04:
 		ret = channel_decode_socks4(c, c->input, c->output);
 		break;

@@ -193,6 +193,7 @@ void file_simple_fileio()
 		retValue = lseek(f, offset, SEEK_SET);
 		ASSERT_INT_EQ(retValue, 0);
 		char *tmp = dup_str(small_read_buf);
+		ASSERT_PTR_NE(tmp, NULL);
 
 		retValue = read(f, small_read_buf, SMALL_RECV_BUF_SIZE);
 		small_read_buf[retValue] = '\0';

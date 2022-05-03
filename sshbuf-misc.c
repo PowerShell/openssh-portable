@@ -82,8 +82,8 @@ sshbuf_dtob16(struct sshbuf *buf)
 		return strdup("");
 	if (SIZE_MAX / 2 <= len || (ret = malloc(len * 2 + 1)) == NULL)
 		return NULL;
-	for (i = j = 0; i < len; i++) { // CodeQL [SM02311]: false positive p will not be null
-		ret[j++] = hex[(p[i] >> 4) & 0xf];
+	for (i = j = 0; i < len; i++) { 
+		ret[j++] = hex[(p[i] >> 4) & 0xf]; // CodeQL [SM02311]: false positive p will not be null
 		ret[j++] = hex[p[i] & 0xf];
 	}
 	ret[j] = '\0';

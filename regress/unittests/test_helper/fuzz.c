@@ -157,7 +157,7 @@ fuzz_fmt(struct fuzz *fuzz, char *s, size_t n)
 static void
 dump(u_char *p, size_t len)
 {
-	ssize_t i, j;
+	size_t i, j;
 
 	for (i = 0; i < len; i += 16) {
 		fprintf(stderr, "%.4zd: ", i);

@@ -40,7 +40,7 @@ sshbuf_get(struct sshbuf *buf, void *v, size_t len)
 	if ((r = sshbuf_consume(buf, len)) < 0)
 		return r;
 	if (v != NULL && len != 0)
-		memcpy(v, p, len);
+		memcpy(v, p, len); // CodeQL [SM02311]: false positive p will not be null
 	return 0;
 }
 
@@ -53,7 +53,7 @@ sshbuf_get_u64(struct sshbuf *buf, u_int64_t *valp)
 	if ((r = sshbuf_consume(buf, 8)) < 0)
 		return r;
 	if (valp != NULL)
-		*valp = PEEK_U64(p);
+		*valp = PEEK_U64(p); // CodeQL [SM02311]: false positive p will not be null
 	return 0;
 }
 
@@ -66,7 +66,7 @@ sshbuf_get_u32(struct sshbuf *buf, u_int32_t *valp)
 	if ((r = sshbuf_consume(buf, 4)) < 0)
 		return r;
 	if (valp != NULL)
-		*valp = PEEK_U32(p);
+		*valp = PEEK_U32(p); // CodeQL [SM02311]: false positive p will not be null
 	return 0;
 }
 
@@ -79,7 +79,7 @@ sshbuf_get_u16(struct sshbuf *buf, u_int16_t *valp)
 	if ((r = sshbuf_consume(buf, 2)) < 0)
 		return r;
 	if (valp != NULL)
-		*valp = PEEK_U16(p);
+		*valp = PEEK_U16(p); // CodeQL [SM02311]: false positive p will not be null
 	return 0;
 }
 
@@ -92,7 +92,7 @@ sshbuf_get_u8(struct sshbuf *buf, u_char *valp)
 	if ((r = sshbuf_consume(buf, 1)) < 0)
 		return r;
 	if (valp != NULL)
-		*valp = (u_int8_t)*p;
+		*valp = (u_int8_t)*p; // CodeQL [SM02311]: false positive p will not be null
 	return 0;
 }
 

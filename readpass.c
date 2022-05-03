@@ -313,7 +313,6 @@ notify_start(int force_askpass, const char *fmt, ...)
 		free(prompt);
 		return NULL;
 	}
-#ifndef WINDOWS
 	if (pid == 0) {
 		if (stdfd_devnull(1, 1, 0) == -1)
 			fatal_f("stdfd_devnull failed");
@@ -324,7 +323,6 @@ notify_start(int force_askpass, const char *fmt, ...)
 		_exit(1);
 		/* NOTREACHED */
 	}
-#endif
  out_ctx:
 	if ((ret = calloc(1, sizeof(*ret))) == NULL) {
 		kill(pid, SIGTERM);

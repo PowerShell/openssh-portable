@@ -198,7 +198,7 @@ agent_cleanup_connection(struct agent_connection* con)
 	if (con->client_process_handle)
 		CloseHandle(con->client_process_handle);
 
-	for (int i = 0; i < con->nsession_ids; i++) {
+	for (size_t i = 0; i < con->nsession_ids; i++) {
 		sshkey_free(con->session_ids[i].key);
 		sshbuf_free(con->session_ids[i].sid);
 	}

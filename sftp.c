@@ -337,13 +337,16 @@ local_do_shell(const char *args)
 			if (cygwin_path_prefix_start = strstr(args, CYGWIN_PATH_PREFIX)) {
 				int len = strlen(cygwin_path_prefix_start) + 1;
 				char *tmp = malloc(len);
-				memset(tmp, 0, len);
+				if (tmp != NULL)
+				{
+					memset(tmp, 0, len);
 
-				bash_to_win_path(cygwin_path_prefix_start, tmp, len);
-				strcpy_s(cygwin_path_prefix_start, len, tmp); /* override the original string */
+					bash_to_win_path(cygwin_path_prefix_start, tmp, len);
+					strcpy_s(cygwin_path_prefix_start, len, tmp); /* override the original string */
 
-				if (tmp)
-					free(tmp);
+					if (tmp)
+						free(tmp);
+				}
 			}
 		}
 

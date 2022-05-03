@@ -625,12 +625,17 @@ ConWriteString(char* pszString, int cbString)
 	if ((needed = MultiByteToWideChar(CP_UTF8, 0, pszString, cbString, NULL, 0)) == 0 ||
 	    (utf16 = malloc(needed * sizeof(wchar_t))) == NULL ||
 	    (cnt = MultiByteToWideChar(CP_UTF8, 0, pszString, cbString, utf16, needed)) == 0) {
-		Result = (DWORD)printf_s(pszString);
-	} else {
+		const char* pszStringConst = pszString;
+		Result = (DWORD)printf_s(pszStringConst);
+	}
+	else {
 		if (GetConsoleOutputHandle())
 			WriteConsoleW(GetConsoleOutputHandle(), utf16, cnt, &Result, 0);
 		else
-			Result = (DWORD)wprintf_s(utf16);
+		{
+			const char* utf16Const = utf16;
+			Result = (DWORD)wprintf_s(utf16Const);
+		}
 	}
 
 	if (utf16)

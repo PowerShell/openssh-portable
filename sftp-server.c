@@ -1050,13 +1050,13 @@ process_fsetstat(u_int32_t id)
 
 		if (a.flags & SSH2_FILEXFER_ATTR_SIZE) {
 			logit("set \"%s\" size %llu",
-			    name, (unsigned long long)a.size);
+			    name, (unsigned long long)a.size); // CodeQL [SM02311]: false positive name will not be null because of handle_to_fd check
 			r = ftruncate(fd, a.size);
 			if (r == -1)
 				status = errno_to_portable(errno);
 		}
 		if (a.flags & SSH2_FILEXFER_ATTR_PERMISSIONS) {
-			logit("set \"%s\" mode %04o", name, a.perm);
+			logit("set \"%s\" mode %04o", name, a.perm); // CodeQL [SM02311]: false positive name will not be null because of handle_to_fd check
 #ifdef HAVE_FCHMOD
 			r = fchmod(fd, a.perm & 07777);
 #else
@@ -1071,7 +1071,7 @@ process_fsetstat(u_int32_t id)
 
 			strftime(buf, sizeof(buf), "%Y%m%d-%H:%M:%S",
 			    localtime(&t));
-			logit("set \"%s\" modtime %s", name, buf);
+			logit("set \"%s\" modtime %s", name, buf); // CodeQL [SM02311]: false positive name will not be null because of handle_to_fd check
 #ifdef HAVE_FUTIMES
 			r = futimes(fd, attrib_to_tv(&a));
 #else
@@ -1081,7 +1081,7 @@ process_fsetstat(u_int32_t id)
 				status = errno_to_portable(errno);
 		}
 		if (a.flags & SSH2_FILEXFER_ATTR_UIDGID) {
-			logit("set \"%s\" owner %lu group %lu", name,
+			logit("set \"%s\" owner %lu group %lu", name, // CodeQL [SM02311]: false positive name will not be null because of handle_to_fd check
 			    (u_long)a.uid, (u_long)a.gid);
 #ifdef HAVE_FCHOWN
 			r = fchown(fd, a.uid, a.gid);

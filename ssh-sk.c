@@ -527,7 +527,7 @@ sshsk_enroll(int type, const char *provider_path, const char *device,
 	}
 	/* XXX validate flags? */
 	/* enroll key */
-	if ((r = skp->sk_enroll(alg, challenge, challenge_len, application,
+	if ((r = skp->sk_enroll(alg, challenge, challenge_len, application, // CodeQL [SM02311]: false positive challenge will not be null
 	    flags, pin, opts, &resp)) != 0) {
 		debug_f("provider \"%s\" failure %d", provider_path, r);
 		r = skerr_to_ssherr(r);

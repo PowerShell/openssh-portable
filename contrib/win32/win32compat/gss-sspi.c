@@ -444,8 +444,10 @@ gss_acquire_cred(_Out_ OM_uint32 *minor_status, _In_opt_ gss_name_t desired_name
 	/* determine expiration if requested */
 	if (time_rec != NULL) {
 		FILETIME current_time;
-		SystemTimeToFileTime(&current_time_system, &current_time);
-		*time_rec = (OM_uint32) (expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
+		if (SystemTimeToFileTime(&current_time_system, &current_time) != 0)
+			*time_rec = (OM_uint32)(expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
+		else
+			debug("gss_acquire_cred: SystemTimeToFileTime failed");
 	}
 
 	/* set actual supported mechs if requested */
@@ -597,8 +599,10 @@ gss_init_sec_context(
 	/* if requested, translate the expiration time to number of second */
 	if (time_rec != NULL) {
 		FILETIME current_time;
-		SystemTimeToFileTime(&current_time_system, &current_time);
-		*time_rec = (OM_uint32)(expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
+		if (SystemTimeToFileTime(&current_time_system, &current_time) != 0)
+			*time_rec = (OM_uint32)(expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
+		else
+			debug("gss_init_sec_context: SystemTimeToFileTime failed");
 	}
 
 	/* if requested, return the supported mechanism oid */
