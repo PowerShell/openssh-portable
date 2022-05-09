@@ -633,7 +633,7 @@ ConWriteString(char* pszString, int cbString)
 			WriteConsoleW(GetConsoleOutputHandle(), utf16, cnt, &Result, 0);
 		else
 		{
-			const char* utf16Const = utf16;
+			const wchar_t* utf16Const = utf16;
 			Result = (DWORD)wprintf_s(utf16Const);
 		}
 	}
