@@ -2392,7 +2392,7 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 			fatal("%s line %d: %s missing argument.",
 			    filename, linenum, keyword);
 		/* Parse mode in octal format */
-		value = strtol(arg, &p, 8);
+		value = strtol(arg, &p, 8); // CodeQL [SM02313]: false positive place arg is checked for validity on line 2391 so p will be initialized
 		if (arg == p || value < 0 || value > 0777)
 			fatal("%s line %d: Invalid %s.",
 			    filename, linenum, keyword);
