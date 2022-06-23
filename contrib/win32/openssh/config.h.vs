@@ -1358,6 +1358,7 @@
 /* libcrypto includes complete ECC support */
 #define OPENSSL_HAS_ECC 1
 #define OPENSSL_HAS_NISTP521 1
+#define HAVE_EC_KEY_METHOD_NEW 1
 
 /* libcrypto is missing AES 192 and 256 bit functions */
 /* #undef OPENSSL_LOBOTOMISED_AES */
