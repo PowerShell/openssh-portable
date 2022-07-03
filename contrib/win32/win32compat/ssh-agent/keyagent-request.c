@@ -242,7 +242,7 @@ process_add_identity(struct sshbuf* request, struct sshbuf* response, struct age
 	blob = sshbuf_ptr(request);
 	if (sshkey_private_deserialize(request, &key) != 0 ||
 	   (blob_len = (sshbuf_ptr(request) - blob) & 0xffffffff) == 0 ||
-	    sshbuf_peek_string_direct(request, &comment, &comment_len) != 0) {
+	    sshbuf_get_cstring(request, &comment, &comment_len) != 0) {
 		debug("key add request is invalid");
 		request_invalid = 1;
 		goto done;
