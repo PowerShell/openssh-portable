@@ -143,6 +143,7 @@ process_request(struct agent_connection* con)
 		r = process_unsupported_request(request, response, con);
 		break;
 	case SSH2_AGENTC_ADD_IDENTITY:
+	case SSH2_AGENTC_ADD_ID_CONSTRAINED:
 		r =  process_add_identity(request, response, con);
 		break;
 	case SSH2_AGENTC_REQUEST_IDENTITIES:
