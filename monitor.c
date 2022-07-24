@@ -83,6 +83,7 @@
 #include "canohost.h"
 #include "log.h"
 #include "misc.h"
+#include "msg.h"
 #include "servconf.h"
 #include "monitor.h"
 #ifdef GSSAPI
