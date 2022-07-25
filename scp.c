@@ -135,6 +135,9 @@
 
 #include "sftp-common.h"
 #include "sftp-client.h"
+#ifdef WINDOWS
+#include "misc_internal.h"
+#endif // WINDOWS
 
 extern char *__progname;
 
@@ -2074,6 +2077,11 @@ sink(int argc, char **argv, const char *src)
 		omode = mode;
 		mode |= S_IWUSR;
 #ifdef WINDOWS
+		if (add_mark_of_web(np) == -1 && verbose_mode) {
+			run_err("scp: %s: failed to add mark of the web\n", np);
+			exit(1);
+		};
+		
 		// In windows, we would like to inherit the parent folder permissions by setting mode to USHRT_MAX.
 		if ((ofd = open(np, O_WRONLY|O_CREAT, USHRT_MAX)) == -1) {
 #else

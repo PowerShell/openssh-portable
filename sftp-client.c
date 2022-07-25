@@ -1727,6 +1727,15 @@ do_download(struct sftp_conn *conn, const char *remote_path,
 		}
 	}
 	close(local_fd);
+#ifdef WINDOWS
+	if (add_mark_of_web(local_path) == -1) {
+		// (resume_flag ? 0 : O_TRUNC) on line 1355 requires us 
+		// to add the mark of the web after transferring the file. 
+		// if MOTW fails, we need to remove the file before exiting
+		remove(local_path);
+		fatal_f("%s: failed to add mark of the web", local_path);
+	}
+#endif // WINDOWS
 	sshbuf_free(msg);
 	free(handle);
 

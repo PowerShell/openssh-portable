@@ -54,6 +54,9 @@
 
 #include "sftp.h"
 #include "sftp-common.h"
+#ifdef WINDOWS
+#include "misc_internal.h"
+#endif // WINDOWS
 
 char *sftp_realpath(const char *, char *); /* sftp-realpath.c */
 
@@ -862,6 +865,12 @@ process_write(u_int32_t id)
 	    (r = sshbuf_get_u64(iqueue, &off)) != 0 ||
 	    (r = sshbuf_get_string(iqueue, &data, &len)) != 0)
 		fatal_fr(r, "parse");
+
+#ifdef WINDOWS
+	if (add_mark_of_web(resolved_path_utf8(handle_to_name(handle))) == -1) {
+		fatal_f("%s: failed to add mark of the web", resolved_path_utf8(handle_to_name(handle)));
+	}
+#endif // WINDOWS
 
 	debug("request %u: write \"%s\" (handle %d) off %llu len %zu",
 	    id, handle_to_name(handle), handle, (unsigned long long)off, len);
