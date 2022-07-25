@@ -2127,19 +2127,19 @@ add_mark_of_web(const char* filename)
 	const char zoneIdentifier[] = "[ZoneTransfer]\nZoneId=3";
 	const DWORD shareMode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
 	int status = 0;
-	char* filepath = NULL;
+	char* filestreamPath = NULL;
 	DWORD numWritten = 0;
 	BOOL writeResult;
 	HANDLE file;
-	size_t filepath_length = strlen(filename) + strlen(":Zone.Identifier") + 1;
+	size_t filestreampath_length = strlen(filename) + strlen(":Zone.Identifier") + 1;
 
-	filepath = malloc(filepath_length);
-	if (filepath == NULL) {
+	filestreamPath = malloc(filestreampath_length);
+	if (filestreamPath == NULL) {
 		return -1;
 	}
 	// create zone identifer file stream and write the Mark of the Web to it
-	sprintf_s(filepath, filepath_length, "%s:Zone.Identifier", filename);
-	file = CreateFile(filepath, GENERIC_WRITE, shareMode, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	sprintf_s(filestreamPath, filestreampath_length, "%s:Zone.Identifier", filename);
+	file = CreateFile(filestreamPath, GENERIC_WRITE, shareMode, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (INVALID_HANDLE_VALUE == file) {
 		status = -1;
 		goto cleanup;
@@ -2150,7 +2150,7 @@ add_mark_of_web(const char* filename)
 		status = -1;
 	}
 cleanup:
-	free(filepath);
+	free(filestreamPath);
 	return status;
 }
 
