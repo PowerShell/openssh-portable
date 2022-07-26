@@ -2077,10 +2077,14 @@ sink(int argc, char **argv, const char *src)
 		omode = mode;
 		mode |= S_IWUSR;
 #ifdef WINDOWS
-		if (add_mark_of_web(np) == -1 && verbose_mode) {
+		wchar_t* filepath = utf8_to_utf16(np);
+		if (filepath == NULL || add_mark_of_web(filepath) == -1) {
+			if (filepath)
+				free(filepath);
 			run_err("scp: %s: failed to add mark of the web\n", np);
 			exit(1);
-		};
+		}
+		free(filepath);
 		
 		// In windows, we would like to inherit the parent folder permissions by setting mode to USHRT_MAX.
 		if ((ofd = open(np, O_WRONLY|O_CREAT, USHRT_MAX)) == -1) {

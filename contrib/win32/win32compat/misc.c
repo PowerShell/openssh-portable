@@ -2121,36 +2121,36 @@ strrstr(const char *inStr, const char *pattern)
 }
 
 int
-add_mark_of_web(const char* filename)
+add_mark_of_web(const wchar_t* filename)
 {
 	// ZoneId=3 indicates the file comes from the Internet Zone
-	const char zoneIdentifier[] = "[ZoneTransfer]\nZoneId=3";
+	const wchar_t zoneIdentifier[] = L"[ZoneTransfer]\nZoneId=3";
 	const DWORD shareMode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
-	int status = 0;
-	char* filestreamPath = NULL;
+	int status = -1;
+	wchar_t* fileStreamPath = NULL;
 	DWORD numWritten = 0;
 	BOOL writeResult;
 	HANDLE file;
-	size_t filestreampath_length = strlen(filename) + strlen(":Zone.Identifier") + 1;
+	size_t fileStreamPathLen = wcslen(filename) + wcslen(L":Zone.Identifier") + 2;
 
-	filestreamPath = malloc(filestreampath_length);
-	if (filestreamPath == NULL) {
-		return -1;
+	fileStreamPath = malloc(fileStreamPathLen * sizeof(wchar_t));
+	if (fileStreamPath == NULL) {
+		goto out;
 	}
 	// create zone identifer file stream and write the Mark of the Web to it
-	sprintf_s(filestreamPath, filestreampath_length, "%s:Zone.Identifier", filename);
-	file = CreateFile(filestreamPath, GENERIC_WRITE, shareMode, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	swprintf_s(fileStreamPath, fileStreamPathLen, L"%s:Zone.Identifier", filename);
+	file = CreateFileW(fileStreamPath, GENERIC_WRITE, shareMode, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (INVALID_HANDLE_VALUE == file) {
-		status = -1;
 		goto cleanup;
 	}
-	writeResult = WriteFile(file, zoneIdentifier, (DWORD)strlen(zoneIdentifier), &numWritten, NULL);
+	writeResult = WriteFile(file, zoneIdentifier, (DWORD)(wcslen(zoneIdentifier)*sizeof(wchar_t)), &numWritten, NULL);
 	CloseHandle(file);
-	if (!writeResult) {
-		status = -1;
+	if (writeResult) {
+		status = 0;
 	}
 cleanup:
-	free(filestreamPath);
+	free(fileStreamPath);
+out:
 	return status;
 }
 
