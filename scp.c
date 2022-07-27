@@ -2078,10 +2078,13 @@ sink(int argc, char **argv, const char *src)
 		mode |= S_IWUSR;
 #ifdef WINDOWS
 		wchar_t* filepath = utf8_to_utf16(np);
-		if (filepath == NULL || add_mark_of_web(filepath) == -1) {
-			if (filepath)
-				free(filepath);
-			run_err("scp: %s: failed to add mark of the web\n", np);
+		if (filepath == NULL) {
+			run_err("cannot convert %s to utf16 for mark of the web\n", np);
+			exit(1);
+		}
+		if (add_mark_of_web(filepath) == -1) {
+			free(filepath);
+			run_err("%s: failed to add mark of the web\n", np);
 			exit(1);
 		}
 		free(filepath);

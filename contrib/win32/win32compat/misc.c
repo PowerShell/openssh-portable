@@ -2135,7 +2135,7 @@ add_mark_of_web(const wchar_t* filename)
 
 	fileStreamPath = malloc(fileStreamPathLen * sizeof(wchar_t));
 	if (fileStreamPath == NULL) {
-		goto out;
+		return status;
 	}
 	// create zone identifer file stream and write the Mark of the Web to it
 	swprintf_s(fileStreamPath, fileStreamPathLen, L"%s:Zone.Identifier", filename);
@@ -2150,7 +2150,6 @@ add_mark_of_web(const wchar_t* filename)
 	}
 cleanup:
 	free(fileStreamPath);
-out:
 	return status;
 }
 

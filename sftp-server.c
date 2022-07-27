@@ -868,7 +868,10 @@ process_write(u_int32_t id)
 
 #ifdef WINDOWS
 	wchar_t* filepath = resolved_path_utf16(handle_to_name(handle));
-	if (filepath == NULL || add_mark_of_web(filepath) == -1) {
+	if (filepath == NULL) {
+		fatal_f("%s: cannot convert %s to utf16 for mark of the web", filepath);
+	}
+	if (add_mark_of_web(filepath) == -1) {
 		fatal_f("%s: failed to add mark of the web", filepath);
 	}
 	free(filepath);
