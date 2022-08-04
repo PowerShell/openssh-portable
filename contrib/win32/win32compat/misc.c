@@ -2132,7 +2132,7 @@ add_mark_of_web(const char* filename)
 
 	fileStreamPath = malloc(fileStreamPathLen * sizeof(char));
 	if (fileStreamPath == NULL) {
-		return status;
+		return -1;
 	}
 	// create zone identifer file stream and write the Mark of the Web to it
 	sprintf_s(fileStreamPath, fileStreamPathLen, "%s:Zone.Identifier", filename);
