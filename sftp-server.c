@@ -872,7 +872,9 @@ process_write(u_int32_t id)
 		fatal_f("cannot convert handle %d to utf8 filepath for mark of the web", handle);
 	}
 	if (add_mark_of_web(filepath) == -1) {
-		fatal_f("%s: failed to add mark of the web", filepath);
+		debug("add_mark_of_web to %s failed", filepath);
+		free(filepath);
+		fatal_f("failed to add mark of the web");
 	}
 	free(filepath);
 #endif // WINDOWS
