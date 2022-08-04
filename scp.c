@@ -2077,17 +2077,10 @@ sink(int argc, char **argv, const char *src)
 		omode = mode;
 		mode |= S_IWUSR;
 #ifdef WINDOWS
-		wchar_t* filepath = utf8_to_utf16(np);
-		if (filepath == NULL) {
-			run_err("cannot convert %s to utf16 for mark of the web\n", np);
-			exit(1);
-		}
-		if (add_mark_of_web(filepath) == -1) {
-			free(filepath);
+		if (add_mark_of_web(np) == -1) {
 			run_err("%s: failed to add mark of the web\n", np);
 			exit(1);
 		}
-		free(filepath);
 		
 		// In windows, we would like to inherit the parent folder permissions by setting mode to USHRT_MAX.
 		if ((ofd = open(np, O_WRONLY|O_CREAT, USHRT_MAX)) == -1) {

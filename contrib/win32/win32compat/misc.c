@@ -60,6 +60,7 @@
 #include "w32fd.h"
 #include "inc\string.h"
 #include "inc\time.h"
+#include "..\..\..\atomicio.h"
 
 #include <wchar.h>
 
@@ -2121,32 +2122,29 @@ strrstr(const char *inStr, const char *pattern)
 }
 
 int
-add_mark_of_web(const wchar_t* filename)
+add_mark_of_web(const char* filename)
 {
 	// ZoneId=3 indicates the file comes from the Internet Zone
-	const wchar_t zoneIdentifier[] = L"[ZoneTransfer]\nZoneId=3";
-	const DWORD shareMode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
-	int status = -1;
-	wchar_t* fileStreamPath = NULL;
-	DWORD numWritten = 0;
-	BOOL writeResult;
-	HANDLE file;
-	size_t fileStreamPathLen = wcslen(filename) + wcslen(L":Zone.Identifier") + 2;
+	const char zoneIdentifier[] = "[ZoneTransfer]\nZoneId=3";
+	char* fileStreamPath = NULL;
+	size_t fileStreamPathLen = strlen(filename) + strlen(":Zone.Identifier") + 1;
+	int ofd, status = 0;
 
-	fileStreamPath = malloc(fileStreamPathLen * sizeof(wchar_t));
+	fileStreamPath = malloc(fileStreamPathLen * sizeof(char));
 	if (fileStreamPath == NULL) {
 		return status;
 	}
 	// create zone identifer file stream and write the Mark of the Web to it
-	swprintf_s(fileStreamPath, fileStreamPathLen, L"%s:Zone.Identifier", filename);
-	file = CreateFileW(fileStreamPath, GENERIC_WRITE, shareMode, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (INVALID_HANDLE_VALUE == file) {
+	sprintf_s(fileStreamPath, fileStreamPathLen, "%s:Zone.Identifier", filename);
+	if ((ofd = open(fileStreamPath, O_WRONLY | O_CREAT, USHRT_MAX)) == -1) {
+		status = -1;
 		goto cleanup;
 	}
-	writeResult = WriteFile(file, zoneIdentifier, (DWORD)(wcslen(zoneIdentifier)*sizeof(wchar_t)), &numWritten, NULL);
-	CloseHandle(file);
-	if (writeResult) {
-		status = 0;
+	if (atomicio(vwrite, ofd, zoneIdentifier, strlen(zoneIdentifier)) != strlen(zoneIdentifier)) {
+		status = -1;
+	}
+	if (close(ofd) == -1) {
+		status = -1;
 	}
 cleanup:
 	free(fileStreamPath);
