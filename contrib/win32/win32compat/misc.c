@@ -2133,22 +2133,24 @@ add_mark_of_web(const char* filename)
 		return -1;
 	}
 
+	sprintf_s(fileStreamPath, fileStreamPathLen, "%s:Zone.Identifier", filename);
+
 	// ZoneId=3 indicates the file comes from the Internet Zone
 	const char zoneIdentifier[] = "[ZoneTransfer]\nZoneId=3";
 	int ofd, status = 0;
-
-	sprintf_s(fileStreamPath, fileStreamPathLen, "%s:Zone.Identifier", filename);
 
 	// create zone identifer file stream and then write the Mark of the Web to it
 	if ((ofd = open(fileStreamPath, O_WRONLY | O_CREAT, USHRT_MAX)) == -1) {
 		status = -1;
 		goto cleanup;
 	}
-	
-	if (atomicio(vwrite, ofd, zoneIdentifier, strlen(zoneIdentifier)) != strlen(zoneIdentifier)) {
+
+	size_t zoneIndentifierLen = strlen(zoneIdentifier);
+
+	if (atomicio(vwrite, ofd, zoneIdentifier, zoneIndentifierLen) != zoneIndentifierLen) {
 		status = -1;
 	}
-	
+
 	if (close(ofd) == -1) {
 		status = -1;
 	}
