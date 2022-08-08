@@ -318,7 +318,7 @@ notify_start(int force_askpass, const char *fmt, ...)
 			fatal_f("stdfd_devnull failed");
 		closefrom(STDERR_FILENO + 1);
 		setenv("SSH_ASKPASS_PROMPT", "none", 1); /* hint to UI */
-		execlp(askpass, askpass, prompt, (char*)NULL);
+		execlp(askpass, askpass, prompt, (char *)NULL);
 		error_f("exec(%s): %s", askpass, strerror(errno));
 		_exit(1);
 		/* NOTREACHED */

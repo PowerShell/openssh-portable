@@ -194,7 +194,9 @@ ConEnterRawMode()
 	if (TRUE == isAnsiParsingRequired) {
 		if (gcsbRet == 0)
 		{
-			error("Failed to get console screen buffer info error:%d", GetLastError());
+			dwRet = GetLastError();
+			error("GetConsoleScreenBufferInfo on GetConsoleOutputHandle() failed with %d", dwRet);
+			return;
 		}
 		SavedViewRect = csbi.srWindow;
 		debug("console doesn't support the ansi parsing");

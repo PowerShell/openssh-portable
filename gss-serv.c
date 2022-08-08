@@ -104,7 +104,7 @@ ssh_gssapi_acquire_cred(Gssctxt *ctx)
 	if (options.gss_strict_acceptor) {
 		if (gss_create_empty_oid_set(&status, &oidset) == GSS_S_FAILURE)
 		{
-			debug("ssh_gssapi_acquire_cred: gss_create_empty_oid_set failed");
+			error("ssh_gssapi_acquire_cred: gss_create_empty_oid_set failed");
 			return (-1);
 		}
 		gss_add_oid_set_member(&status, ctx->oid, &oidset);
@@ -156,7 +156,7 @@ ssh_gssapi_supported_oids(gss_OID_set *oidset)
 	gss_create_empty_oid_set(&min_status, oidset);
 	if (gss_indicate_mechs(&min_status, &supported) == GSS_S_FAILURE)
 	{
-		debug("ssh_gssapi_supported_oids: gss_indicate_mechs failed to \
+		error("ssh_gssapi_supported_oids: gss_indicate_mechs failed to \
 			determine which underlying security mechanisms are available");
 	}
 	else
