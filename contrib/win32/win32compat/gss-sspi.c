@@ -1080,8 +1080,7 @@ ssh_gssapi_krb5_userok(ssh_gssapi_client *client, char *name)
 	struct passwd * user = getpwnam(name);
 	if (user == NULL)
 	{
-		error("sspi getpwnam failed to get user from user-provided, resolved user '%s'", 
-			name);
+		error("sspi getpwnam failed to get user from user-provided, resolved user '%s'", name);
 		return 0;
 	}
 	if (_stricmp(client->displayname.value, user->pw_name) != 0) {
