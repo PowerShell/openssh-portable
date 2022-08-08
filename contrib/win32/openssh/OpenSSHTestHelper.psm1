@@ -146,7 +146,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     Get-ChildItem $testSvcConfigDir | foreach {$acl | set-acl $_.FullName}
 
 
-    $SSHDTestSvcNameCmdLine = (Join-Path $script:OpenSSHBinPath sshd) + " -f " + $testSshdConfig
+    $SSHDTestSvcNameCmdLine = (Join-Path $script:OpenSSHBinPath 'sshd.exe') + " -f " + $testSshdConfig
     New-Service -Name $SSHDTestSvcName -DisplayName "OpenSSH SSH Test Server for E2E tests" -BinaryPathName $SSHDTestSvcNameCmdLine -StartupType Manual | Out-Null
     sc.exe privs $SSHDTestSvcName SeAssignPrimaryTokenPrivilege/SeTcbPrivilege/SeBackupPrivilege/SeRestorePrivilege/SeImpersonatePrivilege
 
@@ -317,13 +317,11 @@ function Set-BasicTestInfo
     }
     else
     {
-        if (-not (Test-Path (Join-Path $OpenSSHBinPath ssh.exe) -PathType Leaf))
+        $script:OpenSSHBinPath = (Resolve-Path -Path $OpenSSHBinPath -ErrorAction Stop).Path
+
+        if (-not (Test-Path (Join-Path $script:OpenSSHBinPath ssh.exe) -PathType Leaf))
         {
             Throw "Cannot find OpenSSH binaries under $OpenSSHBinPath. Please specify -OpenSSHBinPath to the OpenSSH installed location"
-        }
-        else
-        {
-            $script:OpenSSHBinPath = $OpenSSHBinPath
         }
     }
 

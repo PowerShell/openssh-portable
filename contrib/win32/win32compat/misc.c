@@ -1480,6 +1480,7 @@ localtime_r(const time_t *timep, struct tm *result)
 	return localtime_s(result, timep) == 0 ? result : NULL;
 }
 
+<<<<<<< HEAD
 struct tm *
 w32_localtime(const time_t* sourceTime)
 {
@@ -1502,7 +1503,7 @@ w32_ctime(const time_t* sourceTime)
 	return ctime_s(destTime, 26, sourceTime) == 0 ? destTime : NULL;
 }
 
-static void
+void
 freezero(void *ptr, size_t sz)
 {
 	if (ptr == NULL)
