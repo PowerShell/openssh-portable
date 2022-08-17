@@ -61,6 +61,7 @@
 #include "inc\string.h"
 #include "inc\time.h"
 #include "..\..\..\atomicio.h"
+#include "urlmon.h"
 
 #include <wchar.h>
 
@@ -135,6 +136,9 @@ char* chroot_path = NULL;
 int chroot_path_len = 0;
 /* UTF-16 version of the above */
 wchar_t* chroot_pathw = NULL;
+
+/* motw zone_id initialized to invalid value */
+DWORD motw_zone_id = 5;
 
 int
 usleep(unsigned int useconds)
@@ -2136,7 +2140,18 @@ add_mark_of_web(const char* filename)
 	sprintf_s(fileStreamPath, fileStreamPathLen, "%s:Zone.Identifier", filename);
 
 	// ZoneId=3 indicates the file comes from the Internet Zone
-	const char zoneIdentifier[] = "[ZoneTransfer]\nZoneId=3";
+	// const char zoneIdentifier[] = "[ZoneTransfer]\nZoneId=3";
+	char* zoneIdentifierStr = NULL;
+	size_t zoneIndentifierLen = strlen("[ZoneTransfer]\nZoneId=") + 1 + 1;
+
+	zoneIdentifierStr = malloc(zoneIndentifierLen * sizeof(char));
+
+	if (zoneIdentifierStr == NULL) {
+		return -1;
+	}
+
+	sprintf_s(zoneIdentifierStr, zoneIndentifierLen, "[ZoneTransfer]\nZoneId=%d", motw_zone_id);
+
 	int ofd, status = 0;
 
 	// create zone identifer file stream and then write the Mark of the Web to it
@@ -2145,9 +2160,9 @@ add_mark_of_web(const char* filename)
 		goto cleanup;
 	}
 
-	size_t zoneIndentifierLen = strlen(zoneIdentifier);
+	// size_t zoneIndentifierLen = strlen(zoneIdentifier);
 
-	if (atomicio(vwrite, ofd, zoneIdentifier, zoneIndentifierLen) != zoneIndentifierLen) {
+	if (atomicio(vwrite, ofd, zoneIdentifierStr, zoneIndentifierLen) != zoneIndentifierLen) {
 		status = -1;
 	}
 
@@ -2160,3 +2175,42 @@ cleanup:
 	return status;
 }
 
+void get_zone_identifier(const char* hostname) {
+	static const CLSID CLSID_ISM =
+	{ 0x7B8A2D94, 0x0AC9, 0x11D1,
+	{ 0x89, 0x6C, 0x00, 0xC0, 0x4F, 0xB6, 0xBF, 0xC4 } };
+	static const IID IID_IISM =
+	{ 0x79EAC9EE, 0xBAF9, 0x11CE,
+	{ 0x8C, 0x82, 0x00, 0xAA, 0x00, 0x4B, 0xA9, 0x0B } };
+	IInternetSecurityManager* IISM;
+	CoInitialize(NULL);
+	HRESULT hr = CoCreateInstance(&CLSID_ISM, NULL,
+		CLSCTX_ALL, &IID_IISM, (void**)&IISM);
+	if (SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE)
+	{
+		wchar_t* hostname_w = utf8_to_utf16(hostname);
+		size_t inputStrLen = wcslen(hostname_w) + wcslen(L"ftp://") + 2;
+		wchar_t* inputStr = malloc(inputStrLen * sizeof(wchar_t));
+		if (inputStr == NULL) {
+			return;
+		}
+		swprintf_s(inputStr, inputStrLen, L"ftp://%s", hostname_w);
+		hr = IISM->lpVtbl->MapUrlToZone(IISM, inputStr, &motw_zone_id, 0);
+		if (hr == S_OK) {
+			if (motw_zone_id < 5) {
+				debug("valid zone identifier value: %d", motw_zone_id);
+			}
+			else {
+				debug("invalid zone identifier value, will not use");
+				motw_zone_id = 5;
+			}
+		}
+		else {
+			motw_zone_id = 5;
+			debug("MapUrlToZone failed");
+		}
+	}
+	else {
+		debug("failed to co-create instance");
+	}
+}

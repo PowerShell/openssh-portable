@@ -869,14 +869,14 @@ process_write(u_int32_t id)
 #ifdef WINDOWS
 	char* filepath = resolved_path_utf8(handle_to_name(handle));
 	if (filepath == NULL) {
-		fatal_f("cannot convert handle %d to utf8 filepath for mark of the web", handle);
+		debug("cannot convert handle %d to utf8 filepath for mark of the web", handle);
 	}
-	if (add_mark_of_web(filepath) == -1) {
-		debug("add_mark_of_web to %s failed", filepath);
+	else {
+		if (motw_zone_id == 5 || add_mark_of_web(filepath) == -1) {
+			debug("add_mark_of_web to %s failed", filepath);
+		}
 		free(filepath);
-		fatal_f("failed to add mark of the web");
 	}
-	free(filepath);
 #endif // WINDOWS
 
 	debug("request %u: write \"%s\" (handle %d) off %llu len %zu",
@@ -1912,6 +1912,10 @@ sftp_server_main(int argc, char **argv, struct passwd *user_pw)
 
 	logit("session opened for local user %s from [%s]",
 	    pw->pw_name, client_addr);
+
+#ifdef WINDOWS
+	get_zone_identifier(client_addr);
+#endif // WINDOWS
 
 	in = STDIN_FILENO;
 	out = STDOUT_FILENO;

@@ -1141,6 +1141,9 @@ do_sftp_connect(char *host, char *user, int port, char *sftp_direct,
 		    reminp, remoutp, pidp) < 0)
 			return NULL;
 	}
+#ifdef WINDOWS
+	get_zone_identifier(host);
+#endif // WINDOWS
 	return do_init(*reminp, *remoutp, 32768, 64, limit_kbps);
 }
 
@@ -1439,6 +1442,9 @@ tolocal(int argc, char **argv, enum scp_mode_e mode, char *sftp_direct)
 			continue;
 		}
 		/* SCP */
+#ifdef WINDOWS
+		get_zone_identifier(host);
+#endif // WINDOWS
 		xasprintf(&bp, "%s -f %s%s",
 		    cmd, *src == '-' ? "-- " : "", src);
 		if (do_cmd(ssh_program, host, suser, sport, 0, bp,
@@ -2077,9 +2083,8 @@ sink(int argc, char **argv, const char *src)
 		omode = mode;
 		mode |= S_IWUSR;
 #ifdef WINDOWS
-		if (add_mark_of_web(np) == -1) {
-			run_err("%s: failed to add mark of the web\n", np);
-			exit(1);
+		if (motw_zone_id == 5 || add_mark_of_web(np) == -1) {
+			note_err("%s: failed to add mark of the web\n", np);
 		}
 		
 		// In windows, we would like to inherit the parent folder permissions by setting mode to USHRT_MAX.
