@@ -872,7 +872,7 @@ process_write(u_int32_t id)
 		debug("cannot convert handle %d to utf8 filepath for mark of the web", handle);
 	}
 	else {
-		if (motw_zone_id == 5 || add_mark_of_web(filepath) == -1) {
+		if (add_mark_of_web(filepath) == -1) {
 			debug("add_mark_of_web to %s failed", filepath);
 		}
 		free(filepath);

@@ -2083,16 +2083,9 @@ sink(int argc, char **argv, const char *src)
 		omode = mode;
 		mode |= S_IWUSR;
 #ifdef WINDOWS
-		if (motw_zone_id == 5) {
-			if (verbose_mode)
-				note_err("%s: will not add mark of the web due to push \
-					from local to remote scenario, or MapUrlToZone API failure\n", np);
-		}
-		else {
-			if (add_mark_of_web(np) == -1) {
-				if (verbose_mode) {
-					note_err("%s: add_mark_of_web failed\n", np);
-				}
+		if (add_mark_of_web(np) == -1) {
+			if (verbose_mode) {
+				note_err("%s: add_mark_of_web failed\n", np);
 			}
 		}
 		

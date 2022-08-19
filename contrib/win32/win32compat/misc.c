@@ -2128,54 +2128,57 @@ strrstr(const char *inStr, const char *pattern)
 int
 add_mark_of_web(const char* filename)
 {
-	char* fileStreamPath = NULL;
-	size_t fileStreamPathLen = strlen(filename) + strlen(":Zone.Identifier") + 1;
+	if (motw_zone_id < 5) {
+		char* fileStreamPath = NULL;
+		size_t fileStreamPathLen = strlen(filename) + strlen(":Zone.Identifier") + 1;
 
-	fileStreamPath = malloc(fileStreamPathLen * sizeof(char));
+		fileStreamPath = malloc(fileStreamPathLen * sizeof(char));
 
-	if (fileStreamPath == NULL) {
+		if (fileStreamPath == NULL) {
+			return -1;
+		}
+
+		sprintf_s(fileStreamPath, fileStreamPathLen, "%s:Zone.Identifier", filename);
+
+		char* zoneIdentifierStr = NULL;
+		size_t zoneIndentifierLen = strlen("[ZoneTransfer]\nZoneId=") + 1 + 1;
+
+		zoneIdentifierStr = malloc(zoneIndentifierLen * sizeof(char));
+
+		if (zoneIdentifierStr == NULL) {
+			return -1;
+		}
+
+		sprintf_s(zoneIdentifierStr, zoneIndentifierLen, "[ZoneTransfer]\nZoneId=%d", motw_zone_id);
+
+		int ofd, status = 0;
+
+		// create zone identifer file stream and then write the Mark of the Web to it
+		if ((ofd = open(fileStreamPath, O_WRONLY | O_CREAT, USHRT_MAX)) == -1) {
+			status = -1;
+			goto cleanup;
+		}
+
+		if (atomicio(vwrite, ofd, zoneIdentifierStr, zoneIndentifierLen) != zoneIndentifierLen) {
+			status = -1;
+		}
+
+		if (close(ofd) == -1) {
+			status = -1;
+		}
+
+	cleanup:
+		free(fileStreamPath);
+		free(zoneIdentifierStr);
+		return status;
+	}
+	else {
 		return -1;
 	}
-
-	sprintf_s(fileStreamPath, fileStreamPathLen, "%s:Zone.Identifier", filename);
-
-	// ZoneId=3 indicates the file comes from the Internet Zone
-	// const char zoneIdentifier[] = "[ZoneTransfer]\nZoneId=3";
-	char* zoneIdentifierStr = NULL;
-	size_t zoneIndentifierLen = strlen("[ZoneTransfer]\nZoneId=") + 1 + 1;
-
-	zoneIdentifierStr = malloc(zoneIndentifierLen * sizeof(char));
-
-	if (zoneIdentifierStr == NULL) {
-		return -1;
-	}
-
-	sprintf_s(zoneIdentifierStr, zoneIndentifierLen, "[ZoneTransfer]\nZoneId=%d", motw_zone_id);
-
-	int ofd, status = 0;
-
-	// create zone identifer file stream and then write the Mark of the Web to it
-	if ((ofd = open(fileStreamPath, O_WRONLY | O_CREAT, USHRT_MAX)) == -1) {
-		status = -1;
-		goto cleanup;
-	}
-
-	// size_t zoneIndentifierLen = strlen(zoneIdentifier);
-
-	if (atomicio(vwrite, ofd, zoneIdentifierStr, zoneIndentifierLen) != zoneIndentifierLen) {
-		status = -1;
-	}
-
-	if (close(ofd) == -1) {
-		status = -1;
-	}
-
-cleanup:
-	free(fileStreamPath);
-	return status;
 }
 
-/* Gets the zone identifier value based on the provided hostname, and sets the global motw_zone_id variable with that value. */
+/* Gets the zone identifier value based on the provided hostname, 
+and sets the global motw_zone_id variable with that value. */
 void get_zone_identifier(const char* hostname) {
 	static const CLSID CLSID_ISM =
 	{ 0x7B8A2D94, 0x0AC9, 0x11D1,
@@ -2190,28 +2193,28 @@ void get_zone_identifier(const char* hostname) {
 	if (SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE)
 	{
 		wchar_t* hostname_w = utf8_to_utf16(hostname);
-		size_t inputStrLen = wcslen(hostname_w) + wcslen(L"ftp://") + 2;
-		wchar_t* inputStr = malloc(inputStrLen * sizeof(wchar_t));
-		if (inputStr == NULL) {
+		if (hostname_w == NULL) {
 			return;
 		}
-		swprintf_s(inputStr, inputStrLen, L"ftp://%s", hostname_w);
-		hr = IISM->lpVtbl->MapUrlToZone(IISM, inputStr, &motw_zone_id, 0);
+		size_t host_format_len = wcslen(hostname_w) + wcslen(L"ftp://") + 1;
+		wchar_t* host_format = malloc(host_format_len * sizeof(wchar_t));
+		if (host_format == NULL) {
+			free(hostname_w);
+			return;
+		}
+		swprintf_s(host_format, host_format_len, L"ftp://%s", hostname_w);
+		hr = IISM->lpVtbl->MapUrlToZone(IISM, host_format, &motw_zone_id, 0);
 		if (hr == S_OK) {
-			if (motw_zone_id < 5) {
-				debug("valid zone identifier value: %d", motw_zone_id);
-			}
-			else {
-				debug("invalid zone identifier value, will not use");
-				motw_zone_id = 5;
-			}
+			debug("MapUrlToZone zone identifier value: %d", motw_zone_id);
 		}
 		else {
 			motw_zone_id = 5;
-			debug("MapUrlToZone failed");
+			debug("MapUrlToZone failed, resetting motw_zone_id to invalid value");
 		}
+		free(hostname_w);
+		free(host_format);
 	}
 	else {
-		debug("failed to co-create instance");
+		debug("failed to co-create instance for MapUrlToZone");
 	}
 }

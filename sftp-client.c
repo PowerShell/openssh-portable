@@ -1728,7 +1728,7 @@ do_download(struct sftp_conn *conn, const char *remote_path,
 	}
 	close(local_fd);
 #ifdef WINDOWS
-	if (motw_zone_id == 5 || add_mark_of_web(local_path) == -1) {
+	if (add_mark_of_web(local_path) == -1) {
 		debug("%s: failed to add mark of the web", local_path);
 	}
 #endif // WINDOWS
