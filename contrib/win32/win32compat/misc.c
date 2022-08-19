@@ -2175,6 +2175,7 @@ cleanup:
 	return status;
 }
 
+/* Gets the zone identifier value based on the provided hostname, and sets the global motw_zone_id variable with that value. */
 void get_zone_identifier(const char* hostname) {
 	static const CLSID CLSID_ISM =
 	{ 0x7B8A2D94, 0x0AC9, 0x11D1,
