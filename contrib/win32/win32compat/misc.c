@@ -2179,27 +2179,31 @@ cleanup:
 /* Gets the zone identifier value based on the provided hostname, 
 and sets the global motw_zone_id variable with that value. */
 void get_zone_identifier(const char* hostname) {
+	HRESULT hrCoInit = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+	if (!(SUCCEEDED(hrCoInit) || hrCoInit == RPC_E_CHANGED_MODE)) {
+		debug("CoInitializeEx for MapUrlToZone failed");
+		return;
+	}
 	static const CLSID CLSID_ISM =
 	{ 0x7B8A2D94, 0x0AC9, 0x11D1,
 	{ 0x89, 0x6C, 0x00, 0xC0, 0x4F, 0xB6, 0xBF, 0xC4 } };
 	static const IID IID_IISM =
 	{ 0x79EAC9EE, 0xBAF9, 0x11CE,
 	{ 0x8C, 0x82, 0x00, 0xAA, 0x00, 0x4B, 0xA9, 0x0B } };
-	IInternetSecurityManager* IISM;
-	CoInitialize(NULL);
+	IInternetSecurityManager* IISM = NULL;
 	HRESULT hr = CoCreateInstance(&CLSID_ISM, NULL,
 		CLSCTX_ALL, &IID_IISM, (void**)&IISM);
-	if (!(SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE)) {
-		motw_zone_id = 5;
-		debug("failed to co-create instance for MapUrlToZone");
-		return;
+	if (!SUCCEEDED(hr)) {
+		debug("CoCreateInstance for MapUrlToZone failed");
+		goto out;
 	}
-	wchar_t* hostname_w = utf8_to_utf16(hostname);
+	wchar_t *hostname_w = NULL, *host_format = NULL;
+	hostname_w = utf8_to_utf16(hostname);
 	if (hostname_w == NULL) {
-		return;
+		goto cleanup;
 	}
 	size_t host_format_len = wcslen(hostname_w) + wcslen(L"ftp://") + 1;
-	wchar_t* host_format = malloc(host_format_len * sizeof(wchar_t));
+	host_format = malloc(host_format_len * sizeof(wchar_t));
 	if (host_format == NULL) {
 		goto cleanup;
 	}
@@ -2212,7 +2216,14 @@ void get_zone_identifier(const char* hostname) {
 		motw_zone_id = 5;
 		debug("MapUrlToZone failed, resetting motw_zone_id to invalid value");
 	}
-	free(host_format);
 cleanup:
-	free(hostname_w);
+	if (IISM)
+		IISM->lpVtbl->Release(IISM);
+	if (hostname_w)
+		free(hostname_w);
+	if (host_format)
+		free(host_format);
+out:
+	if (SUCCEEDED(hrCoInit))
+		CoUninitialize();
 }
