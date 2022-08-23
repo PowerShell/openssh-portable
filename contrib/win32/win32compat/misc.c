@@ -2179,20 +2179,15 @@ cleanup:
 /* Gets the zone identifier value based on the provided hostname, 
 and sets the global motw_zone_id variable with that value. */
 void get_zone_identifier(const char* hostname) {
-	HRESULT hrCoInit = CoInitializeEx(NULL, COINIT_MULTITHREADED);
-	if (!(SUCCEEDED(hrCoInit) || hrCoInit == RPC_E_CHANGED_MODE)) {
+	HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+	if (!SUCCEEDED(hr)) {
 		debug("CoInitializeEx for MapUrlToZone failed");
 		return;
 	}
-	static const CLSID CLSID_ISM =
-	{ 0x7B8A2D94, 0x0AC9, 0x11D1,
-	{ 0x89, 0x6C, 0x00, 0xC0, 0x4F, 0xB6, 0xBF, 0xC4 } };
-	static const IID IID_IISM =
-	{ 0x79EAC9EE, 0xBAF9, 0x11CE,
-	{ 0x8C, 0x82, 0x00, 0xAA, 0x00, 0x4B, 0xA9, 0x0B } };
-	IInternetSecurityManager* IISM = NULL;
-	HRESULT hr = CoCreateInstance(&CLSID_ISM, NULL,
-		CLSCTX_ALL, &IID_IISM, (void**)&IISM);
+	IInternetSecurityManager* pIISM = NULL;
+	// CLSID_InternetSecurityManager & IID_IInternetSecurityManager declared in urlmon.h
+	hr = CoCreateInstance(&CLSID_InternetSecurityManager, NULL,
+		CLSCTX_ALL, &IID_IInternetSecurityManager, (void**)&pIISM);
 	if (!SUCCEEDED(hr)) {
 		debug("CoCreateInstance for MapUrlToZone failed");
 		goto out;
@@ -2208,7 +2203,7 @@ void get_zone_identifier(const char* hostname) {
 		goto cleanup;
 	}
 	swprintf_s(host_format, host_format_len, L"ftp://%s", hostname_w);
-	hr = IISM->lpVtbl->MapUrlToZone(IISM, host_format, &motw_zone_id, 0);
+	hr = pIISM->lpVtbl->MapUrlToZone(pIISM, host_format, &motw_zone_id, 0);
 	if (hr == S_OK) {
 		debug("MapUrlToZone zone identifier value: %d", motw_zone_id);
 	}
@@ -2217,13 +2212,12 @@ void get_zone_identifier(const char* hostname) {
 		debug("MapUrlToZone failed, resetting motw_zone_id to invalid value");
 	}
 cleanup:
-	if (IISM)
-		IISM->lpVtbl->Release(IISM);
+	if (pIISM)
+		pIISM->lpVtbl->Release(pIISM);
 	if (hostname_w)
 		free(hostname_w);
 	if (host_format)
 		free(host_format);
 out:
-	if (SUCCEEDED(hrCoInit))
-		CoUninitialize();
+	CoUninitialize();
 }
