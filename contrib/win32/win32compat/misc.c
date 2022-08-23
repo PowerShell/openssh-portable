@@ -2184,7 +2184,7 @@ void get_zone_identifier(const char* hostname) {
 		debug("CoInitializeEx for MapUrlToZone failed");
 		return;
 	}
-	IInternetSecurityManager* pIISM = NULL;
+	IInternetSecurityManager *pIISM = NULL;
 	// CLSID_InternetSecurityManager & IID_IInternetSecurityManager declared in urlmon.h
 	hr = CoCreateInstance(&CLSID_InternetSecurityManager, NULL,
 		CLSCTX_ALL, &IID_IInternetSecurityManager, (void**)&pIISM);
@@ -2192,18 +2192,18 @@ void get_zone_identifier(const char* hostname) {
 		debug("CoCreateInstance for MapUrlToZone failed");
 		goto out;
 	}
-	wchar_t *hostname_w = NULL, *host_format = NULL;
+	wchar_t *hostname_w = NULL, *hostformat_w = NULL;
 	hostname_w = utf8_to_utf16(hostname);
 	if (hostname_w == NULL) {
 		goto cleanup;
 	}
-	size_t host_format_len = wcslen(hostname_w) + wcslen(L"ftp://") + 1;
-	host_format = malloc(host_format_len * sizeof(wchar_t));
-	if (host_format == NULL) {
+	size_t hostname_w_len = wcslen(hostname_w) + wcslen(L"ftp://") + 1;
+	hostformat_w = malloc(hostname_w_len * sizeof(wchar_t));
+	if (hostformat_w == NULL) {
 		goto cleanup;
 	}
-	swprintf_s(host_format, host_format_len, L"ftp://%s", hostname_w);
-	hr = pIISM->lpVtbl->MapUrlToZone(pIISM, host_format, &motw_zone_id, 0);
+	swprintf_s(hostformat_w, hostname_w_len, L"ftp://%s", hostname_w);
+	hr = pIISM->lpVtbl->MapUrlToZone(pIISM, hostformat_w, &motw_zone_id, 0);
 	if (hr == S_OK) {
 		debug("MapUrlToZone zone identifier value: %d", motw_zone_id);
 	}
@@ -2216,8 +2216,8 @@ cleanup:
 		pIISM->lpVtbl->Release(pIISM);
 	if (hostname_w)
 		free(hostname_w);
-	if (host_format)
-		free(host_format);
+	if (hostformat_w)
+		free(hostformat_w);
 out:
 	CoUninitialize();
 }
