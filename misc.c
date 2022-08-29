@@ -1149,7 +1149,7 @@ duplicateargs(arglist *dest, arglist *source)
 	
 	if (source->list != NULL) {
 		for (int i = 0; i < source->num; i++) {
-			addargs(dest, source->list[i]);
+			addargs(dest, "%s", source->list[i]);
 		}
 	}
 }
