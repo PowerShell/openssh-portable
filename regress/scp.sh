@@ -105,6 +105,16 @@ for mode in scp sftp ; do
 	 $SCP "${scpopts[@]}" *metachar* ${DIR2} 2>&1 2>/dev/null; \
 	 [ ! -f metachartest ] ) || fail "shell metacharacters"
 
+	if test $mode = scp ; then
+		verbose "$tag: input args & printf check"
+		scpclean
+		cp ${DATA} ${COPY}
+		$SCP "${scpopts[@]}" -vvv -o '"%h %p"' ${COPY} somehost:${DIR} 2>&1 | tee scp_printf_test.txt
+		# relies on logs from debug3: spawning statement 
+		[[ " $( cat "scp_printf_test.txt" ) " =~ "%h %p" ]] || fail "input args & printf check failed"
+		rm -f scp_printf_test.txt
+	fi
+
 	if [ ! -z "$SUDO" ]; then
 		verbose "$tag: skipped file after scp -p with failed chown+utimes"
 		scpclean
