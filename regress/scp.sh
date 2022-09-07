@@ -110,7 +110,7 @@ for mode in scp sftp ; do
 		scpclean
 		cp ${DATA} ${COPY}
 		$SCP "${scpopts[@]}" -vvv -o '"%h %p"' ${COPY} somehost:${DIR} 2>&1 | tee scp_printf_test.txt
-		# relies on logs from debug3: spawning statement 
+		# relies on debug log statement, specifically from "debug3: spawning..." 
 		[[ " $( cat "scp_printf_test.txt" ) " =~ "%h %p" ]] || fail "input args & printf check failed"
 		rm -f scp_printf_test.txt
 	fi
