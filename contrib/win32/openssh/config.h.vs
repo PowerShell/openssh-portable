@@ -1702,6 +1702,7 @@
 #define HAVE_MBTOWC 1
 #define HAVE_LLABS 1
 #define HAVE_RAISE 1
+#define HAVE_KILLPG 1
 
 #include <signal.h>
 #include <io.h>
