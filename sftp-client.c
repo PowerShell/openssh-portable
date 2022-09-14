@@ -1819,6 +1819,14 @@ do_download(struct sftp_conn *conn, const char *remote_path,
 			status = SSH2_FX_FAILURE;
 		else
 			status = SSH2_FX_OK;
+
+#ifdef WINDOWS
+		/* Write mark-of-the-web to dest file as needed. */
+		if (add_mark_of_web(local_path) == -1) {
+			debug("%s: failed to add mark of the web", local_path);
+		}
+#endif // WINDOWS
+
 		/* Override umask and utimes if asked */
 #ifdef HAVE_FCHMOD
 		if (preserve_flag && fchmod(local_fd, mode) == -1)
@@ -1847,11 +1855,6 @@ do_download(struct sftp_conn *conn, const char *remote_path,
 		}
 	}
 	close(local_fd);
-#ifdef WINDOWS
-	if (add_mark_of_web(local_path) == -1) {
-		debug("%s: failed to add mark of the web", local_path);
-	}
-#endif // WINDOWS
 	sshbuf_free(msg);
 	free(handle);
 

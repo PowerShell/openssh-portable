@@ -264,20 +264,48 @@ readdir(void *avp)
 	}
 }
 
-/* return last part of a path. The last path being a filename */
-char *
-basename(char *path)
+/* Return the leaf node of a path. */
+char*
+basename(const char* path)
 {
-	char *pdest;
+	static char bname[PATH_MAX];
 
-	if (!path)
-		return ".";
-	pdest = strrchr(path, '/');
-	if (pdest)
-		return (pdest + 1);
-	pdest = strrchr(path, '\\');
-	if (pdest)
-		return (pdest + 1);
+	/* Empty or NULL string gets treated as "." */
+	if (path == NULL || *path == '\0') {
+		bname[0] = '.';
+		bname[1] = '\0';
+		return (bname);
+	}
 
-	return path; /* path does not have a slash */
+	/* Strip any trailing slashes */
+	const char* endp = path + strlen(path) - 1;
+	while (endp > path && (*endp == '/' || *endp == '\\'))
+		endp--;
+
+	/* All slashes becomes "/" */
+	if (endp == path && (*endp == '/' || *endp == '\\')) {
+		bname[0] = '/';
+		bname[1] = '\0';
+		return (bname);
+	}
+
+	/* Find the start of the base */
+	const char* startp = endp;
+	while (startp > path && *(startp - 1) != '/' && *(startp - 1) != '\\')
+		startp--;
+
+	size_t len = endp - startp + 1;
+	if (len >= sizeof(bname)) {
+		errno = ENAMETOOLONG;
+		return (NULL);
+	}
+
+	errno_t result = memcpy_s(bname, PATH_MAX, startp, len);
+	if (result != 0) {
+		errno = result;
+		return (NULL);
+	}
+
+	bname[len] = '\0';
+	return (bname);
 }
