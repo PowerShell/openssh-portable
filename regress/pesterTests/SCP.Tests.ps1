@@ -179,7 +179,7 @@ Describe "Tests for scp command" -Tags "CI" {
         CheckTarget -target $DestinationFilePath | Should Be $true
 
         # TODO: Test only
-        Write-Verbose -Verbose "SourceFile Path: $(Get-ChildItem -Path $SourceFilePath)"
+        Write-Verbose -Verbose "Source File Path: $(Get-ChildItem -Path $SourceFilePath)"
         Write-Verbose -Verbose "Source File Info: $(Get-ChildItem -Path $SourceFilePath | Select-Object Name,Length)"
         Write-Verbose -Verbose "Dest File Path: $(Get-ChildItem -Path $DestinationFilePath)"
         Write-Verbose -Verbose "Dest File Info: $(Get-ChildItem -Path $DestinationFilePath | Select-Object Name,Length)"
@@ -189,6 +189,10 @@ Describe "Tests for scp command" -Tags "CI" {
 
         if($Options.contains("-p "))
         {
+            # TODO: Test only
+            Write-Verbose -Verbose "Source File LastWriteTime: $((Get-ChildItem -Path $SourceFilePath).LastWriteTime.DateTime)"
+            Write-Verbose -Verbose "Dest File LastWriteTime: $((Get-ChildItem -Path $DestinationFilePath).LastWriteTime.DateTime)"
+
             $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath).LastWriteTime.DateTime (Get-ChildItem -path $DestinationFilePath).LastWriteTime.DateTime ).Length -eq 0
             $equal | Should Be $true
         }
