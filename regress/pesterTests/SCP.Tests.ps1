@@ -189,6 +189,9 @@ Describe "Tests for scp command" -Tags "CI" {
             Write-Verbose -Verbose "TestPersist DstFilePath: $(Get-ChildItem -Path $dstFilePath)"
             Write-Verbose -Verbose "TestPersist DstFileInfo: $((Get-ChildItem -Path $dstFilePath).LastWriteTime.DateTime)"
 
+            Write-Verbose -Verbose "TestPersist SSH version:"
+            ssh -V
+
             CheckTarget -target $dstFilePath | Should Be $true
 
             $srcFileInfo = Get-ChildItem -Path $srcFilePath

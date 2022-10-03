@@ -2128,6 +2128,9 @@ strrstr(const char *inStr, const char *pattern)
 int
 add_mark_of_web(const char* filename)
 {
+	// TODO: !!Test only!!
+	motw_zone_id = 10;
+
 	if (motw_zone_id > 4) {
 		return -1;
 	}
