@@ -172,9 +172,40 @@ Describe "Tests for scp command" -Tags "CI" {
 
     It 'File copy: <Title> ' -TestCases:$testData {
         param([string]$Title, $Source, $Destination, [string]$Options)
-            
+
+        if ($Options.Contains("-p "))
+        {
+            $fileName = [System.IO.Path]::GetRandomFileName();
+            $srcFilePath = Join-Path -Path $SourceDir -ChildPath $fileName
+            $dstFilePath = Join-Path -Path $DestinationDir -ChildPath $fileName
+            "Hello Text..." | Out-File -FilePath $srcFilePath;
+            Write-Verbose -Verbose "TestPersist SrcFilePath: $(Get-ChildItem -Path $srcFilePath)"
+            Write-Verbose -Verbose "TestPersist SrcFileInfo: $((Get-ChildItem -Path $srcFilePath).LastWriteTime.DateTime)"
+            Start-Sleep -Seconds 30
+            Write-Verbose -Verbose "TestPersist SrcFileInfo: $((Get-ChildItem -Path $srcFilePath).LastWriteTime.DateTime)"
+
+            Invoke-Expression -Command "scp $Options test_target:${srcFilePath} $dstFilePath"
+
+            Write-Verbose -Verbose "TestPersist DstFilePath: $(Get-ChildItem -Path $dstFilePath)"
+            Write-Verbose -Verbose "TestPersist DstFileInfo: $((Get-ChildItem -Path $dstFilePath).LastWriteTime.DateTime)"
+
+            CheckTarget -target $dstFilePath | Should Be $true
+
+            $srcFileInfo = Get-ChildItem -Path $srcFilePath
+            $dstFileInfo = Get-ChildItem -Path $dstFilePath
+
+            $srcFileInfo.Name | Should Be $dstFileInfo.Name
+            $srcFileInfo.Length | Should Be $dstFileInfo.Length
+            $srcFileInfo.LastWriteTime.DateTime | Should Be $dstFileInfo.LastWriteTime.DateTime
+
+            Remove-Item -Path $dstFilePath -Force -ErrorAction SilentlyContinue
+
+            #return;
+        }
+
         iex  "scp $Options $Source $Destination"
         $LASTEXITCODE | Should Be 0
+
         #validate file content. DestPath is the path to the file.
         CheckTarget -target $DestinationFilePath | Should Be $true
 
