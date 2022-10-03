@@ -23,6 +23,9 @@
         <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="A newer version of !(bind.property.ProductName) is already installed." />
         <Condition Message="OpenSSH is supported only on Windows 7 and newer."><![CDATA[VersionNT >= 601]]></Condition>
 
+        <!-- assume user wants path to be updated when client binaries are installed, can be overridden during install with ADD_PATH=0 -->
+        <Property Id="ADD_PATH" Value="1" />
+
         <Feature Id="Client" AllowAdvertise="no">
             <ComponentGroupRef Id="Client" />
         </Feature>
