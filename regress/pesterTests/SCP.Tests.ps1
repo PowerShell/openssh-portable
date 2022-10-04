@@ -189,8 +189,8 @@ Describe "Tests for scp command" -Tags "CI" {
             Write-Verbose -Verbose "TestPersist DstFilePath: $(Get-ChildItem -Path $dstFilePath)"
             Write-Verbose -Verbose "TestPersist DstFileInfo: $((Get-ChildItem -Path $dstFilePath).LastWriteTime.DateTime)"
 
-            Write-Verbose -Verbose "TestPersist SSH version:"
-            ssh -V
+            $sshver = ssh -V *>&1
+            Write-Verbose -Verbose "TestPersist SSH version: $sshver"
 
             CheckTarget -target $dstFilePath | Should Be $true
 
@@ -230,6 +230,8 @@ Describe "Tests for scp command" -Tags "CI" {
             $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath).LastWriteTime.DateTime (Get-ChildItem -path $DestinationFilePath).LastWriteTime.DateTime ).Length -eq 0
             $equal | Should Be $true
         }
+
+        Write-Verbose -Verbose "Copy Test complete"
     }
                 
     It 'Directory recursive copy: <Title> ' -TestCases:$testData1 {
