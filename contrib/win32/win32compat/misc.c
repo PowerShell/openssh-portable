@@ -2128,7 +2128,9 @@ strrstr(const char *inStr, const char *pattern)
 int
 add_mark_of_web(const char* filename)
 {
-	if (motw_zone_id > 4) {
+	// TODO: Test only
+	int imotw = 5;
+	if (imotw > 4) {
 		return -1;
 	}
 	char* fileStreamPath = NULL;
