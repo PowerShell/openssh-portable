@@ -169,11 +169,13 @@ Describe "Tests for scp command" -Tags "CI" {
         $tI++
     }       
     
-
     It 'File copy: <Title> ' -TestCases:$testData {
         param([string]$Title, $Source, $Destination, [string]$Options)
 
-        if ($Options.Contains("-p "))
+        $havePersist = $Options.Contains("-p ")
+        Write-Verbose -Verbose "Have File Persist: $havePersist";
+
+        if ($havePersist)
         {
             $fileName = [System.IO.Path]::GetRandomFileName();
             $srcFilePath = Join-Path -Path $SourceDir -ChildPath $fileName
@@ -184,13 +186,12 @@ Describe "Tests for scp command" -Tags "CI" {
             Start-Sleep -Seconds 30
             Write-Verbose -Verbose "TestPersist SrcFileInfo: $((Get-ChildItem -Path $srcFilePath).LastWriteTime.DateTime)"
 
-            Invoke-Expression -Command "scp $Options test_target:${srcFilePath} $dstFilePath"
+            $cmdToInvoke = "scp $Options test_target:${srcFilePath} $dstFilePath"
+            Write-Verbose -Verbose "TestPersist Running Command: $cmdToInvoke"
+            Invoke-Expression -Command $cmdToInvoke
 
             Write-Verbose -Verbose "TestPersist DstFilePath: $(Get-ChildItem -Path $dstFilePath)"
             Write-Verbose -Verbose "TestPersist DstFileInfo: $((Get-ChildItem -Path $dstFilePath).LastWriteTime.DateTime)"
-
-            #$sshver = ssh -V *>&1
-            #Write-Verbose -Verbose "TestPersist SSH version: $sshver"
 
             CheckTarget -target $dstFilePath | Should Be $true
 
@@ -202,11 +203,11 @@ Describe "Tests for scp command" -Tags "CI" {
             $srcFileInfo.LastWriteTime.DateTime | Should Be $dstFileInfo.LastWriteTime.DateTime
 
             Remove-Item -Path $dstFilePath -Force -ErrorAction SilentlyContinue
-
-            #return;
         }
 
-        iex  "scp $Options $Source $Destination"
+        $cmdToInvoke = "scp $Options $Source $Destination"
+        Write-Verbose -Verbose "Running Command: $cmdToInvoke"
+        iex $cmdToInvoke
         $LASTEXITCODE | Should Be 0
 
         #validate file content. DestPath is the path to the file.
@@ -221,7 +222,7 @@ Describe "Tests for scp command" -Tags "CI" {
         $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
         $equal | Should Be $true
 
-        if($Options.contains("-p "))
+        if ($havePersist)
         {
             # TODO: Test only
             Write-Verbose -Verbose "Source File LastWriteTime: $((Get-ChildItem -Path $SourceFilePath).LastWriteTime.DateTime)"
