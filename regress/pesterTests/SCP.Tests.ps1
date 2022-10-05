@@ -173,7 +173,7 @@ Describe "Tests for scp command" -Tags "CI" {
         param([string]$Title, $Source, $Destination, [string]$Options)
 
         $havePersist = $Options.Contains("-p ")
-        Write-Verbose -Verbose "Have File Persist: $havePersist";
+        Write-Verbose -Verbose "Have File Info Persist: $havePersist";
 
         if ($havePersist)
         {
