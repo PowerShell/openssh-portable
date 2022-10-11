@@ -567,7 +567,7 @@ function Start-OpenSSHBuild
 
     Start-OpenSSHBootstrap -NativeHostArch $NativeHostArch -OneCore:$OneCore
 
-    $PathTargets = Join-Path $PSScriptRoot paths.targets
+    $PathTargets = Join-Path -Path $PSScriptRoot -ChildPath 'paths.targets'
     if ($NoOpenSSL) 
     {        
         [XML]$xml = Get-Content $PathTargets
