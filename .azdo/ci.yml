@@ -44,28 +44,48 @@ stages:
       displayName: Build Win32-OpenSSH
 
     - pwsh: |
-        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
-        Publish-Artifact
-      displayName: Publish build artifact
+        $BuildOutPath = "$(Build.SourcesDirectory)/bin"
+        $BuildOutx86Path = Join-Path -Path $BuildOutPath -ChildPath 'Win32/Release'
+        Get-ChildItem -Path $BuildOutx86Path
+        $BuildOutx64Path = Join-Path -Path $BuildOutPath -ChildPath 'x64/Release'
+        Get-ChildItem -Path $BuildOutx64Path
+      displayName: Capture build results
 
-- stage: Compliance
-  displayName: Compliance
-  dependsOn: Build
-  jobs:
-  - job: ComplianceJob
-    pool:
-      vmImage: windows-latest
-    steps:
-    - checkout: self
-      clean: true
-    - checkout: ComplianceRepo
-      clean: true
-    - download: current
-      artifact: 'Microsoft.PowerShell.SecretManagement'
-    - template: ci-compliance.yml@ComplianceRepo
-      parameters:
-        # credscan
-        suppressionsFile: ''
+    - pwsh: |
+        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+        $BuildDestPath = "$(Build.SourcesDirectory)/Win32-OpenSSH"
+        if (Test-Path -Path $BuildDestPath) {
+          Remove-Item -Path $BuildDestPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        $null = New-Item -ItemType Directory -Path $BuildDestPath -Force
+        # Copy build artifacts
+        $BuildDestx86Path = Join-Path -Path $BuildDestPath -ChildPath 'x86/Release'
+        Start-OpenSSHPackage -NativeHostArch x86 -Configuration Release -DestinationPath $BuildDestx86Path
+        $BuildDestX64Path = Join-Path -Path $BuildDestPath -ChildPath 'x64/Release'
+        Start-OpenSSHPackage -NativeHostArch x64 -Configuration Release -DestinationPath $BuildDestx64Path
+        # Upload build artifacts
+        $artifactName = 'Win32-OpenSSH'
+        Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$BuildDestPath"
+      displayName: Upload Win32-OpenSSH build artifacts
+
+#- stage: Compliance
+#  displayName: Compliance
+#  dependsOn: Build
+#  jobs:
+#  - job: ComplianceJob
+#    pool:
+#      vmImage: windows-latest
+#    steps:
+#    - checkout: self
+#      clean: true
+#    - checkout: ComplianceRepo
+#      clean: true
+#    - download: current
+#      artifact: 'Microsoft.PowerShell.SecretManagement'
+#    - template: ci-compliance.yml@ComplianceRepo
+#      parameters:
+#        # credscan
+#        suppressionsFile: ''
 
 - stage: Test
   displayName: Test Win32-OpenSSH
@@ -83,13 +103,25 @@ stages:
         Write-Host "##$vstsCommandString"
       displayName: Install PowerShell Core
 
+    - task: DownloadBuildArtifacts@0
+      displayName: 'Download build artifacts'
+      inputs:
+        buildType: current
+        downloadType: single
+        artifactName: Win32-OpenSSH
+        downloadPath: '$(System.ArtifactsDirectory)'
+
+    - pwsh: |
+        Get-ChildItem -Path "$(System.ArtifactsDirectory)/* -Recurse"
+      displayName: Capture downloaded artifact directory
+
     - pwsh: |
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
-        Install-OpenSSH
+        Install-OpenSSH -SourceDir "$(System.ArtifactsDirectory)/Win32-OpenSSH/x64/Release/*" -OpenSSHDir "$env:SystemDrive/OpenSSH" -NativeHostArch x64 -Configuration Release -Verbose
       displayName: Install Win32-OpenSSH
   
     - pwsh: |
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
-        Invoke-OpenSSHTests
-        Publish-OpenSSHTestResults
+        Invoke-OpenSSHTests -OpenSSHBinPath "$env:SystemDrive/OpenSSH"
+        Publish-OpenSSHTestResults # TODO: #
       displayName: Run tests and publish results

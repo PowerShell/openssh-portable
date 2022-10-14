@@ -1,7 +1,8 @@
 ##
 ## Azure DevOps CI build tools
-## [Add appropriate copyright]
+## (TODO: Add appropriate copyright)
 ##
+@{
 
 RootModule = './AzDOBuildTools.psm1'
 
@@ -27,9 +28,10 @@ NestedModules = @(
     '../OpenSSHTestHelper.psm1')
 
 FunctionsToExport = @(
+    'Invoke-AllLocally',
     'Invoke-AzDOBuild',
     'Install-OpenSSH',
     'Invoke-OpenSSHTests',
-    'Publish-OpenSSHTestResults',
-    'Publish-Artifact'
-)
+    'Publish-OpenSSHTestResults')
+
+}

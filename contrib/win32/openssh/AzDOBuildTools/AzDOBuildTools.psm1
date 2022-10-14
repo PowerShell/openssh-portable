@@ -112,8 +112,8 @@ function Invoke-AllLocally
 function Invoke-AzDOBuild
 {
       Set-BuildVariable TestPassed True
-      Start-OpenSSHBuild -Configuration Release -NativeHostArch x64
-      Start-OpenSSHBuild -Configuration Release -NativeHostArch x86
+      Start-OpenSSHBuild -Configuration Release -NativeHostArch x64 -Verbose
+      Start-OpenSSHBuild -Configuration Release -NativeHostArch x86 -Verbose
       Write-BuildMessage -Message "OpenSSH binaries build success!" -Category Information
 }
 
@@ -126,25 +126,18 @@ function Install-OpenSSH
     [CmdletBinding()]
     param
     ( 
-        [ValidateSet('Debug', 'Release')]
-        [string]$Configuration = "Release",
-
-        [ValidateSet('x86', 'x64', '')]
-        [string]$NativeHostArch = "",
+        [Parameter(Mandatory=$true)]
+        [string]$SourceDir,
 
         [string]$OpenSSHDir = "$env:SystemDrive\OpenSSH"
     )
 
-    if ($NativeHostArch -eq "") 
-    {
-        $NativeHostArch = 'x64'
-        if ($env:PROCESSOR_ARCHITECTURE  -eq 'x86') {
-            $NativeHostArch = 'x86'
-        }
-    }
     UnInstall-OpenSSH -OpenSSHDir $OpenSSHDir
 
-    Start-OpenSSHPackage -NativeHostArch $NativeHostArch -Configuration $Configuration -DestinationPath $OpenSSHDir
+    if (! (Test-Path -Path $OpenSSHDir)) {
+        $null = New-Item -Path $OpenSSHDir -ItemType Directory -Force
+    }
+    Copy-Item -Path $SourceDir -Destination $OpenSSHDir -Recurse -Force -Verbose
 
     Push-Location $OpenSSHDir 
 
@@ -297,7 +290,12 @@ function Publish-Artifact
 #>
 function Invoke-OpenSSHTests
 {
-    Set-BasicTestInfo -Confirm:$false
+    [CmdletBinding()]
+    param (
+        [string] $OpenSSHBinPath
+    )
+
+    Set-BasicTestInfo -OpenSSHBinPath $OpenSSHBinPath -Confirm:$false
     Invoke-OpenSSHSetupTest
     if (($OpenSSHTestInfo -eq $null) -or (-not (Test-Path $OpenSSHTestInfo["SetupTestResultsFile"])))
     {
