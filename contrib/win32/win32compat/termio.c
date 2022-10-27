@@ -260,6 +260,18 @@ int
 syncio_close(struct w32_io* pio)
 {
 	debug4("syncio_close - pio:%p", pio);
+
+	/* Flush descriptor.*/
+	if (pio->write_details.pending) {
+		WaitForSingleObject(pio->write_overlapped.hEvent, INFINITE);
+
+		/* drain queued APCs */
+		SleepEx(0, TRUE);
+	}
+
+	// This call is likely racy, there's no guarantee
+	// that a thread has begun IO operations when it's called.
+	// Why stop io operations when we're going to close it anyhow?
 	CancelIoEx(WINHANDLE(pio), NULL);
 
 	/* If io is pending, let worker threads exit. */
@@ -276,10 +288,10 @@ syncio_close(struct w32_io* pio)
 
 		WaitForSingleObject(pio->read_overlapped.hEvent, INFINITE);
 	}
-	if (pio->write_details.pending)
-		WaitForSingleObject(pio->write_overlapped.hEvent, INFINITE);
+
 	/* drain queued APCs */
 	SleepEx(0, TRUE);
+
 	/* TODO - fix this, closing Console handles is interfering with TTY/PTY rendering */
 	if (FILETYPE(pio) != FILE_TYPE_CHAR)
 		CloseHandle(WINHANDLE(pio));
