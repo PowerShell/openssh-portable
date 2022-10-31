@@ -829,4 +829,19 @@ function Enable-Privilege {
     $type[0]::EnablePrivilege($Privilege, $Disable)
 }
 
-Export-ModuleMember -Function Repair-FilePermission, Repair-SshdConfigPermission, Repair-SshdHostKeyPermission, Repair-AuthorizedKeyPermission, Repair-UserKeyPermission, Repair-UserSshConfigPermission, Enable-Privilege, Get-UserAccount, Get-UserSID, Repair-AdministratorsAuthorizedKeysPermission, Repair-ModuliFilePermission, Repair-SSHFolderPermission, Repair-SSHFolderFilePermission, Repair-SSHFolderPrivateKeyPermission
+Function Add-Path {
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
+    param
+    (
+        [parameter(Mandatory=$true)]
+        [string]$FilePath
+    )
+
+    if ((Test-Path $FilePath) -and -not($ENV:PATH | Select-String -SimpleMatch $FilePath)) { 
+        $oldPath = (Get-ItemProperty -Path ‘Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment’ -Name PATH).Path
+        $newPath = $FilePath + ’;’ + $oldPath 
+        Set-ItemProperty -Path ‘Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment’ -Name PATH –Value $newPath
+    }
+}
+
+Export-ModuleMember -Function Repair-FilePermission, Repair-SshdConfigPermission, Repair-SshdHostKeyPermission, Repair-AuthorizedKeyPermission, Repair-UserKeyPermission, Repair-UserSshConfigPermission, Enable-Privilege, Get-UserAccount, Get-UserSID, Repair-AdministratorsAuthorizedKeysPermission, Repair-ModuliFilePermission, Repair-SSHFolderPermission, Repair-SSHFolderFilePermission, Repair-SSHFolderPrivateKeyPermission, Add-Path
