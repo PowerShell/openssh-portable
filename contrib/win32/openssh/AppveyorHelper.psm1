@@ -385,7 +385,7 @@ function Invoke-OpenSSHTests
         return
     }
 
-    
+    Invoke-OpenSSHUnginstallTest
     if (($OpenSSHTestInfo -eq $null) -or (-not (Test-Path $OpenSSHTestInfo["UninstallTestResultsFile"])))
     {
         Write-Warning "Test result file $OpenSSHTestInfo["UninstallTestResultsFile"] not found after tests."
