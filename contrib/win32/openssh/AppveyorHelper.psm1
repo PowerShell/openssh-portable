@@ -174,6 +174,9 @@ function Install-OpenSSH
     if (-not ($machinePath.ToLower().Contains($OpenSSHDir.ToLower())))
     {
         $newMachineEnvironmentPath = "$OpenSSHDir;$newMachineEnvironmentPath"
+    }
+    if (-not ($env:Path.ToLower().Contains($OpenSSHDir.ToLower())))
+    {
         $env:Path = "$OpenSSHDir;$env:Path"
     }
     # Update machine environment path
@@ -382,7 +385,7 @@ function Invoke-OpenSSHTests
         return
     }
 
-    Invoke-OpenSSHUninstallTest
+    
     if (($OpenSSHTestInfo -eq $null) -or (-not (Test-Path $OpenSSHTestInfo["UninstallTestResultsFile"])))
     {
         Write-Warning "Test result file $OpenSSHTestInfo["UninstallTestResultsFile"] not found after tests."

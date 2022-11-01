@@ -837,10 +837,16 @@ Function Add-Path {
         [string]$FilePath
     )
 
-    if ((Test-Path $FilePath) -and -not($ENV:PATH | Select-String -SimpleMatch $FilePath)) { 
-        $oldPath = (Get-ItemProperty -Path ‘Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment’ -Name PATH).Path
-        $newPath = $FilePath + ’;’ + $oldPath 
-        Set-ItemProperty -Path ‘Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment’ -Name PATH –Value $newPath
+    if (Test-Path $FilePath) {
+        $machinePath = (Get-ItemProperty -Path ‘Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment’ -Name PATH).Path
+        if (-not ($machinePath.ToLower().Contains($FilePath.ToLower()+';')))
+        {
+            $newPath = $FilePath + ’;’ + $machinePath 
+            Set-ItemProperty -Path ‘Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment’ -Name PATH –Value $newPath
+            if ((Get-ItemProperty -Path ‘Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment’ -Name PATH).Path -eq $newPath) {
+                Write-Host "Updated Machine PATH to include OpenSSH directory, restart/re-login required to take effect globally" -ForegroundColor Yellow
+            }
+        }
     }
 }
 
