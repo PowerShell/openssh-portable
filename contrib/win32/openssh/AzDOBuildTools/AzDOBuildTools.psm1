@@ -404,32 +404,49 @@ function Invoke-OpenSSHTests
 
 <#
       .Synopsis
-      upload OpenSSH pester test results.
+      Collect OpenSSH pester test results into one directory
 #>
-function Publish-OpenSSHTestResults
+function Copy-OpenSSHTestResults
 { 
-    if ($env:APPVEYOR_JOB_ID)
+    param (
+        [Parameter(Mandatory=$true)]
+        [string] $ResultsPath
+    )
+
+    if (Test-Path -Path $ResultsPath)
+    {
+        Remove-Item -Path $ResultsPath -Force -Recurse -ErrorAction Ignore
+    }
+
+    Write-Verbose -Verbose "Creating test results directory for artifacts upload: $ResultsPath"
+    $null = New-Item -Path $ResultsPath -ItemType Directory -Force
+    
+    if (Test-Path -Path $ResultsPath)
     {
         $setupresultFile = Resolve-Path $Global:OpenSSHTestInfo["SetupTestResultsFile"] -ErrorAction Ignore
-        if( (Test-Path $Global:OpenSSHTestInfo["SetupTestResultsFile"]) -and $setupresultFile)
+        if ($setupresultFile)
         {
-            (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", $setupresultFile)
-             Write-BuildMessage -Message "Setup test results uploaded!" -Category Information
+            Write-Verbose -Verbose "Copying set-up test results file, $setupresultFile, to results directory"
+            Copy-Item -Path $setupresultFile -Destination $ResultsPath
         }
 
         $E2EresultFile = Resolve-Path $Global:OpenSSHTestInfo["E2ETestResultsFile"] -ErrorAction Ignore
-        if( (Test-Path $Global:OpenSSHTestInfo["E2ETestResultsFile"]) -and $E2EresultFile)
+        if ($E2EresultFile)
         {
-            (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", $E2EresultFile)
-             Write-BuildMessage -Message "E2E test results uploaded!" -Category Information
+            Write-Verbose -Verbose "Copying end-to-end test results file, $E2EresultFile, to results directory"
+            Copy-Item -Path $E2EresultFile -Destination $ResultsPath
         }
 
         $uninstallResultFile = Resolve-Path $Global:OpenSSHTestInfo["UninstallTestResultsFile"] -ErrorAction Ignore
-        if( (Test-Path $Global:OpenSSHTestInfo["UninstallTestResultsFile"]) -and $uninstallResultFile)
+        if ($uninstallResultFile)
         {
-            (New-Object 'System.Net.WebClient').UploadFile("https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)", $uninstallResultFile)
-             Write-BuildMessage -Message "Uninstall test results uploaded!" -Category Information
+            Write-Verbose -Verbose "Copying uninstall test results file, $uninstallResultFile, to results directory"
+            Copy-Item -Path $uninstallResultFile -Destination $ResultsPath
         }
+    }
+    else
+    {
+        Write-Verbose -Verbose "Unable to write test results path for test artifacts upload: $ResultsPath"
     }
 
     if ($env:DebugMode)
@@ -439,11 +456,11 @@ function Publish-OpenSSHTestResults
     
     if($env:TestPassed -ieq 'True')
     {
-        Write-BuildMessage -Message "The checkin validation success!" -Category Information
+        Write-BuildMessage -Message "The checkin validation tests succeeded!" -Category Information
     }
     else
     {
-        Write-BuildMessage -Message "The checkin validation failed!" -Category Error
-        throw "The checkin validation failed!"
+        Write-BuildMessage -Message "The checkin validation tests failed!" -Category Error
+        throw "The checkin validation tests failed!"
     }
 }

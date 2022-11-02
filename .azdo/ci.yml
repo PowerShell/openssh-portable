@@ -123,5 +123,13 @@ stages:
     - pwsh: |
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
         Invoke-OpenSSHTests -OpenSSHBinPath "$env:SystemDrive/OpenSSH"
-        Publish-OpenSSHTestResults # TODO: #
+        # Copy test results to results directory
+        $ResultsDirectory = "$(Build.SourcesDirectory)/Win32OpenSSHTestResults"
+        Copy-OpenSSHTestResults -ResultsPath $ResultsDirectory
+        # Upload test results artifact
+        if (Test-Path -Path $ResultsDirectory)
+        {
+          $artifactName = 'Win32-OpenSSH-TestResults'
+          Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$ResultsDirectory"
+        }
       displayName: Run tests and publish results
