@@ -171,11 +171,11 @@ function Install-OpenSSH
 
     $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
     $newMachineEnvironmentPath = $machinePath
-    if (-not ($machinePath.ToLower().Contains($OpenSSHDir.ToLower())))
+    if (-not $machinePath.ToLower().Contains("$OpenSSHDir;".ToLower()))
     {
         $newMachineEnvironmentPath = "$OpenSSHDir;$newMachineEnvironmentPath"
     }
-    if (-not ($env:Path.ToLower().Contains($OpenSSHDir.ToLower())))
+    if (-not $env:Path.ToLower().Contains("$OpenSSHDir;".ToLower()))
     {
         $env:Path = "$OpenSSHDir;$env:Path"
     }

@@ -829,7 +829,7 @@ function Enable-Privilege {
     $type[0]::EnablePrivilege($Privilege, $Disable)
 }
 
-Function Add-Path {
+Function Add-MachinePath {
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
     param
     (
@@ -838,12 +838,12 @@ Function Add-Path {
     )
 
     if (Test-Path $FilePath) {
-        $machinePath = (Get-ItemProperty -Path ‘Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment’ -Name PATH).Path
-        if (-not ($machinePath.ToLower().Contains($FilePath.ToLower()+';')))
+        $machinePath = (Get-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH).Path
+        if (-not $machinePath.ToLower().Contains("$FilePath;".ToLower()))
         {
             $newPath = $FilePath + ’;’ + $machinePath 
-            Set-ItemProperty -Path ‘Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment’ -Name PATH –Value $newPath
-            if ((Get-ItemProperty -Path ‘Registry::HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session Manager\Environment’ -Name PATH).Path -eq $newPath) {
+            Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH –Value $newPath
+            if ((Get-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH).Path -eq $newPath) {
                 Write-Host "Updated Machine PATH to include OpenSSH directory, restart/re-login required to take effect globally" -ForegroundColor Yellow
             }
         }

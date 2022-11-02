@@ -129,4 +129,4 @@ sc.exe privs sshd SeAssignPrimaryTokenPrivilege/SeTcbPrivilege/SeBackupPrivilege
 Write-Host -ForegroundColor Green "sshd and ssh-agent services successfully installed"
 
 # add folder to system PATH
-Add-Path -FilePath $scriptdir @psBoundParameters
+Add-MachinePath -FilePath $scriptdir @psBoundParameters
