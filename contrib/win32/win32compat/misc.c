@@ -60,6 +60,8 @@
 #include "w32fd.h"
 #include "inc\string.h"
 #include "inc\time.h"
+#include "..\..\..\atomicio.h"
+#include "urlmon.h"
 
 #include <wchar.h>
 
@@ -134,6 +136,9 @@ char* chroot_path = NULL;
 int chroot_path_len = 0;
 /* UTF-16 version of the above */
 wchar_t* chroot_pathw = NULL;
+
+/* motw zone_id initialized to invalid value */
+DWORD motw_zone_id = 5;
 
 int
 usleep(unsigned int useconds)
@@ -2150,4 +2155,101 @@ strrstr(const char *inStr, const char *pattern)
 		last = tmp++;
 
 	return last;
+}
+
+int
+add_mark_of_web(const char* filename)
+{
+	if (motw_zone_id > 4) {
+		return -1;
+	}
+	char* fileStreamPath = NULL;
+	size_t fileStreamPathLen = strlen(filename) + strlen(":Zone.Identifier") + 1;
+
+	fileStreamPath = malloc(fileStreamPathLen * sizeof(char));
+
+	if (fileStreamPath == NULL) {
+		return -1;
+	}
+
+	sprintf_s(fileStreamPath, fileStreamPathLen, "%s:Zone.Identifier", filename);
+
+	int ofd, status = 0;
+	char* zoneIdentifierStr = NULL;
+	size_t zoneIndentifierLen = strlen("[ZoneTransfer]\nZoneId=") + 1 + 1;
+
+	zoneIdentifierStr = malloc(zoneIndentifierLen * sizeof(char));
+
+	if (zoneIdentifierStr == NULL) {
+		status = -1;
+		goto cleanup;
+	}
+
+	sprintf_s(zoneIdentifierStr, zoneIndentifierLen, "[ZoneTransfer]\nZoneId=%d", motw_zone_id);
+
+	// create zone identifer file stream and then write the Mark of the Web to it
+	if ((ofd = open(fileStreamPath, O_WRONLY | O_CREAT, USHRT_MAX)) == -1) {
+		status = -1;
+		goto cleanup;
+	}
+
+	if (atomicio(vwrite, ofd, zoneIdentifierStr, zoneIndentifierLen) != zoneIndentifierLen) {
+		status = -1;
+	}
+
+	if (close(ofd) == -1) {
+		status = -1;
+	}
+
+cleanup:
+	free(fileStreamPath);
+	if (zoneIdentifierStr)
+		free(zoneIdentifierStr);
+	return status;
+}
+
+/* Gets the zone identifier value based on the provided hostname, 
+and sets the global motw_zone_id variable with that value. */
+void get_zone_identifier(const char* hostname) {
+	HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+	if (!SUCCEEDED(hr)) {
+		debug("CoInitializeEx for MapUrlToZone failed");
+		return;
+	}
+	IInternetSecurityManager *pIISM = NULL;
+	// CLSID_InternetSecurityManager & IID_IInternetSecurityManager declared in urlmon.h
+	hr = CoCreateInstance(&CLSID_InternetSecurityManager, NULL,
+		CLSCTX_ALL, &IID_IInternetSecurityManager, (void**)&pIISM);
+	if (!SUCCEEDED(hr)) {
+		debug("CoCreateInstance for MapUrlToZone failed");
+		goto out;
+	}
+	wchar_t *hostname_w = NULL, *hostformat_w = NULL;
+	hostname_w = utf8_to_utf16(hostname);
+	if (hostname_w == NULL) {
+		goto cleanup;
+	}
+	size_t hostname_w_len = wcslen(hostname_w) + wcslen(L"ftp://") + 1;
+	hostformat_w = malloc(hostname_w_len * sizeof(wchar_t));
+	if (hostformat_w == NULL) {
+		goto cleanup;
+	}
+	swprintf_s(hostformat_w, hostname_w_len, L"ftp://%s", hostname_w);
+	hr = pIISM->lpVtbl->MapUrlToZone(pIISM, hostformat_w, &motw_zone_id, 0);
+	if (hr == S_OK) {
+		debug("MapUrlToZone zone identifier value: %d", motw_zone_id);
+	}
+	else {
+		motw_zone_id = 5;
+		debug("MapUrlToZone failed, resetting motw_zone_id to invalid value");
+	}
+cleanup:
+	if (pIISM)
+		pIISM->lpVtbl->Release(pIISM);
+	if (hostname_w)
+		free(hostname_w);
+	if (hostformat_w)
+		free(hostformat_w);
+out:
+	CoUninitialize();
 }

@@ -1,4 +1,4 @@
-/* $OpenBSD: channels.h,v 1.141 2022/01/22 00:49:34 djm Exp $ */
+/* $OpenBSD: channels.h,v 1.143 2022/05/05 00:56:58 djm Exp $ */
 
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
@@ -138,7 +138,7 @@ struct Channel {
 	int     sock;		/* sock fd */
 	u_int	io_want;	/* bitmask of SSH_CHAN_IO_* */
 	u_int	io_ready;	/* bitmask of SSH_CHAN_IO_* */
-	int	pollfd_offset;	/* base offset into pollfd array (or -1) */
+	int	pfds[4];	/* pollfd entries for rfd/wfd/efd/sock */
 	int     ctl_chan;	/* control channel (multiplexed connections) */
 	int     isatty;		/* rfd is a tty */
 #ifdef _AIX
@@ -275,7 +275,7 @@ Channel	*channel_by_id(struct ssh *, int);
 Channel	*channel_by_remote_id(struct ssh *, u_int);
 Channel	*channel_lookup(struct ssh *, int);
 Channel *channel_new(struct ssh *, char *, int, int, int, int,
-	    u_int, u_int, int, char *, int);
+	    u_int, u_int, int, const char *, int);
 void	 channel_set_fds(struct ssh *, int, int, int, int, int,
 	    int, int, u_int);
 void	 channel_free(struct ssh *, Channel *);

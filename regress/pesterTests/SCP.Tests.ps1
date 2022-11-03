@@ -172,7 +172,6 @@ Describe "Tests for scp command" -Tags "CI" {
 
     It 'File copy: <Title> ' -TestCases:$testData {
         param([string]$Title, $Source, $Destination, [string]$Options)
-            
         iex  "scp $Options $Source $Destination"
         $LASTEXITCODE | Should Be 0
         #validate file content. DestPath is the path to the file.
@@ -181,7 +180,7 @@ Describe "Tests for scp command" -Tags "CI" {
         $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
         $equal | Should Be $true
 
-        if($Options.contains("-p "))
+        if($Options.contains("-p ") -and [environment]::OSVersion.Version.Major -ge 10)
         {
             $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath).LastWriteTime.DateTime (Get-ChildItem -path $DestinationFilePath).LastWriteTime.DateTime ).Length -eq 0
             $equal | Should Be $true

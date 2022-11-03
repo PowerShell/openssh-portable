@@ -1,4 +1,4 @@
-#	$OpenBSD: scp.sh,v 1.13 2021/08/10 03:35:45 djm Exp $
+#	$OpenBSD: scp.sh,v 1.14 2022/05/15 23:48:07 djm Exp $
 #	Placed in the Public Domain.
 
 tid="scp"
@@ -59,6 +59,33 @@ for mode in scp sftp ; do
 	$SCP "${scpopts[@]}" somehost:${DATA} ${COPY} || fail "copy failed"
 	cmp ${DATA} ${COPY} || fail "corrupted copy"
 
+	# In place tests will not work on Windows because of simultaneous read of/write to file
+
+	# verbose "$tag: copy local file to remote file in place"
+	# scpclean
+	# cp ${DATA} ${COPY}
+	# $SCP "${scpopts[@]}" ${COPY} somehost:${COPY} || fail "copy failed"
+	# cmp ${DATA} ${COPY} || fail "corrupted copy"
+
+	# verbose "$tag: copy remote file to local file in place"
+	# scpclean
+	# cp ${DATA} ${COPY}
+	# $SCP "${scpopts[@]}" somehost:${COPY} ${COPY} || fail "copy failed"
+	# cmp ${DATA} ${COPY} || fail "corrupted copy"
+
+	verbose "$tag: copy local file to remote file clobber"
+	scpclean
+	cat ${DATA} ${DATA} > ${COPY}
+	$SCP "${scpopts[@]}" ${DATA} somehost:${COPY} || fail "copy failed"
+	ls -l $DATA $COPY
+	cmp ${DATA} ${COPY} || fail "corrupted copy"
+
+	verbose "$tag: copy remote file to local file clobber"
+	scpclean
+	cat ${DATA} ${DATA} > ${COPY}
+	$SCP "${scpopts[@]}" somehost:${DATA} ${COPY} || fail "copy failed"
+	cmp ${DATA} ${COPY} || fail "corrupted copy"
+
 	verbose "$tag: simple copy local file to remote dir"
 	scpclean
 	cp ${DATA} ${COPY}
@@ -104,6 +131,16 @@ for mode in scp sftp ; do
 	 touch '`touch metachartest`' && \
 	 $SCP "${scpopts[@]}" *metachar* ${DIR2} 2>&1 2>/dev/null; \
 	 [ ! -f metachartest ] ) || fail "shell metacharacters"
+
+	if test $mode = scp ; then
+		verbose "$tag: input args & printf check"
+		scpclean
+		cp ${DATA} ${COPY}
+		$SCP "${scpopts[@]}" -vvv -o '"%h %p"' ${COPY} somehost:${DIR} 2>&1 | tee scp_printf_test.txt
+		# relies on debug log statement, specifically from "debug3: spawning..." 
+		[[ " $( cat "scp_printf_test.txt" ) " =~ "%h %p" ]] || fail "input args & printf check failed"
+		rm -f scp_printf_test.txt
+	fi
 
 	if [ ! -z "$SUDO" ]; then
 		verbose "$tag: skipped file after scp -p with failed chown+utimes"

@@ -151,6 +151,7 @@
 #define HAVE_FIDO_DEV_GET_TOUCH_STATUS
 #define HAVE_FIDO_CRED_SET_CLIENTDATA
 #define HAVE_FIDO_ASSERT_SET_CLIENTDATA
+#define HAVE_FIDO_DEV_IS_WINHELLO
 
 /* File names may not contain backslash characters */
 /* #undef FILESYSTEM_NO_BACKSLASH */
@@ -1733,3 +1734,7 @@
 #define WITH_ZLIB
 #define _PATH_TTY "conin$"
 #define HAVE_STRUCT_POLLFD_FD 1
+#define HAVE_KILLPG 1
+
+
+

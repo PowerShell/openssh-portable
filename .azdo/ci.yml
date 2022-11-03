@@ -1,0 +1,135 @@
+name: $(BuildDefinitionName)-$(date:yyMM).$(date:dd)$(rev:rrr)
+trigger:
+  # Batch merge builds together while a merge build is running
+  batch: true
+  branches:
+    include:
+    - latestw_all
+pr:
+  branches:
+    include:
+    - latestw_all
+
+resources:
+  repositories:
+  - repository: ComplianceRepo
+    type: github
+    endpoint: ComplianceGHRepo
+    name: PowerShell/compliance
+
+stages:
+- stage: Build
+  displayName: Build Win32-OpenSSH
+  jobs:
+  - job: BuildPkg
+    displayName: Build Package
+    pool:
+      name: 1ES
+      demands:
+      - ImageOverride -equals PSMMS2019-OpenSSH-Secure
+
+    steps:
+    - powershell: |
+        $powerShellPath = Join-Path -Path $env:AGENT_TEMPDIRECTORY -ChildPath 'powershell'
+        Invoke-WebRequest -Uri https://raw.githubusercontent.com/PowerShell/PowerShell/master/tools/install-powershell.ps1 -outfile ./install-powershell.ps1
+        ./install-powershell.ps1 -Destination $powerShellPath
+        $vstsCommandString = "vso[task.setvariable variable=PATH]$powerShellPath;$env:PATH"
+        Write-Host "sending " + $vstsCommandString
+        Write-Host "##$vstsCommandString"
+      displayName: Install PowerShell Core
+    
+    - pwsh: |
+        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+        Invoke-AzDOBuild
+      displayName: Build Win32-OpenSSH
+
+    - pwsh: |
+        $BuildOutPath = "$(Build.SourcesDirectory)/bin"
+        $BuildOutx86Path = Join-Path -Path $BuildOutPath -ChildPath 'Win32/Release'
+        Get-ChildItem -Path $BuildOutx86Path
+        $BuildOutx64Path = Join-Path -Path $BuildOutPath -ChildPath 'x64/Release'
+        Get-ChildItem -Path $BuildOutx64Path
+      displayName: Capture build results
+
+    - pwsh: |
+        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+        $BuildDestPath = "$(Build.SourcesDirectory)/Win32-OpenSSH"
+        if (Test-Path -Path $BuildDestPath) {
+          Remove-Item -Path $BuildDestPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        $null = New-Item -ItemType Directory -Path $BuildDestPath -Force
+        # Copy build artifacts
+        $BuildDestx86Path = Join-Path -Path $BuildDestPath -ChildPath 'x86/Release'
+        Start-OpenSSHPackage -NativeHostArch x86 -Configuration Release -DestinationPath $BuildDestx86Path
+        $BuildDestX64Path = Join-Path -Path $BuildDestPath -ChildPath 'x64/Release'
+        Start-OpenSSHPackage -NativeHostArch x64 -Configuration Release -DestinationPath $BuildDestx64Path
+        # Upload build artifacts
+        $artifactName = 'Win32-OpenSSH'
+        Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$BuildDestPath"
+      displayName: Upload Win32-OpenSSH build artifacts
+
+#- stage: Compliance
+#  displayName: Compliance
+#  dependsOn: Build
+#  jobs:
+#  - job: ComplianceJob
+#    pool:
+#      vmImage: windows-latest
+#    steps:
+#    - checkout: self
+#      clean: true
+#    - checkout: ComplianceRepo
+#      clean: true
+#    - download: current
+#      artifact: 'Microsoft.PowerShell.SecretManagement'
+#    - template: ci-compliance.yml@ComplianceRepo
+#      parameters:
+#        # credscan
+#        suppressionsFile: ''
+
+- stage: Test
+  displayName: Test Win32-OpenSSH
+  dependsOn: Build
+  jobs:
+  pool:
+    vmImage: windows-latest
+  steps:
+  - powershell: |
+        $powerShellPath = Join-Path -Path $env:AGENT_TEMPDIRECTORY -ChildPath 'powershell'
+        Invoke-WebRequest -Uri https://raw.githubusercontent.com/PowerShell/PowerShell/master/tools/install-powershell.ps1 -outfile ./install-powershell.ps1
+        ./install-powershell.ps1 -Destination $powerShellPath
+        $vstsCommandString = "vso[task.setvariable variable=PATH]$powerShellPath;$env:PATH"
+        Write-Host "sending " + $vstsCommandString
+        Write-Host "##$vstsCommandString"
+      displayName: Install PowerShell Core
+
+    - task: DownloadBuildArtifacts@0
+      displayName: 'Download build artifacts'
+      inputs:
+        buildType: current
+        downloadType: single
+        artifactName: Win32-OpenSSH
+        downloadPath: '$(System.ArtifactsDirectory)'
+
+    - pwsh: |
+        Get-ChildItem -Path "$(System.ArtifactsDirectory)/* -Recurse"
+      displayName: Capture downloaded artifact directory
+
+    - pwsh: |
+        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+        Install-OpenSSH -SourceDir "$(System.ArtifactsDirectory)/Win32-OpenSSH/x64/Release/*" -OpenSSHDir "$env:SystemDrive/OpenSSH" -NativeHostArch x64 -Configuration Release -Verbose
+      displayName: Install Win32-OpenSSH
+  
+    - pwsh: |
+        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+        Invoke-OpenSSHTests -OpenSSHBinPath "$env:SystemDrive/OpenSSH"
+        # Copy test results to results directory
+        $ResultsDirectory = "$(Build.SourcesDirectory)/Win32OpenSSHTestResults"
+        Copy-OpenSSHTestResults -ResultsPath $ResultsDirectory
+        # Upload test results artifact
+        if (Test-Path -Path $ResultsDirectory)
+        {
+          $artifactName = 'Win32-OpenSSH-TestResults'
+          Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$ResultsDirectory"
+        }
+      displayName: Run tests and publish results

@@ -1,4 +1,4 @@
-/* $OpenBSD: misc.c,v 1.174 2022/02/11 00:43:56 dtucker Exp $ */
+/* $OpenBSD: misc.c,v 1.177 2022/08/11 01:56:51 djm Exp $ */
 /*
  * Copyright (c) 2000 Markus Friedl.  All rights reserved.
  * Copyright (c) 2005-2020 Damien Miller.  All rights reserved.
@@ -1091,16 +1091,21 @@ addargs(arglist *args, char *fmt, ...)
 	r = vasprintf(&cp, fmt, ap);
 	va_end(ap);
 	if (r == -1)
-		fatal("addargs: argument too long");
+		fatal_f("argument too long");
 
 	nalloc = args->nalloc;
 	if (args->list == NULL) {
 		nalloc = 32;
 		args->num = 0;
-	} else if (args->num+2 >= nalloc)
+	} else if (args->num > (256 * 1024))
+		fatal_f("too many arguments");
+	else if (args->num >= args->nalloc)
+		fatal_f("arglist corrupt");
+	else if (args->num+2 >= nalloc)
 		nalloc *= 2;
 
-	args->list = xrecallocarray(args->list, args->nalloc, nalloc, sizeof(char *));
+	args->list = xrecallocarray(args->list, args->nalloc,
+	    nalloc, sizeof(char *));
 	args->nalloc = nalloc;
 	args->list[args->num++] = cp;
 	args->list[args->num] = NULL;
@@ -1117,10 +1122,12 @@ replacearg(arglist *args, u_int which, char *fmt, ...)
 	r = vasprintf(&cp, fmt, ap);
 	va_end(ap);
 	if (r == -1)
-		fatal("replacearg: argument too long");
+		fatal_f("argument too long");
+	if (args->list == NULL || args->num >= args->nalloc)
+		fatal_f("arglist corrupt");
 
 	if (which >= args->num)
-		fatal("replacearg: tried to replace invalid arg %d >= %d",
+		fatal_f("tried to replace invalid arg %d >= %d",
 		    which, args->num);
 	free(args->list[which]);
 	args->list[which] = cp;
@@ -1131,13 +1138,15 @@ freeargs(arglist *args)
 {
 	u_int i;
 
-	if (args->list != NULL) {
+	if (args == NULL)
+		return;
+	if (args->list != NULL && args->num < args->nalloc) {
 		for (i = 0; i < args->num; i++)
 			free(args->list[i]);
 		free(args->list);
-		args->nalloc = args->num = 0;
-		args->list = NULL;
 	}
+	args->nalloc = args->num = 0;
+	args->list = NULL;
 }
 
 #ifdef WINDOWS
@@ -1149,7 +1158,7 @@ duplicateargs(arglist *dest, const arglist *source)
 	
 	if (source->list != NULL) {
 		for (int i = 0; i < source->num; i++) {
-			addargs(dest, source->list[i]);
+			addargs(dest, "%s", source->list[i]);
 		}
 	}
 }
@@ -2444,15 +2453,26 @@ parse_absolute_time(const char *s, uint64_t *tp)
 	struct tm tm;
 	time_t tt;
 	char buf[32], *fmt;
+	const char *cp;
+	size_t l;
+	int is_utc = 0;
 
 	*tp = 0;
 
+	l = strlen(s);
+	if (l > 1 && strcasecmp(s + l - 1, "Z") == 0) {
+		is_utc = 1;
+		l--;
+	} else if (l > 3 && strcasecmp(s + l - 3, "UTC") == 0) {
+		is_utc = 1;
+		l -= 3;
+	}
 	/*
 	 * POSIX strptime says "The application shall ensure that there
 	 * is white-space or other non-alphanumeric characters between
 	 * any two conversion specifications" so arrange things this way.
 	 */
-	switch (strlen(s)) {
+	switch (l) {
 	case 8: /* YYYYMMDD */
 		fmt = "%Y-%m-%d";
 		snprintf(buf, sizeof(buf), "%.4s-%.2s-%.2s", s, s + 4, s + 6);
@@ -2472,10 +2492,15 @@ parse_absolute_time(const char *s, uint64_t *tp)
 	}
 
 	memset(&tm, 0, sizeof(tm));
-	if (strptime(buf, fmt, &tm) == NULL)
+	if ((cp = strptime(buf, fmt, &tm)) == NULL || *cp != '\0')
 		return SSH_ERR_INVALID_FORMAT;
-	if ((tt = mktime(&tm)) < 0)
-		return SSH_ERR_INVALID_FORMAT;
+	if (is_utc) {
+		if ((tt = timegm(&tm)) < 0)
+			return SSH_ERR_INVALID_FORMAT;
+	} else {
+		if ((tt = mktime(&tm)) < 0)
+			return SSH_ERR_INVALID_FORMAT;
+	}
 	/* success */
 	*tp = (uint64_t)tt;
 	return 0;
@@ -2883,4 +2908,21 @@ lookup_env_in_list(const char *env, char * const *envs, size_t nenvs)
 		}
 	}
 	return NULL;
+}
+
+const char *
+lookup_setenv_in_list(const char *env, char * const *envs, size_t nenvs)
+{
+	char *name, *cp;
+	const char *ret;
+
+	name = xstrdup(env);
+	if ((cp = strchr(name, '=')) == NULL) {
+		free(name);
+		return NULL; /* not env=val */
+	}
+	*cp = '\0';
+	ret = lookup_env_in_list(name, envs, nenvs);
+	free(name);
+	return ret;
 }

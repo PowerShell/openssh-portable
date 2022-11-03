@@ -1,4 +1,4 @@
-/* $OpenBSD: scp.c,v 1.245 2022/02/10 04:12:38 djm Exp $ */
+/* $OpenBSD: scp.c,v 1.248 2022/05/13 06:31:50 djm Exp $ */
 /*
  * scp - secure remote copy.  This is basically patched BSD rcp which
  * uses ssh to do the data transfer (instead of using rcmd).
@@ -135,6 +135,9 @@
 
 #include "sftp-common.h"
 #include "sftp-client.h"
+#ifdef WINDOWS
+#include "misc_internal.h"
+#endif // WINDOWS
 
 extern char *__progname;
 
@@ -574,13 +577,11 @@ main(int argc, char **argv)
 	const char *errstr;
 	extern char *optarg;
 	extern int optind;
-	enum scp_mode_e mode = MODE_SCP;
+	enum scp_mode_e mode = MODE_SFTP;
 	char *sftp_direct = NULL;
 
 	/* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */
 	sanitise_stdfd();
-
-	seed_rng();
 
 	msetlocale();
 
@@ -1138,6 +1139,9 @@ do_sftp_connect(char *host, char *user, int port, char *sftp_direct,
 		    reminp, remoutp, pidp) < 0)
 			return NULL;
 	}
+#ifdef WINDOWS
+	get_zone_identifier(host);
+#endif // WINDOWS
 	return do_init(*reminp, *remoutp, 32768, 64, limit_kbps);
 }
 
@@ -1436,6 +1440,9 @@ tolocal(int argc, char **argv, enum scp_mode_e mode, char *sftp_direct)
 			continue;
 		}
 		/* SCP */
+#ifdef WINDOWS
+		get_zone_identifier(host);
+#endif // WINDOWS
 		xasprintf(&bp, "%s -f %s%s",
 		    cmd, *src == '-' ? "-- " : "", src);
 		if (do_cmd(ssh_program, host, suser, sport, 0, bp,
@@ -1518,11 +1525,11 @@ source_sftp(int argc, char *src, char *targ, struct sftp_conn *conn)
 
 	if (src_is_dir && iamrecursive) {
 		if (upload_dir(conn, src, abs_dst, pflag,
-		    SFTP_PROGRESS_ONLY, 0, 0, 1) != 0) {
+		    SFTP_PROGRESS_ONLY, 0, 0, 1, 1) != 0) {
 			error("failed to upload directory %s to %s", src, targ);
 			errs = 1;
 		}
-	} else if (do_upload(conn, src, abs_dst, pflag, 0, 0) != 0) {
+	} else if (do_upload(conn, src, abs_dst, pflag, 0, 0, 1) != 0) {
 		error("failed to upload file %s to %s", src, targ);
 		errs = 1;
 	}
@@ -1838,11 +1845,11 @@ sink_sftp(int argc, char *dst, const char *src, struct sftp_conn *conn)
 		debug("Fetching %s to %s\n", g.gl_pathv[i], abs_dst);
 		if (globpath_is_dir(g.gl_pathv[i]) && iamrecursive) {
 			if (download_dir(conn, g.gl_pathv[i], abs_dst, NULL,
-			    pflag, SFTP_PROGRESS_ONLY, 0, 0, 1) == -1)
+			    pflag, SFTP_PROGRESS_ONLY, 0, 0, 1, 1) == -1)
 				err = -1;
 		} else {
 			if (do_download(conn, g.gl_pathv[i], abs_dst, NULL,
-			    pflag, 0, 0) == -1)
+			    pflag, 0, 0, 1) == -1)
 				err = -1;
 		}
 		free(abs_dst);
@@ -2074,6 +2081,12 @@ sink(int argc, char **argv, const char *src)
 		omode = mode;
 		mode |= S_IWUSR;
 #ifdef WINDOWS
+		if (add_mark_of_web(np) == -1) {
+			if (verbose_mode) {
+				note_err("%s: add_mark_of_web failed\n", np);
+			}
+		}
+		
 		// In windows, we would like to inherit the parent folder permissions by setting mode to USHRT_MAX.
 		if ((ofd = open(np, O_WRONLY|O_CREAT, USHRT_MAX)) == -1) {
 #else

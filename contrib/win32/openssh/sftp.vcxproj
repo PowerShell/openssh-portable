@@ -43,6 +43,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)sftp.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\wmain_common.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\win32-utf8.c" />
+    <ClCompile Include="..\..\..\sftp-usergroup.c" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="version.rc" />

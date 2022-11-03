@@ -1,4 +1,4 @@
-.\" $OpenBSD: sftp.1,v 1.138 2021/07/02 05:11:21 dtucker Exp $
+.\" $OpenBSD: sftp.1,v 1.142 2022/09/19 21:39:16 djm Exp $
 .\"
 .\" Copyright (c) 2001 Damien Miller.  All rights reserved.
 .\"
@@ -22,7 +22,7 @@
 .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.Dd $Mdocdate: July 2 2021 $
+.Dd $Mdocdate: September 19 2022 $
 .Dt SFTP 1
 .Os
 .Sh NAME
@@ -34,7 +34,7 @@
 .Op Fl B Ar buffer_size
 .Op Fl b Ar batchfile
 .Op Fl c Ar cipher
-.Op Fl D Ar sftp_server_path
+.Op Fl D Ar sftp_server_command
 .Op Fl F Ar ssh_config
 .Op Fl i Ar identity_file
 .Op Fl J Ar destination
@@ -126,7 +126,7 @@ Batch mode reads a series of commands from an input
 .Ar batchfile
 instead of
 .Em stdin .
-Since it lacks user interaction it should be used in conjunction with
+Since it lacks user interaction, it should be used in conjunction with
 non-interactive authentication to obviate the need to enter a password
 at connection time (see
 .Xr sshd 8
@@ -144,7 +144,7 @@ will abort if any of the following
 commands fail:
 .Ic get , put , reget , reput , rename , ln ,
 .Ic rm , mkdir , chdir , ls ,
-.Ic lchdir , chmod , chown ,
+.Ic lchdir , copy , cp , chmod , chown ,
 .Ic chgrp , lpwd , df , symlink ,
 and
 .Ic lmkdir .
@@ -167,10 +167,12 @@ flag).
 Selects the cipher to use for encrypting the data transfers.
 This option is directly passed to
 .Xr ssh 1 .
-.It Fl D Ar sftp_server_path
+.It Fl D Ar sftp_server_command
 Connect directly to a local sftp server
 (rather than via
 .Xr ssh 1 ) .
+A command and arguments may be specified, for example
+.Qq /path/sftp-server -el debug3 .
 This option may be useful in debugging the client and server.
 .It Fl F Ar ssh_config
 Specifies an alternative
@@ -271,6 +273,7 @@ For full details of the options listed below, and their possible values, see
 .It PubkeyAcceptedAlgorithms
 .It PubkeyAuthentication
 .It RekeyLimit
+.It RequiredRSASize
 .It SendEnv
 .It ServerAliveInterval
 .It ServerAliveCountMax
@@ -400,6 +403,18 @@ If the
 flag is specified, then symlinks will not be followed.
 Note that this is only supported by servers that implement
 the "lsetstat@openssh.com" extension.
+.It Ic copy Ar oldpath Ar newpath
+Copy remote file from
+.Ar oldpath
+to
+.Ar newpath .
+.Pp
+Note that this is only supported by servers that implement the "copy-data"
+extension.
+.It Ic cp Ar oldpath Ar newpath
+Alias to
+.Ic copy
+command.
 .It Xo Ic df
 .Op Fl hi
 .Op Ar path

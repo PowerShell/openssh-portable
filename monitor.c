@@ -1,4 +1,4 @@
-/* $OpenBSD: monitor.c,v 1.231 2022/01/28 06:18:42 guenther Exp $ */
+/* $OpenBSD: monitor.c,v 1.234 2022/06/15 16:08:25 djm Exp $ */
 /*
  * Copyright 2002 Niels Provos <provos@citi.umich.edu>
  * Copyright 2002 Markus Friedl <markus@openbsd.org>
@@ -739,7 +739,6 @@ mm_answer_sign(struct ssh *ssh, int sock, struct sshbuf *m)
 int
 mm_answer_pwnamallow(struct ssh *ssh, int sock, struct sshbuf *m)
 {
-	char *username;
 	struct passwd *pwent;
 	int r, allowed = 0;
 	u_int i;
@@ -749,14 +748,12 @@ mm_answer_pwnamallow(struct ssh *ssh, int sock, struct sshbuf *m)
 	if (authctxt->attempt++ != 0)
 		fatal_f("multiple attempts for getpwnam");
 
-	if ((r = sshbuf_get_cstring(m, &username, NULL)) != 0)
+	if ((r = sshbuf_get_cstring(m, &authctxt->user, NULL)) != 0)
 		fatal_fr(r, "parse");
 
-	pwent = getpwnamallow(ssh, username);
+	pwent = getpwnamallow(ssh, authctxt->user);
 
-	authctxt->user = xstrdup(username);
-	setproctitle("%s [priv]", pwent ? username : "unknown");
-	free(username);
+	setproctitle("%s [priv]", pwent ? authctxt->user : "unknown");
 
 	sshbuf_reset(m);
 

@@ -507,6 +507,8 @@
     <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\win32_sshtty.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\win32-utf8.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-sk-client.c" />
+    <ClCompile Include="..\..\..\misc.c" />
+    <ClCompile Include="..\..\..\sshkey.c" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="version.rc" />

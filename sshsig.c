@@ -1,4 +1,4 @@
-/* $OpenBSD: sshsig.c,v 1.28 2022/02/01 23:34:47 djm Exp $ */
+/* $OpenBSD: sshsig.c,v 1.30 2022/08/19 03:06:30 djm Exp $ */
 /*
  * Copyright (c) 2019 Google LLC
  *
@@ -494,7 +494,7 @@ hash_file(int fd, const char *hashalg, struct sshbuf **bp)
 {
 	char *hex, rbuf[8192], hash[SSH_DIGEST_MAX_LENGTH];
 	ssize_t n, total = 0;
-	struct ssh_digest_ctx *ctx;
+	struct ssh_digest_ctx *ctx = NULL;
 	int alg, oerrno, r = SSH_ERR_INTERNAL_ERROR;
 	struct sshbuf *b = NULL;
 
@@ -517,7 +517,6 @@ hash_file(int fd, const char *hashalg, struct sshbuf **bp)
 				continue;
 			oerrno = errno;
 			error_f("read: %s", strerror(errno));
-			ssh_digest_free(ctx);
 			errno = oerrno;
 			r = SSH_ERR_SYSTEM_ERROR;
 			goto out;
@@ -552,9 +551,11 @@ hash_file(int fd, const char *hashalg, struct sshbuf **bp)
 	/* success */
 	r = 0;
  out:
+	oerrno = errno;
 	sshbuf_free(b);
 	ssh_digest_free(ctx);
 	explicit_bzero(hash, sizeof(hash));
+	errno = oerrno;
 	return r;
 }
 
@@ -772,7 +773,7 @@ parse_principals_key_and_options(const char *path, u_long linenum, char *line,
 		return SSH_ERR_KEY_NOT_FOUND; /* blank or all-comment line */
 
 	/* format: identity[,identity...] [option[,option...]] key */
-	if ((tmp = strdelimw(&cp)) == NULL) {
+	if ((tmp = strdelimw(&cp)) == NULL || cp == NULL) {
 		error("%s:%lu: invalid line", path, linenum);
 		r = SSH_ERR_INVALID_FORMAT;
 		goto out;
@@ -807,6 +808,11 @@ parse_principals_key_and_options(const char *path, u_long linenum, char *line,
 		opts = cp;
 		if (sshkey_advance_past_options(&cp) != 0) {
 			error("%s:%lu: invalid options", path, linenum);
+			r = SSH_ERR_INVALID_FORMAT;
+			goto out;
+		}
+		if (cp == NULL || *cp == '\0') {
+			error("%s:%lu: missing key", path, linenum);
 			r = SSH_ERR_INVALID_FORMAT;
 			goto out;
 		}

@@ -42,6 +42,7 @@
     <ClCompile Include="..\..\..\sftp-client.c" />
     <ClCompile Include="..\..\..\sftp-common.c" />
     <ClCompile Include="..\..\..\sftp-glob.c" />
+    <ClCompile Include="..\..\..\sftp-usergroup.c" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="version.rc" />

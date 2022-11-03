@@ -3,6 +3,7 @@
 # @manojampalam - removed ntrights.exe dependency
 # @bingbing8 - removed secedit.exe dependency
 # @tessgauthier - added permissions check for %programData%/ssh
+# @tessgauthier - added update to system path for scp/sftp discoverability
 
 [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
 param ()
@@ -126,3 +127,6 @@ New-Service -Name sshd -DisplayName "OpenSSH SSH Server" -BinaryPathName `"$sshd
 sc.exe privs sshd SeAssignPrimaryTokenPrivilege/SeTcbPrivilege/SeBackupPrivilege/SeRestorePrivilege/SeImpersonatePrivilege
 
 Write-Host -ForegroundColor Green "sshd and ssh-agent services successfully installed"
+
+# add folder to system PATH
+Add-MachinePath -FilePath $scriptdir @psBoundParameters
