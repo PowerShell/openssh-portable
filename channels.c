@@ -1175,8 +1175,9 @@ x11_open_helper(struct ssh *ssh, struct sshbuf *b)
 		return 0;
 
 	/* Parse the lengths of variable-length fields. */
-	ucp = sshbuf_mutable_ptr(b); 
-	if (ucp[0] == 0x42) {	// CodeQL [SM02311]: false positive ucp will not be null /* Byte order MSB first. */
+	if ((ucp = sshbuf_mutable_ptr(b)) == NULL)  
+		return 0;
+	if (ucp[0] == 0x42) { /* Byte order MSB first. */
 		proto_len = 256 * ucp[6] + ucp[7];
 		data_len = 256 * ucp[8] + ucp[9];
 	} else if (ucp[0] == 0x6c) {	/* Byte order LSB first. */
