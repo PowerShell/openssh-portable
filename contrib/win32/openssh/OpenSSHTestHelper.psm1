@@ -406,8 +406,8 @@ function Install-OpenSSHTestDependencies
     if ($InstalledPesters.Count -eq 0)
     {      
         Write-Log -Message "Installing Pester..." 
-        Install-Module -Name 'Pester' -MaximumVersion 4.9.9
-        # choco install Pester --version 3.4.6 -y --force --limitoutput 2>&1 >> $Script:TestSetupLogFile
+        # Install-Module -Name 'Pester' -RequiredVersion 3.4.6
+        choco install Pester --version 3.4.6 -y --force --limitoutput 2>&1 >> $Script:TestSetupLogFile
     }
 
     if($TestHarness)
