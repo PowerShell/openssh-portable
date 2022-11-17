@@ -108,7 +108,7 @@ stages:
         suppressionsFile: ''
     # Documentation: https://eng.ms/docs/security-compliance-identity-and-management-scim/security/azure-security/cloudai-security-fundamentals-engineering/security-integration/guardian-wiki/sdl-azdo-extension/security-analysis-report-build-task
     - task: securedevelopmentteam.vss-secure-development-tools.build-task-report.SdtReport@2
-      conintueOnError: true
+      continueOnError: true
       displayName: 'Guardian Export'
       inputs:
         GdnExportVstsConsole: true
