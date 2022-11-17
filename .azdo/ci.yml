@@ -10,12 +10,12 @@ pr:
     include:
     - latestw_all
 
-#resources:
-#  repositories:
-#  - repository: ComplianceRepo
-#    type: github
-#    endpoint: ComplianceGHRepo
-#    name: PowerShell/compliance
+resources:
+  repositories:
+  - repository: ComplianceRepo
+    type: github
+    endpoint: ComplianceGHRepo
+    name: PowerShell/compliance
 
 stages:
 - stage: Build
@@ -88,24 +88,24 @@ stages:
         Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$configFilePath"
       displayName: Upload Win32-OpenSSH build artifacts
 
-#- stage: Compliance
-#  displayName: Compliance
-#  dependsOn: Build
-#  jobs:
-#  - job: ComplianceJob
-#    pool:
-#      vmImage: windows-latest
-#    steps:
-#    - checkout: self
-#      clean: true
-#    - checkout: ComplianceRepo
-#      clean: true
-#    - download: current
-#      artifact: 'Microsoft.PowerShell.SecretManagement'
-#    - template: ci-compliance.yml@ComplianceRepo
-#      parameters:
-#        # credscan
-#        suppressionsFile: ''
+- stage: Compliance
+  displayName: Compliance
+  dependsOn: Build
+  jobs:
+  - job: ComplianceJob
+    pool:
+      vmImage: windows-latest
+    steps:
+    - checkout: self
+      clean: true
+    - checkout: ComplianceRepo
+      clean: true
+    - download: current
+      artifact: 'Win32-OpenSSH'
+    - template: ci-compliance.yml@ComplianceRepo
+      parameters:
+        # credscan
+        suppressionsFile: ''
 
 - stage: Test
   displayName: Test Win32-OpenSSH
