@@ -106,6 +106,17 @@ stages:
       parameters:
         # credscan
         suppressionsFile: ''
+    # Documentation: https://eng.ms/docs/security-compliance-identity-and-management-scim/security/azure-security/cloudai-security-fundamentals-engineering/security-integration/guardian-wiki/sdl-azdo-extension/security-analysis-report-build-task
+    - task: securedevelopmentteam.vss-secure-development-tools.build-task-report.SdtReport@2
+      conintueOnError: true
+      displayName: 'Guardian Export'
+      inputs:
+        GdnExportVstsConsole: true
+        GdnExportSarifFile: true
+        GdnExportHtmlFile: true
+        GdnExportAllTools: false
+        GdnExportGdnToolCredScan: true
+        #this didn't do anything GdnExportCustomLogsFolder: '$(Build.ArtifactStagingDirectory)/Guardian'
 
 - stage: Test
   displayName: Test Win32-OpenSSH
