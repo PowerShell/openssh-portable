@@ -6,7 +6,7 @@
     <OpenSSH-Lib-Path>$(SolutionDir)lib\</OpenSSH-Lib-Path>
     <LibreSSLVersion>3.6.1.0</LibreSSLVersion>
     <ZLibVersion>1.2.13</ZLibVersion>
-    <fido2Version>1.10.0</fido2Version>
+    <fido2Version>1.12.0</fido2Version>
     <!--libcbor version is not used in the bulid; it is needed for pipeline compliance tasks-->  
     <libcborVersion>0.8.0</libcborVersion> 
     <LibreSSL-Path>$(SolutionDir)\LibreSSL\sdk\</LibreSSL-Path>
