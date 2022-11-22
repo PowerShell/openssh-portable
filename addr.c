@@ -396,8 +396,8 @@ addr_pton_cidr(const char *p, struct xaddr *n, u_int *l)
 	if ((mp = strchr(addrbuf, '/')) != NULL) {
 		*mp = '\0';
 		mp++;
-		masklen = strtoul(mp, &cp, 10);
-		if (masklen == 0 || *mp < '0' || *mp > '9' || *cp != '\0' || masklen > 128)
+		masklen = strtoul(mp, &cp, 10); // CodeQL [SM02313]: strtoul will initialize cp
+		if (*mp < '0' || *mp > '9' || *cp != '\0' || masklen > 128)
 			return -1;
 	}
 

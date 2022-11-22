@@ -1292,8 +1292,11 @@ channel_decode_socks4(Channel *c, struct sshbuf *input, struct sshbuf *output)
 	if (have < len)
 		return 0;
 	p = sshbuf_ptr(input);
-	if (p == NULL)
-		return 0;
+	// Fixes CodeQL: SM02311 
+	if (p == NULL) {
+		error("channel %d: invalid input", c->self);
+		return -1;
+	}
 
 	need = 1;
 	/* SOCKS4A uses an invalid IP address 0.0.0.x */
@@ -1327,6 +1330,7 @@ channel_decode_socks4(Channel *c, struct sshbuf *input, struct sshbuf *output)
 	}
 	have = sshbuf_len(input);
 	p = sshbuf_ptr(input);
+	// Fixes CodeQL: SM02311
 	if (p == NULL || memchr(p, '\0', have) == NULL) {
 		error("channel %d: decode socks4: unterminated user", c->self);
 		return -1;

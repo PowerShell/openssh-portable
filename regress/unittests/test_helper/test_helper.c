@@ -419,13 +419,11 @@ tohex(const void *_s, size_t l)
 	char *r = malloc((l * 2) + 1);
 
 	assert(r != NULL);
-	if (r != NULL) {
-		for (i = j = 0; i < l; i++) {
-			r[j++] = hex[(s[i] >> 4) & 0xf];
-			r[j++] = hex[s[i] & 0xf];
-		}
-		r[j] = '\0';
+	for (i = j = 0; i < l; i++) {
+		r[j++] = hex[(s[i] >> 4) & 0xf]; // CodeQL [SM02311]: tests rely on assert for NULL checks
+		r[j++] = hex[s[i] & 0xf];
 	}
+	r[j] = '\0';
 	return r;
 }
 

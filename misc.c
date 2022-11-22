@@ -1886,8 +1886,8 @@ parse_ipqos(const char *cp)
 			return ipqos[i].value;
 	}
 	/* Try parsing as an integer */
-	val = strtol(cp, &ep, 0);
-	if (val <= 0 || *cp == '\0' || *ep != '\0' || val > 255)
+	val = strtol(cp, &ep, 0); // CodeQL [SM02313]: strtoul will initialize ep
+	if (*cp == '\0' || *ep != '\0' || val < 0 || val > 255)
 		return -1;
 	return val;
 }

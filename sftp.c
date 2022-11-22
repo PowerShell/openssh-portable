@@ -351,8 +351,7 @@ local_do_shell(const char *args)
 					bash_to_win_path(cygwin_path_prefix_start, tmp, len);
 					strcpy_s(cygwin_path_prefix_start, len, tmp); /* override the original string */
 
-					if (tmp)
-						free(tmp);
+					free(tmp);
 				}
 			}
 		}
@@ -1538,8 +1537,8 @@ parse_args(const char **cpp, int *ignore_errors, int *disable_echo, int *aflag,
 		if (argc - optidx < 1)
 			goto need_num_arg;
 		errno = 0;
-		ll = strtoll(argv[optidx], &cp2, base);
-		if (ll == 0 || cp2 == argv[optidx] || *cp2 != '\0' ||
+		ll = strtoll(argv[optidx], &cp2, base); // CodeQL [SM02313]: strtoll will initialize cp2
+		if (cp2 == argv[optidx] || *cp2 != '\0' ||
 		    ((ll == LLONG_MIN || ll == LLONG_MAX) && errno == ERANGE) ||
 		    ll < 0 || ll > UINT32_MAX) {
  need_num_arg:

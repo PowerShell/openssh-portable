@@ -448,7 +448,7 @@ cleanup:
 	if (str_w)
 		free(str_w);
 	if (str_tmp)
-		free(str_tmp); // CodeQL [SM01977]: false positive str_tmp has not been previously freed, CodeQL [SM03650]: false positive str_tmp has not been previously freed
+		free(str_tmp);
 	return ret;
 }
 
@@ -1602,12 +1602,11 @@ am_system()
 
 	if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &proc_token) == FALSE ||
 		GetTokenInformation(proc_token, TokenUser, NULL, 0, &info_len) == TRUE ||
-		(info = (TOKEN_USER*)malloc(info_len)) == NULL)
-		fatal("unable to know if I am running as system");
+		(info = (TOKEN_USER*)malloc(info_len)) == NULL) { // CodeQL [SM02320]: GetTokenInformation will initialize info
+			fatal("unable to know if I am running as system");
+	}
 
-	memset(info, 0, info_len);
-
-	if	(GetTokenInformation(proc_token, TokenUser, info, info_len, &info_len) == FALSE)
+	if (GetTokenInformation(proc_token, TokenUser, info, info_len, &info_len) == FALSE) 
 		fatal("unable to know if I am running as system");
 
 	if (IsWellKnownSid(info->User.Sid, WinLocalSystemSid))
