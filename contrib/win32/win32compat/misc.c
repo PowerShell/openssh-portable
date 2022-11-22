@@ -410,8 +410,10 @@ char*
 		* stop reading until reach '\n' or the converted utf8 string length is n-1
 		*/
 		do {
-			if (str_tmp)
-				free(str_tmp);			
+			if (str_tmp) {
+				free(str_tmp);
+				str_tmp = NULL;
+			}
 			if (fgetws(str_w, 2, stream) == NULL)
 				goto cleanup;
 			if ((str_tmp = utf16_to_utf8(str_w)) == NULL) {
@@ -1600,8 +1602,12 @@ am_system()
 
 	if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &proc_token) == FALSE ||
 		GetTokenInformation(proc_token, TokenUser, NULL, 0, &info_len) == TRUE ||
-		(info = (TOKEN_USER*)malloc(info_len)) == NULL || // CodeQL [SM02320]: false positive info will be initialized on following line
-		GetTokenInformation(proc_token, TokenUser, info, info_len, &info_len) == FALSE)
+		(info = (TOKEN_USER*)malloc(info_len)) == NULL)
+		fatal("unable to know if I am running as system");
+
+	memset(info, 0, info_len);
+
+	if	(GetTokenInformation(proc_token, TokenUser, info, info_len, &info_len) == FALSE)
 		fatal("unable to know if I am running as system");
 
 	if (IsWellKnownSid(info->User.Sid, WinLocalSystemSid))

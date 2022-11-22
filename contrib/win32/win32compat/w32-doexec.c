@@ -356,7 +356,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info;
 	HANDLE job_dup;
 	pid_t pid = -1;
-	char * shell_command_option_local = NULL;
+	char * shell_command_option_local = NULL, *pty_cmd_cp = NULL;
 	size_t shell_len = 0;
 	/*account for the quotes and null*/
 	shell_len = strlen(s->pw->pw_shell) + 2 + 1;
@@ -395,7 +395,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		char *pty_cmd = NULL;
 		if (command) {
 			size_t len = strlen(shell) + 1 + strlen(shell_command_option_local) + 1 + strlen(command) + 1;
-			pty_cmd = calloc(1, len);
+			pty_cmd_cp = pty_cmd = calloc(1, len);
 			if (pty_cmd != NULL)
 			{
 				strcpy_s(pty_cmd, len, shell);
@@ -557,6 +557,8 @@ cleanup:
 		free(shell);
 	if (job)
 		CloseHandle(job);
+	if (pty_cmd_cp)
+		free(pty_cmd_cp);
 
 	return ret;
 }

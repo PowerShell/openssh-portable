@@ -4118,11 +4118,15 @@ private2_uudecode(struct sshbuf *blob, struct sshbuf **decodedp)
 
 	/* check preamble */
 	cp = sshbuf_ptr(blob);
+	if (cp == NULL) {
+		r = SSH_ERR_ALLOC_FAIL;
+		goto out;
+	}
 	encoded_len = sshbuf_len(blob);
 	
 #ifdef SUPPORT_CRLF
 	if ((encoded_len < (MARK_BEGIN_LEN + MARK_END_LEN) ||
-	    memcmp(cp, MARK_BEGIN, MARK_BEGIN_LEN) != 0) && // CodeQL [SM02311]: false positive cp will not be null
+	    memcmp(cp, MARK_BEGIN, MARK_BEGIN_LEN) != 0) &&
 	    (encoded_len < (MARK_BEGIN_LEN_CRLF + MARK_END_LEN_CRLF) ||
 	    memcmp(cp, MARK_BEGIN_CRLF, MARK_BEGIN_LEN_CRLF) != 0)) {
 #else  /* !SUPPORT_CRLF */

@@ -346,7 +346,7 @@ start:
 			return (-1);
 		}
 		if (*(place = nargv[optind]) != '-' ||
-		    (place[1] == '\0' && strchr(options, '-') == NULL)) { // CodeQL [SM01947]: false positive place is defined on line 101, checking for null terminator
+		    (place[1] == '\0' && strchr(options, '-') == NULL)) { // CodeQL [SM01947]: upstream code; place re-assigned in previous line
 			place = EMSG;		/* found non-option */
 			if (flags & FLAG_ALLARGS) {
 				/*

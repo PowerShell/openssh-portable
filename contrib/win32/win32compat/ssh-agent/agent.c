@@ -301,11 +301,13 @@ get_con_client_info(struct agent_connection* con)
 	}
 
 	if (GetTokenInformation(client_primary_token, TokenUser, NULL, 0, &info_len) == TRUE ||
-		(info = (TOKEN_USER*)malloc(info_len)) == NULL ||
-		GetTokenInformation(client_primary_token, TokenUser, info, info_len, &info_len) == FALSE)
+		(info = (TOKEN_USER*)malloc(info_len)) == NULL)
 		goto done;
 
 	memset(info, 0, info_len);
+
+	if (GetTokenInformation(client_primary_token, TokenUser, info, info_len, &info_len) == FALSE)
+		goto done;
 	
 	/* check if its localsystem */
 	if (IsWellKnownSid(info->User.Sid, WinLocalSystemSid)) {

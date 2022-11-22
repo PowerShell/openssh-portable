@@ -1319,13 +1319,13 @@ monitor_valid_userblob(struct ssh *ssh, const u_char *data, u_int datalen)
 	if ((r = sshbuf_skip_string(b)) != 0 ||	/* service */
 	    (r = sshbuf_get_cstring(b, &cp, NULL)) != 0)
 		fatal_fr(r, "parse method");
-	if (strcmp("publickey", cp) != 0) { // CodeQL [SM03650]: false positive cp populated again in line 1323
-		if (strcmp("publickey-hostbound-v00@openssh.com", cp) == 0) // CodeQL [SM03650]: false positive cp populated again in line 1323
+	if (strcmp("publickey", cp) != 0) { // CodeQL [SM03650]: false positive cp repopulated in previous line
+		if (strcmp("publickey-hostbound-v00@openssh.com", cp) == 0) // CodeQL [SM03650]: false positive cp repopulated in previous line
 			hostbound = 1;
 		else
 			fail++;
 	}
-	free(cp); // CodeQL [SM03650]: false positive cp populated again in line 1323 and not previously freed
+	free(cp); // CodeQL [SM03650]: false positive cp repopulated in previous line
 	if ((r = sshbuf_get_u8(b, &type)) != 0)
 		fatal_fr(r, "parse pktype");
 	if (type == 0)

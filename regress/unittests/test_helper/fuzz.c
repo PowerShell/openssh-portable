@@ -218,7 +218,10 @@ fuzz_begin(u_int strategies, const void *p, size_t l)
 
 	assert(p != NULL);
 	assert(ret != NULL);
-	ret->seed = malloc(l); // CodeQL [SM02311]: false positive assert assures ret will not be null
+	if (ret == NULL) {
+		return ret;
+	}
+	ret->seed = malloc(l);
 	assert(ret->seed != NULL);
 	memcpy(ret->seed, p, l);
 	ret->slen = l;

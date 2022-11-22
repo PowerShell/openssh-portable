@@ -158,21 +158,20 @@ ssh_gssapi_supported_oids(gss_OID_set *oidset)
 	{
 		error("ssh_gssapi_supported_oids: gss_indicate_mechs failed to \
 			determine which underlying security mechanisms are available");
+		return;
 	}
-	else
-	{
-		while (supported_mechs[i]->name != NULL) {
-			if (GSS_ERROR(gss_test_oid_set_member(&min_status,
-				&supported_mechs[i]->oid, supported, &present)))
-				present = 0;
-			if (present)
-				gss_add_oid_set_member(&min_status,
-					&supported_mechs[i]->oid, oidset);
-			i++;
-		}
+	
+	while (supported_mechs[i]->name != NULL) {
+		if (GSS_ERROR(gss_test_oid_set_member(&min_status,
+			&supported_mechs[i]->oid, supported, &present)))
+			present = 0;
+		if (present)
+			gss_add_oid_set_member(&min_status,
+				&supported_mechs[i]->oid, oidset);
+		i++;
+	}
 
-		gss_release_oid_set(&min_status, &supported);
-	}
+	gss_release_oid_set(&min_status, &supported);
 }
 
 

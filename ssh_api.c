@@ -332,13 +332,16 @@ _ssh_read_banner(struct ssh *ssh, struct sshbuf *banner)
 	int r = 0, remote_major, remote_minor, expect_nl;
 	size_t n, j;
 
+	if (s == NULL)
+		return SSH_ERR_ALLOC_FAIL;
+
 	for (j = n = 0;;) {
 		sshbuf_reset(banner);
 		expect_nl = 0;
 		for (;;) {
 			if (j >= sshbuf_len(input))
 				return 0; /* insufficient data in input buf */
-			c = s[j++]; // CodeQL [SM02311]: false positive s will not be null
+			c = s[j++];
 			if (c == '\r') {
 				expect_nl = 1;
 				continue;

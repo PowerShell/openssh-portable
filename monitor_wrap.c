@@ -618,7 +618,7 @@ mm_pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, size_t namebuflen)
 	strlcpy(namebuf, p, namebuflen); /* Possible truncation */
 	free(p);
 
-	if ((r = sshbuf_put(loginmsg, msg, strlen(msg))) != 0) // CodeQL [SM01714] false positive: msg is null terminated
+	if ((r = sshbuf_put(loginmsg, msg, strlen(msg))) != 0) // CodeQL [SM01714] false positive: sshbuf_get_cstring null terminates msg
 		fatal_fr(r, "put loginmsg");
 	free(msg);
 

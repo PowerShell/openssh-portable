@@ -1538,8 +1538,8 @@ parse_args(const char **cpp, int *ignore_errors, int *disable_echo, int *aflag,
 		if (argc - optidx < 1)
 			goto need_num_arg;
 		errno = 0;
-		ll = strtoll(argv[optidx], &cp2, base); // CodeQL [SM02313]: false positive cp2 will not be uninitialized
-		if (cp2 == argv[optidx] || *cp2 != '\0' ||
+		ll = strtoll(argv[optidx], &cp2, base);
+		if (ll == 0 || cp2 == argv[optidx] || *cp2 != '\0' ||
 		    ((ll == LLONG_MIN || ll == LLONG_MAX) && errno == ERANGE) ||
 		    ll < 0 || ll > UINT32_MAX) {
  need_num_arg:

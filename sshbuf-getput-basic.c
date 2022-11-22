@@ -39,8 +39,10 @@ sshbuf_get(struct sshbuf *buf, void *v, size_t len)
 
 	if ((r = sshbuf_consume(buf, len)) < 0)
 		return r;
+	if (p == NULL)
+		return SSH_ERR_INTERNAL_ERROR;
 	if (v != NULL && len != 0)
-		memcpy(v, p, len); // CodeQL [SM02311]: false positive p will not be null
+		memcpy(v, p, len);
 	return 0;
 }
 
@@ -49,11 +51,13 @@ sshbuf_get_u64(struct sshbuf *buf, u_int64_t *valp)
 {
 	const u_char *p = sshbuf_ptr(buf);
 	int r;
-
+	
 	if ((r = sshbuf_consume(buf, 8)) < 0)
 		return r;
+	if (p == NULL)
+		return SSH_ERR_INTERNAL_ERROR;
 	if (valp != NULL)
-		*valp = PEEK_U64(p); // CodeQL [SM02311]: false positive p will not be null
+		*valp = PEEK_U64(p);
 	return 0;
 }
 
@@ -65,8 +69,10 @@ sshbuf_get_u32(struct sshbuf *buf, u_int32_t *valp)
 
 	if ((r = sshbuf_consume(buf, 4)) < 0)
 		return r;
+	if (p == NULL)
+		return SSH_ERR_INTERNAL_ERROR;
 	if (valp != NULL)
-		*valp = PEEK_U32(p); // CodeQL [SM02311]: false positive p will not be null
+		*valp = PEEK_U32(p);
 	return 0;
 }
 
@@ -78,8 +84,10 @@ sshbuf_get_u16(struct sshbuf *buf, u_int16_t *valp)
 
 	if ((r = sshbuf_consume(buf, 2)) < 0)
 		return r;
+	if (p == NULL)
+		return SSH_ERR_INTERNAL_ERROR;
 	if (valp != NULL)
-		*valp = PEEK_U16(p); // CodeQL [SM02311]: false positive p will not be null
+		*valp = PEEK_U16(p);
 	return 0;
 }
 
@@ -91,8 +99,10 @@ sshbuf_get_u8(struct sshbuf *buf, u_char *valp)
 
 	if ((r = sshbuf_consume(buf, 1)) < 0)
 		return r;
+	if (p == NULL)
+		return SSH_ERR_INTERNAL_ERROR;
 	if (valp != NULL)
-		*valp = (u_int8_t)*p; // CodeQL [SM02311]: false positive p will not be null
+		*valp = (u_int8_t)*p;
 	return 0;
 }
 
@@ -251,7 +261,9 @@ sshbuf_peek_string_direct(const struct sshbuf *buf, const u_char **valp,
 		SSHBUF_DBG(("SSH_ERR_MESSAGE_INCOMPLETE"));
 		return SSH_ERR_MESSAGE_INCOMPLETE;
 	}
-	len = PEEK_U32(p); // CodeQL [SM02311]: false positive p will not be null
+	if (p == NULL)
+		return SSH_ERR_INTERNAL_ERROR;
+	len = PEEK_U32(p);
 	if (len > SSHBUF_SIZE_MAX - 4) {
 		SSHBUF_DBG(("SSH_ERR_STRING_TOO_LARGE"));
 		return SSH_ERR_STRING_TOO_LARGE;

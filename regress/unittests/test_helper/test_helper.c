@@ -159,7 +159,7 @@ main(int argc, char **argv)
 	/* Handle systems without __progname */
 	if (__progname == NULL) {
 		__progname = strrchr(argv[0], '/');
-		if (__progname == NULL || __progname[1] == '\0') // CodeQL [SM01947]: false positive __progname is more than 1 byte 
+		if (__progname == NULL || (__progname[0] != '\0' && __progname[1] == '\0'))
 			__progname = argv[0];	
 		else
 			__progname++;
@@ -419,11 +419,13 @@ tohex(const void *_s, size_t l)
 	char *r = malloc((l * 2) + 1);
 
 	assert(r != NULL);
-	for (i = j = 0; i < l; i++) {
-		r[j++] = hex[(s[i] >> 4) & 0xf]; // CodeQL [SM02311]: false positive r will not be null
-		r[j++] = hex[s[i] & 0xf];
+	if (r != NULL) {
+		for (i = j = 0; i < l; i++) {
+			r[j++] = hex[(s[i] >> 4) & 0xf];
+			r[j++] = hex[s[i] & 0xf];
+		}
+		r[j] = '\0';
 	}
-	r[j] = '\0';
 	return r;
 }
 

@@ -521,6 +521,8 @@ sshsk_enroll(int type, const char *provider_path, const char *device,
 		goto out;
 	} else {
 		challenge = sshbuf_ptr(challenge_buf);
+		if (challenge == NULL)
+			goto out;
 		challenge_len = sshbuf_len(challenge_buf);
 		debug3_f("using explicit challenge len=%zd", challenge_len);
 	}
