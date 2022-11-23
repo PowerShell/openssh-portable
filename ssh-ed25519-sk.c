@@ -133,7 +133,7 @@ ssh_ed25519_sk_verify(const struct sshkey *key,
 	sm = sshbuf_ptr(encoded);
 	smlen = sshbuf_len(encoded);
 	mlen = smlen;
-	if (sm == NULL || (m = malloc(smlen)) == NULL) {
+	if (sm == NULL || (m = malloc(smlen)) == NULL) { // fix CodeQL SM02313
 		r = SSH_ERR_ALLOC_FAIL;
 		goto out;
 	}

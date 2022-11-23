@@ -521,7 +521,7 @@ sshsk_enroll(int type, const char *provider_path, const char *device,
 		goto out;
 	} else {
 		challenge = sshbuf_ptr(challenge_buf);
-		if (challenge == NULL)
+		if (challenge == NULL) // fix CodeQL SM02313
 			goto out;
 		challenge_len = sshbuf_len(challenge_buf);
 		debug3_f("using explicit challenge len=%zd", challenge_len);
@@ -532,7 +532,7 @@ sshsk_enroll(int type, const char *provider_path, const char *device,
 	}
 	/* XXX validate flags? */
 	/* enroll key */
-	if ((r = skp->sk_enroll(alg, challenge, challenge_len, application, // CodeQL [SM02311]: false positive challenge will not be null
+	if ((r = skp->sk_enroll(alg, challenge, challenge_len, application,
 	    flags, pin, opts, &resp)) != 0) {
 		debug_f("provider \"%s\" failure %d", provider_path, r);
 		r = skerr_to_ssherr(r);

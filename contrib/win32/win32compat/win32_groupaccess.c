@@ -95,13 +95,11 @@ get_user_groups()
 	DWORD group_size = 0;
 	if (GetTokenInformation(logon_token, TokenGroups, NULL, 0, &group_size) == 0
 		&& GetLastError() != ERROR_INSUFFICIENT_BUFFER ||
-		(group_buf = (PTOKEN_GROUPS)malloc(group_size)) == NULL) {
+		(group_buf = (PTOKEN_GROUPS)malloc(group_size)) == NULL) { // CodeQL [SM02320]: GetTokenInformation will initialize group_buf
 		debug3("%s: GetTokenInformation() failed: %d", __FUNCTION__, GetLastError());
 		errno = EOTHER;
 		goto cleanup;
 	}
-
-	memset(group_buf, 0, group_size);
 
 	/* read group sids from logon token -- this will return a list of groups
 	* similar to the data returned when you do a whoami /groups command */

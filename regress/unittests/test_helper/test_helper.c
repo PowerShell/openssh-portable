@@ -159,7 +159,7 @@ main(int argc, char **argv)
 	/* Handle systems without __progname */
 	if (__progname == NULL) {
 		__progname = strrchr(argv[0], '/');
-		if (__progname == NULL || (__progname[0] != '\0' && __progname[1] == '\0'))
+		if (__progname == NULL || (__progname[0] != '\0' && __progname[1] == '\0')) // fix CodeQL SM01947
 			__progname = argv[0];	
 		else
 			__progname++;

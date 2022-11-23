@@ -344,7 +344,7 @@ local_do_shell(const char *args)
 			if (cygwin_path_prefix_start = strstr(args, CYGWIN_PATH_PREFIX)) {
 				int len = strlen(cygwin_path_prefix_start) + 1;
 				char *tmp = malloc(len);
-				if (tmp != NULL)
+				if (tmp != NULL) // fix CodeQL SM02313
 				{
 					memset(tmp, 0, len);
 
@@ -1052,7 +1052,7 @@ do_globbed_ls(struct sftp_conn *conn, const char *path,
 	for (nentries = 0; g.gl_pathv[nentries] != NULL; nentries++)
 		;	/* count entries */
 	indices = calloc(nentries, sizeof(*indices));
-	if (indices == NULL)
+	if (indices == NULL) // fix CodeQL SM02313
 	{
 		return -1;
 	}

@@ -2633,7 +2633,9 @@ ssh_packet_send_mux(struct ssh *ssh)
 	if (len < 6)
 		return SSH_ERR_INTERNAL_ERROR;
 	cp = sshbuf_mutable_ptr(state->outgoing_packet);
-	type = cp[5]; // CodeQL [SM02311]: false positive cp will not be null
+	if (cp == NULL) // fix CodeQL SM02313
+		return SSH_ERR_INTERNAL_ERROR;
+	type = cp[5];
 	if (ssh_packet_log_type(type))
 		debug3_f("type %u", type);
 	/* drop everything, but the connection protocol */

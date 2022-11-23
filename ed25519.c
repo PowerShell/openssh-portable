@@ -106,7 +106,7 @@ int crypto_sign_ed25519_open(
     const unsigned char *pk
     )
 {
-  unsigned long long i;
+  unsigned long long i; // fix CodeQL SM01735
   int ret;
   unsigned char t2[32];
   ge25519 get1, get2;

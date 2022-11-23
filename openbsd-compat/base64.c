@@ -135,7 +135,7 @@ b64_ntop(u_char const *src, size_t srclength, char *target, size_t targsize)
 	size_t datalength = 0;
 	u_char input[3];
 	u_char output[4];
-	size_t i;
+	size_t i; // fix CodeQL SM01735
 
 	while (2 < srclength) {
 		input[0] = *src++;

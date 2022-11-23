@@ -160,7 +160,7 @@ dump(u_char *p, size_t len)
 	size_t i, j;
 
 	for (i = 0; i < len; i += 16) {
-		fprintf(stderr, "%.4zu: ", i);
+		fprintf(stderr, "%.4zu: ", i); // fix CodeQL SM01735
 		for (j = i; j < i + 16; j++) {
 			if (j < len)
 				fprintf(stderr, "%02x ", p[j]);

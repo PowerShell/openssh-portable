@@ -1189,12 +1189,11 @@ fileio_readlink(const char *path, char *buf, size_t bufsiz)
 	}
 
 	/* allocate the maximum possible size the reparse buffer size could be */
-	reparse_buffer = (PREPARSE_DATA_BUFFER_SYMLINK)malloc(MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
+	reparse_buffer = (PREPARSE_DATA_BUFFER_SYMLINK)malloc(MAXIMUM_REPARSE_DATA_BUFFER_SIZE); // CodeQL [SM02320]: DeviceIoControl will set reparse_buffer
 	if (reparse_buffer == NULL) {
 		errno = ENOMEM;
 		goto cleanup;
 	}
-	memset(reparse_buffer, 0, MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
 
 	/* send a request to the file system to get the real path */
 	DWORD dwBytesReturned = 0;

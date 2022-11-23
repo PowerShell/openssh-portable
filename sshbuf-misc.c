@@ -80,9 +80,9 @@ sshbuf_dtob16(struct sshbuf *buf)
 
 	if (len == 0)
 		return strdup("");
-	if (p == NULL || SIZE_MAX / 2 <= len || (ret = malloc(len * 2 + 1)) == NULL)
+	if (p == NULL || SIZE_MAX / 2 <= len || (ret = malloc(len * 2 + 1)) == NULL) // fix CodeQL SM02313
 		return NULL;
-	for (i = j = 0; i < len; i++) { 
+	for (i = j = 0; i < len; i++) {
 		ret[j++] = hex[(p[i] >> 4) & 0xf];
 		ret[j++] = hex[p[i] & 0xf];
 	}

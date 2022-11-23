@@ -954,7 +954,7 @@ process_config_line_depth(Options *options, struct passwd *pw, const char *host,
 	LogLevel *log_level_ptr;
 	SyslogFacility *log_facility_ptr;
 	long long val64;
-	size_t len, i;
+	size_t len, i; // fix CodeQL SM01735
 	struct Forward fwd;
 	const struct multistate *multistate_ptr;
 	struct allowed_cname *cname;

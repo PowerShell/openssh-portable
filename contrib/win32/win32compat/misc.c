@@ -1750,11 +1750,10 @@ get_sid(const char* name)
 			goto cleanup;
 		}
 
-		if ((info = (TOKEN_USER*)malloc(info_len)) == NULL) {
+		if ((info = (TOKEN_USER*)malloc(info_len)) == NULL) { // CodeQL [SM02320]: GetTokenInformation will initialize info
 			errno = ENOMEM;
 			goto cleanup;
-		}
-		memset(info, 0, info_len);
+		};
 
 		if (GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE) {
 			errno = errno_from_Win32LastError();

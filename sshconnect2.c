@@ -349,7 +349,7 @@ struct cauthctxt {
 #ifdef GSSAPI
 	/* gssapi */
 	gss_OID_set gss_supported_mechs;
-	size_t mech_tried;
+	size_t mech_tried; // fix CodeQL SM01735
 #endif
 	/* pubkey */
 	struct idlist keys;

@@ -129,7 +129,7 @@ kex_c25519_enc(struct kex *kex, const struct sshbuf *client_blob,
 		goto out;
 	}
 	client_pub = sshbuf_ptr(client_blob);
-	if (client_pub == NULL) {
+	if (client_pub == NULL) { // fix CodeQL SM02313
 		r = SSH_ERR_ALLOC_FAIL;
 		goto out;
 	}
