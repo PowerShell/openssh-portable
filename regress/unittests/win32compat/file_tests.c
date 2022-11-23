@@ -420,7 +420,7 @@ file_miscellaneous_tests()
 	ASSERT_INT_NE(retValue, -1);
 
 	char *tmp = dup_str(thishost);
-	if (tmp == NULL)
+	if (tmp != NULL)
 		goto out;
 	int len = strlen(tmp);
 
@@ -490,8 +490,6 @@ file_miscellaneous_tests()
 	retValue = unlink(tmp_filename);
 	ASSERT_INT_EQ(retValue, 0);	
 out:
-	if (pcwd)
-		free(pcwd);
 	TEST_DONE();
 }
 
