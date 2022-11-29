@@ -1114,43 +1114,39 @@ QueueEvent(DWORD event, HWND hwnd, LONG idObject, LONG idChild)
 	consoleEvent* current = NULL;
 
 	EnterCriticalSection(&criticalSection);
-	current = malloc(sizeof(consoleEvent));
-	if (current != NULL)
-	{
-		memset(current, 0, sizeof(consoleEvent));
-		if (current) {
-			if (!head) {
-				current->event = event;
-				current->hwnd = hwnd;
-				current->idChild = idChild;
-				current->idObject = idObject;
+	current = malloc(sizeof(consoleEvent)); // CodeQL [SM02320]: current struct fields initialized below
+	if (current) {
+		if (!head) {
+			current->event = event;
+			current->hwnd = hwnd;
+			current->idChild = idChild;
+			current->idObject = idObject;
 
-				/* No links head == tail */
-				current->next = NULL;
-				current->prior = NULL;
+			/* No links head == tail */
+			current->next = NULL;
+			current->prior = NULL;
 
-				head = current;
-				tail = current;
-			}
-			else {
-				current->event = event;
-				current->hwnd = hwnd;
-				current->idChild = idChild;
-				current->idObject = idObject;
-
-				/* Current tail points to new tail */
-				tail->next = current;
-
-				/* New tail points to old tail */
-				current->prior = tail;
-				current->next = NULL;
-
-				/* Update the tail pointer to the new last event */
-				tail = current;
-			}
+			head = current;
+			tail = current;
 		}
-		LeaveCriticalSection(&criticalSection);
+		else {
+			current->event = event;
+			current->hwnd = hwnd;
+			current->idChild = idChild;
+			current->idObject = idObject;
+
+			/* Current tail points to new tail */
+			tail->next = current;
+
+			/* New tail points to old tail */
+			current->prior = tail;
+			current->next = NULL;
+
+			/* Update the tail pointer to the new last event */
+			tail = current;
+		}
 	}
+	LeaveCriticalSection(&criticalSection);
 }
 
 void FreeQueueEvent()

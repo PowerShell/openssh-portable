@@ -1602,7 +1602,7 @@ am_system()
 
 	if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &proc_token) == FALSE ||
 		GetTokenInformation(proc_token, TokenUser, NULL, 0, &info_len) == TRUE ||
-		(info = (TOKEN_USER*)malloc(info_len)) == NULL) { // CodeQL [SM02320]: GetTokenInformation will initialize info
+		(info = (TOKEN_USER*)malloc(info_len)) == NULL) {
 			fatal("unable to know if I am running as system");
 	}
 
@@ -1742,12 +1742,12 @@ get_sid(const char* name)
 	}
 	else {
 		if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token) == FALSE ||
-		    GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE) {
+		    GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE) { // CodeQL [SM02320]: GetTokenInformation will initialize info
 			errno = EOTHER;
 			goto cleanup;
 		}
 
-		if ((info = (TOKEN_USER*)malloc(info_len)) == NULL) { // CodeQL [SM02320]: GetTokenInformation will initialize info
+		if ((info = (TOKEN_USER*)malloc(info_len)) == NULL) { 
 			errno = ENOMEM;
 			goto cleanup;
 		};
