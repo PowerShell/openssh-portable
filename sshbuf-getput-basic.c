@@ -53,10 +53,11 @@ sshbuf_get_u64(struct sshbuf *buf, u_int64_t *valp)
 	int r;
 	if ((r = sshbuf_consume(buf, 8)) < 0)
 		return r;
-	if (p == NULL) // fix CodeQL SM02313
-		return SSH_ERR_INTERNAL_ERROR;
-	if (valp != NULL)
+	if (valp != NULL) {
+		if (p == NULL) // fix CodeQL SM02313
+			return SSH_ERR_INTERNAL_ERROR;
 		*valp = PEEK_U64(p);
+	}
 	return 0;
 }
 
@@ -68,10 +69,11 @@ sshbuf_get_u32(struct sshbuf *buf, u_int32_t *valp)
 
 	if ((r = sshbuf_consume(buf, 4)) < 0)
 		return r;
-	if (p == NULL) // fix CodeQL SM02313
-		return SSH_ERR_INTERNAL_ERROR;
-	if (valp != NULL)
+	if (valp != NULL) {
+		if (p == NULL) // fix CodeQL SM02313
+			return SSH_ERR_INTERNAL_ERROR;
 		*valp = PEEK_U32(p);
+	}
 	return 0;
 }
 
@@ -83,10 +85,11 @@ sshbuf_get_u16(struct sshbuf *buf, u_int16_t *valp)
 
 	if ((r = sshbuf_consume(buf, 2)) < 0)
 		return r;
-	if (p == NULL) // fix CodeQL SM02313
-		return SSH_ERR_INTERNAL_ERROR;
-	if (valp != NULL)
+	if (valp != NULL) {
+		if (p == NULL) // fix CodeQL SM02313
+			return SSH_ERR_INTERNAL_ERROR;
 		*valp = PEEK_U16(p);
+	}
 	return 0;
 }
 
@@ -98,10 +101,11 @@ sshbuf_get_u8(struct sshbuf *buf, u_char *valp)
 
 	if ((r = sshbuf_consume(buf, 1)) < 0)
 		return r;
-	if (p == NULL) // fix CodeQL SM02313
-		return SSH_ERR_INTERNAL_ERROR;
-	if (valp != NULL)
+	if (valp != NULL) {
+		if (p == NULL) // fix CodeQL SM02313
+			return SSH_ERR_INTERNAL_ERROR;
 		*valp = (u_int8_t)*p;
+	}
 	return 0;
 }
 

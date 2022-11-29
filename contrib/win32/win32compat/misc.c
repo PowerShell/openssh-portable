@@ -1696,15 +1696,12 @@ lookup_sid(const wchar_t* name_utf16, PSID psid, DWORD * psid_len)
 			error_f("Failed to allocate memory");
 			goto cleanup;
 		}
-		else
-		{
-			name_utf16_modified[0] = L'\0';
-			wcscat_s(name_utf16_modified, name_size, name_utf16);
-			wcscat_s(name_utf16_modified, name_size, L"\\");
-			wcscat_s(name_utf16_modified, name_size, name_utf16);
+		name_utf16_modified[0] = L'\0';
+		wcscat_s(name_utf16_modified, name_size, name_utf16);
+		wcscat_s(name_utf16_modified, name_size, L"\\");
+		wcscat_s(name_utf16_modified, name_size, name_utf16);
 
-			ret = lookup_sid(name_utf16_modified, psid, psid_len);
-		}
+		ret = lookup_sid(name_utf16_modified, psid, psid_len);
 	}
 	else {
 		if (psid_len != NULL)

@@ -50,27 +50,26 @@ delete_dir_recursive(char *full_dir_path)
 	struct dirent *dp;
 	char mode[12];
 	char *tmpFullPath = malloc(PATH_MAX + 1);
-	if (tmpFullPath != NULL)
-	{
-		strcpy(tmpFullPath, full_dir_path);
-		int tmpStrLen = strlen(tmpFullPath);
-		tmpFullPath[tmpStrLen++] = '\\';
+	if (NULL == tmpFullPath) return;
 
-		while (dp = readdir(dirp)) {
-			strcpy(tmpFullPath + tmpStrLen, dp->d_name);
-			tmpFullPath[tmpStrLen + strlen(dp->d_name)] = '\0';
+	strcpy(tmpFullPath, full_dir_path);
+	int tmpStrLen = strlen(tmpFullPath);
+	tmpFullPath[tmpStrLen++] = '\\';
 
-			stat(tmpFullPath, &st);
-			strmode(st.st_mode, mode);
-			if (mode[0] == '-') /* regular file */
-				unlink(tmpFullPath);
-			else if (mode[0] == 'd') /* directory */
-				delete_dir_recursive(tmpFullPath);
-		}
+	while (dp = readdir(dirp)) {
+		strcpy(tmpFullPath + tmpStrLen, dp->d_name);
+		tmpFullPath[tmpStrLen + strlen(dp->d_name)] = '\0';
 
-		closedir(dirp);
-		rmdir(full_dir_path);
-
-		free(tmpFullPath);
+		stat(tmpFullPath, &st);
+		strmode(st.st_mode, mode);
+		if (mode[0] == '-') /* regular file */
+			unlink(tmpFullPath);
+		else if (mode[0] == 'd') /* directory */
+			delete_dir_recursive(tmpFullPath);
 	}
+
+	closedir(dirp);
+	rmdir(full_dir_path);
+
+	free(tmpFullPath);
 }
