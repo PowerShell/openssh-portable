@@ -39,13 +39,19 @@ if (Get-Service ssh-agent -ErrorAction SilentlyContinue)
    sc.exe delete ssh-agent 1>$null
 }
 
-# unregister etw provider
-wevtutil um `"$etwman`"
+# Unregister etw provider
+# PowerShell 7.3+ has new/different native command argument parsing
+if ($PSVersiontable.PSVersion -le '7.2') {
+    wevtutil um `"$etwman`"
+}
+else {
+    wevtutil um "$etwman"
+}
 
 # adjust provider resource path in instrumentation manifest
 [XML]$xml = Get-Content $etwman
-$xml.instrumentationManifest.instrumentation.events.provider.resourceFileName = $sshagentpath.ToString()
-$xml.instrumentationManifest.instrumentation.events.provider.messageFileName = $sshagentpath.ToString()
+$xml.instrumentationManifest.instrumentation.events.provider.resourceFileName = "$sshagentpath"
+$xml.instrumentationManifest.instrumentation.events.provider.messageFileName = "$sshagentpath"
 
 $streamWriter = $null
 $xmlWriter = $null
@@ -114,16 +120,21 @@ if (Test-Path $sshProgDataPath)
     }
 }
 
-#register etw provider
-wevtutil im `"$etwman`"
+# Register etw provider
+# PowerShell 7.3+ has new/different native command argument parsing
+if ($PSVersiontable.PSVersion -le '7.2') {
+    wevtutil im `"$etwman`"
+} else {
+    wevtutil im "$etwman"
+}
 
 $agentDesc = "Agent to hold private keys used for public key authentication."
-New-Service -Name ssh-agent -DisplayName "OpenSSH Authentication Agent" -BinaryPathName `"$sshagentpath`" -Description $agentDesc -StartupType Manual | Out-Null
+New-Service -Name ssh-agent -DisplayName "OpenSSH Authentication Agent" -BinaryPathName "$sshagentpath" -Description $agentDesc -StartupType Manual | Out-Null
 sc.exe sdset ssh-agent "D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)(A;;RP;;;AU)"
 sc.exe privs ssh-agent SeAssignPrimaryTokenPrivilege/SeTcbPrivilege/SeBackupPrivilege/SeRestorePrivilege/SeImpersonatePrivilege
 
 $sshdDesc = "SSH protocol based service to provide secure encrypted communications between two untrusted hosts over an insecure network."
-New-Service -Name sshd -DisplayName "OpenSSH SSH Server" -BinaryPathName `"$sshdpath`" -Description $sshdDesc -StartupType Manual | Out-Null
+New-Service -Name sshd -DisplayName "OpenSSH SSH Server" -BinaryPathName "$sshdpath" -Description $sshdDesc -StartupType Manual | Out-Null
 sc.exe privs sshd SeAssignPrimaryTokenPrivilege/SeTcbPrivilege/SeBackupPrivilege/SeRestorePrivilege/SeImpersonatePrivilege
 
 Write-Host -ForegroundColor Green "sshd and ssh-agent services successfully installed"
