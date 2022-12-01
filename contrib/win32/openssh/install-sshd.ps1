@@ -41,7 +41,7 @@ if (Get-Service ssh-agent -ErrorAction SilentlyContinue)
 
 # Unregister etw provider
 # PowerShell 7.3+ has new/different native command argument parsing
-if ($PSVersiontable.PSVersion -le '7.2') {
+if ($PSVersiontable.PSVersion -le '7.2.9') {
     wevtutil um `"$etwman`"
 }
 else {
@@ -122,7 +122,7 @@ if (Test-Path $sshProgDataPath)
 
 # Register etw provider
 # PowerShell 7.3+ has new/different native command argument parsing
-if ($PSVersiontable.PSVersion -le '7.2') {
+if ($PSVersiontable.PSVersion -le '7.2.9') {
     wevtutil im `"$etwman`"
 } else {
     wevtutil im "$etwman"
