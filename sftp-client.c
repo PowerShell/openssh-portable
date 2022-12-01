@@ -537,12 +537,12 @@ do_init(int fd_in, int fd_out, u_int transfer_buflen, u_int num_requests,
 			ret->exts |= SFTP_EXT_PATH_EXPAND;
 			known = 1;
 		} else if (strcmp(name, "copy-data") == 0 &&
-		    strcmp((char *)value, "1") == 0) {
+		    strcmp((char *)value, "1") == 0) { // CodeQL [SM03650] false positive: value has not been previously freed
 			ret->exts |= SFTP_EXT_COPY_DATA;
 			known = 1;
 		} else if (strcmp(name,
 		    "users-groups-by-id@openssh.com") == 0 &&
-		    strcmp((char *)value, "1") == 0) {
+		    strcmp((char *)value, "1") == 0) { // CodeQL [SM03650] false positive: value has not been previously freed
 			ret->exts |= SFTP_EXT_GETUSERSGROUPS_BY_ID;
 			known = 1;
 		}

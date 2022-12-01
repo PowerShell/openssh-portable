@@ -2266,7 +2266,7 @@ client_input_hostkeys(struct ssh *ssh)
 		}
 		fp = sshkey_fingerprint(key, options.fingerprint_hash,
 		    SSH_FP_DEFAULT);
-		debug3_f("received %s key %s", sshkey_type(key), fp);
+		debug3_f("received %s key %s", sshkey_type(key), fp); // CodeQL [SM02311]: debug3_f can accept NULL value for fp
 		free(fp);
 
 		if (!key_accepted_by_hostkeyalgs(key)) {

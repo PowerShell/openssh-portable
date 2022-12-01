@@ -300,8 +300,8 @@ get_con_client_info(struct agent_connection* con)
 		goto done;
 	}
 
-	if (GetTokenInformation(client_primary_token, TokenUser, NULL, 0, &info_len) == TRUE || // CodeQL [SM02320]: GetTokenInformation will initialize info
-		(info = (TOKEN_USER*)malloc(info_len)) == NULL) 
+	if (GetTokenInformation(client_primary_token, TokenUser, NULL, 0, &info_len) == TRUE ||
+		(info = (TOKEN_USER*)malloc(info_len)) == NULL) // CodeQL [SM02320]: GetTokenInformation will initialize info
 		goto done;
 
 	if (GetTokenInformation(client_primary_token, TokenUser, info, info_len, &info_len) == FALSE)

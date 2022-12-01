@@ -223,6 +223,10 @@ assemble_algorithms(ServerOptions *o)
 	def_kex = match_filter_allowlist(KEX_SERVER_KEX, all_kex);
 	def_key = match_filter_allowlist(KEX_DEFAULT_PK_ALG, all_key);
 	def_sig = match_filter_allowlist(SSH_ALLOWED_CA_SIGALGS, all_sig);
+	if (NULL == def_key || NULL == def_sig) { // fix CodeQL SM02311
+		r = SSH_ERR_INTERNAL_ERROR;
+		goto fail;
+	}
 #define ASSEMBLE(what, defaults, all) \
 	do { \
 		if ((r = kex_assemble_names(&o->what, defaults, all)) != 0) \
@@ -236,6 +240,7 @@ assemble_algorithms(ServerOptions *o)
 	ASSEMBLE(pubkey_accepted_algos, def_key, all_key);
 	ASSEMBLE(ca_sign_algorithms, def_sig, all_sig);
 #undef ASSEMBLE
+fail:
 	free(all_cipher);
 	free(all_mac);
 	free(all_kex);
@@ -1048,7 +1053,7 @@ match_cfg_line(char **condition, int line, struct connection_info *ci)
 		    ci->address ? ci->address : "(null)",
 		    ci->laddress ? ci->laddress : "(null)", ci->lport);
 
-	while ((attrib = strdelim(&cp)) && *attrib != '\0') {
+	while ((attrib = strdelim(&cp)) && (attrib != NULL) && *attrib != '\0') { // fix CodeQL SM02311
 		/* Terminate on comment */
 		if (*attrib == '#') {
 			cp = NULL; /* mark all arguments consumed */

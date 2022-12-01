@@ -1190,7 +1190,7 @@ notify_hostkeys(struct ssh *ssh)
 			continue;
 		fp = sshkey_fingerprint(key, options.fingerprint_hash,
 		    SSH_FP_DEFAULT);
-		debug3_f("key %d: %s %s", i, sshkey_ssh_name(key), fp);
+		debug3_f("key %d: %s %s", i, sshkey_ssh_name(key), fp); // CodeQL [SM02311]: debug3_f can accept NULL value for fp
 		free(fp);
 		if (nkeys == 0) {
 			/*

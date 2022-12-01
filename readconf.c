@@ -337,6 +337,7 @@ kex_default_pk_alg(void)
 		char *all_key;
 
 		all_key = sshkey_alg_list(0, 0, 1, ',');
+		if (NULL == all_key) return NULL; // fix CodeQL SM02311
 		pkalgs = match_filter_allowlist(KEX_DEFAULT_PK_ALG, all_key);
 		free(all_key);
 	}
@@ -2655,6 +2656,10 @@ fill_default_options(Options * options)
 	all_kex = kex_alg_list(',');
 	all_key = sshkey_alg_list(0, 0, 1, ',');
 	all_sig = sshkey_alg_list(0, 1, 1, ',');
+	if (NULL == all_key || NULL == all_sig) { // fix CodeQL SM02311
+		r = SSH_ERR_INTERNAL_ERROR;
+		goto fail;
+	}
 	/* remove unsupported algos from default lists */
 	def_cipher = match_filter_allowlist(KEX_CLIENT_ENCRYPT, all_cipher);
 	def_mac = match_filter_allowlist(KEX_CLIENT_MAC, all_mac);
@@ -3281,7 +3286,7 @@ dump_client_config(Options *o, const char *host)
 	 */
 	all_key = sshkey_alg_list(0, 0, 1, ',');
 	if ((r = kex_assemble_names(&o->hostkeyalgorithms, kex_default_pk_alg(),
-	    all_key)) != 0)
+	    all_key)) != 0) // CodeQL [SM02311]: kex_assemble_names checks for NULL input
 		fatal_fr(r, "expand HostKeyAlgorithms");
 	free(all_key);
 
