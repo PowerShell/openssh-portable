@@ -27,8 +27,6 @@ stages:
       name: PS-PowerShell-x64
       demands:
       - ImageOverride -equals PSMMS2019-OpenSSH-Secure
-    variables:
-      Codeql.Enabled: true
     steps:
     - powershell: |
         $powerShellPath = Join-Path -Path $env:AGENT_TEMPDIRECTORY -ChildPath 'powershell'
@@ -38,17 +36,11 @@ stages:
         Write-Host "sending " + $vstsCommandString
         Write-Host "##$vstsCommandString"
       displayName: Install PowerShell Core
-
-    - task: CodeQL3000Init@0
-      displayName: Initialize CodeQL
     
     - pwsh: |
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
         Invoke-AzDOBuild
       displayName: Build Win32-OpenSSH
-
-    - task: CodeQL3000Finalize@0
-      displayName: Finalize CodeQL
 
     - pwsh: |
         $BuildOutPath = "$(Build.SourcesDirectory)/bin"
