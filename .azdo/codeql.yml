@@ -3,8 +3,8 @@ name: $(BuildDefinitionName)-$(date:yyMM).$(date:dd)$(rev:rrr)
 trigger: none
 
 schedules:
-- cron: "0 10 * * 1"
-  displayName: Weekly CodeQL Build
+- cron: "0 10 * * 1-5"
+  displayName: Daily CodeQL Build
   branches:
     include:
     - latestw_all
@@ -21,6 +21,7 @@ stages:
       - ImageOverride -equals PSMMS2019-OpenSSH-Secure
     variables:
       Codeql.Enabled: true
+      Codeql.Cadence: 23 # hours
     steps:
     - task: CodeQL3000Init@0
       displayName: Initialize CodeQL
