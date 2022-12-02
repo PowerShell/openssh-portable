@@ -2657,7 +2657,7 @@ fill_default_options(Options * options)
 	all_key = sshkey_alg_list(0, 0, 1, ',');
 	all_sig = sshkey_alg_list(0, 1, 1, ',');
 	if (NULL == all_key || NULL == all_sig) { // fix CodeQL SM02311
-		r = SSH_ERR_INTERNAL_ERROR;
+		ret = SSH_ERR_INTERNAL_ERROR;
 		goto fail;
 	}
 	/* remove unsupported algos from default lists */
