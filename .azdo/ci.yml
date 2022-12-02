@@ -27,6 +27,7 @@ stages:
       name: PS-PowerShell-x64
       demands:
       - ImageOverride -equals PSMMS2019-OpenSSH-Secure
+
     steps:
     - powershell: |
         $powerShellPath = Join-Path -Path $env:AGENT_TEMPDIRECTORY -ChildPath 'powershell'
