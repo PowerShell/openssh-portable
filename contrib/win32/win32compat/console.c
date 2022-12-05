@@ -634,7 +634,7 @@ ConWriteString(char* pszString, int cbString)
 			WriteConsoleW(GetConsoleOutputHandle(), utf16, cnt, &Result, 0);
 		else
 		{
-			Result = (DWORD)wprintf_s(utf16);	// CodeQL: [SM01734] false positive: call is not format string with arguments.
+			Result = (DWORD)wprintf_s(utf16);	// CodeQL [SM01734] false positive: call is not format string with arguments.
 		}
 	}
 
