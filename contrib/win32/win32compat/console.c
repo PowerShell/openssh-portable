@@ -627,7 +627,7 @@ ConWriteString(char* pszString, int cbString)
 	if ((needed = MultiByteToWideChar(CP_UTF8, 0, pszString, cbString, NULL, 0)) == 0 ||
 	    (utf16 = malloc(needed * sizeof(wchar_t))) == NULL ||
 	    (cnt = MultiByteToWideChar(CP_UTF8, 0, pszString, cbString, utf16, needed)) == 0) {
-		Result = (DWORD)printf_s(pszString);	// CodeQL: [SM01734] false positive: call is not format string with arguments.
+		Result = (DWORD)printf_s(pszString);	// CodeQL [SM01734] false positive: call is not format string with arguments.
 	}
 	else {
 		if (GetConsoleOutputHandle())
