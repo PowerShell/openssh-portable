@@ -28,6 +28,10 @@
       {
         "file": "\\regress\\pesterTests\\data\\sshtest_hostkey_rsa",
         "_justification": "ssh key for testing purpose"
+      },
+      {
+        "file": "\\regress\\keygen-convert.sh",
+        "_justification": "password for testing purpose"
       }
      ]  
 }
