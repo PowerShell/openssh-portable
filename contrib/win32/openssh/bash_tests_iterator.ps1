@@ -185,7 +185,8 @@ try
 	[string]$failed_testcases = [string]::Empty
 	
 	# These are the known failed testcases.
-	$known_failed_testcases = @("agent.sh", "key-options.sh", "forward-control.sh", "integrity.sh", "krl.sh", "cert-hostkey.sh", "cert-userkey.sh", "percent.sh")
+	# transfer.sh, rekey.sh tests fail on CygWin v3.4.0, but succeeds with v3.3.6
+	$known_failed_testcases = @("agent.sh", "key-options.sh", "forward-control.sh", "integrity.sh", "krl.sh", "cert-hostkey.sh", "cert-userkey.sh", "percent.sh", "transfer.sh", "rekey.sh")
 	$known_failed_testcases_skipped = @()
 
 	$start_time = (Get-Date)

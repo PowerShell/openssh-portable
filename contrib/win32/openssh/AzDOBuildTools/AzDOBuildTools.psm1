@@ -149,7 +149,7 @@ function Install-CygWin
     )
 
     Write-Verbose -Verbose -Message "Installing CygWin from Chocolately to location: ${InstallLocation} ..."
-    choco install cygwin -y --params "/InstallDir:${InstallLocation} /NoStartMenu"
+    choco install cygwin -y --force --params "/InstallDir:${InstallLocation} /NoStartMenu"
 }
 
 <#
