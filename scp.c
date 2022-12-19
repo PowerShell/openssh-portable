@@ -2081,10 +2081,9 @@ sink(int argc, char **argv, const char *src)
 		omode = mode;
 		mode |= S_IWUSR;
 #ifdef WINDOWS
-		if (add_mark_of_web(np) == -1) {
-			if (verbose_mode) {
-				note_err("%s: add_mark_of_web failed\n", np);
-			}
+		// only attempt mark of the web for pull case (from remote to local)
+		if (!iamremote && add_mark_of_web(np) == -1) {
+			debug3_f("%s: add_mark_of_web failed\n", np);
 		}
 		
 		// In windows, we would like to inherit the parent folder permissions by setting mode to USHRT_MAX.

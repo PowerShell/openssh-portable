@@ -2177,16 +2177,16 @@ add_mark_of_web(const char* filename)
 
 	int ofd, status = 0;
 	char* zoneIdentifierStr = NULL;
-	size_t zoneIndentifierLen = strlen("[ZoneTransfer]\nZoneId=") + 1 + 1;
+	size_t zoneIdentifierLen = strlen("[ZoneTransfer]\nZoneId=") + 1 + 1;
 
-	zoneIdentifierStr = malloc(zoneIndentifierLen * sizeof(char));
+	zoneIdentifierStr = malloc(zoneIdentifierLen * sizeof(char));
 
 	if (zoneIdentifierStr == NULL) {
 		status = -1;
 		goto cleanup;
 	}
 
-	sprintf_s(zoneIdentifierStr, zoneIndentifierLen, "[ZoneTransfer]\nZoneId=%d", motw_zone_id);
+	sprintf_s(zoneIdentifierStr, zoneIdentifierLen, "[ZoneTransfer]\nZoneId=%d", motw_zone_id);
 
 	// create zone identifer file stream and then write the Mark of the Web to it
 	if ((ofd = open(fileStreamPath, O_WRONLY | O_CREAT, USHRT_MAX)) == -1) {
@@ -2194,7 +2194,7 @@ add_mark_of_web(const char* filename)
 		goto cleanup;
 	}
 
-	if (atomicio(vwrite, ofd, zoneIdentifierStr, zoneIndentifierLen) != zoneIndentifierLen) {
+	if (atomicio(vwrite, ofd, zoneIdentifierStr, zoneIdentifierLen) != zoneIdentifierLen) {
 		status = -1;
 	}
 
