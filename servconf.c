@@ -2121,6 +2121,9 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 			/* requested glob was not in cache */
 			debug2("%s line %d: new include %s",
 			    filename, linenum, arg);
+#ifdef WINDOWS
+			convertToForwardslash(arg);
+#endif // WINDOWS
 			if ((r = glob(arg, 0, NULL, &gbuf)) != 0) {
 				if (r != GLOB_NOMATCH) {
 					fatal("%s line %d: include \"%s\" glob "
