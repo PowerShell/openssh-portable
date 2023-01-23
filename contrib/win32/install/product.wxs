@@ -11,6 +11,9 @@
 <?elseif $(var.Platform) = "x86"?>
 <?define ProgramFilesFolder = "ProgramFilesFolder"?>
 <?define UpgradeCode = "2A1799F1-5B26-4DDC-A0C7-03F75C4C08D2"?>
+<?elseif $(var.Platform) = "ARM64"?>
+<?define ProgramFilesFolder = "ProgramFiles64Folder"?>
+<?define UpgradeCode = "5D153A07-920A-4978-8B33-8447DD4C42F9"?>
 <?else?>
 <?error Platform $(var.Platform) is not supported?>
 <?endif?>
