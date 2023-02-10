@@ -785,7 +785,7 @@ main(int argc, char **argv)
 				if (sftp_copy_buflen > MAX_SFTP_COPY_BUFLEN) {
 					if (verbose_mode)
 						fmprintf(stderr,
-							"Buffer value of %d is too large for Win32-OpenSSH. Setting buffer to %d\n", 
+							"Buffer value of %llu is too large for Win32-OpenSSH. Setting buffer to %d\n", 
 							sftp_copy_buflen, MAX_SFTP_COPY_BUFLEN);
 					sftp_copy_buflen = MAX_SFTP_COPY_BUFLEN;
 				}
