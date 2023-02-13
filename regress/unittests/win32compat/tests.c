@@ -35,6 +35,8 @@ dup_str(char *inStr)
 
 	int len = strlen(inStr);
 	char *outStr = malloc(len + 1);
+	if (NULL == outStr)
+		return NULL;
 	strncpy(outStr, inStr, len);
 	outStr[len] = '\0';
 	return outStr;

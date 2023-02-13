@@ -383,7 +383,7 @@ start:
 		/*
 		 * If we have "-" do nothing, if "--" we are done.
 		 */
-		if (place[1] != '\0' && *++place == '-' && place[1] == '\0') {
+		if (place[1] != '\0' && *++place == '-' && place[1] == '\0') { // CodeQL [SM01947]: upstream code; place re-assigned in previous line
 			optind++;
 			place = EMSG;
 			/*

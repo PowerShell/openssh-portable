@@ -159,7 +159,7 @@ main(int argc, char **argv)
 	/* Handle systems without __progname */
 	if (__progname == NULL) {
 		__progname = strrchr(argv[0], '/');
-		if (__progname == NULL || (__progname[0] != '\0' && __progname[1] == '\0')) // fix CodeQL SM01947
+		if (__progname == NULL || (__progname[0] != '\0' && __progname[1] == '\0')) // CodeQL [SM01947]: __progname may be longer than 1 byte and prev. checks handle if smaller
 			__progname = argv[0];	
 		else
 			__progname++;
@@ -423,7 +423,7 @@ tohex(const void *_s, size_t l)
 		r[j++] = hex[(s[i] >> 4) & 0xf]; // CodeQL [SM02311]: tests rely on assert for NULL checks
 		r[j++] = hex[s[i] & 0xf];
 	}
-	r[j] = '\0';
+	r[j] = '\0'; // CodeQL [SM02311]: tests rely on assert for NULL checks
 	return r;
 }
 
