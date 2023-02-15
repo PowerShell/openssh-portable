@@ -882,19 +882,6 @@ process_write(u_int32_t id)
 	    (r = sshbuf_get_string(iqueue, &data, &len)) != 0)
 		fatal_fr(r, "parse");
 
-#ifdef WINDOWS
-	char* filepath = resolved_path_utf8(handle_to_name(handle));
-	if (filepath == NULL) {
-		debug("cannot convert handle %d to utf8 filepath for mark of the web", handle);
-	}
-	else {
-		if (add_mark_of_web(filepath) == -1) {
-			debug("add_mark_of_web to %s failed", filepath);
-		}
-		free(filepath);
-	}
-#endif // WINDOWS
-
 	debug("request %u: write \"%s\" (handle %d) off %llu len %zu",
 	    id, handle_to_name(handle), handle, (unsigned long long)off, len);
 	fd = handle_to_fd(handle);
