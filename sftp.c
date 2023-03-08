@@ -2735,9 +2735,6 @@ main(int argc, char **argv)
 	freeargs(&args);
 
 	conn = do_init(in, out, copy_buffer_len, num_requests, limit_kbps);
-#ifdef WINDOWS
-	get_zone_identifier(host);
-#endif //WINDOWS
 	if (conn == NULL)
 		fatal("Couldn't initialise connection to server");
 

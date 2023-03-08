@@ -56,9 +56,6 @@
 
 #include "sftp.h"
 #include "sftp-common.h"
-#ifdef WINDOWS
-#include "misc_internal.h"
-#endif // WINDOWS
 
 char *sftp_realpath(const char *, char *); /* sftp-realpath.c */
 
@@ -2086,10 +2083,6 @@ sftp_server_main(int argc, char **argv, struct passwd *user_pw)
 
 	logit("session opened for local user %s from [%s]",
 	    pw->pw_name, client_addr);
-
-#ifdef WINDOWS
-	get_zone_identifier(client_addr);
-#endif // WINDOWS
 
 	in = STDIN_FILENO;
 	out = STDOUT_FILENO;

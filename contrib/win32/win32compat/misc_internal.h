@@ -49,9 +49,6 @@ extern char* chroot_path;
 extern int chroot_path_len;
 extern wchar_t* chroot_pathw;
 
-/* motw zone_id */
-extern DWORD motw_zone_id;
-
 /* removes first '/' for Windows paths that are unix styled. Ex: /c:/ab.cd */
 wchar_t * resolved_path_utf16(const char *);
 char* resolved_path_utf8(const char *);
@@ -86,5 +83,3 @@ int lookup_principal_name(const wchar_t * sam_account_name, wchar_t * user_princ
 BOOL is_bash_test_env();
 int bash_to_win_path(const char *in, char *out, const size_t out_len);
 void debug_assert_internal();
-int add_mark_of_web(const char* filename);
-void get_zone_identifier(const char* hostname);

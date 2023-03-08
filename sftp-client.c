@@ -1837,11 +1837,6 @@ do_download(struct sftp_conn *conn, const char *remote_path,
 			status = SSH2_FX_FAILURE;
 		else
 			status = SSH2_FX_OK;
-#ifdef WINDOWS
-		if (add_mark_of_web(local_path) == -1) {
-			debug("%s: failed to add mark of the web", local_path);
-		}
-#endif // WINDOWS
 		/* Override umask and utimes if asked */
 #ifdef HAVE_FCHMOD
 		if (preserve_flag && fchmod(local_fd, mode) == -1)
