@@ -138,9 +138,6 @@
 
 #include "sftp-common.h"
 #include "sftp-client.h"
-#ifdef WINDOWS
-#include "misc_internal.h"
-#endif // WINDOWS
 
 extern char *__progname;
 
@@ -1215,9 +1212,6 @@ do_sftp_connect(char *host, char *user, int port, char *sftp_direct,
 		    reminp, remoutp, pidp) < 0)
 			return NULL;
 	}
-#ifdef WINDOWS
-	get_zone_identifier(host);
-#endif // WINDOWS
 	return do_init(*reminp, *remoutp,
 		sftp_copy_buflen, sftp_nrequests, limit_kbps);
 }
@@ -1517,9 +1511,6 @@ tolocal(int argc, char **argv, enum scp_mode_e mode, char *sftp_direct)
 			continue;
 		}
 		/* SCP */
-#ifdef WINDOWS
-		get_zone_identifier(host);
-#endif // WINDOWS
 		xasprintf(&bp, "%s -f %s%s",
 		    cmd, *src == '-' ? "-- " : "", src);
 		if (do_cmd(ssh_program, host, suser, sport, 0, bp,
@@ -2174,11 +2165,6 @@ sink(int argc, char **argv, const char *src)
 		omode = mode;
 		mode |= S_IWUSR;
 #ifdef WINDOWS
-		// only attempt mark of the web for pull case (from remote to local)
-		if (!iamremote && add_mark_of_web(np) == -1) {
-			debug3_f("%s: add_mark_of_web failed\n", np);
-		}
-		
 		// In windows, we would like to inherit the parent folder permissions by setting mode to USHRT_MAX.
 		if ((ofd = open(np, O_WRONLY|O_CREAT, USHRT_MAX)) == -1) {
 #else
