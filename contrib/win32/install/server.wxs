@@ -49,6 +49,7 @@
                     Protocol="tcp"
                     Port="22"
                     Scope="any"
+                    Profile="private"
                     />
             </Component>
             <Component>
