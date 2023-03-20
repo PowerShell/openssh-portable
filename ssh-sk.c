@@ -133,7 +133,7 @@ sshsk_open(const char *path)
 		goto fail;
 #endif
 	}
-	if ((ret->dlhandle = dlopen(path, RTLD_NOW)) == NULL) {
+	if ((ret->dlhandle = dlopen(path, RTLD_NOW)) == NULL) { // CodeQL [SM01925]: upstream code that permits user input to specify external provider is by design, but only accessible via CLI parameter
 		error("Provider \"%s\" dlopen failed: %s", path, dlerror());
 		goto fail;
 	}
