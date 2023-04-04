@@ -227,7 +227,7 @@ process_unsupported_request(struct sshbuf* request, struct sshbuf* response, str
 static int
 parse_key_constraint_extension(struct sshbuf *m)
 {
-	char *ext_name = NULL;
+	char *ext_name = NULL, *skprovider = NULL;
 	int r;
 
 	if ((r = sshbuf_get_cstring(m, &ext_name, NULL)) != 0) {
@@ -236,8 +236,13 @@ parse_key_constraint_extension(struct sshbuf *m)
 	}
 	debug_f("constraint ext %s", ext_name);
 	if (strcmp(ext_name, "sk-provider@openssh.com") == 0) {
-		if ((r = sshbuf_skip_string(m)) != 0) {
+		if ((r = sshbuf_get_cstring(m, &skprovider, NULL)) != 0) {
 			error_fr(r, "parse %s", ext_name);
+			goto out;
+		}
+		if (strcmp(skprovider, "internal") != 0) {
+			error_f("unsupported sk-provider: %s", skprovider);
+			r = SSH_ERR_FEATURE_UNSUPPORTED;
 			goto out;
 		}
 	} else {
