@@ -1,4 +1,4 @@
-/* $OpenBSD: sftp-server.c,v 1.139 2022/02/01 23:32:51 djm Exp $ */
+/* $OpenBSD: sftp-server.c,v 1.145 2022/11/09 09:04:12 dtucker Exp $ */
 /*
  * Copyright (c) 2000-2004 Markus Friedl.  All rights reserved.
  *
@@ -37,6 +37,7 @@
 #include <poll.h>
 #endif
 #include <pwd.h>
+#include <grp.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -44,6 +45,7 @@
 #include <unistd.h>
 #include <stdarg.h>
 
+#include "atomicio.h"
 #include "xmalloc.h"
 #include "sshbuf.h"
 #include "ssherr.h"
@@ -123,6 +125,9 @@ static void process_extended_fsync(u_int32_t id);
 static void process_extended_lsetstat(u_int32_t id);
 static void process_extended_limits(u_int32_t id);
 static void process_extended_expand(u_int32_t id);
+static void process_extended_copy_data(u_int32_t id);
+static void process_extended_home_directory(u_int32_t id);
+static void process_extended_get_users_groups_by_id(u_int32_t id);
 static void process_extended(u_int32_t id);
 
 struct sftp_handler {
@@ -170,6 +175,13 @@ static const struct sftp_handler extended_handlers[] = {
 	{ "limits", "limits@openssh.com", 0, process_extended_limits, 0 },
 	{ "expand-path", "expand-path@openssh.com", 0,
 	    process_extended_expand, 0 },
+	{ "copy-data", "copy-data", 0, process_extended_copy_data, 1 },
+	{ "home-directory", "home-directory", 0,
+	    process_extended_home_directory, 0 },
+#ifndef WINDOWS
+	{ "users-groups-by-id", "users-groups-by-id@openssh.com", 0,
+	    process_extended_get_users_groups_by_id, 0 },
+#endif
 	{ NULL, NULL, 0, NULL, 0 }
 };
 
@@ -728,7 +740,11 @@ process_init(void)
 	compose_extension(msg, "lsetstat@openssh.com", "1");
 	compose_extension(msg, "limits@openssh.com", "1");
 	compose_extension(msg, "expand-path@openssh.com", "1");
-
+	compose_extension(msg, "copy-data", "1");
+	compose_extension(msg, "home-directory", "1");
+#ifndef WINDOWS
+	compose_extension(msg, "users-groups-by-id@openssh.com", "1");
+#endif
 	send_msg(msg);
 	sshbuf_free(msg);
 }
@@ -1050,13 +1066,13 @@ process_fsetstat(u_int32_t id)
 
 		if (a.flags & SSH2_FILEXFER_ATTR_SIZE) {
 			logit("set \"%s\" size %llu",
-			    name, (unsigned long long)a.size);
+			    name, (unsigned long long)a.size); // CodeQL [SM02311]: false positive name will not be null because of handle_to_fd check
 			r = ftruncate(fd, a.size);
 			if (r == -1)
 				status = errno_to_portable(errno);
 		}
 		if (a.flags & SSH2_FILEXFER_ATTR_PERMISSIONS) {
-			logit("set \"%s\" mode %04o", name, a.perm);
+			logit("set \"%s\" mode %04o", name, a.perm); // CodeQL [SM02311]: false positive name will not be null because of handle_to_fd check
 #ifdef HAVE_FCHMOD
 			r = fchmod(fd, a.perm & 07777);
 #else
@@ -1071,7 +1087,7 @@ process_fsetstat(u_int32_t id)
 
 			strftime(buf, sizeof(buf), "%Y%m%d-%H:%M:%S",
 			    localtime(&t));
-			logit("set \"%s\" modtime %s", name, buf);
+			logit("set \"%s\" modtime %s", name, buf); // CodeQL [SM02311]: false positive name will not be null because of handle_to_fd check
 #ifdef HAVE_FUTIMES
 			r = futimes(fd, attrib_to_tv(&a));
 #else
@@ -1081,7 +1097,7 @@ process_fsetstat(u_int32_t id)
 				status = errno_to_portable(errno);
 		}
 		if (a.flags & SSH2_FILEXFER_ATTR_UIDGID) {
-			logit("set \"%s\" owner %lu group %lu", name,
+			logit("set \"%s\" owner %lu group %lu", name, // CodeQL [SM02311]: false positive name will not be null because of handle_to_fd check
 			    (u_long)a.uid, (u_long)a.gid);
 #ifdef HAVE_FCHOWN
 			r = fchown(fd, a.uid, a.gid);
@@ -1161,7 +1177,8 @@ process_readdir(u_int32_t id)
 				continue;
 			stat_to_attrib(&st, &(stats[count].attrib));
 			stats[count].name = xstrdup(dp->d_name);
-			stats[count].long_name = ls_file(dp->d_name, &st, 0, 0);
+			stats[count].long_name = ls_file(dp->d_name, &st,
+			    0, 0, NULL, NULL);
 			count++;
 			/* send up to 100 entries in one message */
 			/* XXX check packet size instead */
@@ -1611,6 +1628,176 @@ process_extended_expand(u_int32_t id)
 	send_names(id, 1, &s);
  out:
 	free(path);
+}
+
+static void
+process_extended_copy_data(u_int32_t id)
+{
+	u_char buf[64*1024];
+	int read_handle, read_fd, write_handle, write_fd;
+	u_int64_t len, read_off, read_len, write_off;
+	int r, copy_until_eof, status = SSH2_FX_OP_UNSUPPORTED;
+	size_t ret;
+
+	if ((r = get_handle(iqueue, &read_handle)) != 0 ||
+	    (r = sshbuf_get_u64(iqueue, &read_off)) != 0 ||
+	    (r = sshbuf_get_u64(iqueue, &read_len)) != 0 ||
+	    (r = get_handle(iqueue, &write_handle)) != 0 ||
+	    (r = sshbuf_get_u64(iqueue, &write_off)) != 0)
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+
+	debug("request %u: copy-data from \"%s\" (handle %d) off %llu len %llu "
+	    "to \"%s\" (handle %d) off %llu",
+	    id, handle_to_name(read_handle), read_handle,
+	    (unsigned long long)read_off, (unsigned long long)read_len,
+	    handle_to_name(write_handle), write_handle,
+	    (unsigned long long)write_off);
+
+	/* For read length of 0, we read until EOF. */
+	if (read_len == 0) {
+		read_len = (u_int64_t)-1 - read_off;
+		copy_until_eof = 1;
+	} else
+		copy_until_eof = 0;
+
+	read_fd = handle_to_fd(read_handle);
+	write_fd = handle_to_fd(write_handle);
+
+	/* Disallow reading & writing to the same handle or same path or dirs */
+	if (read_handle == write_handle || read_fd < 0 || write_fd < 0 ||
+	    !strcmp(handle_to_name(read_handle), handle_to_name(write_handle))) {
+		status = SSH2_FX_FAILURE;
+		goto out;
+	}
+
+	if (lseek(read_fd, read_off, SEEK_SET) < 0) {
+		status = errno_to_portable(errno);
+		error("%s: read_seek failed", __func__);
+		goto out;
+	}
+
+	if ((handle_to_flags(write_handle) & O_APPEND) == 0 &&
+	    lseek(write_fd, write_off, SEEK_SET) < 0) {
+		status = errno_to_portable(errno);
+		error("%s: write_seek failed", __func__);
+		goto out;
+	}
+
+	/* Process the request in chunks. */
+	while (read_len > 0 || copy_until_eof) {
+		len = MINIMUM(sizeof(buf), read_len);
+		read_len -= len;
+
+		ret = atomicio(read, read_fd, buf, len);
+		if (ret == 0 && errno == EPIPE) {
+			status = copy_until_eof ? SSH2_FX_OK : SSH2_FX_EOF;
+			break;
+		} else if (ret == 0) {
+			status = errno_to_portable(errno);
+			error("%s: read failed: %s", __func__, strerror(errno));
+			break;
+		}
+		len = ret;
+		handle_update_read(read_handle, len);
+
+		ret = atomicio(vwrite, write_fd, buf, len);
+		if (ret != len) {
+			status = errno_to_portable(errno);
+			error("%s: write failed: %llu != %llu: %s", __func__,
+			    (unsigned long long)ret, (unsigned long long)len,
+			    strerror(errno));
+			break;
+		}
+		handle_update_write(write_handle, len);
+	}
+
+	if (read_len == 0)
+		status = SSH2_FX_OK;
+
+ out:
+	send_status(id, status);
+}
+
+static void
+process_extended_home_directory(u_int32_t id)
+{
+	char *username;
+	struct passwd *user_pw;
+	int r;
+	Stat s;
+
+	if ((r = sshbuf_get_cstring(iqueue, &username, NULL)) != 0)
+		fatal_fr(r, "parse");
+
+	debug3("request %u: home-directory \"%s\"", id, username);
+	if ((user_pw = getpwnam(username)) == NULL) {
+		send_status(id, SSH2_FX_FAILURE);
+		goto out;
+	}
+
+	verbose("home-directory \"%s\"", pw->pw_dir);
+	attrib_clear(&s.attrib);
+	s.name = s.long_name = pw->pw_dir;
+	send_names(id, 1, &s);
+ out:
+	free(username);
+}
+
+static void
+process_extended_get_users_groups_by_id(u_int32_t id)
+{
+#ifndef WINDOWS
+	struct passwd *user_pw;
+	struct group *gr;
+	struct sshbuf *uids, *gids, *usernames, *groupnames, *msg;
+	int r;
+	u_int n, nusers = 0, ngroups = 0;
+	const char *name;
+
+	if ((usernames = sshbuf_new()) == NULL ||
+	    (groupnames = sshbuf_new()) == NULL ||
+	    (msg = sshbuf_new()) == NULL)
+		fatal_f("sshbuf_new failed");
+	if ((r = sshbuf_froms(iqueue, &uids)) != 0 ||
+	    (r = sshbuf_froms(iqueue, &gids)) != 0)
+		fatal_fr(r, "parse");
+	debug_f("uids len = %zu, gids len = %zu",
+	    sshbuf_len(uids), sshbuf_len(gids));
+	while (sshbuf_len(uids) != 0) {
+		if ((r = sshbuf_get_u32(uids, &n)) != 0)
+			fatal_fr(r, "parse inner uid");
+		user_pw = getpwuid((uid_t)n);
+		name = user_pw == NULL ? "" : user_pw->pw_name;
+		debug3_f("uid %u => \"%s\"", n, name);
+		if ((r = sshbuf_put_cstring(usernames, name)) != 0)
+			fatal_fr(r, "assemble uid reply");
+		nusers++;
+	}
+	while (sshbuf_len(gids) != 0) {
+		if ((r = sshbuf_get_u32(gids, &n)) != 0)
+			fatal_fr(r, "parse inner gid");
+		gr = getgrgid((gid_t)n);
+		name = gr == NULL ? "" : gr->gr_name;
+		debug3_f("gid %u => \"%s\"", n, name);
+		if ((r = sshbuf_put_cstring(groupnames, name)) != 0)
+			fatal_fr(r, "assemble gid reply");
+		nusers++;
+	}
+	verbose("users-groups-by-id: %u users, %u groups", nusers, ngroups);
+
+	if ((r = sshbuf_put_u8(msg, SSH2_FXP_EXTENDED_REPLY)) != 0 ||
+	    (r = sshbuf_put_u32(msg, id)) != 0 ||
+	    (r = sshbuf_put_stringb(msg, usernames)) != 0 ||
+	    (r = sshbuf_put_stringb(msg, groupnames)) != 0)
+		fatal_fr(r, "compose");
+	send_msg(msg);
+
+	sshbuf_free(uids);
+	sshbuf_free(gids);
+	sshbuf_free(usernames);
+	sshbuf_free(groupnames);
+	sshbuf_free(msg);
+#endif
 }
 
 static void

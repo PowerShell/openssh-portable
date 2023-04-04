@@ -233,6 +233,9 @@
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-x86-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -256,6 +259,9 @@
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-x64-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -279,6 +285,9 @@
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-arm64-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -302,6 +311,9 @@
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-arm-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -327,6 +339,9 @@
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-x86-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -353,6 +368,9 @@
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-x64-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -379,6 +397,9 @@
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-arm64-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -405,6 +426,9 @@
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-arm-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>

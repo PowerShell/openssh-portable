@@ -27,9 +27,8 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($ssouser, $rights, "ContainerInherit,Objectinherit", "None", "Allow")
         $acl.SetAccessRule($accessRule)
         Set-Acl -Path $testDir -AclObject $acl
-        $platform = Get-Platform
         #skip on ps 2 becase non-interactive cmd require a ENTER before it returns on ps2
-        $skip = ($platform -eq [PlatformType]::Windows) -and ($PSVersionTable.PSVersion.Major -le 2)
+        $skip = $IsWindows -and ($PSVersionTable.PSVersion.Major -le 2)
 
         <#$testData = @(
             @{
@@ -153,8 +152,8 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         }
 
         It "$tC.$tI - multiple double quotes in cmdline" {
-            # actual command line ssh target \"cmd\" /c \"echo hello\"
-            $o = ssh test_target `\`"cmd`\`" /c `\`"echo hello`\`"
+            # actual command line ssh target "cmd" /c "echo hello"
+            $o = ssh test_target `"cmd`" /c `"echo hello`"
             $o | Should Be "hello"
         }
 
@@ -220,19 +219,19 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         }
         It "$tC.$tI - powershell as default shell and double quotes in cmdline" {
             # actual command line ssh target echo `"hello`"
-            $o = ssh test_target echo ``\`"hello``\`"
-            $o | Should Be "`"hello`""
+            $o = ssh test_target echo `"hello`"
+            $o | Should Be "hello"
         }
         It "$tC.$tI - multiple commands with double quotes in powershell cmdlet" -skip:$skip {
-            # actual command line ssh target cd "$env:programfiles";pwd
-            $o = ssh test_target "cd \`"`$env:programfiles\`";pwd"
+            # actual command line ssh target cd "$env:programfiles\";pwd
+            $o = ssh test_target "cd `"`$env:programfiles\`";pwd"
             $LASTEXITCODE | Should Be 0
             $match = $o -match "Program Files"
             $match.count | Should be 1
         }
         It "$tC.$tI - multiple commands with double quotes in powershell cmdlet" -skip:$skip {
-            # actual command line ssh target dir "$env:programfiles";cd "$env:programfiles";pwd
-            $o = ssh test_target "dir \`"`$env:programfiles\`";cd \`"`$env:programfiles\`";pwd"
+            # actual command line ssh target dir "$env:programfiles\";cd "$env:programfiles\";pwd
+            $o = ssh test_target "dir `"`$env:programfiles\`";cd `"`$env:programfiles\`";pwd"
             $LASTEXITCODE | Should Be 0
             #$o -contains "Program Files" | Should Be $True
             $match = $o -match "Program Files"
@@ -263,8 +262,8 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             $o | Should Contain "cmd"            
         }
         It "$tC.$tI - cmd as default shell and double quotes in cmdline" {
-            # actual command line ssh target echo "\"hello\""
-            $o = ssh test_target 'echo "\"hello\""'
+            # actual command line ssh target echo "hello"
+            $o = ssh test_target echo "`"hello`""
             $o | Should Be "`"hello`""
         }
         It "$tC.$tI - single quotes in powershell cmdlet" -skip:$skip {
@@ -286,8 +285,8 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
         }
         It "$tC.$tI - shellhost as default shell and multiple double quotes in cmdline" {
-            # actual command line ssh target \"cmd\" /c \"echo \"hello\"\"
-            $o = ssh test_target `\`"cmd`\`" /c `\`"echo \`"hello\`"`\`"
+            # actual command line ssh target "cmd" /c "echo "hello""
+            $o = ssh test_target `"cmd`" /c `"echo `"hello`"`"
             $o | Should Be "`"hello`""
         }
     }

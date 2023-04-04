@@ -421,7 +421,7 @@ do_log(LogLevel level, int force, const char *suffix, const char *fmt,
 		closelog_r(&sdata);
 #else
 		openlog(progname, LOG_PID, log_facility);
-		syslog(pri, "%.500s", fmtbuf);
+		syslog(pri, "%.500s", fmtbuf); // CodeQL [SM01733] false positive: not a format call
 		closelog();
 #endif
 	}

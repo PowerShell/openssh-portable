@@ -145,9 +145,13 @@ setup_session_user_vars(wchar_t* profile_path)
 
 		if (ret != ERROR_SUCCESS) {
 			error_message = get_registry_operation_error_message(ret);
-			error("Unable to open Registry Key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"), error_message);
 			if (error_message)
+			{
+				error("Unable to open Registry Key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"), error_message);
 				free(error_message);
+			}
+			else
+				error("Unable to open Registry Key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"));
 			continue;
 		}
 		
@@ -168,9 +172,13 @@ setup_session_user_vars(wchar_t* profile_path)
 			}
 			else if (ret != ERROR_SUCCESS) {
 				error_message = get_registry_operation_error_message(ret);
-				error("Failed to enumerate the value for registry key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"), error_message);
 				if (error_message)
+				{
+					error("Failed to enumerate the value for registry key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"), error_message);
 					free(error_message);
+				}
+				else
+					error("Failed to enumerate the value for registry key %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"));
 				break;
 			}
 
@@ -251,7 +259,7 @@ setup_session_env(struct ssh *ssh, Session* s)
 		_snprintf(buf, ARRAYSIZE(buf), "%s@%s", s->pw->pw_name, getenv("COMPUTERNAME"));
 		UTF8_TO_UTF16_WITH_CLEANUP(tmp, buf);
 		/* escape $ characters as $$ to distinguish from special prompt characters */
-		for (int i = 0, j = 0; i < wcslen(tmp) && j < ARRAYSIZE(wbuf) - 1; i++) {
+		for (size_t i = 0, j = 0; i < wcslen(tmp) && j < ARRAYSIZE(wbuf) - 1; i++) {
 			wbuf[j] = tmp[i];
 			if (wbuf[j++] == L'$')
 				wbuf[j++] = L'$';
@@ -348,7 +356,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info;
 	HANDLE job_dup;
 	pid_t pid = -1;
-	char * shell_command_option_local = NULL;
+	char * shell_command_option_local = NULL, *pty_cmd_cp = NULL;
 	size_t shell_len = 0;
 	/*account for the quotes and null*/
 	shell_len = strlen(s->pw->pw_shell) + 2 + 1;
@@ -387,21 +395,26 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		char *pty_cmd = NULL;
 		if (command) {
 			size_t len = strlen(shell) + 1 + strlen(shell_command_option_local) + 1 + strlen(command) + 1;
-			pty_cmd = calloc(1, len);
-
-			strcpy_s(pty_cmd, len, shell);
-			strcat_s(pty_cmd, len, " ");
-			strcat_s(pty_cmd, len, shell_command_option_local);
-			strcat_s(pty_cmd, len, " ");
-			strcat_s(pty_cmd, len, command);
+			pty_cmd_cp = pty_cmd = calloc(1, len);
+			if (pty_cmd != NULL)
+			{
+				strcpy_s(pty_cmd, len, shell);
+				strcat_s(pty_cmd, len, " ");
+				strcat_s(pty_cmd, len, shell_command_option_local);
+				strcat_s(pty_cmd, len, " ");
+				strcat_s(pty_cmd, len, command);
+			}
 		} else {
 			if (shell_arguments) {
 				size_t len = strlen(shell) + 1 + strlen(shell_arguments) + 1;
 				pty_cmd = calloc(1, len);
 
-				strcpy_s(pty_cmd, len, shell);
-				strcat_s(pty_cmd, len, " ");
-				strcat_s(pty_cmd, len, shell_arguments);
+				if (pty_cmd != NULL)
+				{
+					strcpy_s(pty_cmd, len, shell);
+					strcat_s(pty_cmd, len, " ");
+					strcat_s(pty_cmd, len, shell_arguments);
+				}
 			}
 			else
 				pty_cmd = shell;
@@ -469,12 +482,15 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		}
 		
 		//Passing the PRIVSEP_LOG_FD (STDERR_FILENO + 2) to sftp-server for logging
-		if(strstr(exec_command, "sftp-server.exe"))
-			if (posix_spawn_file_actions_adddup2(&actions, STDERR_FILENO + 2, SFTP_SERVER_LOG_FD) != 0) {
-				errno = EOTHER;
-				error("posix_spawn initialization failed");
-				goto cleanup;
+		if (exec_command) {
+			if (strstr(exec_command, "sftp-server.exe")) {
+				if (posix_spawn_file_actions_adddup2(&actions, STDERR_FILENO + 2, SFTP_SERVER_LOG_FD) != 0) {
+					errno = EOTHER;
+					error("posix_spawn initialization failed");
+					goto cleanup;
+				}
 			}
+		}
 
 		if (posix_spawn(&pid, spawn_argv[0], &actions, NULL, spawn_argv, NULL) != 0) {
 			errno = EOTHER;
@@ -544,6 +560,8 @@ cleanup:
 		free(shell);
 	if (job)
 		CloseHandle(job);
+	if (pty_cmd_cp)
+		free(pty_cmd_cp);
 
 	return ret;
 }

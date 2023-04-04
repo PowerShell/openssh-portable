@@ -95,7 +95,7 @@ get_user_groups()
 	DWORD group_size = 0;
 	if (GetTokenInformation(logon_token, TokenGroups, NULL, 0, &group_size) == 0
 		&& GetLastError() != ERROR_INSUFFICIENT_BUFFER ||
-		(group_buf = (PTOKEN_GROUPS)malloc(group_size)) == NULL) {
+		(group_buf = (PTOKEN_GROUPS)malloc(group_size)) == NULL) { // CodeQL [SM02320]: GetTokenInformation will initialize group_buf
 		debug3("%s: GetTokenInformation() failed: %d", __FUNCTION__, GetLastError());
 		errno = EOTHER;
 		goto cleanup;

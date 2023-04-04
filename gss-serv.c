@@ -102,7 +102,11 @@ ssh_gssapi_acquire_cred(Gssctxt *ctx)
 	gss_OID_set oidset;
 
 	if (options.gss_strict_acceptor) {
-		gss_create_empty_oid_set(&status, &oidset);
+		if (gss_create_empty_oid_set(&status, &oidset) == GSS_S_FAILURE) // fix CodeQL SM02313
+		{
+			error("ssh_gssapi_acquire_cred: gss_create_empty_oid_set failed");
+			return (-1);
+		}
 		gss_add_oid_set_member(&status, ctx->oid, &oidset);
 
 		if (gethostname(lname, MAXHOSTNAMELEN)) {
@@ -150,15 +154,20 @@ ssh_gssapi_supported_oids(gss_OID_set *oidset)
 	gss_OID_set supported;
 
 	gss_create_empty_oid_set(&min_status, oidset);
-	gss_indicate_mechs(&min_status, &supported);
-
+	if (gss_indicate_mechs(&min_status, &supported) == GSS_S_FAILURE) // fix CodeQL SM02313
+	{
+		error("ssh_gssapi_supported_oids: gss_indicate_mechs failed to \
+			determine which underlying security mechanisms are available");
+		return;
+	}
+	
 	while (supported_mechs[i]->name != NULL) {
 		if (GSS_ERROR(gss_test_oid_set_member(&min_status,
-		    &supported_mechs[i]->oid, supported, &present)))
+			&supported_mechs[i]->oid, supported, &present)))
 			present = 0;
 		if (present)
 			gss_add_oid_set_member(&min_status,
-			    &supported_mechs[i]->oid, oidset);
+				&supported_mechs[i]->oid, oidset);
 		i++;
 	}
 

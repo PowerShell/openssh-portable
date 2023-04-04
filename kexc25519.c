@@ -129,6 +129,10 @@ kex_c25519_enc(struct kex *kex, const struct sshbuf *client_blob,
 		goto out;
 	}
 	client_pub = sshbuf_ptr(client_blob);
+	if (client_pub == NULL) { // fix CodeQL SM02313
+		r = SSH_ERR_ALLOC_FAIL;
+		goto out;
+	}
 #ifdef DEBUG_KEXECDH
 	dump_digest("client public key 25519:", client_pub, CURVE25519_SIZE);
 #endif
@@ -185,7 +189,7 @@ kex_c25519_dec(struct kex *kex, const struct sshbuf *server_blob,
 		r = SSH_ERR_ALLOC_FAIL;
 		goto out;
 	}
-	if ((r = kexc25519_shared_key_ext(kex->c25519_client_key, server_pub,
+	if ((r = kexc25519_shared_key_ext(kex->c25519_client_key, server_pub, // CodeQL [SM02311]: false positive server_pub will not be null
 	    buf, 0)) < 0)
 		goto out;
 #ifdef DEBUG_KEXECDH

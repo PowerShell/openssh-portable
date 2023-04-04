@@ -1,20 +1,23 @@
-#	$OpenBSD: scp.sh,v 1.13 2021/08/10 03:35:45 djm Exp $
+#	$OpenBSD: scp.sh,v 1.18 2023/01/13 04:47:34 dtucker Exp $
 #	Placed in the Public Domain.
 
 tid="scp"
 
 #set -x
 
-# Figure out if diff understands "-N"
-if diff -N ${SRC}/scp.sh ${SRC}/scp.sh 2>/dev/null; then
-	DIFFOPT="-rN"
-else
-	DIFFOPT="-r"
-fi
-
 COPY2=${OBJ}/copy2
 DIR=${COPY}.dd
 DIR2=${COPY}.dd2
+COPY3=${OBJ}/copy.glob[123]
+DIR3=${COPY}.dd.glob[456]
+DIFFOPT="-rN"
+
+# Figure out if diff does not understand "-N"
+if ! diff -N ${SRC}/scp.sh ${SRC}/scp.sh 2>/dev/null; then
+	DIFFOPT="-r"
+fi
+
+maybe_add_scp_path_to_sshd
 
 SRC=`dirname ${SCRIPT}`
 cp ${SRC}/scp-ssh-wrapper.sh ${OBJ}/scp-ssh-wrapper.scp
@@ -22,9 +25,9 @@ chmod 755 ${OBJ}/scp-ssh-wrapper.scp
 export SCP # used in scp-ssh-wrapper.scp
 
 scpclean() {
-	rm -rf ${COPY} ${COPY2} ${DIR} ${DIR2}
-	mkdir ${DIR} ${DIR2}
-	chmod 755 ${DIR} ${DIR2}
+	rm -rf ${COPY} ${COPY2} ${DIR} ${DIR2} ${COPY3} ${DIR3}
+	mkdir ${DIR} ${DIR2} ${DIR3}
+	chmod 755 ${DIR} ${DIR2} ${DIR3}
 }
 
 for mode in scp sftp ; do
@@ -43,8 +46,7 @@ for mode in scp sftp ; do
 			scpopts="-s -D ${SFTPSERVER}"
 		fi	
 	fi
-
-	verbose "tid: simple copy local file to local file"
+	verbose "$tag: simple copy local file to local file"
 	scpclean
 	$SCP "${scpopts[@]}" ${DATA} ${COPY} 2>&1 1>/dev/null || fail "copy failed"
 	cmp ${DATA} ${COPY} || fail "corrupted copy"
@@ -56,6 +58,33 @@ for mode in scp sftp ; do
 
 	verbose "$tag: simple copy remote file to local file"
 	scpclean
+	$SCP -vvv "${scpopts[@]}" somehost:${DATA} ${COPY} || fail "copy failed"
+	cmp ${DATA} ${COPY} || fail "corrupted copy"
+
+	# In place tests will not work on Windows because of simultaneous read of/write to file
+
+	# verbose "$tag: copy local file to remote file in place"
+	# scpclean
+	# cp ${DATA} ${COPY}
+	# $SCP "${scpopts[@]}" ${COPY} somehost:${COPY} || fail "copy failed"
+	# cmp ${DATA} ${COPY} || fail "corrupted copy"
+
+	# verbose "$tag: copy remote file to local file in place"
+	# scpclean
+	# cp ${DATA} ${COPY}
+	# $SCP "${scpopts[@]}" somehost:${COPY} ${COPY} || fail "copy failed"
+	# cmp ${DATA} ${COPY} || fail "corrupted copy"
+
+	verbose "$tag: copy local file to remote file clobber"
+	scpclean
+	cat ${DATA} ${DATA} > ${COPY}
+	$SCP "${scpopts[@]}" ${DATA} somehost:${COPY} || fail "copy failed"
+	ls -l $DATA $COPY
+	cmp ${DATA} ${COPY} || fail "corrupted copy"
+
+	verbose "$tag: copy remote file to local file clobber"
+	scpclean
+	cat ${DATA} ${DATA} > ${COPY}
 	$SCP "${scpopts[@]}" somehost:${DATA} ${COPY} || fail "copy failed"
 	cmp ${DATA} ${COPY} || fail "corrupted copy"
 
@@ -98,12 +127,46 @@ for mode in scp sftp ; do
 	$SCP "${scpopts[@]}" -r somehost:${DIR} ${DIR2} || fail "copy failed"
 	diff ${DIFFOPT} ${DIR} ${DIR2} || fail "corrupted copy"
 
+	verbose "$tag: unmatched glob file local->remote"
+	scpclean
+	$SCP "${scpopts[@]}" ${DATA} somehost:${COPY3} || fail "copy failed"
+	cmp ${DATA} ${COPY3} || fail "corrupted copy"
+
+	verbose "$tag: unmatched glob file remote->local"
+	# NB. no clean
+	$SCP "${scpopts[@]}" somehost:${COPY3} ${COPY2} || fail "copy failed"
+	cmp ${DATA} ${COPY2} || fail "corrupted copy"
+
+	verbose "$tag: unmatched glob dir recursive local->remote"
+	scpclean
+	rm -rf ${DIR3}
+	cp ${DATA} ${DIR}/copy
+	cp ${DATA} ${DIR}/copy.glob[1234]
+	$SCP "${scpopts[@]}" -r ${DIR} somehost:${DIR3} || fail "copy failed"
+	diff ${DIFFOPT} ${DIR} ${DIR3} || fail "corrupted copy"
+
+	verbose "$tag: unmatched glob dir recursive remote->local"
+	# NB. no clean
+	rm -rf ${DIR2}
+	$SCP "${scpopts[@]}" -r somehost:${DIR3} ${DIR2} || fail "copy failed"
+	diff ${DIFFOPT} ${DIR} ${DIR2} || fail "corrupted copy"
+
 	verbose "$tag: shell metacharacters"
 	scpclean
 	(cd ${DIR} && \
 	 touch '`touch metachartest`' && \
 	 $SCP "${scpopts[@]}" *metachar* ${DIR2} 2>&1 2>/dev/null; \
 	 [ ! -f metachartest ] ) || fail "shell metacharacters"
+
+	if test $mode = scp ; then
+		verbose "$tag: input args & printf check"
+		scpclean
+		cp ${DATA} ${COPY}
+		$SCP "${scpopts[@]}" -vvv -o '"%h %p"' ${COPY} somehost:${DIR} 2>&1 | tee scp_printf_test.txt
+		# relies on debug log statement, specifically from "debug3: spawning..." 
+		[[ " $( cat "scp_printf_test.txt" ) " =~ "%h %p" ]] || fail "input args & printf check failed"
+		rm -f scp_printf_test.txt
+	fi
 
 	if [ ! -z "$SUDO" ]; then
 		verbose "$tag: skipped file after scp -p with failed chown+utimes"
@@ -149,5 +212,5 @@ for mode in scp sftp ; do
 	cmp ${COPY} ${COPY2} >/dev/null && fail "corrupt target"
 done
 
-scpclean
+#scpclean
 rm -f ${OBJ}/scp-ssh-wrapper.scp

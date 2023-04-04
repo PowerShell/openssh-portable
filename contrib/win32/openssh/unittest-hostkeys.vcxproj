@@ -205,7 +205,8 @@
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
     <PostBuildEvent>
-      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"</Command>
+      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"
+copy /Y "$(LibreSSL-x86-Path)\libcrypto.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -231,7 +232,8 @@
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
     <PostBuildEvent>
-      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"</Command>
+      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"
+copy /Y "$(LibreSSL-x64-Path)\libcrypto.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
@@ -257,7 +259,8 @@
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
     <PostBuildEvent>
-      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"</Command>
+      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"
+copy /Y "$(LibreSSL-arm64-Path)\libcrypto.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
@@ -283,7 +286,8 @@
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
     <PostBuildEvent>
-      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"</Command>
+      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"
+copy /Y "$(LibreSSL-arm-Path)\libcrypto.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -311,7 +315,8 @@
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
     <PostBuildEvent>
-      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"</Command>
+      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"
+copy /Y "$(LibreSSL-x86-Path)\libcrypto.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -340,7 +345,8 @@
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
     <PostBuildEvent>
-      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"</Command>
+      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"
+copy /Y "$(LibreSSL-x64-Path)\libcrypto.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
@@ -369,7 +375,8 @@
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
     <PostBuildEvent>
-      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"</Command>
+      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"
+copy /Y "$(LibreSSL-arm64-Path)\libcrypto.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
@@ -398,7 +405,8 @@
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
     <PostBuildEvent>
-      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"</Command>
+      <Command>xcopy /Y "$(ProjectDir)..\..\..\regress\unittests\hostkeys\testdata\*" "$(OutDir)"
+copy /Y "$(LibreSSL-arm-Path)\libcrypto.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

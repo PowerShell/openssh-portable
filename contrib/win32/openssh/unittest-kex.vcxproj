@@ -202,6 +202,9 @@
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 /ignore:4098 %(AdditionalOptions)</AdditionalOptions>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-x86-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -226,6 +229,9 @@
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 /ignore:4098 %(AdditionalOptions)</AdditionalOptions>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-x64-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -250,6 +256,9 @@
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 /ignore:4098 %(AdditionalOptions)</AdditionalOptions>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-arm64-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -274,6 +283,9 @@
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 /ignore:4098 %(AdditionalOptions)</AdditionalOptions>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-arm-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -300,6 +312,9 @@
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 %(AdditionalOptions)</AdditionalOptions>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-x86-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -327,6 +342,9 @@
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 %(AdditionalOptions)</AdditionalOptions>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-x64-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -354,6 +372,9 @@
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 %(AdditionalOptions)</AdditionalOptions>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-arm64-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -381,6 +402,9 @@
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 %(AdditionalOptions)</AdditionalOptions>
     </Link>
+    <PostBuildEvent>
+      <command>copy /Y "$(LibreSSL-arm-Path)\libcrypto.dll" "$(OutDir)"</command>
+    </PostBuildEvent>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
     </Manifest>
@@ -399,6 +423,7 @@
       <ExcludedFromBuild Condition="$(UseOpenSSL)=='false'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-sk-client.c" />
+    <ClCompile Include="..\..\..\regress\unittests\kex\test_proposal.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

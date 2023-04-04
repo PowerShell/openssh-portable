@@ -203,8 +203,11 @@ WriteThread(_In_ LPVOID lpParameter)
 		pio->write_details.buf[pio->sync_write_status.to_transfer] = '\0';
 		if (0 == in_raw_mode) {
 			wchar_t* t = utf8_to_utf16(pio->write_details.buf);
-			WriteConsoleW(WINHANDLE(pio), t, (DWORD)wcslen(t), 0, 0);
-			free(t);		
+			if (t != NULL)
+			{
+				WriteConsoleW(WINHANDLE(pio), t, (DWORD)wcslen(t), 0, 0);
+				free(t);
+			}
 		} else {
 			processBuffer(WINHANDLE(pio), pio->write_details.buf, pio->sync_write_status.to_transfer, &respbuf, &resplen);
 			/* TODO - respbuf is not null in some cases, this needs to be returned back via read stream */

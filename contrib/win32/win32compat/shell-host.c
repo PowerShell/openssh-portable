@@ -891,7 +891,7 @@ ProcessEvent(void *p)
 	if (child_out == INVALID_HANDLE_VALUE || child_out == NULL)
 		return ERROR_INVALID_PARAMETER;
 
-	GetWindowThreadProcessId(hwnd, &dwProcessId);
+	GetWindowThreadProcessId(hwnd, &dwProcessId); // CodeQL [SM02313]: false positive dwProcessId will not be uninitialized
 
 	if (childProcessId != dwProcessId)
 		return ERROR_SUCCESS;
@@ -1114,7 +1114,7 @@ QueueEvent(DWORD event, HWND hwnd, LONG idObject, LONG idChild)
 	consoleEvent* current = NULL;
 
 	EnterCriticalSection(&criticalSection);
-	current = malloc(sizeof(consoleEvent));
+	current = malloc(sizeof(consoleEvent)); // CodeQL [SM02320]: current struct fields initialized below
 	if (current) {
 		if (!head) {
 			current->event = event;
@@ -1128,7 +1128,8 @@ QueueEvent(DWORD event, HWND hwnd, LONG idObject, LONG idChild)
 
 			head = current;
 			tail = current;
-		} else {
+		}
+		else {
 			current->event = event;
 			current->hwnd = hwnd;
 			current->idChild = idChild;

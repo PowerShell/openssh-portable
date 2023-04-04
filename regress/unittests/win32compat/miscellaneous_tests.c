@@ -37,8 +37,12 @@ test_path_conversion_utilities()
 
 	char *s = "c:\\testdir\\test";
 	char *windows_style_path = dup_str(s);
+	if (windows_style_path == NULL)
+		goto out;
 	int len = strlen(windows_style_path);
 	char *backup = malloc(len + 1);
+	if (backup == NULL)
+		goto out;
 	strncpy(backup, windows_style_path, len);
 	backup[len] = '\0';
 
@@ -53,8 +57,9 @@ test_path_conversion_utilities()
 
 	retValue = strcmp(windows_style_path, backup);
 	ASSERT_INT_EQ(retValue, 0);
-
-	free(windows_style_path);
+out:
+	if (windows_style_path)
+		free(windows_style_path);
 
 	TEST_DONE();
 }
@@ -80,6 +85,8 @@ test_sanitizedpath()
 
 	size_t win32prgdir_len = strlen(win32prgdir_utf8);
 	char *tmp_path = malloc(win32prgdir_len + 2); /* 1-NULL and 1-adding "/" */
+	if (tmp_path == NULL)
+		goto out;
 	tmp_path[0] = '/';
 	strcpy(tmp_path+1, win32prgdir_utf8);
 	tmp_path[win32prgdir_len+1] = '\0';
@@ -101,7 +108,7 @@ test_sanitizedpath()
 	retValue = wcscmp(ret, s2);
 	ASSERT_INT_EQ(retValue, 0);
 	free(ret);
-
+out:
 	free(win32prgdir);
 
 	TEST_DONE();
@@ -118,9 +125,10 @@ test_pw()
 
 	struct passwd *pw1 = NULL;
 	char *user = dup_str(pw->pw_name);
-	pw1 = getpwnam(user);
-	ASSERT_PTR_NE(pw1, NULL);
-
+	if (user != NULL) {
+		pw1 = getpwnam(user);
+		ASSERT_PTR_NE(pw1, NULL);
+	}
 	TEST_DONE();
 }
 

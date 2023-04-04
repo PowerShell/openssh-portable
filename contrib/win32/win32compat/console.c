@@ -182,7 +182,7 @@ ConEnterRawMode()
 	if (FALSE == isConHostParserEnabled || !SetConsoleMode(GetConsoleOutputHandle(), dwAttributes)) /* Windows NT */
 		isAnsiParsingRequired = TRUE;
 			
-	GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &csbi);
+	BOOL gcsbRet = GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &csbi);
 	
 	/* We track the view port, if conpty is not supported */
 	if (!is_conpty_supported())
@@ -192,6 +192,12 @@ ConEnterRawMode()
 	 *  so that the clearscreen will not erase any lines.
 	 */
 	if (TRUE == isAnsiParsingRequired) {
+		if (gcsbRet == 0)
+		{
+			dwRet = GetLastError();
+			error("GetConsoleScreenBufferInfo on GetConsoleOutputHandle() failed with %d", dwRet);
+			return;
+		}
 		SavedViewRect = csbi.srWindow;
 		debug("console doesn't support the ansi parsing");
 	} else {
@@ -621,12 +627,15 @@ ConWriteString(char* pszString, int cbString)
 	if ((needed = MultiByteToWideChar(CP_UTF8, 0, pszString, cbString, NULL, 0)) == 0 ||
 	    (utf16 = malloc(needed * sizeof(wchar_t))) == NULL ||
 	    (cnt = MultiByteToWideChar(CP_UTF8, 0, pszString, cbString, utf16, needed)) == 0) {
-		Result = (DWORD)printf_s(pszString);
-	} else {
+		Result = (DWORD)printf_s(pszString);	// CodeQL [SM01734] false positive: call is not format string with arguments.
+	}
+	else {
 		if (GetConsoleOutputHandle())
 			WriteConsoleW(GetConsoleOutputHandle(), utf16, cnt, &Result, 0);
 		else
-			Result = (DWORD)wprintf_s(utf16);
+		{
+			Result = (DWORD)wprintf_s(utf16);	// CodeQL [SM01734] false positive: call is not format string with arguments.
+		}
 	}
 
 	if (utf16)

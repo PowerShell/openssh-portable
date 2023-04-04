@@ -12,7 +12,6 @@
     <ClCompile Include="$(OpenSSH-Src-Path)cipher-aes.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)cipher-aesctr.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)cipher-chachapoly.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)cipher-ctr.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)cipher.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)cleanup.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)compat.c" />

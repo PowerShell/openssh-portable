@@ -356,7 +356,6 @@
     <ClCompile Include="$(OpenSSH-Src-Path)cipher-aes.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)cipher-aesctr.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)cipher-chachapoly.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)cipher-ctr.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)cipher.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)cleanup.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)compat.c" />
@@ -371,8 +370,6 @@
     <ClCompile Include="$(OpenSSH-Src-Path)ed25519.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)entropy.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)fatal.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)fe25519.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)ge25519.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)gss-genr.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)hash.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)hmac.c" />
@@ -407,7 +404,6 @@
     <ClCompile Include="$(OpenSSH-Src-Path)progressmeter.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)readpass.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)rijndael.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)sc25519.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)smult_curve25519_ref.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sntrup761.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-dss.c">
@@ -429,7 +425,6 @@
     <ClCompile Include="$(OpenSSH-Src-Path)sshkey.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssh_api.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)umac.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)verify.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)xmalloc.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)platform-misc.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)platform-pledge.c" />

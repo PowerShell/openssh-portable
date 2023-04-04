@@ -114,13 +114,13 @@ fd_table_initialize()
 	/* decode fd state if any */
 	{
 		char *posix_fd_state;
-		_dupenv_s(&posix_fd_state, NULL, POSIX_FD_STATE);
+
 		/*TODO - validate parent process - to accomodate these scenarios -
 		* A posix parent process launches a regular process that inturn launches a posix child process
 		* In this case the posix child process may misinterpret POSIX_FD_STATE set by grand parent
 		*/
 
-		if (NULL != posix_fd_state) {
+		if ((_dupenv_s(&posix_fd_state, NULL, POSIX_FD_STATE) == 0) && (NULL != posix_fd_state)) {
 			fd_decode_state(posix_fd_state);
 			free(posix_fd_state);
 			_putenv_s(POSIX_FD_STATE, "");

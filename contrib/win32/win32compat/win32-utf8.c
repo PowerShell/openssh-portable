@@ -7,6 +7,11 @@
 
 #include "console.h"
 
+// previous codepage
+UINT g_previous_codepage = 0;
+
+void
+mrestorelocale(void);
 
 int
 vfmprintf(FILE *stream, const char *fmt, va_list ap)
@@ -95,7 +100,22 @@ asmprintf(char **outp, size_t sz, int *written, const char *fmt, ...)
 void
 msetlocale(void)
 {
+	// save previous codepage
+	g_previous_codepage = GetConsoleOutputCP();
+
 	// allow console output of unicode characters
 	SetConsoleOutputCP(CP_UTF8);
+
+	// register a restore function at exit
+	atexit(mrestorelocale);
 }
 
+void
+mrestorelocale(void)
+{
+	if( 0 != g_previous_codepage )
+	{
+		// restore console output codepage to previous one
+		SetConsoleOutputCP(g_previous_codepage);
+	}
+}

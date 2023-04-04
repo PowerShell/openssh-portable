@@ -52,7 +52,7 @@ strtonum(const char *numstr, long long minval, long long maxval,
 	if (minval > maxval)
 		error = INVALID;
 	else {
-		ll = strtoll(numstr, &ep, 10);
+		ll = strtoll(numstr, &ep, 10); // CodeQL [SM02313]: strtoll will initialize ep
 		if (numstr == ep || *ep != '\0')
 			error = INVALID;
 		else if ((ll == LLONG_MIN && errno == ERANGE) || ll < minval)

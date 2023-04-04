@@ -332,6 +332,9 @@ _ssh_read_banner(struct ssh *ssh, struct sshbuf *banner)
 	int r = 0, remote_major, remote_minor, expect_nl;
 	size_t n, j;
 
+	if (s == NULL) // fix CodeQL SM02313
+		return SSH_ERR_INTERNAL_ERROR;
+
 	for (j = n = 0;;) {
 		sshbuf_reset(banner);
 		expect_nl = 0;

@@ -48,7 +48,7 @@ Describe "Tests for admin and non-admin file based logs" -Tags "CI" {
         {
             Stop-SSHDTestDaemon   -Port $port
         }
-        if(($platform -eq [PlatformType]::Windows) -and ([Environment]::OSVersion.Version.Major -le 6))
+        if($IsWindows -and ([Environment]::OSVersion.Version.Major -le 6))
         {
             #suppress the firewall blocking dialogue on win7
             netsh advfirewall firewall add rule name="sshd" program="$($OpenSSHTestInfo['OpenSSHBinPath'])\sshd.exe" protocol=any action=allow dir=in
@@ -58,7 +58,7 @@ Describe "Tests for admin and non-admin file based logs" -Tags "CI" {
     AfterEach { $tI++ }
     
     AfterAll {        
-        if(($platform -eq [PlatformType]::Windows) -and ($psversiontable.BuildVersion.Major -le 6))
+        if($IsWindows -and ($psversiontable.BuildVersion.Major -le 6))
         {            
             netsh advfirewall firewall delete rule name="sshd" program="$($OpenSSHTestInfo['OpenSSHBinPath'])\sshd.exe" protocol=any dir=in
         }    
@@ -131,11 +131,11 @@ Describe "Tests for admin and non-admin file based logs" -Tags "CI" {
 
                 if($OpenSSHTestInfo["NoLibreSSL"])
                 {
-                    ssh-keygen.exe -t ed25519 -f $KeyFilePath -Z -P `"`" aes128-ctr
+                    ssh-keygen.exe -t ed25519 -f $KeyFilePath -Z -P "" aes128-ctr
                 }
                 else
                 {
-                    ssh-keygen.exe -t ed25519 -f $KeyFilePath -P `"`"
+                    ssh-keygen.exe -t ed25519 -f $KeyFilePath -P ""
                 }
                 Copy-Item "$keyFilePath.pub" $authorizedkeyPath -Force -ErrorAction SilentlyContinue
                 Repair-AuthorizedKeyPermission -Filepath $authorizedkeyPath -confirm:$false

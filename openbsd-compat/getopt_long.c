@@ -346,7 +346,7 @@ start:
 			return (-1);
 		}
 		if (*(place = nargv[optind]) != '-' ||
-		    (place[1] == '\0' && strchr(options, '-') == NULL)) {
+		    (place[1] == '\0' && strchr(options, '-') == NULL)) { // CodeQL [SM01947]: upstream code; place re-assigned in previous line
 			place = EMSG;		/* found non-option */
 			if (flags & FLAG_ALLARGS) {
 				/*
@@ -383,7 +383,7 @@ start:
 		/*
 		 * If we have "-" do nothing, if "--" we are done.
 		 */
-		if (place[1] != '\0' && *++place == '-' && place[1] == '\0') {
+		if (place[1] != '\0' && *++place == '-' && place[1] == '\0') { // CodeQL [SM01947]: upstream code; place re-assigned in previous line
 			optind++;
 			place = EMSG;
 			/*

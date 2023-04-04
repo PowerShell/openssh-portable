@@ -1,4 +1,4 @@
-/* $OpenBSD: sshconnect.c,v 1.356 2021/12/19 22:10:24 djm Exp $ */
+/* $OpenBSD: sshconnect.c,v 1.361 2023/01/13 02:44:02 djm Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -168,7 +168,7 @@ ssh_proxy_fdpass_connect(struct ssh *ssh, const char *host,
 		 * Execute the proxy command.
 		 * Note that we gave up any extra privileges above.
 		 */
-		execv(argv[0], argv);
+		execv(argv[0], argv); // CodeQL [SM01925] false positive: Command strings are controlled by application.
 		perror(argv[0]);
 		exit(1);
 	}
@@ -853,7 +853,7 @@ other_hostkeys_message(const char *host, const char *ip,
 	    system_hostfiles, num_system_hostfiles,
 	    &othernames, &num_othernames);
 	if (num_othernames == 0)
-		return xstrdup("This key is not known by any other names");
+		return xstrdup("This key is not known by any other names.");
 
 	xasprintf(&ret, "This host key is known by the following other "
 	    "names/addresses:");
@@ -972,7 +972,7 @@ check_host_key(char *hostname, const struct ssh_conn_info *cinfo,
 	char *ip = NULL, *host = NULL;
 	char hostline[1000], *hostp, *fp, *ra;
 	char msg[1024];
-	const char *type, *fail_reason;
+	const char *type, *fail_reason = NULL;
 	const struct hostkey_entry *host_found = NULL, *ip_found = NULL;
 	int len, cancelled_forwarding = 0, confirmed;
 	int local = sockaddr_is_local(hostaddr);
@@ -995,6 +995,17 @@ check_host_key(char *hostname, const struct ssh_conn_info *cinfo,
 		    "loopback/localhost.");
 		options.update_hostkeys = 0;
 		return 0;
+	}
+
+	/*
+	 * Don't ever try to write an invalid name to a known hosts file.
+	 * Note: do this before get_hostfile_hostname_ipaddr() to catch
+	 * '[' or ']' in the name before they are added.
+	 */
+	if (strcspn(hostname, "@?*#[]|'\'\"\\") != strlen(hostname)) {
+		debug_f("invalid hostname \"%s\"; will not record: %s",
+		    hostname, fail_reason);
+		readonly = RDONLY;
 	}
 
 	/*
@@ -1134,7 +1145,7 @@ check_host_key(char *hostname, const struct ssh_conn_info *cinfo,
 			    options.fingerprint_hash, SSH_FP_RANDOMART);
 			if (fp == NULL || ra == NULL)
 				fatal_f("sshkey_fingerprint failed");
-			logit("Host key fingerprint is %s\n%s", fp, ra);
+			logit("Host key fingerprint is %s\n%s", fp, ra); // CodeQL [SM02311]: false positive NULL check for ra in earlier line
 			free(ra);
 			free(fp);
 		}
@@ -1188,7 +1199,7 @@ check_host_key(char *hostname, const struct ssh_conn_info *cinfo,
 			xextendf(&msg1, "\n", "%s key fingerprint is %s.",
 			    type, fp);
 			if (options.visual_host_key)
-				xextendf(&msg1, "\n", "%s", ra);
+				xextendf(&msg1, "\n", "%s", ra); // CodeQL [SM02311]: false positive NULL check for ra in earlier line
 			if (options.verify_host_key_dns) {
 				xextendf(&msg1, "\n",
 				    "%s host key fingerprint found in DNS.",
@@ -1302,8 +1313,11 @@ check_host_key(char *hostname, const struct ssh_conn_info *cinfo,
 		}
 		/* The host key has changed. */
 		warn_changed_key(host_key);
-		error("Add correct host key in %.100s to get rid of this message.",
-		    user_hostfiles[0]);
+		if (num_user_hostfiles > 0 || num_system_hostfiles > 0) {
+			error("Add correct host key in %.100s to get rid "
+			    "of this message.", num_user_hostfiles > 0 ?
+			    user_hostfiles[0] : system_hostfiles[0]);
+		}
 		error("Offending %s key in %s:%lu",
 		    sshkey_type(host_found->key),
 		    host_found->file, host_found->line);
@@ -1371,7 +1385,7 @@ check_host_key(char *hostname, const struct ssh_conn_info *cinfo,
 		if (options.exit_on_forward_failure && cancelled_forwarding)
 			fatal("Error: forwarding disabled due to host key "
 			    "check failure");
-		
+
 		/*
 		 * XXX Should permit the user to change to use the new id.
 		 * This could be done by converting the host key to an
@@ -1640,7 +1654,7 @@ show_other_keys(struct hostkeys *hostkeys, struct sshkey *key)
 		    found->host, found->file, found->line,
 		    sshkey_type(found->key), fp);
 		if (options.visual_host_key)
-			logit("%s", ra);
+			logit("%s", ra); // CodeQL [SM02311]: false positive NULL check for ra in earlier line
 		free(ra);
 		free(fp);
 		ret = 1;

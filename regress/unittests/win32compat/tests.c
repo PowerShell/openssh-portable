@@ -35,6 +35,8 @@ dup_str(char *inStr)
 
 	int len = strlen(inStr);
 	char *outStr = malloc(len + 1);
+	if (NULL == outStr)
+		return NULL;
 	strncpy(outStr, inStr, len);
 	outStr[len] = '\0';
 	return outStr;
@@ -50,6 +52,8 @@ delete_dir_recursive(char *full_dir_path)
 	struct dirent *dp;
 	char mode[12];
 	char *tmpFullPath = malloc(PATH_MAX + 1);
+	if (NULL == tmpFullPath) return;
+
 	strcpy(tmpFullPath, full_dir_path);
 	int tmpStrLen = strlen(tmpFullPath);
 	tmpFullPath[tmpStrLen++] = '\\';

@@ -1,4 +1,4 @@
-/* $OpenBSD: packet.c,v 1.307 2022/01/22 00:49:34 djm Exp $ */
+/* $OpenBSD: packet.c,v 1.308 2022/08/31 02:56:40 djm Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -986,7 +986,7 @@ ssh_packet_need_rekeying(struct ssh *ssh, u_int outbound_packet_len)
 		return 1;
 
 	/*
-	 * Always rekey when MAX_PACKETS sent in either direction 
+	 * Always rekey when MAX_PACKETS sent in either direction
 	 * As per RFC4344 section 3.1 we do this after 2^31 packets.
 	 */
 	if (state->p_send.packets > MAX_PACKETS ||
@@ -1449,6 +1449,9 @@ ssh_packet_read_poll2_mux(struct ssh *ssh, u_char *typep, u_int32_t *seqnr_p)
 		return SSH_ERR_INTERNAL_ERROR;
 	*typep = SSH_MSG_NONE;
 	cp = sshbuf_ptr(state->input);
+	if (cp == NULL) { // fix CodeQL SM02311
+		return SSH_ERR_INTERNAL_ERROR;
+	}
 	if (state->packlen == 0) {
 		if (sshbuf_len(state->input) < 4 + 1)
 			return 0; /* packet is incomplete */
@@ -2633,6 +2636,8 @@ ssh_packet_send_mux(struct ssh *ssh)
 	if (len < 6)
 		return SSH_ERR_INTERNAL_ERROR;
 	cp = sshbuf_mutable_ptr(state->outgoing_packet);
+	if (cp == NULL) // fix CodeQL SM02313
+		return SSH_ERR_INTERNAL_ERROR;
 	type = cp[5];
 	if (ssh_packet_log_type(type))
 		debug3_f("type %u", type);

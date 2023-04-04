@@ -25,7 +25,7 @@ start_client()
 		if test $n -gt 60; then
 			if [ "$os" == "windows" ]; then
 				# We can't kill windows process from cygwin / wsl so use "stop-process"
-				powershell.exe /c "stop-process -id $client_pid" >/dev/null 2>&1
+				powershell.exe /c "stop-process -id $client_pid -Force" >/dev/null 2>&1
 			else
 				kill $client_pid
 			fi
@@ -39,8 +39,8 @@ stop_client()
 	pid=`cat $pidfile`
 	if [ "$os" == "windows" ]; then
 		# We can't kill windows process from cygwin / wsl so use "stop-process"
-		powershell.exe /c "stop-process -id $pid" >/dev/null 2>&1
-		powershell.exe /c "stop-process -name sleep" >/dev/null 2>&1
+		powershell.exe /c "stop-process -id $pid -Force" >/dev/null 2>&1
+		powershell.exe /c "stop-process -name sleep -Force" >/dev/null 2>&1
 	else
 		if [ ! -z "$pid" ]; then
 			kill $pid

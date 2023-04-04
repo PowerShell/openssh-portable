@@ -415,7 +415,7 @@ sshauthopt_parse(const char *opts, const char **errstrp)
 				goto alloc_fail;
 			}
 			l = (size_t)(tmp - opt);
-			cp[l] = '\0'; /* truncate at '=' */
+			cp[l] = '\0'; /* truncate at '=' */ // CodeQL [SM02311] false positive: l is calculated so that it is never out of bounds.
 			if (!valid_env_name(cp)) {
 				free(cp);
 				free(opt);
@@ -425,7 +425,7 @@ sshauthopt_parse(const char *opts, const char **errstrp)
 			/* Check for duplicates; XXX O(n*log(n)) */
 			for (i = 0; i < ret->nenv; i++) {
 				if (strncmp(ret->env[i], cp, l) == 0 &&
-				    ret->env[i][l] == '=')
+				    ret->env[i][l] == '=') // CodeQL [SM02311] false positive: l is calculated so that it is never out of bounds.
 					break;
 			}
 			free(cp);

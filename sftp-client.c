@@ -1,4 +1,4 @@
-/* $OpenBSD: sftp-client.c,v 1.161 2022/01/17 21:41:04 djm Exp $ */
+/* $OpenBSD: sftp-client.c,v 1.168 2023/01/11 05:39:38 djm Exp $ */
 /*
  * Copyright (c) 2001-2004 Damien Miller <djm@openbsd.org>
  *
@@ -68,10 +68,10 @@
 extern volatile sig_atomic_t interrupted;
 extern int showprogress;
 
-/* Default size of buffer for up/download */
+/* Default size of buffer for up/download (fix sftp.1 scp.1 if changed) */
 #define DEFAULT_COPY_BUFLEN	32768
 
-/* Default number of concurrent outstanding requests */
+/* Default number of concurrent xfer requests (fix sftp.1 scp.1 if changed) */
 #define DEFAULT_NUM_REQUESTS	64
 
 /* Minimum amount of data to read at a time */
@@ -95,14 +95,16 @@ struct sftp_conn {
 	u_int num_requests;
 	u_int version;
 	u_int msg_id;
-#define SFTP_EXT_POSIX_RENAME	0x00000001
-#define SFTP_EXT_STATVFS	0x00000002
-#define SFTP_EXT_FSTATVFS	0x00000004
-#define SFTP_EXT_HARDLINK	0x00000008
-#define SFTP_EXT_FSYNC		0x00000010
-#define SFTP_EXT_LSETSTAT	0x00000020
-#define SFTP_EXT_LIMITS		0x00000040
-#define SFTP_EXT_PATH_EXPAND	0x00000080
+#define SFTP_EXT_POSIX_RENAME		0x00000001
+#define SFTP_EXT_STATVFS		0x00000002
+#define SFTP_EXT_FSTATVFS		0x00000004
+#define SFTP_EXT_HARDLINK		0x00000008
+#define SFTP_EXT_FSYNC			0x00000010
+#define SFTP_EXT_LSETSTAT		0x00000020
+#define SFTP_EXT_LIMITS			0x00000040
+#define SFTP_EXT_PATH_EXPAND		0x00000080
+#define SFTP_EXT_COPY_DATA		0x00000100
+#define SFTP_EXT_GETUSERSGROUPS_BY_ID	0x00000200
 	u_int exts;
 	u_int64_t limit_kbps;
 	struct bwlimit bwlimit_in, bwlimit_out;
@@ -503,46 +505,55 @@ do_init(int fd_in, int fd_out, u_int transfer_buflen, u_int num_requests,
 		    (r = sshbuf_get_string(msg, &value, &vlen)) != 0)
 			fatal_fr(r, "parse extension");
 		if (strcmp(name, "posix-rename@openssh.com") == 0 &&
-		    strcmp((char *)value, "1") == 0) {
+		    strcmp((char *)value, "1") == 0) { // CodeQL [SM01714] false positive: value is null terminated
 			ret->exts |= SFTP_EXT_POSIX_RENAME;
 			known = 1;
 		} else if (strcmp(name, "statvfs@openssh.com") == 0 &&
-		    strcmp((char *)value, "2") == 0) {
+		    strcmp((char *)value, "2") == 0) { // CodeQL [SM03650] false positive: value has not been previously freed
 			ret->exts |= SFTP_EXT_STATVFS;
 			known = 1;
 		} else if (strcmp(name, "fstatvfs@openssh.com") == 0 &&
-		    strcmp((char *)value, "2") == 0) {
+		    strcmp((char *)value, "2") == 0) { // CodeQL [SM03650] false positive: value has not been previously freed
 			ret->exts |= SFTP_EXT_FSTATVFS;
 			known = 1;
 		} else if (strcmp(name, "hardlink@openssh.com") == 0 &&
-		    strcmp((char *)value, "1") == 0) {
+		    strcmp((char *)value, "1") == 0) { // CodeQL [SM03650] false positive: value has not been previously freed
 			ret->exts |= SFTP_EXT_HARDLINK;
 			known = 1;
 		} else if (strcmp(name, "fsync@openssh.com") == 0 &&
-		    strcmp((char *)value, "1") == 0) {
+		    strcmp((char *)value, "1") == 0) { // CodeQL [SM03650] false positive: value has not been previously freed
 			ret->exts |= SFTP_EXT_FSYNC;
 			known = 1;
 		} else if (strcmp(name, "lsetstat@openssh.com") == 0 &&
-		    strcmp((char *)value, "1") == 0) {
+		    strcmp((char *)value, "1") == 0) { // CodeQL [SM03650] false positive: value has not been previously freed
 			ret->exts |= SFTP_EXT_LSETSTAT;
 			known = 1;
 		} else if (strcmp(name, "limits@openssh.com") == 0 &&
-		    strcmp((char *)value, "1") == 0) {
+		    strcmp((char *)value, "1") == 0) { // CodeQL [SM03650] false positive: value has not been previously freed
 			ret->exts |= SFTP_EXT_LIMITS;
 			known = 1;
 		} else if (strcmp(name, "expand-path@openssh.com") == 0 &&
-		    strcmp((char *)value, "1") == 0) {
+		    strcmp((char *)value, "1") == 0) { // CodeQL [SM03650] false positive: value has not been previously freed
 			ret->exts |= SFTP_EXT_PATH_EXPAND;
+			known = 1;
+		} else if (strcmp(name, "copy-data") == 0 &&
+		    strcmp((char *)value, "1") == 0) { // CodeQL [SM03650] false positive: value has not been previously freed
+			ret->exts |= SFTP_EXT_COPY_DATA;
+			known = 1;
+		} else if (strcmp(name,
+		    "users-groups-by-id@openssh.com") == 0 &&
+		    strcmp((char *)value, "1") == 0) { // CodeQL [SM03650] false positive: value has not been previously freed
+			ret->exts |= SFTP_EXT_GETUSERSGROUPS_BY_ID;
 			known = 1;
 		}
 		if (known) {
 			debug2("Server supports extension \"%s\" revision %s",
-			    name, value);
+			    name, value); // CodeQL [SM03650] false positive: value has not been previously freed
 		} else {
 			debug2("Unrecognised server extension \"%s\"", name);
 		}
 		free(name);
-		free(value);
+		free(value); // CodeQL [SM03650] false positive: value has not been previously freed
 	}
 
 	sshbuf_free(msg);
@@ -555,17 +566,26 @@ do_init(int fd_in, int fd_out, u_int transfer_buflen, u_int num_requests,
 
 		/* If the caller did not specify, find a good value */
 		if (transfer_buflen == 0) {
-			ret->download_buflen = limits.read_length;
-			ret->upload_buflen = limits.write_length;
-			debug("Using server download size %u", ret->download_buflen);
-			debug("Using server upload size %u", ret->upload_buflen);
+			ret->download_buflen = MINIMUM(limits.read_length,
+			    SFTP_MAX_MSG_LENGTH - 1024);
+			ret->upload_buflen = MINIMUM(limits.write_length,
+			    SFTP_MAX_MSG_LENGTH - 1024);
+			ret->download_buflen = MAXIMUM(ret->download_buflen, 64);
+			ret->upload_buflen = MAXIMUM(ret->upload_buflen, 64);
+			debug3("server upload/download buffer sizes "
+			    "%llu / %llu; using %u / %u",
+			    (unsigned long long)limits.write_length,
+			    (unsigned long long)limits.read_length,
+			    ret->upload_buflen, ret->download_buflen);
 		}
 
 		/* Use the server limit to scale down our value only */
 		if (num_requests == 0 && limits.open_handles) {
 			ret->num_requests =
 			    MINIMUM(DEFAULT_NUM_REQUESTS, limits.open_handles);
-			debug("Server handle limit %llu; using %u",
+			if (ret->num_requests == 0)
+				ret->num_requests = 1;
+			debug3("server handle limit %llu; using %u",
 			    (unsigned long long)limits.open_handles,
 			    ret->num_requests);
 		}
@@ -771,12 +791,12 @@ do_lsreaddir(struct sftp_conn *conn, const char *path, int print_flag,
 			if ((r = decode_attrib(msg, &a)) != 0) {
 				error_fr(r, "couldn't decode attrib");
 				free(filename);
-				free(longname);
+				free(longname); // CodeQL [SM01977]: false positive longname has not been previously freed, CodeQL [SM03650]: false positive longname has not been previously freed
 				goto out;
 			}
 
 			if (print_flag)
-				mprintf("%s\n", longname);
+				mprintf("%s\n", longname); // CodeQL[SM03650]: false positive longname has not been previously freed
 
 			/*
 			 * Directory entries should never contain '/'
@@ -790,12 +810,12 @@ do_lsreaddir(struct sftp_conn *conn, const char *path, int print_flag,
 				*dir = xreallocarray(*dir, ents + 2, sizeof(**dir));
 				(*dir)[ents] = xcalloc(1, sizeof(***dir));
 				(*dir)[ents]->filename = xstrdup(filename);
-				(*dir)[ents]->longname = xstrdup(longname);
+				(*dir)[ents]->longname = xstrdup(longname); // CodeQL [SM03650]: false positive longname has not been previously freed
 				memcpy(&(*dir)[ents]->a, &a, sizeof(a));
 				(*dir)[++ents] = NULL;
 			}
 			free(filename);
-			free(longname);
+			free(longname); // CodeQL [SM03650]: false positive longname has not been previously freed
 		}
 	}
 	status = 0;
@@ -1076,6 +1096,121 @@ do_expand_path(struct sftp_conn *conn, const char *path)
 		return do_realpath_expand(conn, path, 0);
 	}
 	return do_realpath_expand(conn, path, 1);
+}
+
+int
+do_copy(struct sftp_conn *conn, const char *oldpath, const char *newpath)
+{
+	Attrib junk, *a;
+	struct sshbuf *msg;
+	u_char *old_handle, *new_handle;
+	u_int mode, status, id;
+	size_t old_handle_len, new_handle_len;
+	int r;
+
+	/* Return if the extension is not supported */
+	if ((conn->exts & SFTP_EXT_COPY_DATA) == 0) {
+		error("Server does not support copy-data extension");
+		return -1;
+	}
+
+	/* Make sure the file exists, and we can copy its perms */
+	if ((a = do_stat(conn, oldpath, 0)) == NULL)
+		return -1;
+
+	/* Do not preserve set[ug]id here, as we do not preserve ownership */
+	if (a->flags & SSH2_FILEXFER_ATTR_PERMISSIONS) {
+		mode = a->perm & 0777;
+
+		if (!S_ISREG(a->perm)) {
+			error("Cannot copy non-regular file: %s", oldpath);
+			return -1;
+		}
+	} else {
+		/* NB: The user's umask will apply to this */
+		mode = 0666;
+	}
+
+	/* Set up the new perms for the new file */
+	attrib_clear(a);
+	a->perm = mode;
+	a->flags |= SSH2_FILEXFER_ATTR_PERMISSIONS;
+
+	if ((msg = sshbuf_new()) == NULL)
+		fatal("%s: sshbuf_new failed", __func__);
+
+	attrib_clear(&junk); /* Send empty attributes */
+
+	/* Open the old file for reading */
+	id = conn->msg_id++;
+	if ((r = sshbuf_put_u8(msg, SSH2_FXP_OPEN)) != 0 ||
+	    (r = sshbuf_put_u32(msg, id)) != 0 ||
+	    (r = sshbuf_put_cstring(msg, oldpath)) != 0 ||
+	    (r = sshbuf_put_u32(msg, SSH2_FXF_READ)) != 0 ||
+	    (r = encode_attrib(msg, &junk)) != 0)
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+	send_msg(conn, msg);
+	debug3("Sent message SSH2_FXP_OPEN I:%u P:%s", id, oldpath);
+
+	sshbuf_reset(msg);
+
+	old_handle = get_handle(conn, id, &old_handle_len,
+	    "remote open(\"%s\")", oldpath);
+	if (old_handle == NULL) {
+		sshbuf_free(msg);
+		return -1;
+	}
+
+	/* Open the new file for writing */
+	id = conn->msg_id++;
+	if ((r = sshbuf_put_u8(msg, SSH2_FXP_OPEN)) != 0 ||
+	    (r = sshbuf_put_u32(msg, id)) != 0 ||
+	    (r = sshbuf_put_cstring(msg, newpath)) != 0 ||
+	    (r = sshbuf_put_u32(msg, SSH2_FXF_WRITE|SSH2_FXF_CREAT|
+	    SSH2_FXF_TRUNC)) != 0 ||
+	    (r = encode_attrib(msg, a)) != 0)
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+	send_msg(conn, msg);
+	debug3("Sent message SSH2_FXP_OPEN I:%u P:%s", id, newpath);
+
+	sshbuf_reset(msg);
+
+	new_handle = get_handle(conn, id, &new_handle_len,
+	    "remote open(\"%s\")", newpath);
+	if (new_handle == NULL) {
+		sshbuf_free(msg);
+		free(old_handle);
+		return -1;
+	}
+
+	/* Copy the file data */
+	id = conn->msg_id++;
+	if ((r = sshbuf_put_u8(msg, SSH2_FXP_EXTENDED)) != 0 ||
+	    (r = sshbuf_put_u32(msg, id)) != 0 ||
+	    (r = sshbuf_put_cstring(msg, "copy-data")) != 0 ||
+	    (r = sshbuf_put_string(msg, old_handle, old_handle_len)) != 0 ||
+	    (r = sshbuf_put_u64(msg, 0)) != 0 ||
+	    (r = sshbuf_put_u64(msg, 0)) != 0 ||
+	    (r = sshbuf_put_string(msg, new_handle, new_handle_len)) != 0 ||
+	    (r = sshbuf_put_u64(msg, 0)) != 0)
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+	send_msg(conn, msg);
+	debug3("Sent message copy-data \"%s\" 0 0 -> \"%s\" 0",
+	       oldpath, newpath);
+
+	status = get_status(conn, id);
+	if (status != SSH2_FX_OK)
+		error("Couldn't copy file \"%s\" to \"%s\": %s", oldpath,
+		    newpath, fx2txt(status));
+
+	/* Clean up everything */
+	sshbuf_free(msg);
+	do_close(conn, old_handle, old_handle_len);
+	do_close(conn, new_handle, new_handle_len);
+	free(old_handle);
+	free(new_handle);
+
+	return status == SSH2_FX_OK ? 0 : -1;
 }
 
 int
@@ -1460,7 +1595,7 @@ progress_meter_path(const char *path)
 int
 do_download(struct sftp_conn *conn, const char *remote_path,
     const char *local_path, Attrib *a, int preserve_flag, int resume_flag,
-    int fsync_flag)
+    int fsync_flag, int inplace_flag)
 {
 	struct sshbuf *msg;
 	u_char *handle;
@@ -1509,10 +1644,10 @@ do_download(struct sftp_conn *conn, const char *remote_path,
 
 #ifdef WINDOWS
 	// In windows, we would like to inherit the parent folder permissions by setting mode to USHRT_MAX.
-	local_fd = open(local_path, O_WRONLY | O_CREAT | (resume_flag ? 0 : O_TRUNC), USHRT_MAX);
+	local_fd = open(local_path, O_WRONLY | O_CREAT | ((resume_flag || inplace_flag) ? 0 : O_TRUNC), USHRT_MAX);
 #else
-	local_fd = open(local_path,
-		O_WRONLY | O_CREAT | (resume_flag ? 0 : O_TRUNC), mode | S_IWUSR);
+	local_fd = open(local_path, O_WRONLY | O_CREAT |
+		((resume_flag || inplace_flag) ? 0 : O_TRUNC), mode | S_IWUSR);
 #endif // WINDOWS
 	if (local_fd == -1) {
 		error("open local \"%s\": %s", local_path, strerror(errno));
@@ -1674,8 +1809,11 @@ do_download(struct sftp_conn *conn, const char *remote_path,
 	/* Sanity check */
 	if (TAILQ_FIRST(&requests) != NULL)
 		fatal("Transfer complete, but requests still in queue");
-	/* Truncate at highest contiguous point to avoid holes on interrupt */
-	if (read_error || write_error || interrupted) {
+	/*
+	 * Truncate at highest contiguous point to avoid holes on interrupt,
+	 * or unconditionally if writing in place.
+	 */
+	if (inplace_flag || read_error || write_error || interrupted) {
 		if (reordered && resume_flag) {
 			error("Unable to resume download of \"%s\": "
 			    "server reordered requests", local_path);
@@ -1736,7 +1874,7 @@ do_download(struct sftp_conn *conn, const char *remote_path,
 static int
 download_dir_internal(struct sftp_conn *conn, const char *src, const char *dst,
     int depth, Attrib *dirattrib, int preserve_flag, int print_flag,
-    int resume_flag, int fsync_flag, int follow_link_flag)
+    int resume_flag, int fsync_flag, int follow_link_flag, int inplace_flag)
 {
 	int i, ret = 0;
 	SFTP_DIRENT **dir_entries;
@@ -1795,7 +1933,7 @@ download_dir_internal(struct sftp_conn *conn, const char *src, const char *dst,
 			if (download_dir_internal(conn, new_src, new_dst,
 			    depth + 1, &(dir_entries[i]->a), preserve_flag,
 			    print_flag, resume_flag,
-			    fsync_flag, follow_link_flag) == -1)
+			    fsync_flag, follow_link_flag, inplace_flag) == -1)
 				ret = -1;
 		} else if (S_ISREG(dir_entries[i]->a.perm) ||
 		    (follow_link_flag && S_ISLNK(dir_entries[i]->a.perm))) {
@@ -1807,7 +1945,8 @@ download_dir_internal(struct sftp_conn *conn, const char *src, const char *dst,
 			if (do_download(conn, new_src, new_dst,
 			    S_ISLNK(dir_entries[i]->a.perm) ? NULL :
 			    &(dir_entries[i]->a),
-			    preserve_flag, resume_flag, fsync_flag) == -1) {
+			    preserve_flag, resume_flag, fsync_flag,
+			    inplace_flag) == -1) {
 				error("Download of file %s to %s failed",
 				    new_src, new_dst);
 				ret = -1;
@@ -1845,7 +1984,7 @@ download_dir_internal(struct sftp_conn *conn, const char *src, const char *dst,
 int
 download_dir(struct sftp_conn *conn, const char *src, const char *dst,
     Attrib *dirattrib, int preserve_flag, int print_flag, int resume_flag,
-    int fsync_flag, int follow_link_flag)
+    int fsync_flag, int follow_link_flag, int inplace_flag)
 {
 	char *src_canon;
 	int ret;
@@ -1857,26 +1996,25 @@ download_dir(struct sftp_conn *conn, const char *src, const char *dst,
 
 	ret = download_dir_internal(conn, src_canon, dst, 0,
 	    dirattrib, preserve_flag, print_flag, resume_flag, fsync_flag,
-	    follow_link_flag);
+	    follow_link_flag, inplace_flag);
 	free(src_canon);
 	return ret;
 }
 
 int
 do_upload(struct sftp_conn *conn, const char *local_path,
-    const char *remote_path, int preserve_flag, int resume, int fsync_flag)
+    const char *remote_path, int preserve_flag, int resume,
+    int fsync_flag, int inplace_flag)
 {
 	int r, local_fd;
-	u_int status = SSH2_FX_OK;
-	u_int id;
-	u_char type;
+	u_int openmode, id, status = SSH2_FX_OK, reordered = 0;
 	off_t offset, progress_counter;
-	u_char *handle, *data;
+	u_char type, *handle, *data;
 	struct sshbuf *msg;
 	struct stat sb;
-	Attrib a, *c = NULL;
-	u_int32_t startid;
-	u_int32_t ackid;
+	Attrib a, t, *c = NULL;
+	u_int32_t startid, ackid;
+	u_int64_t highwater = 0;
 	struct request *ack = NULL;
 	struct requests acks;
 	size_t handle_len;
@@ -1928,10 +2066,15 @@ do_upload(struct sftp_conn *conn, const char *local_path,
 		}
 	}
 
+	openmode = SSH2_FXF_WRITE|SSH2_FXF_CREAT;
+	if (resume)
+		openmode |= SSH2_FXF_APPEND;
+	else if (!inplace_flag)
+		openmode |= SSH2_FXF_TRUNC;
+
 	/* Send open request */
-	if (send_open(conn, remote_path, "dest", SSH2_FXF_WRITE|SSH2_FXF_CREAT|
-	    (resume ? SSH2_FXF_APPEND : SSH2_FXF_TRUNC),
-	    &a, &handle, &handle_len) != 0) {
+	if (send_open(conn, remote_path, "dest", openmode, &a,
+	    &handle, &handle_len) != 0) {
 		close(local_fd);
 		return -1;
 	}
@@ -2013,6 +2156,12 @@ do_upload(struct sftp_conn *conn, const char *local_path,
 			    ack->id, ack->len, (unsigned long long)ack->offset);
 			++ackid;
 			progress_counter += ack->len;
+			if (!reordered && ack->offset <= highwater)
+				highwater = ack->offset + ack->len;
+			else if (!reordered && ack->offset > highwater) {
+				debug3_f("server reordered ACKs");
+				reordered = 1;
+			}
 			free(ack);
 		}
 		offset += len;
@@ -2028,6 +2177,14 @@ do_upload(struct sftp_conn *conn, const char *local_path,
 	if (status != SSH2_FX_OK) {
 		error("write remote \"%s\": %s", remote_path, fx2txt(status));
 		status = SSH2_FX_FAILURE;
+	}
+
+	if (inplace_flag || (resume && (status != SSH2_FX_OK || interrupted))) {
+		debug("truncating at %llu", (unsigned long long)highwater);
+		attrib_clear(&t);
+		t.flags = SSH2_FILEXFER_ATTR_SIZE;
+		t.size = highwater;
+		do_fsetstat(conn, handle, handle_len, &t);
 	}
 
 	if (close(local_fd) == -1) {
@@ -2053,7 +2210,7 @@ do_upload(struct sftp_conn *conn, const char *local_path,
 static int
 upload_dir_internal(struct sftp_conn *conn, const char *src, const char *dst,
     int depth, int preserve_flag, int print_flag, int resume, int fsync_flag,
-    int follow_link_flag)
+    int follow_link_flag, int inplace_flag)
 {
 	int ret = 0;
 	DIR *dirp;
@@ -2131,12 +2288,13 @@ upload_dir_internal(struct sftp_conn *conn, const char *src, const char *dst,
 
 			if (upload_dir_internal(conn, new_src, new_dst,
 			    depth + 1, preserve_flag, print_flag, resume,
-			    fsync_flag, follow_link_flag) == -1)
+			    fsync_flag, follow_link_flag, inplace_flag) == -1)
 				ret = -1;
 		} else if (S_ISREG(sb.st_mode) ||
 		    (follow_link_flag && S_ISLNK(sb.st_mode))) {
 			if (do_upload(conn, new_src, new_dst,
-			    preserve_flag, resume, fsync_flag) == -1) {
+			    preserve_flag, resume, fsync_flag,
+			    inplace_flag) == -1) {
 				error("upload \"%s\" to \"%s\" failed",
 				    new_src, new_dst);
 				ret = -1;
@@ -2156,7 +2314,7 @@ upload_dir_internal(struct sftp_conn *conn, const char *src, const char *dst,
 int
 upload_dir(struct sftp_conn *conn, const char *src, const char *dst,
     int preserve_flag, int print_flag, int resume, int fsync_flag,
-    int follow_link_flag)
+    int follow_link_flag, int inplace_flag)
 {
 	char *dst_canon;
 	int ret;
@@ -2167,7 +2325,7 @@ upload_dir(struct sftp_conn *conn, const char *src, const char *dst,
 	}
 
 	ret = upload_dir_internal(conn, src, dst_canon, 0, preserve_flag,
-	    print_flag, resume, fsync_flag, follow_link_flag);
+	    print_flag, resume, fsync_flag, follow_link_flag, inplace_flag);
 
 	free(dst_canon);
 	return ret;
@@ -2612,6 +2770,120 @@ crossload_dir(struct sftp_conn *from, struct sftp_conn *to,
 	    dirattrib, preserve_flag, print_flag, follow_link_flag);
 	free(from_path_canon);
 	return ret;
+}
+
+int
+can_get_users_groups_by_id(struct sftp_conn *conn)
+{
+	return (conn->exts & SFTP_EXT_GETUSERSGROUPS_BY_ID) != 0;
+}
+
+int
+do_get_users_groups_by_id(struct sftp_conn *conn,
+    const u_int *uids, u_int nuids,
+    const u_int *gids, u_int ngids,
+    char ***usernamesp, char ***groupnamesp)
+{
+	struct sshbuf *msg, *uidbuf, *gidbuf;
+	u_int i, expected_id, id;
+	char *name, **usernames = NULL, **groupnames = NULL;
+	u_char type;
+	int r;
+
+	*usernamesp = *groupnamesp = NULL;
+	if (!can_get_users_groups_by_id(conn))
+		return SSH_ERR_FEATURE_UNSUPPORTED;
+
+	if ((msg = sshbuf_new()) == NULL ||
+	    (uidbuf = sshbuf_new()) == NULL ||
+	    (gidbuf = sshbuf_new()) == NULL)
+		fatal_f("sshbuf_new failed");
+	expected_id = id = conn->msg_id++;
+	debug2("Sending SSH2_FXP_EXTENDED(users-groups-by-id@openssh.com)");
+	for (i = 0; i < nuids; i++) {
+		if ((r = sshbuf_put_u32(uidbuf, uids[i])) != 0)
+			fatal_fr(r, "compose uids");
+	}
+	for (i = 0; i < ngids; i++) {
+		if ((r = sshbuf_put_u32(gidbuf, gids[i])) != 0)
+			fatal_fr(r, "compose gids");
+	}
+	if ((r = sshbuf_put_u8(msg, SSH2_FXP_EXTENDED)) != 0 ||
+	    (r = sshbuf_put_u32(msg, id)) != 0 ||
+	    (r = sshbuf_put_cstring(msg,
+	    "users-groups-by-id@openssh.com")) != 0 ||
+	    (r = sshbuf_put_stringb(msg, uidbuf)) != 0 ||
+	    (r = sshbuf_put_stringb(msg, gidbuf)) != 0)
+		fatal_fr(r, "compose");
+	send_msg(conn, msg);
+	get_msg(conn, msg);
+	if ((r = sshbuf_get_u8(msg, &type)) != 0 ||
+	    (r = sshbuf_get_u32(msg, &id)) != 0)
+		fatal_fr(r, "parse");
+	if (id != expected_id)
+		fatal("ID mismatch (%u != %u)", id, expected_id);
+	if (type == SSH2_FXP_STATUS) {
+		u_int status;
+		char *errmsg;
+
+		if ((r = sshbuf_get_u32(msg, &status)) != 0 ||
+		    (r = sshbuf_get_cstring(msg, &errmsg, NULL)) != 0)
+			fatal_fr(r, "parse status");
+		error("users-groups-by-id %s",
+		    *errmsg == '\0' ? fx2txt(status) : errmsg);
+		free(errmsg);
+		sshbuf_free(msg);
+		sshbuf_free(uidbuf);
+		sshbuf_free(gidbuf);
+		return -1;
+	} else if (type != SSH2_FXP_EXTENDED_REPLY)
+		fatal("Expected SSH2_FXP_EXTENDED_REPLY(%u) packet, got %u",
+		    SSH2_FXP_EXTENDED_REPLY, type);
+
+	/* reuse */
+	sshbuf_free(uidbuf);
+	sshbuf_free(gidbuf);
+	uidbuf = gidbuf = NULL;
+	if ((r = sshbuf_froms(msg, &uidbuf)) != 0 ||
+	    (r = sshbuf_froms(msg, &gidbuf)) != 0)
+		fatal_fr(r, "parse response");
+	if (nuids > 0) {
+		usernames = xcalloc(nuids, sizeof(*usernames));
+		for (i = 0; i < nuids; i++) {
+			if ((r = sshbuf_get_cstring(uidbuf, &name, NULL)) != 0)
+				fatal_fr(r, "parse user name");
+			/* Handle unresolved names */
+			if (*name == '\0') {
+				free(name);
+				name = NULL;
+			}
+			usernames[i] = name;
+		}
+	}
+	if (ngids > 0) {
+		groupnames = xcalloc(ngids, sizeof(*groupnames));
+		for (i = 0; i < ngids; i++) {
+			if ((r = sshbuf_get_cstring(gidbuf, &name, NULL)) != 0)
+				fatal_fr(r, "parse user name");
+			/* Handle unresolved names */
+			if (*name == '\0') {
+				free(name);
+				name = NULL;
+			}
+			groupnames[i] = name;
+		}
+	}
+	if (sshbuf_len(uidbuf) != 0)
+		fatal_f("unexpected extra username data");
+	if (sshbuf_len(gidbuf) != 0)
+		fatal_f("unexpected extra groupname data");
+	sshbuf_free(uidbuf);
+	sshbuf_free(gidbuf);
+	sshbuf_free(msg);
+	/* success */
+	*usernamesp = usernames;
+	*groupnamesp = groupnames;
+	return 0;
 }
 
 char *

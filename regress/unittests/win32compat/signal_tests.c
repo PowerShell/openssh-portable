@@ -44,7 +44,7 @@ VOID TEST_RESOURCES(BOOL start)
 	static DWORD initial_count = 0;
 	if (start) GetProcessHandleCount(GetCurrentProcess(), &initial_count);
 	else {
-		DWORD final_count;
+		DWORD final_count = 0;
 		GetProcessHandleCount(GetCurrentProcess(), &final_count);
 		ASSERT_INT_EQ(initial_count, final_count);
 	}

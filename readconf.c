@@ -1,4 +1,4 @@
-/* $OpenBSD: readconf.c,v 1.366 2022/02/08 08:59:12 dtucker Exp $ */
+/* $OpenBSD: readconf.c,v 1.372 2023/01/13 02:58:20 dtucker Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -175,7 +175,8 @@ typedef enum {
 	oStreamLocalBindMask, oStreamLocalBindUnlink, oRevokedHostKeys,
 	oFingerprintHash, oUpdateHostkeys, oHostbasedAcceptedAlgorithms,
 	oPubkeyAcceptedAlgorithms, oCASignatureAlgorithms, oProxyJump,
-	oSecurityKeyProvider, oKnownHostsCommand,
+	oSecurityKeyProvider, oKnownHostsCommand, oRequiredRSASize,
+	oEnableEscapeCommandline,
 	oIgnore, oIgnoredUnknownOption, oDeprecated, oUnsupported
 } OpCodes;
 
@@ -321,6 +322,8 @@ static struct {
 	{ "proxyjump", oProxyJump },
 	{ "securitykeyprovider", oSecurityKeyProvider },
 	{ "knownhostscommand", oKnownHostsCommand },
+	{ "requiredrsasize", oRequiredRSASize },
+	{ "enableescapecommandline", oEnableEscapeCommandline },
 
 	{ NULL, oBadOption }
 };
@@ -336,6 +339,7 @@ kex_default_pk_alg(void)
 		char *all_key;
 
 		all_key = sshkey_alg_list(0, 0, 1, ',');
+		if (NULL == all_key) return NULL; // fix CodeQL SM02311
 		pkalgs = match_filter_allowlist(KEX_DEFAULT_PK_ALG, all_key);
 		free(all_key);
 	}
@@ -759,20 +763,16 @@ match_cfg_line(Options *options, char **condition, struct passwd *pw,
 static void
 rm_env(Options *options, const char *arg, const char *filename, int linenum)
 {
-	int i, j, onum_send_env = options->num_send_env;
-	char *cp;
+	u_int i, j, onum_send_env = options->num_send_env;
 
 	/* Remove an environment variable */
 	for (i = 0; i < options->num_send_env; ) {
-		cp = xstrdup(options->send_env[i]);
-		if (!match_pattern(cp, arg + 1)) {
-			free(cp);
+		if (!match_pattern(options->send_env[i], arg + 1)) {
 			i++;
 			continue;
 		}
 		debug3("%s line %d: removing environment %s",
-		    filename, linenum, cp);
-		free(cp);
+		    filename, linenum, options->send_env[i]);
 		free(options->send_env[i]);
 		options->send_env[i] = NULL;
 		for (j = i; j < options->num_send_env - 1; j++) {
@@ -951,13 +951,13 @@ process_config_line_depth(Options *options, struct passwd *pw, const char *host,
 {
 	char *str, **charptr, *endofnumber, *keyword, *arg, *arg2, *p;
 	char **cpptr, ***cppptr, fwdarg[256];
-	u_int i, *uintptr, uvalue, max_entries = 0;
+	u_int *uintptr, uvalue, max_entries = 0;
 	int r, oactive, negated, opcode, *intptr, value, value2, cmdline = 0;
 	int remotefwd, dynamicfwd;
 	LogLevel *log_level_ptr;
 	SyslogFacility *log_facility_ptr;
 	long long val64;
-	size_t len;
+	size_t len, i; // fix CodeQL SM01735
 	struct Forward fwd;
 	const struct multistate *multistate_ptr;
 	struct allowed_cname *cname;
@@ -1575,37 +1575,37 @@ parse_pubkey_algos:
 	case oPermitRemoteOpen:
 		uintptr = &options->num_permitted_remote_opens;
 		cppptr = &options->permitted_remote_opens;
-		arg = argv_next(&ac, &av);
-		if (!arg || *arg == '\0')
-			fatal("%s line %d: missing %s specification",
-			    filename, linenum, lookup_opcode_name(opcode));
 		uvalue = *uintptr;	/* modified later */
-		if (strcmp(arg, "any") == 0 || strcmp(arg, "none") == 0) {
-			if (*activep && uvalue == 0) {
-				*uintptr = 1;
-				*cppptr = xcalloc(1, sizeof(**cppptr));
-				(*cppptr)[0] = xstrdup(arg);
-			}
-			break;
-		}
+		i = 0;
 		while ((arg = argv_next(&ac, &av)) != NULL) {
 			arg2 = xstrdup(arg);
-			p = hpdelim(&arg);
-			if (p == NULL) {
-				fatal("%s line %d: missing host in %s",
-				    filename, linenum,
-				    lookup_opcode_name(opcode));
-			}
-			p = cleanhostname(p);
-			/*
-			 * don't want to use permitopen_port to avoid
-			 * dependency on channels.[ch] here.
-			 */
-			if (arg == NULL ||
-			    (strcmp(arg, "*") != 0 && a2port(arg) <= 0)) {
-				fatal("%s line %d: bad port number in %s",
-				    filename, linenum,
-				    lookup_opcode_name(opcode));
+			/* Allow any/none only in first position */
+			if (strcasecmp(arg, "none") == 0 ||
+			    strcasecmp(arg, "any") == 0) {
+				if (i > 0 || ac > 0) {
+					error("%s line %d: keyword %s \"%s\" "
+					    "argument must appear alone.",
+					    filename, linenum, keyword, arg);
+					goto out;
+				}
+			} else {
+				p = hpdelim(&arg);
+				if (p == NULL) {
+					fatal("%s line %d: missing host in %s",
+					    filename, linenum,
+					    lookup_opcode_name(opcode));
+				}
+				p = cleanhostname(p);
+				/*
+				 * don't want to use permitopen_port to avoid
+				 * dependency on channels.[ch] here.
+				 */
+				if (arg == NULL || (strcmp(arg, "*") != 0 &&
+				    a2port(arg) <= 0)) {
+					fatal("%s line %d: bad port number "
+					    "in %s", filename, linenum,
+					    lookup_opcode_name(opcode));
+				}
 			}
 			if (*activep && uvalue == 0) {
 				opt_array_append(filename, linenum,
@@ -1613,7 +1613,11 @@ parse_pubkey_algos:
 				    cppptr, uintptr, arg2);
 			}
 			free(arg2);
+			i++;
 		}
+		if (i == 0)
+			fatal("%s line %d: missing %s specification",
+			    filename, linenum, lookup_opcode_name(opcode));
 		break;
 
 	case oClearAllForwardings:
@@ -1743,20 +1747,10 @@ parse_pubkey_algos:
 				/* Removing an env var */
 				rm_env(options, arg, filename, linenum);
 				continue;
-			} else {
-				/* Adding an env var */
-				if (options->num_send_env >= INT_MAX) {
-					error("%s line %d: too many send env.",
-					    filename, linenum);
-					goto out;
-				}
-				options->send_env = xrecallocarray(
-				    options->send_env, options->num_send_env,
-				    options->num_send_env + 1,
-				    sizeof(*options->send_env));
-				options->send_env[options->num_send_env++] =
-				    xstrdup(arg);
 			}
+			opt_array_append(filename, linenum,
+			    lookup_opcode_name(opcode),
+			    &options->send_env, &options->num_send_env, arg);
 		}
 		break;
 
@@ -1770,16 +1764,15 @@ parse_pubkey_algos:
 			}
 			if (!*activep || value != 0)
 				continue;
-			/* Adding a setenv var */
-			if (options->num_setenv >= INT_MAX) {
-				error("%s line %d: too many SetEnv.",
-				    filename, linenum);
-				goto out;
+			if (lookup_setenv_in_list(arg, options->setenv,
+			    options->num_setenv) != NULL) {
+				debug2("%s line %d: ignoring duplicate env "
+				    "name \"%.64s\"", filename, linenum, arg);
+				continue;
 			}
-			options->setenv = xrecallocarray(
-			    options->setenv, options->num_setenv,
-			    options->num_setenv + 1, sizeof(*options->setenv));
-			options->setenv[options->num_setenv++] = xstrdup(arg);
+			opt_array_append(filename, linenum,
+			    lookup_opcode_name(opcode),
+			    &options->setenv, &options->num_setenv, arg);
 		}
 		break;
 
@@ -2095,7 +2088,7 @@ parse_pubkey_algos:
 			goto out;
 		}
 		/* Parse mode in octal format */
-		value = strtol(arg, &endofnumber, 8);
+		value = strtol(arg, &endofnumber, 8); // CodeQL [SM02313]: strtol initializes endofnumber
 		if (arg == endofnumber || value < 0 || value > 0777) {
 			error("%.200s line %d: Bad mask.", filename, linenum);
 			goto out;
@@ -2200,6 +2193,14 @@ parse_pubkey_algos:
 		if (*activep && *charptr == NULL)
 			*charptr = xstrdup(arg);
 		break;
+
+	case oEnableEscapeCommandline:
+		intptr = &options->enable_escape_commandline;
+		goto parse_flag;
+
+	case oRequiredRSASize:
+		intptr = &options->required_rsa_size;
+		goto parse_int;
 
 	case oDeprecated:
 		debug("%s line %d: Deprecated option \"%s\"",
@@ -2348,6 +2349,7 @@ void
 initialize_options(Options * options)
 {
 	memset(options, 'X', sizeof(*options));
+	options->host_arg = NULL;
 	options->forward_agent = -1;
 	options->forward_agent_sock_path = NULL;
 	options->forward_x11 = -1;
@@ -2459,6 +2461,8 @@ initialize_options(Options * options)
 	options->hostbased_accepted_algos = NULL;
 	options->pubkey_accepted_algos = NULL;
 	options->known_hosts_command = NULL;
+	options->required_rsa_size = -1;
+	options->enable_escape_commandline = -1;
 }
 
 /*
@@ -2655,6 +2659,10 @@ fill_default_options(Options * options)
 	if (options->sk_provider == NULL)
 		options->sk_provider = xstrdup("$SSH_SK_PROVIDER");
 #endif
+	if (options->required_rsa_size == -1)
+		options->required_rsa_size = SSH_RSA_MINIMUM_MODULUS_SIZE;
+	if (options->enable_escape_commandline == -1)
+		options->enable_escape_commandline = 0;
 
 	/* Expand KEX name lists */
 	all_cipher = cipher_alg_list(',', 0);
@@ -2662,6 +2670,10 @@ fill_default_options(Options * options)
 	all_kex = kex_alg_list(',');
 	all_key = sshkey_alg_list(0, 0, 1, ',');
 	all_sig = sshkey_alg_list(0, 1, 1, ',');
+	if (NULL == all_key || NULL == all_sig) { // fix CodeQL SM02311
+		ret = SSH_ERR_INTERNAL_ERROR;
+		goto fail;
+	}
 	/* remove unsupported algos from default lists */
 	def_cipher = match_filter_allowlist(KEX_CLIENT_ENCRYPT, all_cipher);
 	def_mac = match_filter_allowlist(KEX_CLIENT_MAC, all_mac);
@@ -2795,9 +2807,9 @@ free_options(Options *o)
 	}
 	free(o->remote_forwards);
 	free(o->stdio_forward_host);
-	FREE_ARRAY(int, o->num_send_env, o->send_env);
+	FREE_ARRAY(u_int, o->num_send_env, o->send_env);
 	free(o->send_env);
-	FREE_ARRAY(int, o->num_setenv, o->setenv);
+	FREE_ARRAY(u_int, o->num_setenv, o->setenv);
 	free(o->setenv);
 	free(o->control_path);
 	free(o->local_command);
@@ -3288,11 +3300,12 @@ dump_client_config(Options *o, const char *host)
 	 */
 	all_key = sshkey_alg_list(0, 0, 1, ',');
 	if ((r = kex_assemble_names(&o->hostkeyalgorithms, kex_default_pk_alg(),
-	    all_key)) != 0)
+	    all_key)) != 0) // CodeQL [SM02311]: kex_assemble_names checks for NULL input
 		fatal_fr(r, "expand HostKeyAlgorithms");
 	free(all_key);
 
 	/* Most interesting options first: user, host, port */
+	dump_cfg_string(oHost, o->host_arg);
 	dump_cfg_string(oUser, o->user);
 	dump_cfg_string(oHostname, host);
 	dump_cfg_int(oPort, o->port);
@@ -3336,6 +3349,7 @@ dump_client_config(Options *o, const char *host)
 	dump_cfg_fmtint(oVerifyHostKeyDNS, o->verify_host_key_dns);
 	dump_cfg_fmtint(oVisualHostKey, o->visual_host_key);
 	dump_cfg_fmtint(oUpdateHostkeys, o->update_hostkeys);
+	dump_cfg_fmtint(oEnableEscapeCommandline, o->enable_escape_commandline);
 
 	/* Integer options */
 	dump_cfg_int(oCanonicalizeMaxDots, o->canonicalize_max_dots);
@@ -3344,6 +3358,7 @@ dump_client_config(Options *o, const char *host)
 	dump_cfg_int(oNumberOfPasswordPrompts, o->number_of_password_prompts);
 	dump_cfg_int(oServerAliveCountMax, o->server_alive_count_max);
 	dump_cfg_int(oServerAliveInterval, o->server_alive_interval);
+	dump_cfg_int(oRequiredRSASize, o->required_rsa_size);
 
 	/* String options */
 	dump_cfg_string(oBindAddress, o->bind_address);

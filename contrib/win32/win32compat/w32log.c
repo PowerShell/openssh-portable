@@ -124,7 +124,7 @@ openlog_file()
 				goto cleanup;
 		}
 		else {
-			tmp_identity = malloc(wcslen(tail) * sizeof(wchar_t));
+			tmp_identity = malloc(wcslen(tail) * sizeof(wchar_t)); // CodeQL [SM01952]: false positive enough space for null terminator provided
 			if (!tmp_identity)
 				goto cleanup;
 			if (wcsncpy_s(tmp_identity, wcslen(tail), tail + 1, wcslen(tail) - 5) != 0) {

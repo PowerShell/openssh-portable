@@ -11,6 +11,9 @@
 <?elseif $(var.Platform) = "x86"?>
 <?define ProgramFilesFolder = "ProgramFilesFolder"?>
 <?define UpgradeCode = "2A1799F1-5B26-4DDC-A0C7-03F75C4C08D2"?>
+<?elseif $(var.Platform) = "ARM64"?>
+<?define ProgramFilesFolder = "ProgramFiles64Folder"?>
+<?define UpgradeCode = "5D153A07-920A-4978-8B33-8447DD4C42F9"?>
 <?else?>
 <?error Platform $(var.Platform) is not supported?>
 <?endif?>
@@ -22,6 +25,9 @@
 
         <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="A newer version of !(bind.property.ProductName) is already installed." />
         <Condition Message="OpenSSH is supported only on Windows 7 and newer."><![CDATA[VersionNT >= 601]]></Condition>
+
+        <!-- assume user wants path to be updated when client binaries are installed, can be overridden during install with ADD_PATH=0 -->
+        <Property Id="ADD_PATH" Value="1" />
 
         <Feature Id="Client" AllowAdvertise="no">
             <ComponentGroupRef Id="Client" />

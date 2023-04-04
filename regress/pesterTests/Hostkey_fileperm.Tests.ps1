@@ -21,9 +21,8 @@ Describe "Tests for host keys file permission" -Tags "CI" {
         $ssouser = $OpenSSHTestInfo["SSOUser"]
         $script:logNum = 0
         Remove-Item -Path (Join-Path $testDir "*$logName") -Force -ErrorAction SilentlyContinue        
-        $platform = Get-Platform
-        $skip = ($platform -eq [PlatformType]::Windows) -and ([Environment]::OSVersion.Version.Major -le 6) -and ([Environment]::OSVersion.Version.Minor -lt 2)
-        if(($platform -eq [PlatformType]::Windows) -and ($psversiontable.BuildVersion.Major -le 6))
+        $skip = $IsWindows -and ([Environment]::OSVersion.Version.Major -le 6) -and ([Environment]::OSVersion.Version.Minor -lt 2)
+        if($IsWindows -and ($psversiontable.BuildVersion.Major -le 6))
         {
             #suppress the firewall blocking dialogue on win7
             netsh advfirewall firewall add rule name="sshd" program="$($OpenSSHTestInfo['OpenSSHBinPath'])\sshd.exe" protocol=any action=allow dir=in
@@ -32,7 +31,7 @@ Describe "Tests for host keys file permission" -Tags "CI" {
 
     AfterEach { $tI++ }
     AfterAll {
-        if(($platform -eq [PlatformType]::Windows) -and ($psversiontable.BuildVersion.Major -le 6))
+        if($IsWindows -and ($psversiontable.BuildVersion.Major -le 6))
         {            
             netsh advfirewall firewall delete rule name="sshd" program="$($OpenSSHTestInfo['OpenSSHBinPath'])\sshd.exe" protocol=any dir=in
         }    

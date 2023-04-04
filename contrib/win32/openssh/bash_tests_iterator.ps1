@@ -24,7 +24,7 @@ if ($TestFilePath) {
 	# convert to bash format
 	$TestFilePath = $TestFilePath -replace "\\","/"
 }
-$OriginalSystemPath = [System.Environment]::GetEnvironmentVariable('Path', [System.EnvironmentVariableTarget]::Machine) 
+$OriginalSystemPath = [System.Environment]::GetEnvironmentVariable('Path', [System.EnvironmentVariableTarget]::Machine)
 
 # Make sure config.h exists. It is used in some bashstests (Ex - sftp-glob.sh, cfgparse.sh)
 # first check in $BashTestsPath folder. If not then it's parent folder. If not then in the $OpenSSHBinPath
@@ -185,7 +185,8 @@ try
 	[string]$failed_testcases = [string]::Empty
 	
 	# These are the known failed testcases.
-	$known_failed_testcases = @("agent.sh", "key-options.sh", "forward-control.sh", "integrity.sh", "krl.sh", "cert-hostkey.sh", "cert-userkey.sh", "percent.sh")
+	# transfer.sh, rekey.sh tests fail on CygWin v3.4.0, but succeeds with v3.3.6
+	$known_failed_testcases = @("agent.sh", "key-options.sh", "forward-control.sh", "integrity.sh", "krl.sh", "cert-hostkey.sh", "cert-userkey.sh", "percent.sh", "transfer.sh", "rekey.sh")
 	$known_failed_testcases_skipped = @()
 
 	$start_time = (Get-Date)

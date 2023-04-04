@@ -1,4 +1,4 @@
-/* $OpenBSD: monitor_wrap.c,v 1.123 2021/04/15 16:24:31 markus Exp $ */
+/* $OpenBSD: monitor_wrap.c,v 1.126 2023/01/06 02:47:18 djm Exp $ */
 /*
  * Copyright 2002 Niels Provos <provos@citi.umich.edu>
  * Copyright 2002 Markus Friedl <markus@openbsd.org>
@@ -352,6 +352,7 @@ out:
 	for (i = 0; i < options.num_log_verbose; i++)
 		log_verbose_add(options.log_verbose[i]);
 	process_permitopen(ssh, &options);
+	process_channel_timeouts(ssh, &options);
 	free(newopts);
 
 	sshbuf_free(m);
@@ -618,7 +619,7 @@ mm_pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, size_t namebuflen)
 	strlcpy(namebuf, p, namebuflen); /* Possible truncation */
 	free(p);
 
-	if ((r = sshbuf_put(loginmsg, msg, strlen(msg))) != 0)
+	if ((r = sshbuf_put(loginmsg, msg, strlen(msg))) != 0) // CodeQL [SM01714] false positive: sshbuf_get_cstring null terminates msg
 		fatal_fr(r, "put loginmsg");
 	free(msg);
 

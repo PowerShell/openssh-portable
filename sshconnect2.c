@@ -1,4 +1,4 @@
-/* $OpenBSD: sshconnect2.c,v 1.356 2022/02/01 23:32:51 djm Exp $ */
+/* $OpenBSD: sshconnect2.c,v 1.361 2022/09/17 10:33:18 djm Exp $ */
 /*
  * Copyright (c) 2000 Markus Friedl.  All rights reserved.
  * Copyright (c) 2008 Damien Miller.  All rights reserved.
@@ -100,6 +100,11 @@ static const struct ssh_conn_info *xxx_conn_info;
 static int
 verify_host_key_callback(struct sshkey *hostkey, struct ssh *ssh)
 {
+	int r;
+
+	if ((r = sshkey_check_rsa_length(hostkey,
+	    options.required_rsa_size)) != 0)
+		fatal_r(r, "Bad server host key");
 	if (verify_host_key(xxx_host, xxx_hostaddr, hostkey,
 	    xxx_conn_info) == -1)
 		fatal("Host key verification failed.");
@@ -222,6 +227,7 @@ ssh_kex2(struct ssh *ssh, char *host, struct sockaddr *hostaddr, u_short port,
 {
 	char *myproposal[PROPOSAL_MAX] = { KEX_CLIENT };
 	char *s, *all_key;
+	char *prop_kex = NULL, *prop_enc = NULL, *prop_hostkey = NULL;
 	int r, use_known_hosts_order = 0;
 
 	xxx_host = host;
@@ -241,16 +247,15 @@ ssh_kex2(struct ssh *ssh, char *host, struct sockaddr *hostaddr, u_short port,
 	/* Expand or fill in HostkeyAlgorithms */
 	all_key = sshkey_alg_list(0, 0, 1, ',');
 	if ((r = kex_assemble_names(&options.hostkeyalgorithms,
-	    kex_default_pk_alg(), all_key)) != 0)
+	    kex_default_pk_alg(), all_key)) != 0)   // CodeQL [SM02311] false positive: kex_assemble_names handle null all_key.
 		fatal_fr(r, "kex_assemble_namelist");
 	free(all_key);
 
 	if ((s = kex_names_cat(options.kex_algorithms, "ext-info-c")) == NULL)
 		fatal_f("kex_names_cat");
-	myproposal[PROPOSAL_KEX_ALGS] = compat_kex_proposal(ssh, s);
+	myproposal[PROPOSAL_KEX_ALGS] = prop_kex = compat_kex_proposal(ssh, s);
 	myproposal[PROPOSAL_ENC_ALGS_CTOS] =
-	    compat_cipher_proposal(ssh, options.ciphers);
-	myproposal[PROPOSAL_ENC_ALGS_STOC] =
+	    myproposal[PROPOSAL_ENC_ALGS_STOC] = prop_enc =
 	    compat_cipher_proposal(ssh, options.ciphers);
 	myproposal[PROPOSAL_COMP_ALGS_CTOS] =
 	    myproposal[PROPOSAL_COMP_ALGS_STOC] =
@@ -259,12 +264,12 @@ ssh_kex2(struct ssh *ssh, char *host, struct sockaddr *hostaddr, u_short port,
 	    myproposal[PROPOSAL_MAC_ALGS_STOC] = options.macs;
 	if (use_known_hosts_order) {
 		/* Query known_hosts and prefer algorithms that appear there */
-		myproposal[PROPOSAL_SERVER_HOST_KEY_ALGS] =
+		myproposal[PROPOSAL_SERVER_HOST_KEY_ALGS] = prop_hostkey =
 		    compat_pkalg_proposal(ssh,
 		    order_hostkeyalgs(host, hostaddr, port, cinfo));
 	} else {
 		/* Use specified HostkeyAlgorithms exactly */
-		myproposal[PROPOSAL_SERVER_HOST_KEY_ALGS] =
+		myproposal[PROPOSAL_SERVER_HOST_KEY_ALGS] = prop_hostkey =
 		    compat_pkalg_proposal(ssh, options.hostkeyalgorithms);
 	}
 
@@ -307,6 +312,10 @@ ssh_kex2(struct ssh *ssh, char *host, struct sockaddr *hostaddr, u_short port,
 	    (r = ssh_packet_write_wait(ssh)) != 0)
 		fatal_fr(r, "send packet");
 #endif
+	/* Free only parts of proposal that were dynamically allocated here. */
+	free(prop_kex);
+	free(prop_enc);
+	free(prop_hostkey);
 }
 
 /*
@@ -340,7 +349,7 @@ struct cauthctxt {
 #ifdef GSSAPI
 	/* gssapi */
 	gss_OID_set gss_supported_mechs;
-	u_int mech_tried;
+	size_t mech_tried; // fix CodeQL SM01735
 #endif
 	/* pubkey */
 	struct idlist keys;
@@ -1264,7 +1273,7 @@ identity_sign(struct identity *id, u_char **sigp, size_t *lenp,
     const u_char *data, size_t datalen, u_int compat, const char *alg)
 {
 	struct sshkey *sign_key = NULL, *prv = NULL;
-	int retried = 0, r = SSH_ERR_INTERNAL_ERROR;
+	int is_agent = 0, retried = 0, r = SSH_ERR_INTERNAL_ERROR;
 	struct notifier_ctx *notifier = NULL;
 	char *fp = NULL, *pin = NULL, *prompt = NULL;
 
@@ -1284,6 +1293,7 @@ identity_sign(struct identity *id, u_char **sigp, size_t *lenp,
 	if (id->key != NULL &&
 	    (id->isprivate || (id->key->flags & SSHKEY_FLAG_EXT))) {
 		sign_key = id->key;
+		is_agent = 1;
 	} else {
 		/* Load the private key from the file. */
 		if ((prv = load_identity_file(id)) == NULL)
@@ -1295,47 +1305,31 @@ identity_sign(struct identity *id, u_char **sigp, size_t *lenp,
 			goto out;
 		}
 		sign_key = prv;
-		if (sshkey_is_sk(sign_key)) {
-#ifdef WINDOWS
-			/*
-			 * Don't prompt for FIDO2 PINs by default on Windows.
-			 * The odds are we are communicating with webauthn.dll,
-			 * which handles this internally. In the event we are
-			 * talking directly to a FIDO2 device and a PIN is
-			 * required, sshkey_sign() will return WRONG_PASSPHRASE
-			 * and we will prompt for a PIN when we retry.
-			 */
-			if ((sign_key->sk_flags &
-			    SSH_SK_USER_VERIFICATION_REQD) && 0) {
-#else
-			if ((sign_key->sk_flags &
-			    SSH_SK_USER_VERIFICATION_REQD)) {
-#endif
+	}
  retry_pin:
-				xasprintf(&prompt, "Enter PIN for %s key %s: ",
-				    sshkey_type(sign_key), id->filename);
-				pin = read_passphrase(prompt, 0);
-			}
-			if ((sign_key->sk_flags & SSH_SK_USER_PRESENCE_REQD)) {
-				/* XXX should batch mode just skip these? */
-				if ((fp = sshkey_fingerprint(sign_key,
-				    options.fingerprint_hash,
-				    SSH_FP_DEFAULT)) == NULL)
-					fatal_f("fingerprint failed");
-				notifier = notify_start(options.batch_mode,
-				    "Confirm user presence for key %s %s",
-				    sshkey_type(sign_key), fp);
-				free(fp);
-			}
-		}
+	/* Prompt for touch for non-agent FIDO keys that request UP */
+	if (!is_agent && sshkey_is_sk(sign_key) &&
+	    (sign_key->sk_flags & SSH_SK_USER_PRESENCE_REQD)) {
+		/* XXX should batch mode just skip these? */
+		if ((fp = sshkey_fingerprint(sign_key,
+		    options.fingerprint_hash, SSH_FP_DEFAULT)) == NULL)
+			fatal_f("fingerprint failed");
+		notifier = notify_start(options.batch_mode,
+		    "Confirm user presence for key %s %s",
+		    sshkey_type(sign_key), fp);
+		free(fp);
 	}
 	if ((r = sshkey_sign(sign_key, sigp, lenp, data, datalen,
 	    alg, options.sk_provider, pin, compat)) != 0) {
 		debug_fr(r, "sshkey_sign");
-		if (pin == NULL && !retried && sshkey_is_sk(sign_key) &&
+		if (!retried && pin == NULL && !is_agent &&
+		    sshkey_is_sk(sign_key) &&
 		    r == SSH_ERR_KEY_WRONG_PASSPHRASE) {
 			notify_complete(notifier, NULL);
 			notifier = NULL;
+			xasprintf(&prompt, "Enter PIN for %s key %s: ",
+			    sshkey_type(sign_key), id->filename);
+			pin = read_passphrase(prompt, 0);
 			retried = 1;
 			goto retry_pin;
 		}
@@ -1659,6 +1653,13 @@ load_identity_file(Identity *id)
 			private = NULL;
 			quit = 1;
 		}
+		if (!quit && (r = sshkey_check_rsa_length(private,
+		    options.required_rsa_size)) != 0) {
+			debug_fr(r, "Skipping key %s", id->filename);
+			sshkey_free(private);
+			private = NULL;
+			quit = 1;
+		}
 		if (!quit && private != NULL && id->agent_fd == -1 &&
 		    !(id->key && id->isprivate))
 			maybe_add_key_to_agent(id->filename, private, comment,
@@ -1805,6 +1806,12 @@ pubkey_prepare(struct ssh *ssh, Authctxt *authctxt)
 	/* list of keys supported by the agent */
 	if ((r = get_agent_identities(ssh, &agent_fd, &idlist)) == 0) {
 		for (j = 0; j < idlist->nkeys; j++) {
+			if ((r = sshkey_check_rsa_length(idlist->keys[j],
+			    options.required_rsa_size)) != 0) {
+				debug_fr(r, "ignoring %s agent key",
+				    sshkey_ssh_name(idlist->keys[j]));
+				continue;
+			}
 			found = 0;
 			TAILQ_FOREACH(id, &files, next) {
 				/*
