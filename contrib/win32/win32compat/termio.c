@@ -269,9 +269,6 @@ syncio_close(struct w32_io* pio)
 		SleepEx(0, TRUE);
 	}
 
-	// This call is likely racy, there's no guarantee
-	// that a thread has begun IO operations when it's called.
-	// Why stop io operations when we're going to close it anyhow?
 	CancelIoEx(WINHANDLE(pio), NULL);
 
 	/* If io is pending, let worker threads exit. */
