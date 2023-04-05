@@ -261,7 +261,14 @@ syncio_close(struct w32_io* pio)
 {
 	debug4("syncio_close - pio:%p", pio);
 
-	/* Flush descriptor.*/
+	/*
+	* Wait for io write operation that is called by worker thread to terminate
+	* to avoid the write operation being terminated prematurely by CancelIoEx.
+	* If you see any process waiting here indefinitely - its because no one
+	* is draining from other end of the pipe. This is an unfortunate
+	* consequence that should otherwise have very little impact on practical
+	* scenarios.
+	*/
 	if (pio->write_details.pending) {
 		WaitForSingleObject(pio->write_overlapped.hEvent, INFINITE);
 
