@@ -97,6 +97,7 @@ _rs_init(u_char *buf, size_t n)
 {
 	if (n < KEYSZ + IVSZ)
 		return;
+}
 
 #ifndef WITH_OPENSSL
 #ifdef WINDOWS
