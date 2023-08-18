@@ -60,7 +60,7 @@ set_defaultshell()
 	HKEY reg_key = 0;
 	int tmp_len, ret = -1;
 	REGSAM mask = STANDARD_RIGHTS_READ | KEY_QUERY_VALUE | KEY_WOW64_64KEY;
-	wchar_t path_buf[PATH_MAX], option_buf[32], arg_buf[PATH_MAX];
+	wchar_t path_buf[PATH_MAX], option_buf[PATH_MAX], arg_buf[PATH_MAX];
 	char *pw_shellpath_local = NULL, *command_option_local = NULL, *shell_arguments_local = NULL;
 
 	errno = 0;
