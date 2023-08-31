@@ -5,7 +5,7 @@
     <OpenSSH-Bin-Path>$(SolutionDir)..\..\..\bin\</OpenSSH-Bin-Path>
     <OpenSSH-Lib-Path>$(SolutionDir)lib\</OpenSSH-Lib-Path>
     <LibreSSLVersion>3.7.2.0</LibreSSLVersion>
-    <ZLibVersion>1.2.13</ZLibVersion>
+    <ZLibVersion>1.3</ZLibVersion>
     <fido2Version>1.13.0</fido2Version>
     <!--libcbor version is not used in the build; it is needed for pipeline compliance tasks-->  
     <libcborVersion>0.10.1</libcborVersion> 
