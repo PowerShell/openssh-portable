@@ -18,7 +18,7 @@ stages:
     pool:
       name: PS-PowerShell-x64
       demands:
-      - ImageOverride -equals PSMMS2019-OpenSSH-Secure
+      - ImageOverride -equals PSMMS2022-OpenSSH-Secure
     variables:
       Codeql.Enabled: true
       Codeql.Cadence: 23 # hours
