@@ -173,3 +173,89 @@ cleanup:
 	return ret;
 }
 
+/*
+* The function is similar to check_secure_file_permission.
+* Check the owner of the file is one of these types: Local Administrators groups or system account
+* Check the users have access permission to the file don't violate the following rules:
+	1. no user other than local administrators group and system account have write permission on the folder
+* Returns 0 on success and -1 on failure
+*/
+int
+check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
+{
+	PSECURITY_DESCRIPTOR pSD = NULL;
+	PSID owner_sid = NULL, ti_sid = NULL;
+	PACL dacl = NULL;
+	DWORD error_code = ERROR_SUCCESS;
+	BOOL is_valid_sid = FALSE, is_valid_acl = FALSE;
+	wchar_t* bad_user = NULL;
+	int ret = 0;
+
+	/*Get the owner sid of the file.*/
+	if ((error_code = GetNamedSecurityInfoW(path_utf16, SE_FILE_OBJECT,
+		OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+		&owner_sid, NULL, &dacl, NULL, &pSD)) != ERROR_SUCCESS) {
+		printf("failed to retrieve the owner sid and dacl of file %S with error code: %d", path_utf16, error_code);
+		errno = EOTHER;
+		ret = -1;
+		goto cleanup;
+	}
+	if (((is_valid_sid = IsValidSid(owner_sid)) == FALSE) || ((is_valid_acl = IsValidAcl(dacl)) == FALSE)) {
+		printf("IsValidSid: %d; is_valid_acl: %d", is_valid_sid, is_valid_acl);
+		ret = -1;
+		goto cleanup;
+	}
+	if (!IsWellKnownSid(owner_sid, WinBuiltinAdministratorsSid) &&
+		!IsWellKnownSid(owner_sid, WinLocalSystemSid)) {
+		printf("Bad owner on %S", path_utf16);
+		ret = -1;
+		goto cleanup;
+	}
+	/*
+	iterate all aces of the file to find out if there is violation of the following rules:
+		1. no others than administrators group and system account have write permission on the file
+	*/
+	for (DWORD i = 0; i < dacl->AceCount; i++) {
+		PVOID current_ace = NULL;
+		PACE_HEADER current_aceHeader = NULL;
+		PSID current_trustee_sid = NULL;
+		ACCESS_MASK current_access_mask = 0;
+
+		if (!GetAce(dacl, i, &current_ace)) {
+			printf("GetAce() failed");
+			errno = EOTHER;
+			ret = -1;
+			goto cleanup;
+		}
+
+		current_aceHeader = (PACE_HEADER)current_ace;
+		/* only interested in Allow ACE */
+		if (current_aceHeader->AceType != ACCESS_ALLOWED_ACE_TYPE)
+			continue;
+
+		PACCESS_ALLOWED_ACE pAllowedAce = (PACCESS_ALLOWED_ACE)current_ace;
+		current_trustee_sid = &(pAllowedAce->SidStart);
+		current_access_mask = pAllowedAce->Mask;
+
+		/*no need to check administrators group and system account*/
+		if (IsWellKnownSid(current_trustee_sid, WinBuiltinAdministratorsSid) ||
+			IsWellKnownSid(current_trustee_sid, WinLocalSystemSid)) {
+			continue;
+		}
+		else if (read_ok && (current_access_mask & (FILE_WRITE_DATA | FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA | FILE_APPEND_DATA)) == 0) {
+			/* if read is allowed, allow ACES that do not give write access*/
+			continue;
+		}
+		else {
+			ret = -1;
+		}
+	}
+cleanup:
+	if (bad_user)
+		LocalFree(bad_user);
+	if (pSD)
+		LocalFree(pSD);
+	if (ti_sid)
+		free(ti_sid);
+	return ret;
+}

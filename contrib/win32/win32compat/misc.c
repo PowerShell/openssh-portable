@@ -60,6 +60,7 @@
 #include "w32fd.h"
 #include "inc\string.h"
 #include "inc\time.h"
+#include "..\..\..\sshfileperm.h"
 
 #include <wchar.h>
 
@@ -1440,6 +1441,13 @@ create_directory_withsddl(wchar_t *path_w, wchar_t *sddl_w)
 		sa.lpSecurityDescriptor = pSD;
 		if (!CreateDirectoryW(path_w, &sa)) {
 			error("Failed to create directory:%ls error:%d", path_w, GetLastError());
+			return -1;
+		}
+	}
+	else {
+		// directory already exists; need to confirm permissions are correct
+		if (check_secure_folder_permission(path_w, 1) != 0) {
+			error("Directory already exists but folder permissions are invalid");
 			return -1;
 		}
 	}
