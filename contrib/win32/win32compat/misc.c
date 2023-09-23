@@ -946,6 +946,41 @@ convertToForwardslash(char *str)
 	}
 }
 
+// cut the leader char
+static void pre_cut_path(char* inputpath) {
+	if (!inputpath) {
+		return;
+	}
+	size_t path_len_org = 0, path_len = 0;
+	path_len_org = strlen(inputpath);
+	path_len = path_len_org;
+	/* fix /./ to /  */
+	if (path_len >= 3 && inputpath[0] == '/' && inputpath[1] == '.' && inputpath[2] == '/') {
+		int offset = 0;
+		while (offset <= (path_len - 2)) {
+			inputpath[offset] = inputpath[offset + 2];
+			offset++;
+		}
+	}
+	path_len = strlen(inputpath);
+	/* fix // to /  */
+	if (path_len >= 2 && inputpath[0] == '/' && inputpath[1] == '/') {
+		int offset = 0;
+		while (offset <= (path_len - 1)) {
+			inputpath[offset] = inputpath[offset + 1];
+			offset++;
+		}
+	}
+
+	if (strlen(inputpath) == path_len_org) {
+		return;
+	}
+	else {
+		//repeat until no leader char
+		pre_cut_path(inputpath);
+	}
+}
+
 /*
  * This method will resolves references to /./, /../ and extra '/' characters in the null-terminated string named by
  *  path to produce a canonicalized absolute pathname.
@@ -987,8 +1022,18 @@ realpath(const char *inputpath, char * resolved)
 		return NULL;
 	}
 
+	pre_cut_path(path);
+	path_len = strlen(path);
+
 	/* resolve root directory to the same */
 	if (path_len == 1 && (path[0] == '/' || path[0] == '\\')) {
+		resolved[0] = '/';
+		resolved[1] = '\0';
+		ret = resolved;
+		goto done;
+	}
+	/* fix /. to root */
+	if (strcmp(path, "/.") == 0) {
 		resolved[0] = '/';
 		resolved[1] = '\0';
 		ret = resolved;
