@@ -352,7 +352,7 @@
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <FullProgramDatabaseFile>true</FullProgramDatabaseFile>
       <ShowProgress>NotSet</ShowProgress>
-      <AdditionalOptions>/debug /debugtype:cv,fixup /opt:ref /opt:icf /incremental:no /ignore:4099 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/debug /debugtype:cv,fixup /opt:ref /opt:icf /incremental:no /ignore:4099 /CETCOMPAT %(AdditionalOptions)</AdditionalOptions>
     </Link>
     <Manifest>
       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
