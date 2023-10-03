@@ -1458,7 +1458,7 @@ int start_as_shell(wchar_t* cmd)
 int 
 wmain(int ac, wchar_t **av)
 {
-	wchar_t *exec_command, *option, *cmdline;
+	wchar_t *exec_command, *option, *cmdline = NULL;
 	int with_pty, len;
 
 	_set_invalid_parameter_handler(my_invalid_parameter_handler);
