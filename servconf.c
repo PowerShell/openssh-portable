@@ -210,7 +210,7 @@ static void
 assemble_algorithms(ServerOptions *o)
 {
 	char *all_cipher, *all_mac, *all_kex, *all_key, *all_sig;
-	char *def_cipher, *def_mac, *def_kex, *def_key, *def_sig;
+	char *def_cipher = NULL, *def_mac = NULL, *def_kex = NULL, *def_key = NULL, *def_sig = NULL;
 	int r;
 
 	all_cipher = cipher_alg_list(',', 0);

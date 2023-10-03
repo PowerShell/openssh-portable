@@ -1355,7 +1355,7 @@ sshkey_check_rsa_length(const struct sshkey *k, int min_size)
 int
 sshkey_ecdsa_key_to_nid(EC_KEY *k)
 {
-	EC_GROUP *eg;
+	EC_GROUP *eg = NULL;
 	int nids[] = {
 		NID_X9_62_prime256v1,
 		NID_secp384r1,

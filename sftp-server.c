@@ -611,7 +611,7 @@ send_data(u_int32_t id, const u_char *data, int dlen)
 static void
 send_handle(u_int32_t id, int handle)
 {
-	u_char *string;
+	u_char *string = NULL;
 	int hlen;
 
 	handle_to_string(handle, &string, &hlen);
