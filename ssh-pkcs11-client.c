@@ -165,20 +165,14 @@ find_helper(void)
 	char module_path[PATH_MAX + 1];
 	char *ep;
 	DWORD n;
-
-#ifdef WINDOWS
 	size_t len = 0;
+	
 	_dupenv_s(&helper, &len, "SSH_PKCS11_HELPER");
 	if (helper == NULL || len == 0) {
 		if ((helper = find_helper_in_module_path()) == NULL)
 			helper = _PATH_SSH_PKCS11_HELPER;
 	}
-#else
-	if ((helper = getenv("SSH_PKCS11_HELPER")) == NULL || strlen(helper) == 0) {
-		if ((helper = find_helper_in_module_path()) == NULL)
-			helper = _PATH_SSH_PKCS11_HELPER;
-	}
-#endif /* WINDOWS */
+
 	if (!path_absolute(helper)) {
 		error_f("helper \"%s\" unusable: path not absolute", helper);
 		return NULL;
