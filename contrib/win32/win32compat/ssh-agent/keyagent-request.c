@@ -44,6 +44,8 @@
 #define MAX_VALUE_NAME_LENGTH 16383
 #define MAX_VALUE_DATA_LENGTH 2048
 
+extern int remote_add_provider;
+
 /* 
  * get registry root where keys are stored 
  * user keys are stored in user's hive
@@ -660,6 +662,12 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 		goto done;
 	}
 
+	if (con->nsession_ids != 0 && !remote_add_provider) {
+		verbose("failed PKCS#11 add of \"%.100s\": remote addition of "
+		    "providers is disabled", provider);
+		goto done;
+	}
+	
 	if (realpath(provider, canonical_provider) == NULL) {
 		error("failed PKCS#11 add of \"%.100s\": realpath: %s",
 			provider, strerror(errno));
