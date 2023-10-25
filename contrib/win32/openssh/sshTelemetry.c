@@ -119,6 +119,19 @@ void send_encryption_telemetry(const char* direction,
     TraceLoggingUnregister(g_hProvider1);
 }
 
+void send_exit_code_telemetry(const int exit_code)
+{
+    TraceLoggingRegister(g_hProvider1);
+    TraceLoggingWrite(
+        g_hProvider1,
+        "ExitCode",
+        TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
+        TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
+        TraceLoggingInt16(exit_code, "exitCode")
+    );
+    TraceLoggingUnregister(g_hProvider1);
+}
+
 void send_pubkey_telemetry(const char* pubKeyStatus)
 {
     TraceLoggingRegister(g_hProvider1);
@@ -202,19 +215,6 @@ void send_ssh_version_telemetry(const char* ssh_version,
         TraceLoggingString(ssh_version, "ourVersion"),
         TraceLoggingString(remote_protocol_error, "remoteProtocolError"),
         TraceLoggingString(peer_version, "peerVersion")
-    );
-    TraceLoggingUnregister(g_hProvider1);
-}
-
-void send_error_code_telemetry(const int exit_status)
-{
-    TraceLoggingRegister(g_hProvider1);
-    TraceLoggingWrite(
-        g_hProvider1,
-        "ExitCode",
-        TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
-        TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingInt16(exit_status, "exitCode")
     );
     TraceLoggingUnregister(g_hProvider1);
 }

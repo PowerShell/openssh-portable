@@ -12,6 +12,9 @@ void send_encryption_telemetry(const char* direction,
 	const char* comp, const char* host_key, 
 	const char** cproposal, const char** sproposal);
 
+// sends exit code of kex_exchange_identification(), from sshd only
+void send_exit_code_telemetry(const int exit_code);
+
 // sends status if using key-based auth
 void send_pubkey_telemetry(const char* pubKeyStatus);
 
@@ -30,5 +33,3 @@ void send_sshd_connection_telemetry(const char* conn);
 // sends version and peer version from ssh & sshd
 void send_ssh_version_telemetry(const char* ssh_version,
 	const char* peer_version, const char* remote_protocol_error);
-
-void send_error_code_telemetry(const int exit_status);

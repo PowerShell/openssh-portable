@@ -2724,15 +2724,15 @@ done_loading_hostkeys:
 
 	if ((r = kex_exchange_identification(ssh, -1,
 		options.version_addendum)) != 0)
-#ifndef WINDOWS
+#ifdef WINDOWS
 	{
-		send_error_code_telemetry(r);
+		send_exit_code_telemetry(r);
 #endif /* WINDOWS */
 		sshpkt_fatal(ssh, r, "banner exchange");
-#ifndef WINDOWS
+#ifdef WINDOWS
 	}
 	else {
-		send_error_code_telemetry(0);
+		send_exit_code_telemetry(0);
 	}
 #endif /* WINDOWS */
 idexch_done:
