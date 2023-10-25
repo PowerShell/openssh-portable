@@ -206,3 +206,15 @@ void send_ssh_version_telemetry(const char* ssh_version,
     TraceLoggingUnregister(g_hProvider1);
 }
 
+void send_error_code_telemetry(int exit_status)
+{
+    TraceLoggingRegister(g_hProvider1);
+    TraceLoggingWrite(
+        g_hProvider1,
+        "Error",
+        TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
+        TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
+        TraceLoggingInt16(exit_status, "exitCode")
+    );
+    TraceLoggingUnregister(g_hProvider1);
+}
