@@ -2722,25 +2722,14 @@ done_loading_hostkeys:
 	if (!debug_flag)
 		alarm(options.login_grace_time);
 
-	send_error_code_telemetry(-10);
-	send_error_code_telemetry(-1);
-	send_error_code_telemetry(-24);
-	send_error_code_telemetry(-3);
-	send_error_code_telemetry(-2);
-	send_error_code_telemetry(-4);
-	send_error_code_telemetry(-53);
-	send_error_code_telemetry(-52);
-	send_error_code_telemetry(-49);
-	send_error_code_telemetry(-9);
-
 	if ((r = kex_exchange_identification(ssh, -1,
 		options.version_addendum)) != 0)
-#ifdef WINDOWS
+#ifndef WINDOWS
 	{
 		send_error_code_telemetry(r);
 #endif /* WINDOWS */
 		sshpkt_fatal(ssh, r, "banner exchange");
-#ifdef WINDOWS
+#ifndef WINDOWS
 	}
 	else {
 		send_error_code_telemetry(0);
