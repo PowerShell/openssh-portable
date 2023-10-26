@@ -2731,9 +2731,7 @@ done_loading_hostkeys:
 		sshpkt_fatal(ssh, r, "banner exchange");
 #ifdef WINDOWS
 	}
-	else {
-		send_exit_code_telemetry(0);
-	}
+	send_exit_code_telemetry(0);
 #endif /* WINDOWS */
 idexch_done:
 	ssh_packet_set_nonblocking(ssh);
