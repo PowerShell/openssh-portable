@@ -311,7 +311,7 @@ cleanup:
 
 int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	int pipein[2], pipeout[2], pipeerr[2], ret = -1;
-	char *exec_command = NULL, *posix_cmd_input = NULL, *shell = NULL;
+	char *exec_command = NULL, *posix_cmd_input = NULL, *shell = NULL, *pty_cmd_cp = NULL;;
 	HANDLE job = NULL, process_handle;
 	extern char* shell_command_option;
 	extern char* shell_arguments;
@@ -356,7 +356,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info;
 	HANDLE job_dup;
 	pid_t pid = -1;
-	char * shell_command_option_local = NULL, *pty_cmd_cp = NULL;
+	char* shell_command_option_local = NULL;
 	size_t shell_len = 0;
 	/*account for the quotes and null*/
 	shell_len = strlen(s->pw->pw_shell) + 2 + 1;

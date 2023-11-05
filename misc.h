@@ -1,4 +1,4 @@
-/* $OpenBSD: misc.h,v 1.101 2023/01/06 02:37:04 djm Exp $ */
+/* $OpenBSD: misc.h,v 1.104 2023/08/18 01:37:41 djm Exp $ */
 
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
@@ -19,6 +19,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <stdio.h>
+#include <signal.h>
 
 /* Data structure for representing a forwarding request. */
 struct Forward {
@@ -57,7 +58,7 @@ char	*get_rdomain(int);
 int	 set_rdomain(int, const char *);
 int	 get_sock_af(int);
 void	 set_sock_tos(int, int);
-int	 waitrfd(int, int *);
+int	 waitrfd(int, int *, volatile sig_atomic_t *);
 int	 timeout_connect(int, const struct sockaddr *, socklen_t, int *);
 int	 a2port(const char *);
 int	 a2tun(const char *, int *);
@@ -96,6 +97,7 @@ int	 parse_absolute_time(const char *, uint64_t *);
 void	 format_absolute_time(uint64_t, char *, size_t);
 int	 path_absolute(const char *);
 int	 stdfd_devnull(int, int, int);
+int	 lib_contains_symbol(const char *, const char *);
 
 void	 sock_set_v6only(int);
 
@@ -242,5 +244,8 @@ void	notify_complete(struct notifier_ctx *, const char *, ...)
 
 typedef void (*sshsig_t)(int);
 sshsig_t ssh_signal(int, sshsig_t);
+
+/* On OpenBSD time_t is int64_t which is long long. */
+/* #define SSH_TIME_T_MAX LLONG_MAX */
 
 #endif /* _MISC_H */

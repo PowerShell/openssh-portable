@@ -1,4 +1,4 @@
-/* $OpenBSD: ssh-pkcs11-client.c,v 1.17 2020/10/18 11:32:02 djm Exp $ */
+/* $OpenBSD: ssh-pkcs11-client.c,v 1.18 2023/07/19 14:03:45 djm Exp $ */
 /*
  * Copyright (c) 2010 Markus Friedl.  All rights reserved.
  * Copyright (c) 2014 Pedro Martelletto. All rights reserved.
@@ -30,11 +30,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <limits.h>
 
 #include <openssl/ecdsa.h>
 #include <openssl/rsa.h>
-
-#include "openbsd-compat/openssl-compat.h"
 
 #include "pathnames.h"
 #include "xmalloc.h"
@@ -47,10 +46,24 @@
 #include "ssh-pkcs11.h"
 #include "ssherr.h"
 
+#include "openbsd-compat/openssl-compat.h"
+
+#if !defined(OPENSSL_HAS_ECC) || !defined(HAVE_EC_KEY_METHOD_NEW)
+#define EC_KEY_METHOD void
+#define EC_KEY void
+#endif
+
 #ifdef WINDOWS
 #include "openbsd-compat/sys-queue.h"
 #define CRYPTOKI_COMPAT
 #include "pkcs11.h"
+
+static int fd = -1;
+static pid_t pid = -1;
+static RSA_METHOD	*helper_rsa;
+#if defined(OPENSSL_HAS_ECC) && defined(HAVE_EC_KEY_METHOD_NEW)
+static EC_KEY_METHOD	*helper_ecdsa;
+#endif /* OPENSSL_HAS_ECC && HAVE_EC_KEY_METHOD_NEW */
 
 static char module_path[PATH_MAX + 1];
 extern char *sshagent_con_username;
@@ -148,15 +161,18 @@ find_helper_in_module_path(void)
 static char *
 find_helper(void)
 {
-	char *helper;
+	char *helper = NULL;
 	char module_path[PATH_MAX + 1];
 	char *ep;
 	DWORD n;
-
-	if ((helper = getenv("SSH_PKCS11_HELPER")) == NULL || strlen(helper) == 0) {
+	size_t len = 0;
+	
+	_dupenv_s(&helper, &len, "SSH_PKCS11_HELPER");
+	if (helper == NULL || len == 0) {
 		if ((helper = find_helper_in_module_path()) == NULL)
 			helper = _PATH_SSH_PKCS11_HELPER;
 	}
+
 	if (!path_absolute(helper)) {
 		error_f("helper \"%s\" unusable: path not absolute", helper);
 		return NULL;
@@ -166,20 +182,146 @@ find_helper(void)
 	return helper;
 }
 
-#endif /* WINDOWS */
+#else
 
 /* borrows code from sftp-server and ssh-agent */
 
-static int fd = -1;
-static pid_t pid = -1;
+/*
+ * Maintain a list of ssh-pkcs11-helper subprocesses. These may be looked up
+ * by provider path or their unique EC/RSA METHOD pointers.
+ */
+struct helper {
+	char *path;
+	pid_t pid;
+	int fd;
+	RSA_METHOD *rsa_meth;
+	EC_KEY_METHOD *ec_meth;
+	int (*rsa_finish)(RSA *rsa);
+	void (*ec_finish)(EC_KEY *key);
+	size_t nrsa, nec; /* number of active keys of each type */
+};
+static struct helper **helpers;
+static size_t nhelpers;
+
+static struct helper *
+helper_by_provider(const char *path)
+{
+	size_t i;
+
+	for (i = 0; i < nhelpers; i++) {
+		if (helpers[i] == NULL || helpers[i]->path == NULL ||
+		    helpers[i]->fd == -1)
+			continue;
+		if (strcmp(helpers[i]->path, path) == 0)
+			return helpers[i];
+	}
+	return NULL;
+}
+
+static struct helper *
+helper_by_rsa(const RSA *rsa)
+{
+	size_t i;
+	const RSA_METHOD *meth;
+
+	if ((meth = RSA_get_method(rsa)) == NULL)
+		return NULL;
+	for (i = 0; i < nhelpers; i++) {
+		if (helpers[i] != NULL && helpers[i]->rsa_meth == meth)
+			return helpers[i];
+	}
+	return NULL;
+
+}
+
+#if defined(OPENSSL_HAS_ECC) && defined(HAVE_EC_KEY_METHOD_NEW)
+static struct helper *
+helper_by_ec(const EC_KEY *ec)
+{
+	size_t i;
+	const EC_KEY_METHOD *meth;
+
+	if ((meth = EC_KEY_get_method(ec)) == NULL)
+		return NULL;
+	for (i = 0; i < nhelpers; i++) {
+		if (helpers[i] != NULL && helpers[i]->ec_meth == meth)
+			return helpers[i];
+	}
+	return NULL;
+
+}
+#endif /* defined(OPENSSL_HAS_ECC) && defined(HAVE_EC_KEY_METHOD_NEW) */
 
 static void
-send_msg(struct sshbuf *m)
+helper_free(struct helper *helper)
+{
+	size_t i;
+	int found = 0;
+
+	if (helper == NULL)
+		return;
+	if (helper->path == NULL || helper->ec_meth == NULL ||
+	    helper->rsa_meth == NULL)
+		fatal_f("inconsistent helper");
+	debug3_f("free helper for provider %s", helper->path);
+	for (i = 0; i < nhelpers; i++) {
+		if (helpers[i] == helper) {
+			if (found)
+				fatal_f("helper recorded more than once");
+			found = 1;
+		}
+		else if (found)
+			helpers[i - 1] = helpers[i];
+	}
+	if (found) {
+		helpers = xrecallocarray(helpers, nhelpers,
+		    nhelpers - 1, sizeof(*helpers));
+		nhelpers--;
+	}
+	free(helper->path);
+#if defined(OPENSSL_HAS_ECC) && defined(HAVE_EC_KEY_METHOD_NEW)
+	EC_KEY_METHOD_free(helper->ec_meth);
+#endif
+	RSA_meth_free(helper->rsa_meth);
+	free(helper);
+}
+
+static void
+helper_terminate(struct helper *helper)
+{
+	if (helper == NULL) {
+		return;
+	} else if (helper->fd == -1) {
+		debug3_f("already terminated");
+	} else {
+		debug3_f("terminating helper for %s; "
+		    "remaining %zu RSA %zu ECDSA",
+		    helper->path, helper->nrsa, helper->nec);
+		close(helper->fd);
+		/* XXX waitpid() */
+		helper->fd = -1;
+		helper->pid = -1;
+	}
+	/*
+	 * Don't delete the helper entry until there are no remaining keys
+	 * that reference it. Otherwise, any signing operation would call
+	 * a free'd METHOD pointer and that would be bad.
+	 */
+	if (helper->nrsa == 0 && helper->nec == 0)
+		helper_free(helper);
+}
+
+#endif /* WINDOWS */
+
+static void
+send_msg(int fd, struct sshbuf *m)
 {
 	u_char buf[4];
 	size_t mlen = sshbuf_len(m);
 	int r;
 
+	if (fd == -1)
+		return;
 	POKE_U32(buf, mlen);
 	if (atomicio(vwrite, fd, buf, 4) != 4 ||
 	    atomicio(vwrite, fd, sshbuf_mutable_ptr(m),
@@ -190,12 +332,15 @@ send_msg(struct sshbuf *m)
 }
 
 static int
-recv_msg(struct sshbuf *m)
+recv_msg(int fd, struct sshbuf *m)
 {
 	u_int l, len;
 	u_char c, buf[1024];
 	int r;
 
+	sshbuf_reset(m);
+	if (fd == -1)
+		return 0; /* XXX */
 	if ((len = atomicio(read, fd, buf, 4)) != 4) {
 		error("read from helper failed: %u", len);
 		return (0); /* XXX */
@@ -204,7 +349,6 @@ recv_msg(struct sshbuf *m)
 	if (len > 256 * 1024)
 		fatal("response too long: %u", len);
 	/* read len bytes into m */
-	sshbuf_reset(m);
 	while (len > 0) {
 		l = len;
 		if (l > sizeof(buf))
@@ -229,7 +373,7 @@ pkcs11_init(int interactive)
 	TAILQ_INIT(&pkcs11_providers);
 	TAILQ_INIT(&pkcs11_keylist);
 #endif /* WINDOWS */
-	return (0);
+	return 0;
 }
 
 void
@@ -249,14 +393,18 @@ pkcs11_terminate(void)
 		waitpid(pid, NULL, 0);
 		pid = -1;
 	}
-#endif /* WINDOWS */
 
 	if (fd >= 0)
 		close(fd);
 
-#ifdef WINDOWS
 	fd = -1;
-#endif
+#else
+	size_t i;
+
+	debug3_f("terminating %zu helpers", nhelpers);
+	for (i = 0; i < nhelpers; i++)
+		helper_terminate(helpers[i]);
+#endif /* WINDOWS */
 }
 
 static int
@@ -267,7 +415,13 @@ rsa_encrypt(int flen, const u_char *from, u_char *to, RSA *rsa, int padding)
 	u_char *blob = NULL, *signature = NULL;
 	size_t blen, slen = 0;
 	int r, ret = -1;
+#ifndef WINDOWS
+	struct helper *helper;
 
+	if ((helper = helper_by_rsa(rsa)) == NULL || helper->fd == -1)
+		fatal_f("no helper for PKCS11 key");
+	debug3_f("signing with PKCS11 provider %s", helper->path);
+#endif /* WINDOWS */
 	if (padding != RSA_PKCS1_PADDING)
 		goto fail;
 	key = sshkey_new(KEY_UNSPEC);
@@ -289,10 +443,18 @@ rsa_encrypt(int flen, const u_char *from, u_char *to, RSA *rsa, int padding)
 	    (r = sshbuf_put_string(msg, from, flen)) != 0 ||
 	    (r = sshbuf_put_u32(msg, 0)) != 0)
 		fatal_fr(r, "compose");
-	send_msg(msg);
+#ifndef WINDOWS
+	send_msg(helper->fd, msg);
+#else
+	send_msg(fd, msg);
+#endif /* WINDOWS */
 	sshbuf_reset(msg);
 
-	if (recv_msg(msg) == SSH2_AGENT_SIGN_RESPONSE) {
+#ifdef WINDOWS
+	if (recv_msg(fd, msg) == SSH2_AGENT_SIGN_RESPONSE) {
+#else
+	if (recv_msg(helper->fd, msg) == SSH2_AGENT_SIGN_RESPONSE) {
+#endif /* WINDOWS */
 		if ((r = sshbuf_get_string(msg, &signature, &slen)) != 0)
 			fatal_fr(r, "parse");
 		if (slen <= (size_t)RSA_size(rsa)) {
@@ -308,6 +470,28 @@ rsa_encrypt(int flen, const u_char *from, u_char *to, RSA *rsa, int padding)
 	return (ret);
 }
 
+#ifndef WINDOWS
+static int
+rsa_finish(RSA *rsa)
+{
+	struct helper *helper;
+
+	if ((helper = helper_by_rsa(rsa)) == NULL)
+		fatal_f("no helper for PKCS11 key");
+	debug3_f("free PKCS11 RSA key for provider %s", helper->path);
+	if (helper->rsa_finish != NULL)
+		helper->rsa_finish(rsa);
+	if (helper->nrsa == 0)
+		fatal_f("RSA refcount error");
+	helper->nrsa--;
+	debug3_f("provider %s remaining keys: %zu RSA %zu ECDSA",
+	    helper->path, helper->nrsa, helper->nec);
+	if (helper->nrsa == 0 && helper->nec == 0)
+		helper_terminate(helper);
+	return 1;
+}
+#endif /* WINDOWS */
+
 #if defined(OPENSSL_HAS_ECC) && defined(HAVE_EC_KEY_METHOD_NEW)
 static ECDSA_SIG *
 ecdsa_do_sign(const unsigned char *dgst, int dgst_len, const BIGNUM *inv,
@@ -320,7 +504,13 @@ ecdsa_do_sign(const unsigned char *dgst, int dgst_len, const BIGNUM *inv,
 	u_char *blob = NULL, *signature = NULL;
 	size_t blen, slen = 0;
 	int r, nid;
+#ifndef WINDOWS
+	struct helper *helper;
 
+	if ((helper = helper_by_ec(ec)) == NULL || helper->fd == -1)
+		fatal_f("no helper for PKCS11 key");
+	debug3_f("signing with PKCS11 provider %s", helper->path);
+#endif /* WINDOWS */
 	nid = sshkey_ecdsa_key_to_nid(ec);
 	if (nid < 0) {
 		error_f("couldn't get curve nid");
@@ -348,10 +538,18 @@ ecdsa_do_sign(const unsigned char *dgst, int dgst_len, const BIGNUM *inv,
 	    (r = sshbuf_put_string(msg, dgst, dgst_len)) != 0 ||
 	    (r = sshbuf_put_u32(msg, 0)) != 0)
 		fatal_fr(r, "compose");
-	send_msg(msg);
+#ifndef WINDOWS
+	send_msg(helper->fd, msg);
+#else
+	send_msg(fd, msg);
+#endif /* WINDOWS */
 	sshbuf_reset(msg);
 
-	if (recv_msg(msg) == SSH2_AGENT_SIGN_RESPONSE) {
+#ifdef WINDOWS
+	if (recv_msg(fd, msg) == SSH2_AGENT_SIGN_RESPONSE) { 
+#else
+	if (recv_msg(helper->fd, msg) == SSH2_AGENT_SIGN_RESPONSE) {
+#endif /* WINDOWS */
 		if ((r = sshbuf_get_string(msg, &signature, &slen)) != 0)
 			fatal_fr(r, "parse");
 		cp = signature;
@@ -365,14 +563,32 @@ ecdsa_do_sign(const unsigned char *dgst, int dgst_len, const BIGNUM *inv,
 	sshbuf_free(msg);
 	return (ret);
 }
-#endif /* OPENSSL_HAS_ECC && HAVE_EC_KEY_METHOD_NEW */
 
-static RSA_METHOD	*helper_rsa;
-#if defined(OPENSSL_HAS_ECC) && defined(HAVE_EC_KEY_METHOD_NEW)
-static EC_KEY_METHOD	*helper_ecdsa;
-#endif /* OPENSSL_HAS_ECC && HAVE_EC_KEY_METHOD_NEW */
+#ifndef WINDOWS
+static void
+ecdsa_do_finish(EC_KEY *ec)
+{
+	struct helper *helper;
+
+	if ((helper = helper_by_ec(ec)) == NULL)
+		fatal_f("no helper for PKCS11 key");
+	debug3_f("free PKCS11 ECDSA key for provider %s", helper->path);
+	if (helper->ec_finish != NULL)
+		helper->ec_finish(ec);
+	if (helper->nec == 0)
+		fatal_f("ECDSA refcount error");
+	helper->nec--;
+	debug3_f("provider %s remaining keys: %zu RSA %zu ECDSA",
+	    helper->path, helper->nrsa, helper->nec);
+	if (helper->nrsa == 0 && helper->nec == 0)
+		helper_terminate(helper);
+}
+#endif /* defined(OPENSSL_HAS_ECC) && defined(HAVE_EC_KEY_METHOD_NEW) */
+#endif /* WINDOWS */
 
 /* redirect private key crypto operations to the ssh-pkcs11-helper */
+#ifdef WINDOWS
+
 static void
 wrap_key(struct sshkey *k)
 {
@@ -385,6 +601,32 @@ wrap_key(struct sshkey *k)
 	else
 		fatal_f("unknown key type");
 }
+
+#else
+
+static void
+wrap_key(struct helper *helper, struct sshkey *k)
+{
+	debug3_f("wrap %s for provider %s", sshkey_type(k), helper->path);
+	if (k->type == KEY_RSA) {
+		RSA_set_method(k->rsa, helper->rsa_meth);
+		if (helper->nrsa++ >= INT_MAX)
+			fatal_f("RSA refcount error");
+#if defined(OPENSSL_HAS_ECC) && defined(HAVE_EC_KEY_METHOD_NEW)
+	} else if (k->type == KEY_ECDSA) {
+		EC_KEY_set_method(k->ecdsa, helper->ec_meth);
+		if (helper->nec++ >= INT_MAX)
+			fatal_f("EC refcount error");
+#endif
+	} else
+		fatal_f("unknown key type");
+	k->flags |= SSHKEY_FLAG_EXT;
+	debug3_f("provider %s remaining keys: %zu RSA %zu ECDSA",
+	    helper->path, helper->nrsa, helper->nec);
+}
+#endif /* WINDOWS */
+
+#ifdef WINDOWS
 
 static int
 pkcs11_start_helper_methods(void)
@@ -413,12 +655,54 @@ pkcs11_start_helper_methods(void)
 	return (0);
 }
 
+#else
+
+static int
+pkcs11_start_helper_methods(struct helper *helper)
+{
+	RSA_METHOD *rsa_meth;
+	EC_KEY_METHOD *ec_meth = NULL;
+#if defined(OPENSSL_HAS_ECC) && defined(HAVE_EC_KEY_METHOD_NEW)
+	int (*ec_init)(EC_KEY *key);
+	int (*ec_copy)(EC_KEY *dest, const EC_KEY *src);
+	int (*ec_set_group)(EC_KEY *key, const EC_GROUP *grp);
+	int (*ec_set_private)(EC_KEY *key, const BIGNUM *priv_key);
+	int (*ec_set_public)(EC_KEY *key, const EC_POINT *pub_key);
+	int (*ec_sign)(int, const unsigned char *, int, unsigned char *,
+	    unsigned int *, const BIGNUM *, const BIGNUM *, EC_KEY *) = NULL;
+
+	if ((ec_meth = EC_KEY_METHOD_new(EC_KEY_OpenSSL())) == NULL)
+		return -1;
+	EC_KEY_METHOD_get_sign(ec_meth, &ec_sign, NULL, NULL);
+	EC_KEY_METHOD_set_sign(ec_meth, ec_sign, NULL, ecdsa_do_sign);
+	EC_KEY_METHOD_get_init(ec_meth, &ec_init, &helper->ec_finish,
+	    &ec_copy, &ec_set_group, &ec_set_private, &ec_set_public);
+	EC_KEY_METHOD_set_init(ec_meth, ec_init, ecdsa_do_finish,
+	    ec_copy, ec_set_group, ec_set_private, ec_set_public);
+#endif /* defined(OPENSSL_HAS_ECC) && defined(HAVE_EC_KEY_METHOD_NEW) */
+
+	if ((rsa_meth = RSA_meth_dup(RSA_get_default_method())) == NULL)
+		fatal_f("RSA_meth_dup failed");
+	helper->rsa_finish = RSA_meth_get_finish(rsa_meth);
+	if (!RSA_meth_set1_name(rsa_meth, "ssh-pkcs11-helper") ||
+	    !RSA_meth_set_priv_enc(rsa_meth, rsa_encrypt) ||
+	    !RSA_meth_set_finish(rsa_meth, rsa_finish))
+		fatal_f("failed to prepare method");
+
+	helper->ec_meth = ec_meth;
+	helper->rsa_meth = rsa_meth;
+	return 0;
+}
+
+#endif /* WINDOWS */
+
+#ifdef WINDOWS
+
 static int
 pkcs11_start_helper(void)
 {
 	int pair[2];
 	char *helper, *verbosity = NULL;
-#ifdef WINDOWS
 	int r, actions_inited = 0;
 	char *av[3];
 	posix_spawn_file_actions_t actions;
@@ -429,7 +713,6 @@ pkcs11_start_helper(void)
 
 	if ((helper = find_helper()) == NULL)
 		goto out;
-#endif /* WINDOWS */
 
 
 #ifdef DEBUG_PKCS11
@@ -448,7 +731,7 @@ pkcs11_start_helper(void)
 		error("socketpair: %s", strerror(errno));
 		return (-1);
 	}
-#ifdef WINDOWS
+
 	if (posix_spawn_file_actions_init(&actions) != 0) {
 		error_f("posix_spawn_file_actions_init failed");
 		goto out;
@@ -480,12 +763,51 @@ pkcs11_start_helper(void)
 		error_f("failed to spwan process %s", av[0]);
 		goto out;
 	}
+
 	fd = pair[0];
 	r = 0;
+	/* success */
+	debug3_f("started pid=%ld", (long)pid);
+
+out:
+	if (client_token)
+		CloseHandle(client_token);
+	return r;
+}
+
 #else
+
+static struct helper *
+pkcs11_start_helper(const char *path)
+{
+	int pair[2];
+	char *prog, *verbosity = NULL;
+	struct helper *helper;
+	pid_t pid;
+
+	if (nhelpers >= INT_MAX)
+		fatal_f("too many helpers");
+	debug3_f("start helper for %s", path);
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == -1) {
+		error_f("socketpair: %s", strerror(errno));
+		return NULL;
+	}
+	helper = xcalloc(1, sizeof(*helper));
+	if (pkcs11_start_helper_methods(helper) == -1) {
+		error_f("pkcs11_start_helper_methods failed");
+		goto fail;
+	}
 	if ((pid = fork()) == -1) {
-		error("fork: %s", strerror(errno));
-		return (-1);
+		error_f("fork: %s", strerror(errno));
+ fail:
+		close(pair[0]);
+		close(pair[1]);
+		RSA_meth_free(helper->rsa_meth);
+#if defined(OPENSSL_HAS_ECC) && defined(HAVE_EC_KEY_METHOD_NEW)
+		EC_KEY_METHOD_free(helper->ec_meth);
+#endif
+		free(helper);
+		return NULL;
 	} else if (pid == 0) {
 		if ((dup2(pair[1], STDIN_FILENO) == -1) ||
 		    (dup2(pair[1], STDOUT_FILENO) == -1)) {
@@ -494,28 +816,30 @@ pkcs11_start_helper(void)
 		}
 		close(pair[0]);
 		close(pair[1]);
-		helper = getenv("SSH_PKCS11_HELPER");
-		if (helper == NULL || strlen(helper) == 0)
-			helper = _PATH_SSH_PKCS11_HELPER;
-		debug_f("starting %s %s", helper,
+		prog = getenv("SSH_PKCS11_HELPER");
+		if (prog == NULL || strlen(prog) == 0)
+			prog = _PATH_SSH_PKCS11_HELPER;
+		if (log_level_get() >= SYSLOG_LEVEL_DEBUG1)
+			verbosity = "-vvv";
+		debug_f("starting %s %s", prog,
 		    verbosity == NULL ? "" : verbosity);
-		execlp(helper, helper, verbosity, (char *)NULL);
-		fprintf(stderr, "exec: %s: %s\n", helper, strerror(errno));
+		execlp(prog, prog, verbosity, (char *)NULL);
+		fprintf(stderr, "exec: %s: %s\n", prog, strerror(errno));
 		_exit(1);
 	}
 	close(pair[1]);
-	fd = pair[0];
-	return (0);
-#endif
-	/* success */
-	debug3_f("started pid=%ld", (long)pid);
-#ifdef WINDOWS
-out:
-	if (client_token)
-		CloseHandle(client_token);
-	return r;
-#endif
+	helper->fd = pair[0];
+	helper->path = xstrdup(path);
+	helper->pid = pid;
+	debug3_f("helper %zu for \"%s\" on fd %d pid %ld", nhelpers,
+	    helper->path, helper->fd, (long)helper->pid);
+	helpers = xrecallocarray(helpers, nhelpers,
+	    nhelpers + 1, sizeof(*helpers));
+	helpers[nhelpers++] = helper;
+	return helper;
 }
+
+#endif /* WINDOWS */
 
 int
 pkcs11_add_provider(char *name, char *pin, struct sshkey ***keysp,
@@ -528,10 +852,16 @@ pkcs11_add_provider(char *name, char *pin, struct sshkey ***keysp,
 	size_t blen;
 	u_int nkeys, i;
 	struct sshbuf *msg;
+#ifndef WINDOWS
+	struct helper *helper;
+	if ((helper = helper_by_provider(name)) == NULL &&
+	    (helper = pkcs11_start_helper(name)) == NULL)
+		return -1;
+#else
 	struct pkcs11_provider *p;
-
-	if (fd < 0 && pkcs11_start_helper() < 0)
+	if (fd < 0 && pkcs11_start_helper() < 0)	
 		return (-1);
+#endif /* WINDOWS */
 
 	if ((msg = sshbuf_new()) == NULL)
 		fatal_f("sshbuf_new failed");
@@ -539,10 +869,18 @@ pkcs11_add_provider(char *name, char *pin, struct sshkey ***keysp,
 	    (r = sshbuf_put_cstring(msg, name)) != 0 ||
 	    (r = sshbuf_put_cstring(msg, pin)) != 0)
 		fatal_fr(r, "compose");
-	send_msg(msg);
+#ifdef WINDOWS
+	send_msg(fd, msg);
+#else
+	send_msg(helper->fd, msg);
+#endif /* WINDOWS */
 	sshbuf_reset(msg);
 
-	type = recv_msg(msg);
+#ifdef WINDOWS
+	type = recv_msg(fd, msg);
+#else
+	type = recv_msg(helper->fd, msg);
+#endif /* WINDOWS */
 	if (type == SSH2_AGENT_IDENTITIES_ANSWER) {
 		if ((r = sshbuf_get_u32(msg, &nkeys)) != 0)
 			fatal_fr(r, "parse nkeys");
@@ -556,7 +894,11 @@ pkcs11_add_provider(char *name, char *pin, struct sshkey ***keysp,
 				fatal_fr(r, "parse key");
 			if ((r = sshkey_from_blob(blob, blen, &k)) != 0)
 				fatal_fr(r, "decode key");
+#ifdef WINDOWS
 			wrap_key(k);
+#else
+			wrap_key(helper, k);
+#endif /* WINDOWS */
 			(*keysp)[i] = k;
 			if (labelsp)
 				(*labelsp)[i] = label;
@@ -583,6 +925,7 @@ pkcs11_add_provider(char *name, char *pin, struct sshkey ***keysp,
 int
 pkcs11_del_provider(char *name)
 {
+#ifdef WINDOWS
 	int r, ret = -1;
 	struct sshbuf *msg;
 
@@ -592,13 +935,24 @@ pkcs11_del_provider(char *name)
 	    (r = sshbuf_put_cstring(msg, name)) != 0 ||
 	    (r = sshbuf_put_cstring(msg, "")) != 0)
 		fatal_fr(r, "compose");
-	send_msg(msg);
+	send_msg(fd, msg);
 	sshbuf_reset(msg);
 
-	if (recv_msg(msg) == SSH_AGENT_SUCCESS)
+	if (recv_msg(fd, msg) == SSH_AGENT_SUCCESS)
 		ret = 0;
 	sshbuf_free(msg);
 	return (ret);
-}
+#else
+	struct helper *helper;
 
+	/*
+	 * ssh-agent deletes keys before calling this, so the helper entry
+	 * should be gone before we get here.
+	 */
+	debug3_f("delete %s", name);
+	if ((helper = helper_by_provider(name)) != NULL)
+		helper_terminate(helper);
+	return 0;
+#endif /* WINDOWS */
+}
 #endif /* ENABLE_PKCS11 */

@@ -1,4 +1,4 @@
-/* $OpenBSD: monitor.c,v 1.234 2022/06/15 16:08:25 djm Exp $ */
+/* $OpenBSD: monitor.c,v 1.236 2023/05/10 10:04:20 dtucker Exp $ */
 /*
  * Copyright 2002 Niels Provos <provos@citi.umich.edu>
  * Copyright 2002 Markus Friedl <markus@openbsd.org>
@@ -126,9 +126,6 @@ int mm_answer_keyverify(struct ssh *, int, struct sshbuf *);
 int mm_answer_pty(struct ssh *, int, struct sshbuf *);
 int mm_answer_pty_cleanup(struct ssh *, int, struct sshbuf *);
 int mm_answer_term(struct ssh *, int, struct sshbuf *);
-int mm_answer_rsa_keyallowed(struct ssh *, int, struct sshbuf *);
-int mm_answer_rsa_challenge(struct ssh *, int, struct sshbuf *);
-int mm_answer_rsa_response(struct ssh *, int, struct sshbuf *);
 int mm_answer_sesskey(struct ssh *, int, struct sshbuf *);
 int mm_answer_sessid(struct ssh *, int, struct sshbuf *);
 
@@ -164,7 +161,11 @@ static char *hostbased_cuser = NULL;
 static char *hostbased_chost = NULL;
 static char *auth_method = "unknown";
 static char *auth_submethod = NULL;
+#ifdef WINDOWS
+static size_t session_id2_len = 0;
+#else
 static u_int session_id2_len = 0;
+#endif /* WINDOWS */
 static u_char *session_id2 = NULL;
 static pid_t monitor_child_pid;
 
@@ -1127,6 +1128,10 @@ mm_answer_pam_respond(struct ssh *ssh, int sock, struct sshbuf *m)
 	sshpam_authok = NULL;
 	if ((r = sshbuf_get_u32(m, &num)) != 0)
 		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+	if (num > PAM_MAX_NUM_MSG) {
+		fatal_f("Too many PAM messages, got %u, expected <= %u",
+		    num, (unsigned)PAM_MAX_NUM_MSG);
+	}
 	if (num > 0) {
 		resp = xcalloc(num, sizeof(char *));
 		for (i = 0; i < num; ++i) {
@@ -1191,11 +1196,6 @@ mm_answer_keyallowed(struct ssh *ssh, int sock, struct sshbuf *m)
 		fatal_fr(r, "parse");
 
 	if (key != NULL && authctxt->valid) {
-		/* These should not make it past the privsep child */
-		if (sshkey_type_plain(key->type) == KEY_RSA &&
-		    (ssh->compat & SSH_BUG_RSASIGMD5) != 0)
-			fatal_f("passed a SSH_BUG_RSASIGMD5 key");
-
 		switch (type) {
 		case MM_USERKEY:
 			auth_method = "publickey";

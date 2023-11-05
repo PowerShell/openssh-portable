@@ -109,7 +109,7 @@ ssh_gssapi_acquire_cred(Gssctxt *ctx)
 		}
 		gss_add_oid_set_member(&status, ctx->oid, &oidset);
 
-		if (gethostname(lname, MAXHOSTNAMELEN)) {
+		if (gethostname(lname, HOST_NAME_MAX)) {
 			gss_release_oid_set(&status, &oidset);
 			return (-1);
 		}

@@ -37,6 +37,8 @@
 
 #define BUFSIZE 5 * 1024
 
+extern int remote_add_provider;
+
 char* sshagent_con_username;
 HANDLE sshagent_client_primary_token;
 
@@ -167,10 +169,15 @@ agent_listen_loop()
 				memset(&si, 0, sizeof(STARTUPINFOW));
 				GetModuleFileNameW(NULL, module_path, PATH_MAX);
 				SetHandleInformation(con, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
-				if ((swprintf_s(path, PATH_MAX, L"%s %d", module_path, (int)(intptr_t)con) == -1 ) ||
-				    (CreateProcessW(NULL, path, NULL, NULL, TRUE,
-					DETACHED_PROCESS, NULL, NULL,
-					&si, &pi) == FALSE)) {
+				if (remote_add_provider == 1) {
+					if (swprintf_s(path, PATH_MAX, L"%s %d %s", module_path, (int)(intptr_t)con, L"-Oallow-remote-pkcs11") == -1)
+						verbose("Failed to create child process %ls ERROR:%d", module_path, GetLastError());
+				}
+				else {
+					if (swprintf_s(path, PATH_MAX, L"%s %d", module_path, (int)(intptr_t)con) == -1)
+						verbose("Failed to create child process %ls ERROR:%d", module_path, GetLastError());
+				}
+				if (CreateProcessW(NULL, path, NULL, NULL, TRUE, DETACHED_PROCESS, NULL, NULL, &si, &pi) == FALSE) {
 					verbose("Failed to create child process %ls ERROR:%d", module_path, GetLastError());
 				} else {
 					debug("spawned worker %d for agent client pid %d ", pi.dwProcessId, client_pid);

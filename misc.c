@@ -1,4 +1,4 @@
-/* $OpenBSD: misc.c,v 1.180 2023/01/06 02:37:04 djm Exp $ */
+/* $OpenBSD: misc.c,v 1.186 2023/08/18 01:37:41 djm Exp $ */
 /*
  * Copyright (c) 2000 Markus Friedl.  All rights reserved.
  * Copyright (c) 2005-2020 Damien Miller.  All rights reserved.
@@ -22,6 +22,7 @@
 
 #include <sys/types.h>
 #include <sys/ioctl.h>
+//#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -35,9 +36,15 @@
 #ifdef HAVE_POLL_H
 #include <poll.h>
 #endif
+#ifdef HAVE_NLIST_H
+#include <nlist.h>
+#endif
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
+#ifdef HAVE_STDINT_H
+# include <stdint.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -306,19 +313,62 @@ set_sock_tos(int fd, int tos)
  * Returns 0 if fd ready or -1 on timeout or error (see errno).
  */
 static int
-waitfd(int fd, int *timeoutp, short events)
+waitfd(int fd, int *timeoutp, short events, volatile sig_atomic_t *stop)
 {
 	struct pollfd pfd;
+#ifdef WINDOWS
 	struct timeval t_start;
+	int oerrno, r, have_timeout = (*timeoutp >= 0);
+#else
+	struct timespec timeout;
 	int oerrno, r;
+	sigset_t nsigset, osigset;
+
+	if (timeoutp && *timeoutp == -1)
+		timeoutp = NULL;
+#endif /* WINDOWS */
 
 	pfd.fd = fd;
 	pfd.events = events;
-	for (; *timeoutp >= 0;) {
+#ifdef WINDOWS
+	/*
+	 * Windows does not support sigprocmask
+	 * which was implemented to handle ctrl+c during multiplexing.
+	 * When Win32-OpenSSH adds multiplexing support, modify and use
+	 * native_sig_handler in contrib/win32/win32compat/signal.c here
+	 *
+	*/
+	for (; !have_timeout || *timeoutp >= 0;) {
 		monotime_tv(&t_start);
 		r = poll(&pfd, 1, *timeoutp);
+#else
+	ptimeout_init(&timeout);
+	if (timeoutp != NULL)
+		ptimeout_deadline_ms(&timeout, *timeoutp);
+	if (stop != NULL)
+		sigfillset(&nsigset);
+	for (; timeoutp == NULL || *timeoutp >= 0;) {
+		if (stop != NULL) {
+			sigprocmask(SIG_BLOCK, &nsigset, &osigset);
+			if (*stop) {
+				sigprocmask(SIG_SETMASK, &osigset, NULL);
+				errno = EINTR;
+				return -1;
+			}
+		}
+		r = ppoll(&pfd, 1, ptimeout_get_tsp(&timeout),
+			stop != NULL ? &osigset : NULL);
+#endif /* WINDOWS */
 		oerrno = errno;
-		ms_subtract_diff(&t_start, timeoutp);
+#ifdef WINDOWS
+		if (have_timeout)
+			ms_subtract_diff(&t_start, timeoutp);
+#else
+		if (stop != NULL)
+			sigprocmask(SIG_SETMASK, &osigset, NULL);
+		if (timeoutp)
+			*timeoutp = ptimeout_get_ms(&timeout);
+#endif /* WINDOWS */
 		errno = oerrno;
 		if (r > 0)
 			return 0;
@@ -338,8 +388,8 @@ waitfd(int fd, int *timeoutp, short events)
  * Returns 0 if fd ready or -1 on timeout or error (see errno).
  */
 int
-waitrfd(int fd, int *timeoutp) {
-	return waitfd(fd, timeoutp, POLLIN);
+waitrfd(int fd, int *timeoutp, volatile sig_atomic_t *stop) {
+	return waitfd(fd, timeoutp, POLLIN, stop);
 }
 
 /*
@@ -373,7 +423,7 @@ timeout_connect(int sockfd, const struct sockaddr *serv_addr,
 		break;
 	}
 
-	if (waitfd(sockfd, timeoutp, POLLIN | POLLOUT) == -1)
+	if (waitfd(sockfd, timeoutp, POLLIN | POLLOUT, NULL) == -1)
 		return -1;
 
 	/* Completed or failed */
@@ -938,8 +988,11 @@ urldecode(const char *src)
 {
 	char *ret, *dst;
 	int ch;
+	size_t srclen;
 
-	ret = xmalloc(strlen(src) + 1);
+	if ((srclen = strlen(src)) >= SIZE_MAX)
+		fatal_f("input too large");
+	ret = xmalloc(srclen + 1);
 	for (dst = ret; *src != '\0'; src++) {
 		switch (*src) {
 		case '+':
@@ -2327,6 +2380,8 @@ child_set_env(char ***envp, u_int *envsizep, const char *name,
 	 * If we're passed an uninitialized list, allocate a single null
 	 * entry before continuing.
 	 */
+	if ((*envp == NULL) != (*envsizep == 0))
+		fatal_f("environment size mismatch");
 	if (*envp == NULL && *envsizep == 0) {
 		*envp = xmalloc(sizeof(char *));
 		*envp[0] = NULL;
@@ -2505,9 +2560,6 @@ parse_absolute_time(const char *s, uint64_t *tp)
 	*tp = (uint64_t)tt;
 	return 0;
 }
-
-/* On OpenBSD time_t is int64_t which is long long. */
-/* #define SSH_TIME_T_MAX LLONG_MAX */
 
 void
 format_absolute_time(uint64_t t, char *buf, size_t len)
@@ -3014,4 +3066,80 @@ int
 ptimeout_isset(struct timespec *pt)
 {
 	return pt->tv_sec != -1;
+}
+
+/*
+ * Returns zero if the library at 'path' contains symbol 's', nonzero
+ * otherwise.
+ */
+int
+lib_contains_symbol(const char *path, const char *s)
+{
+#ifndef WINDOWS
+#ifdef HAVE_NLIST_H
+	struct nlist nl[2];
+	int ret = -1, r;
+
+	memset(nl, 0, sizeof(nl));
+	nl[0].n_name = xstrdup(s);
+	nl[1].n_name = NULL;
+	if ((r = nlist(path, nl)) == -1) {
+		error_f("nlist failed for %s", path);
+		goto out;
+	}
+	if (r != 0 || nl[0].n_value == 0 || nl[0].n_type == 0) {
+		error_f("library %s does not contain symbol %s", path, s);
+		goto out;
+	}
+	/* success */
+	ret = 0;
+ out:
+	free(nl[0].n_name);
+	return ret;
+#else /* HAVE_NLIST_H */
+	int fd, ret = -1;
+	struct stat st;
+	void *m = NULL;
+	size_t sz = 0;
+
+	memset(&st, 0, sizeof(st));
+	if ((fd = open(path, O_RDONLY)) < 0) {
+		error_f("open %s: %s", path, strerror(errno));
+		return -1;
+	}
+	if (fstat(fd, &st) != 0) {
+		error_f("fstat %s: %s", path, strerror(errno));
+		goto out;
+	}
+	if (!S_ISREG(st.st_mode)) {
+		error_f("%s is not a regular file", path);
+		goto out;
+	}
+	if (st.st_size < 0 ||
+	    (size_t)st.st_size < strlen(s) ||
+	    st.st_size >= INT_MAX/2) {
+		error_f("%s bad size %lld", path, (long long)st.st_size);
+		goto out;
+	}
+	sz = (size_t)st.st_size;
+	if ((m = mmap(NULL, sz, PROT_READ, MAP_PRIVATE, fd, 0)) == MAP_FAILED ||
+	    m == NULL) {
+		error_f("mmap %s: %s", path, strerror(errno));
+		goto out;
+	}
+	if (memmem(m, sz, s, strlen(s)) == NULL) {
+		error_f("%s does not contain expected string %s", path, s);
+		goto out;
+	}
+	/* success */
+	ret = 0;
+ out:
+	if (m != NULL && m != MAP_FAILED)
+		munmap(m, sz);
+	close(fd);
+	return ret;
+#endif /* HAVE_NLIST_H */
+#else /* WINDOWS */
+	return 0;
+#endif /* WINDOWS */
 }

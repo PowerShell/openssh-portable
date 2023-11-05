@@ -292,7 +292,7 @@ error:
 }
 
 /*fopen on Windows to mimic https://linux.die.net/man/3/fopen
-* only r, w, a are supported for now
+* only r, w, a, a+ are supported for now
 */
 FILE *
 w32_fopen_utf8(const char *input_path, const char *mode)
@@ -305,7 +305,7 @@ w32_fopen_utf8(const char *input_path, const char *mode)
 	errno_t r = 0;
 	int nonfs_dev = 0; /* opening a non file system device */
 
-	if (mode == NULL || mode[1] != '\0') {
+	if (mode == NULL || (mode[1] != '\0' && strncmp(mode, "a+", 2) != 0)) {
 		errno = ENOTSUP;
 		return NULL;
 	}

@@ -270,6 +270,7 @@ sshkey_file_tests(void)
 	ASSERT_STRING_EQ((const char *)sshbuf_ptr(buf),
 	    OBJ_nid2sn(k1->ecdsa_nid));
 	sshbuf_free(buf);
+#ifndef OPENSSL_IS_BORINGSSL /* lacks EC_POINT_point2bn() */
 	a = load_bignum("ecdsa_1.param.priv");
 	b = load_bignum("ecdsa_1.param.pub");
 	c = EC_POINT_point2bn(EC_KEY_get0_group(k1->ecdsa),
@@ -281,6 +282,7 @@ sshkey_file_tests(void)
 	BN_free(a);
 	BN_free(b);
 	BN_free(c);
+#endif /* OPENSSL_IS_BORINGSSL */
 	TEST_DONE();
 
 #ifndef WINDOWS /* TODO: test fails (atleast) on Windows as Licrypto is unable to parse legacy private key file with passphrase*/

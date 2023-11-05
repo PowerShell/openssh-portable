@@ -80,15 +80,18 @@ find_helper_in_module_path(void)
 static char *
 find_helper(void)
 {
-	char *helper;
+	char *helper = NULL;
 	char module_path[PATH_MAX + 1];
 	char *ep;
 	DWORD n;
+	size_t len = 0;
 
-	if ((helper = getenv("SSH_SK_HELPER")) == NULL || strlen(helper) == 0) {
+	_dupenv_s(&helper, &len, "SSH_SK_HELPER");
+	if (helper == NULL || len == 0) {
 		if ((helper = find_helper_in_module_path()) == NULL)
 			helper = _PATH_SSH_SK_HELPER;
 	}
+
 	if (!path_absolute(helper)) {
 		error_f("helper \"%s\" unusable: path not absolute", helper);
 		return NULL;

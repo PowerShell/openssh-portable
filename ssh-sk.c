@@ -1,4 +1,4 @@
-/* $OpenBSD: ssh-sk.c,v 1.39 2022/07/20 03:29:14 djm Exp $ */
+/* $OpenBSD: ssh-sk.c,v 1.40 2023/07/19 14:02:27 djm Exp $ */
 /*
  * Copyright (c) 2019 Google LLC
  *
@@ -133,10 +133,19 @@ sshsk_open(const char *path)
 		goto fail;
 #endif
 	}
+	if (lib_contains_symbol(path, "sk_api_version") != 0) {
+		error("provider %s is not an OpenSSH FIDO library", path);
+		goto fail;
+	}
+#ifdef WINDOWS
 	if ((ret->dlhandle = dlopen(path, RTLD_NOW)) == NULL) { // CodeQL [SM01925]: upstream code that permits user input to specify external provider is by design, but only accessible via CLI parameter
 		error("Provider \"%s\" dlopen failed: %s", path, dlerror());
 		goto fail;
 	}
+#else
+	if ((ret->dlhandle = dlopen(path, RTLD_NOW)) == NULL)
+		fatal("Provider \"%s\" dlopen failed: %s", path, dlerror());
+#endif /* WINDOWS */
 	if ((ret->sk_api_version = dlsym(ret->dlhandle,
 	    "sk_api_version")) == NULL) {
 		error("Provider \"%s\" dlsym(sk_api_version) failed: %s",

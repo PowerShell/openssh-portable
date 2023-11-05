@@ -1,5 +1,4 @@
-
-/* $OpenBSD: servconf.c,v 1.390 2023/01/17 09:44:48 djm Exp $ */
+/* $OpenBSD: servconf.c,v 1.396 2023/07/17 05:26:38 djm Exp $ */
 /*
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
  *                    All rights reserved
@@ -54,7 +53,6 @@
 #include "sshbuf.h"
 #include "misc.h"
 #include "servconf.h"
-#include "compat.h"
 #include "pathnames.h"
 #include "cipher.h"
 #include "sshkey.h"
@@ -212,7 +210,7 @@ static void
 assemble_algorithms(ServerOptions *o)
 {
 	char *all_cipher, *all_mac, *all_kex, *all_key, *all_sig;
-	char *def_cipher, *def_mac, *def_kex, *def_key, *def_sig;
+	char *def_cipher = NULL, *def_mac = NULL, *def_kex = NULL, *def_key = NULL, *def_sig = NULL;
 	int r;
 
 	all_cipher = cipher_alg_list(',', 0);
@@ -963,7 +961,7 @@ process_permitopen(struct ssh *ssh, ServerOptions *options)
 
 /* Parse a ChannelTimeout clause "pattern=interval" */
 static int
-parse_timeout(const char *s, char **typep, u_int *secsp)
+parse_timeout(const char *s, char **typep, int *secsp)
 {
 	char *cp, *sdup;
 	int secs;
@@ -989,7 +987,7 @@ parse_timeout(const char *s, char **typep, u_int *secsp)
 	if (typep != NULL)
 		*typep = xstrdup(sdup);
 	if (secsp != NULL)
-		*secsp = (u_int)secs;
+		*secsp = secs;
 	free(sdup);
 	return 0;
 }
@@ -997,7 +995,8 @@ parse_timeout(const char *s, char **typep, u_int *secsp)
 void
 process_channel_timeouts(struct ssh *ssh, ServerOptions *options)
 {
-	u_int i, secs;
+	int secs;
+	u_int i;
 	char *type;
 
 	debug3_f("setting %u timeouts", options->num_channel_timeouts);
@@ -1337,6 +1336,7 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 {
 	char *str, ***chararrayptr, **charptr, *arg, *arg2, *p, *keyword;
 	int cmdline = 0, *intptr, value, value2, n, port, oactive, r, found;
+	int ca_only = 0;
 	SyslogFacility *log_facility_ptr;
 	LogLevel *log_level_ptr;
 	ServerOpCodes opcode;
@@ -1578,6 +1578,7 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 
 	case sHostbasedAcceptedAlgorithms:
 		charptr = &options->hostbased_accepted_algos;
+		ca_only = 0;
  parse_pubkey_algos:
 		arg = argv_next(&ac, &av);
 		if (!arg || *arg == '\0')
@@ -1585,7 +1586,7 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 			    filename, linenum);
 		if (*arg != '-' &&
 		    !sshkey_names_valid2(*arg == '+' || *arg == '^' ?
-		    arg + 1 : arg, 1))
+		    arg + 1 : arg, 1, ca_only))
 			fatal("%s line %d: Bad key types '%s'.",
 			    filename, linenum, arg ? arg : "<NONE>");
 		if (*activep && *charptr == NULL)
@@ -1594,18 +1595,22 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 
 	case sHostKeyAlgorithms:
 		charptr = &options->hostkeyalgorithms;
+		ca_only = 0;
 		goto parse_pubkey_algos;
 
 	case sCASignatureAlgorithms:
 		charptr = &options->ca_sign_algorithms;
+		ca_only = 1;
 		goto parse_pubkey_algos;
 
 	case sPubkeyAuthentication:
 		intptr = &options->pubkey_authentication;
+		ca_only = 0;
 		goto parse_flag;
 
 	case sPubkeyAcceptedAlgorithms:
 		charptr = &options->pubkey_accepted_algos;
+		ca_only = 0;
 		goto parse_pubkey_algos;
 
 	case sPubkeyAuthOptions:
@@ -2415,7 +2420,7 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 			fatal("%.200s line %d: %s must be an absolute path",
 			    filename, linenum, keyword);
 		}
-		if (*activep && options->authorized_keys_command == NULL)
+		if (*activep && *charptr == NULL)
 			*charptr = xstrdup(str + len);
 		argv_consume(&ac);
 		break;
@@ -2983,8 +2988,16 @@ dump_cfg_strarray_oneline(ServerOpCodes code, u_int count, char **vals)
 {
 	u_int i;
 
-	if (count <= 0 && code != sAuthenticationMethods)
-		return;
+	switch (code) {
+	case sAuthenticationMethods:
+	case sChannelTimeout:
+		break;
+	default:
+		if (count <= 0)
+			return;
+		break;
+	}
+
 	printf("%s", lookup_opcode_name(code));
 	for (i = 0; i < count; i++)
 		printf(" %s",  vals[i]);
