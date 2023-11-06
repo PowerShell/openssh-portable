@@ -2048,7 +2048,11 @@ do_upload(struct sftp_conn *conn, const char *local_path,
 		close(local_fd);
 		return(-1);
 	}
+#ifdef WINDOWS
+	if (!(S_ISREG(sb.st_mode) || sb.st_mode & S_IFMT == S_IFIFO)) {
+#else
 	if (!S_ISREG(sb.st_mode)) {
+#endif /* WINDOWS */
 		error("local \"%s\" is not a regular file", local_path);
 		close(local_fd);
 		return(-1);
