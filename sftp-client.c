@@ -2049,7 +2049,7 @@ do_upload(struct sftp_conn *conn, const char *local_path,
 		return(-1);
 	}
 #ifdef WINDOWS
-	if (!(S_ISREG(sb.st_mode) || sb.st_mode & S_IFMT == S_IFIFO)) {
+	if (!(S_ISREG(sb.st_mode) || (sb.st_mode & S_IFMT) == S_IFIFO)) {
 #else
 	if (!S_ISREG(sb.st_mode)) {
 #endif /* WINDOWS */
