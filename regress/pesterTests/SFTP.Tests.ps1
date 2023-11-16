@@ -307,7 +307,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
       $fileDestination = Join-Path $serverDirectory "test-sftp-put.txt"
       $Commands = "put \\.\pipe\npipe $fileDestination"
       Set-Content $batchFilePath -Encoding UTF8 -value $Commands
-      $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port -b $batchFilePath test_target > $outputFilePath")
+      $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -vvv -P $port -b $batchFilePath test_target > $outputFilePath")
       Invoke-Expression $str
       #validate file content - data sent from pipe is defined in .\utilities\pipe\create-pipe-put.ps1
       (Get-Content $fileDestination) | Should -Be "temp pipe data"   
