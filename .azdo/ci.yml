@@ -61,9 +61,10 @@ stages:
         }
         $null = New-Item -ItemType Directory -Path $BuildDestPath -Force
         $BuildDestx86Path = Join-Path -Path $BuildDestPath -ChildPath 'x86/Release'
-        Copy-BuildResults -BuildResultsPath $BuildDestx86Path -NativeHostArch x86 -Configuration Release
+        # temporary change to build debug instead of release because of zlib different compiler version error
+        Copy-BuildResults -BuildResultsPath $BuildDestx86Path -NativeHostArch x86 -Configuration Debug
         $BuildDestX64Path = Join-Path -Path $BuildDestPath -ChildPath 'x64/Release'
-        Copy-BuildResults -BuildResultsPath $BuildDestx64Path -NativeHostArch x64 -Configuration Release
+        Copy-BuildResults -BuildResultsPath $BuildDestx64Path -NativeHostArch x64 -Configuration Debug
         #
         # Upload build artifacts
         Write-Verbose -Verbose -Message "Uploading build artifacts"
