@@ -35,9 +35,8 @@ function Write-BuildMessage
 #>
 function Invoke-AzDOBuild
 {
-      # temporary change to build debug instead of release because of zlib different compiler version error
-      Start-OpenSSHBuild -Configuration Debug -NativeHostArch x64 -Verbose
-      Start-OpenSSHBuild -Configuration Debug -NativeHostArch x86 -Verbose
+      Start-OpenSSHBuild -Configuration Release -NativeHostArch x64 -Verbose
+      Start-OpenSSHBuild -Configuration Release -NativeHostArch x86 -Verbose
       Write-BuildMessage -Message "OpenSSH binaries build success!" -Category Information
 }
 
