@@ -119,15 +119,15 @@ void send_encryption_telemetry(const char* direction,
     TraceLoggingUnregister(g_hProvider1);
 }
 
-void send_exit_code_telemetry(const int exit_code)
+void send_kex_exch_exit_code_telemetry(const int exit_code)
 {
     TraceLoggingRegister(g_hProvider1);
     TraceLoggingWrite(
         g_hProvider1,
-        "ExitCode",
+        "KexExchExitCodeSSHD",
         TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
         TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
-        TraceLoggingInt16(exit_code, "exitCode")
+        TraceLoggingInt16(exit_code, "KexExchExitCodeSSHD")
     );
     TraceLoggingUnregister(g_hProvider1);
 }

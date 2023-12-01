@@ -2726,12 +2726,12 @@ done_loading_hostkeys:
 		options.version_addendum)) != 0)
 #ifdef WINDOWS
 	{
-		send_exit_code_telemetry(r);
+		send_kex_exch_exit_code_telemetry(r);
 #endif /* WINDOWS */
 		sshpkt_fatal(ssh, r, "banner exchange");
 #ifdef WINDOWS
 	}
-	send_exit_code_telemetry(0);
+	send_kex_exch_exit_code_telemetry(0);
 #endif /* WINDOWS */
 idexch_done:
 	ssh_packet_set_nonblocking(ssh);
