@@ -338,7 +338,7 @@ sighup_restart(void)
 	close_listen_socks();
 	close_startup_pipes();
 	ssh_signal(SIGHUP, SIG_IGN); /* will be restored after exec */
-	execv(saved_argv[0], saved_argv);
+	execv(saved_argv[0], saved_argv); // CodeQL [SM01925] false positive: restarting sshd will verify inputs via case statement in main
 	logit("RESTART FAILED: av[0]='%.100s', error: %.100s.", saved_argv[0],
 	    strerror(errno));
 	exit(1);
