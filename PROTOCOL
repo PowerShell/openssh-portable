@@ -137,6 +137,25 @@ than as a named global or channel request to allow pings with very
 short packet lengths, which would not be possible with other
 approaches.
 
+1.9 transport: strict key exchange extension
+
+OpenSSH supports a number of transport-layer hardening measures under
+a "strict KEX" feature. This feature is signalled similarly to the
+RFC8305 ext-info feature: by including a additional algorithm in the
+SSH2_MSG_KEXINIT kex_algorithms field. The client may append
+"kex-strict-c-v00@openssh.com" to its kex_algorithms and the server
+may append "kex-strict-s-v00@openssh.com".
+
+When endpoint that supports this extension observes this algorithm
+name in a peer's KEXINIT packet, it MUST make the following changes to
+the the protocol:
+
+a) During initial KEX, terminate the connection if any unexpected or
+   out-of-sequence packet is received. This includes terminating the
+   connection if the first packet received is not SSH2_MSG_KEXINIT.
+b) At each SSH2_MSG_NEWKEYS message, reset the packet sequence number
+   to zero.
+
 2. Connection protocol changes
 
 2.1. connection: Channel write close extension "eow@openssh.com"
