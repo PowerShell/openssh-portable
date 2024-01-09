@@ -77,6 +77,7 @@ jobs:
           - { target: ARM64, config: default, host: ARM64 }
           - { target: ARM64, config: pam, host: ARM64 }
           - { target: debian-riscv64, config: default, host: debian-riscv64 }
+          - { target: obsd-arm64, config: default, host: obsd-arm64 }
           - { target: openwrt-mips, config: default, host: openwrt-mips }
           - { target: openwrt-mipsel, config: default, host: openwrt-mipsel }
     steps:

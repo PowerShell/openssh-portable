@@ -119,6 +119,19 @@ void send_encryption_telemetry(const char* direction,
     TraceLoggingUnregister(g_hProvider1);
 }
 
+void send_kex_exch_exit_code_telemetry(const int exit_code)
+{
+    TraceLoggingRegister(g_hProvider1);
+    TraceLoggingWrite(
+        g_hProvider1,
+        "KexExchExitCodeSSHD",
+        TelemetryPrivacyDataTag(PDT_ProductAndServiceUsage),
+        TraceLoggingKeyword(MICROSOFT_KEYWORD_MEASURES),
+        TraceLoggingInt16(exit_code, "KexExchExitCodeSSHD")
+    );
+    TraceLoggingUnregister(g_hProvider1);
+}
+
 void send_pubkey_telemetry(const char* pubKeyStatus)
 {
     TraceLoggingRegister(g_hProvider1);
@@ -205,4 +218,3 @@ void send_ssh_version_telemetry(const char* ssh_version,
     );
     TraceLoggingUnregister(g_hProvider1);
 }
-

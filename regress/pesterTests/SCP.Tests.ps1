@@ -37,6 +37,19 @@ Describe "Tests for scp command" -Tags "CI" {
         $null = New-Item $DestinationDir -ItemType directory -Force -ErrorAction SilentlyContinue
         $sshcmd = (get-command ssh).Path        
 
+        # for symlink tests
+        $SourceDirSymLinkName = "SourceDirSymLink"
+        $SourceDirSymLink = Join-Path $testDir $SourceDirSymLinkName
+        $tmpDir = Join-Path $testDir "tmpDir"
+        $tmpDirFilePath = Join-Path $tmpDir $fileName1
+        $null = New-Item $SourceDirSymLink -ItemType directory -Force -ErrorAction SilentlyContinue
+        $null = New-Item $tmpDir -ItemType directory -Force -ErrorAction SilentlyContinue
+        $null = New-item -path $tmpDirFilePath -ItemType file -force -ErrorAction SilentlyContinue
+        "Test content in tmp dir for sym link" | Set-content -Path $tmpDirFilePath
+        $SymLinkName = "SymLinkDir"
+        $SymLinkDir = Join-Path $SourceDirSymLink $SymLinkName
+        $null = New-Item -Path $SymLinkDir -ItemType SymbolicLink -Value $tmpDir
+
         $server = $OpenSSHTestInfo["Target"]
         $port = $OpenSSHTestInfo["Port"]
         $ssouser = $OpenSSHTestInfo["SSOUser"]
@@ -114,6 +127,27 @@ Describe "Tests for scp command" -Tags "CI" {
             }
         )
 
+        $testData2 = @(
+            @{
+                Title = 'symlink copy from local dir to remote dir'
+                Source = $SourceDirSymLink
+                Destination = "test_target:$DestinationDir"
+                Options = "-r -p -c aes128-ctr"
+            },
+            @{
+                Title = 'symlink copy from local dir to local dir'
+                Source = $SourceDirSymLink
+                Destination = $DestinationDir
+                Options = "-r "
+            },
+            @{
+                Title = 'symlink copy from remote dir to local dir'            
+                Source = "test_target:$SourceDirSymLink"
+                Destination = $DestinationDir
+                Options = "-C -r -q"
+            }
+        )
+
         # for the first time, delete the existing log files.
         if ($OpenSSHTestInfo['DebugMode'])
         {
@@ -152,6 +186,10 @@ Describe "Tests for scp command" -Tags "CI" {
             {
                 Get-Item $SourceDir | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
             }
+            if(-not [string]::IsNullOrEmpty($SourceDirSymLink))
+            {
+                Get-Item $SourceDirSymLink | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            }
             if(-not [string]::IsNullOrEmpty($DestinationDir))
             {
                 Get-Item $DestinationDir | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
@@ -176,7 +214,7 @@ Describe "Tests for scp command" -Tags "CI" {
         $LASTEXITCODE | Should Be 0
         #validate file content. DestPath is the path to the file.
         CheckTarget -target $DestinationFilePath | Should Be $true
-
+        
         $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
         $equal | Should Be $true
 
@@ -211,6 +249,16 @@ Describe "Tests for scp command" -Tags "CI" {
             $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir).LastWriteTime.DateTime (Get-ChildItem -Recurse -path (join-path $DestinationDir $SourceDirName) ).LastWriteTime.DateTime).Length -eq 0            
             $equal | Should Be $true
         }
+    }
+
+    It 'Directory with symlink recursive copy: <Title> ' -TestCases:$testData2 {
+        param([string]$Title, $Source, $Destination, [string]$Options)                        
+            
+        iex  "scp $Options $Source $Destination"
+        $LASTEXITCODE | Should Be 0
+        $expectedFilepath = join-path $DestinationDir $SourceDirSymLinkName $SymLinkName $fileName1
+        CheckTarget -target $expectedFilepath | Should Be $true
+        Get-Content $expectedFilepath | Should Be "Test content in tmp dir for sym link"
     }
 
     It 'File copy: path contains wildcards ' {

@@ -63,6 +63,17 @@
 
 #define KEX_CLIENT_ENCRYPT KEX_SERVER_ENCRYPT
 
+#ifdef WINDOWS
+#define	KEX_SERVER_MAC \
+	"umac-64-etm@openssh.com," \
+	"umac-128-etm@openssh.com," \
+	"hmac-sha2-256-etm@openssh.com," \
+	"hmac-sha2-512-etm@openssh.com," \
+	"umac-64@openssh.com," \
+	"umac-128@openssh.com," \
+	"hmac-sha2-256," \
+	"hmac-sha2-512,"
+#else
 #define	KEX_SERVER_MAC \
 	"umac-64-etm@openssh.com," \
 	"umac-128-etm@openssh.com," \
@@ -74,6 +85,7 @@
 	"hmac-sha2-256," \
 	"hmac-sha2-512," \
 	"hmac-sha1"
+#endif
 
 #define KEX_CLIENT_MAC KEX_SERVER_MAC
 

@@ -338,7 +338,7 @@ sighup_restart(void)
 	close_listen_socks();
 	close_startup_pipes();
 	ssh_signal(SIGHUP, SIG_IGN); /* will be restored after exec */
-	execv(saved_argv[0], saved_argv);
+	execv(saved_argv[0], saved_argv); // CodeQL [SM01925] false positive: restarting sshd will verify inputs via case statement in main
 	logit("RESTART FAILED: av[0]='%.100s', error: %.100s.", saved_argv[0],
 	    strerror(errno));
 	exit(1);
@@ -2142,7 +2142,7 @@ main(int ac, char **av)
 			break;
 		case 'V':
 			fprintf(stderr, "%s, %s\n",
-			    SSH_VERSION, SSH_OPENSSL_VERSION);
+			    SSH_RELEASE, SSH_OPENSSL_VERSION);
 			exit(0);
 #ifdef WINDOWS
 		case 'y':
@@ -2723,8 +2723,16 @@ done_loading_hostkeys:
 		alarm(options.login_grace_time);
 
 	if ((r = kex_exchange_identification(ssh, -1,
-	    options.version_addendum)) != 0)
+		options.version_addendum)) != 0)
+#ifdef WINDOWS
+	{
+		send_kex_exch_exit_code_telemetry(r);
+#endif /* WINDOWS */
 		sshpkt_fatal(ssh, r, "banner exchange");
+#ifdef WINDOWS
+	}
+	send_kex_exch_exit_code_telemetry(0);
+#endif /* WINDOWS */
 idexch_done:
 	ssh_packet_set_nonblocking(ssh);
 

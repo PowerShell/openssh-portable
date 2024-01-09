@@ -12,6 +12,9 @@ void send_encryption_telemetry(const char* direction,
 	const char* comp, const char* host_key, 
 	const char** cproposal, const char** sproposal);
 
+// sends exit code of kex_exchange_identification(), utilized only in sshd
+void send_kex_exch_exit_code_telemetry(const int exit_code);
+
 // sends status if using key-based auth
 void send_pubkey_telemetry(const char* pubKeyStatus);
 
