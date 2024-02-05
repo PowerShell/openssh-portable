@@ -23,18 +23,18 @@ Describe "E2E scenarios for ssh-shellhost" -Tags "CI" {
         }
 
         It "$tC.$tI - various quote tests" -skip:$skip {
-                $o = ssh-shellhost -c cmd /c echo hello
-                $o | Should Be "hello"
-                $o = ssh-shellhost -c `"cmd /c echo hello`"
-                $o | Should Be "hello"
-                $o = ssh-shellhost -c cmd /c echo `"hello`"
-                $o | Should Be "`"hello`""
-                $o = ssh-shellhost -c `"cmd /c echo `"hello`"`"
-                $o | Should Be "`"hello`""
-                $o = ssh-shellhost -c `"cmd /c echo `"hello`"
-                $o | Should Be "`"hello"
-                $o = ssh-shellhost -c `"`"cmd`" /c echo `"hello`"`"
-                $o | Should Be "`"hello`""
+            $o = ssh-shellhost -c cmd /c echo hello
+            $o | Should Be "hello"
+            $o = ssh-shellhost -c "cmd /c echo hello"
+            $o | Should Be "hello"
+            $o = ssh-shellhost -c cmd /c echo "hello"
+            $o | Should Be "hello"
+            $o = ssh-shellhost -c "cmd /c echo `"hello`""
+            $o | Should Be "`\`"hello`\`""
+            $o = ssh-shellhost -c "cmd /c echo `"hello"
+            $o | Should Be "`\`"hello"
+            $o = ssh-shellhost -c "cmd" /c echo "hello"
+            $o | Should Be "hello"
                 
         }
 

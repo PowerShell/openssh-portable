@@ -36,8 +36,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
         Remove-item (Join-Path $rootDirectory "*.$batchFileName") -Force -ErrorAction SilentlyContinue
         Remove-item (Join-Path $rootDirectory "*.log") -Force -ErrorAction SilentlyContinue
         
-        $platform = Get-Platform
-        $skip = ($platform -eq [PlatformType]::Windows) -and ($PSVersionTable.PSVersion.Major -le 2)
+        $skip = $IsWindows -and ($PSVersionTable.PSVersion.Major -le 2)
 
         $testData1 = @(
              @{

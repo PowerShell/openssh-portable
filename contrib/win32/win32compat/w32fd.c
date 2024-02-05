@@ -114,13 +114,13 @@ fd_table_initialize()
 	/* decode fd state if any */
 	{
 		char *posix_fd_state;
-		_dupenv_s(&posix_fd_state, NULL, POSIX_FD_STATE);
+
 		/*TODO - validate parent process - to accomodate these scenarios -
 		* A posix parent process launches a regular process that inturn launches a posix child process
 		* In this case the posix child process may misinterpret POSIX_FD_STATE set by grand parent
 		*/
 
-		if (NULL != posix_fd_state) {
+		if ((_dupenv_s(&posix_fd_state, NULL, POSIX_FD_STATE) == 0) && (NULL != posix_fd_state)) {
 			fd_decode_state(posix_fd_state);
 			free(posix_fd_state);
 			_putenv_s(POSIX_FD_STATE, "");
@@ -558,7 +558,7 @@ w32_write(int fd, const void *buf, size_t max)
 	if (fd_table.w32_ios[fd]->type == SOCK_FD)
 		return socketio_send(fd_table.w32_ios[fd], buf, max, 0);
 
-	return fileio_write(fd_table.w32_ios[fd], buf, max);
+	return fileio_write_wrapper(fd_table.w32_ios[fd], buf, max);
 }
 
 int
@@ -696,6 +696,9 @@ w32_fcntl(int fd, int cmd, ... /* arg */)
 		break;
 	case F_SETFD:
 		ret = w32_io_process_fd_flags(fd_table.w32_ios[fd], va_arg(valist, int));
+		break;
+	case F_DUPFD:
+		ret = dup(fd);
 		break;
 	default:
 		errno = EINVAL;
@@ -1044,7 +1047,7 @@ char * build_commandline_string(const char* cmd, char *const argv[], BOOLEAN pre
 * spawned child will run as as_user if its not NULL
 */
 static int
-spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDLE err, unsigned long flags, HANDLE* as_user, BOOLEAN prepend_module_path)
+spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDLE err, unsigned long flags, HANDLE as_user, BOOLEAN prepend_module_path)
 {
 	PROCESS_INFORMATION pi;
 	STARTUPINFOW si;
@@ -1071,14 +1074,28 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 	if (strstr(cmd, "sshd.exe")) {
 		flags |= DETACHED_PROCESS;
 	}
+
+	char* fidoDebug = NULL;
+	size_t len = 0;
+	_dupenv_s(&fidoDebug, &len, "FIDO_DEBUG");
+
+	if (is_bash_test_env() ||
+		(strstr(cmd, "ssh-pkcs11-helper.exe")) ||
+		((fidoDebug == NULL) && strstr(cmd, "ssh-sk-helper.exe"))) {
+		debug3("Creating process with CREATE_NO_WINDOW");
+		flags |= CREATE_NO_WINDOW;
+	}
 	
 	wchar_t * t = cmdline_utf16;
 	do {
-		debug3("spawning %ls", t);
-		if (as_user)
+		if (as_user) {
+			debug3("spawning %ls as user", t);
 			b = CreateProcessAsUserW(as_user, NULL, t, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
-		else
+		}
+		else {
+			debug3("spawning %ls as subprocess", t);
 			b = CreateProcessW(NULL, t, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
+		}
 		if(b || GetLastError() != ERROR_FILE_NOT_FOUND || (argv != NULL && *argv != NULL) || cmd[0] == '\"')
 			break;
 		t++;
@@ -1301,4 +1318,16 @@ int
 posix_spawnp(pid_t *pidp, const char *file, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[])
 {
 	return posix_spawn_internal(pidp, file, file_actions, attrp, argv, envp, NULL, FALSE);
+}
+
+int
+posix_spawn_as_user(pid_t *pidp, const char *file, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], HANDLE user_token)
+{
+	return posix_spawn_internal(pidp, file, file_actions, attrp, argv, envp, user_token, TRUE);
+}
+
+int
+posix_spawnp_as_user(pid_t *pidp, const char *file, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], HANDLE user_token)
+{
+	return posix_spawn_internal(pidp, file, file_actions, attrp, argv, envp, user_token, FALSE);
 }

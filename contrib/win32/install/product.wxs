@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+
+<?ifndef ProductVersion?>
+<?error ProductVersion must be defined?>
+<?endif?>
+
+<!-- Currently support x86, x64 builds. Assumes only previews are built as MSIs. -->
+<?if $(var.Platform) = "x64"?>
+<?define ProgramFilesFolder = "ProgramFiles64Folder"?>
+<?define UpgradeCode = "9E9D0D93-E70D-4424-ADBD-AD3B226A226D"?>
+<?elseif $(var.Platform) = "x86"?>
+<?define ProgramFilesFolder = "ProgramFilesFolder"?>
+<?define UpgradeCode = "2A1799F1-5B26-4DDC-A0C7-03F75C4C08D2"?>
+<?elseif $(var.Platform) = "ARM64"?>
+<?define ProgramFilesFolder = "ProgramFiles64Folder"?>
+<?define UpgradeCode = "5D153A07-920A-4978-8B33-8447DD4C42F9"?>
+<?else?>
+<?error Platform $(var.Platform) is not supported?>
+<?endif?>
+
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product Id="*" Name="OpenSSH" Version="$(var.ProductVersion)" Language="1033" Manufacturer="Microsoft Corporation" UpgradeCode="$(var.UpgradeCode)">
+        <Package Compressed="yes" InstallerVersion="200" InstallScope="perMachine"/>
+        <MediaTemplate EmbedCab="yes" />
+
+        <MajorUpgrade Schedule="afterInstallInitialize" DowngradeErrorMessage="A newer version of !(bind.property.ProductName) is already installed." />
+        <Condition Message="OpenSSH is supported only on Windows 7 and newer."><![CDATA[VersionNT >= 601]]></Condition>
+
+        <!-- assume user wants path to be updated when client binaries are installed, can be overridden during install with ADD_PATH=0 -->
+        <Property Id="ADD_PATH" Value="1" />
+
+        <Feature Id="Client" AllowAdvertise="no">
+            <ComponentGroupRef Id="Client" />
+        </Feature>
+        <Feature Id="Server" AllowAdvertise="no">
+            <ComponentGroupRef Id="Server" />
+        </Feature>
+
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="$(var.ProgramFilesFolder)" Name="Program Files">
+                <Directory Id="INSTALLFOLDER" Name="OpenSSH" >
+                    <Directory Id="MANIFESTFOLDER" Name="_manifest" >
+                        <Directory Id="SPDXFOLDER" Name="spdx_2.2" />
+                    </Directory>
+                </Directory>
+            </Directory>
+        </Directory>
+    </Product>
+</Wix>

@@ -40,7 +40,7 @@
     <Property Key="AdvancedMitigationsEnforced" Value="None" Type="AdvancedMitigations" />
     <Properties Key="AllowedLibraries" Type="IL.Rules.StringToVersionMap" />
     <Properties Key="MinimumToolVersions" Type="IL.Rules.StringToVersionMap">
-      <Property Key="MinimumCompilerVersion" Value="17.0.65501.17013" Type="System.Version" />
+      <Property Key="C" Value="17.0.65501.17013" Type="System.Version" />
       <Property Key="MinimumXboxCompilerVersion" Value="16.0.11886.0" Type="System.Version" />
     </Properties>
     <Property Key="RuleEnabled" Value="Default" Type="Driver.RuleEnabledState" />

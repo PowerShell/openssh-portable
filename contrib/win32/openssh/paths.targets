@@ -4,13 +4,21 @@
     <OpenSSH-Src-Path>$(SolutionDir)..\..\..\</OpenSSH-Src-Path>
     <OpenSSH-Bin-Path>$(SolutionDir)..\..\..\bin\</OpenSSH-Bin-Path>
     <OpenSSH-Lib-Path>$(SolutionDir)lib\</OpenSSH-Lib-Path>
-    <LibreSSLVersion>3.0.2.0</LibreSSLVersion>
-    <ZLibVersion>2.1.11</ZLibVersion>
+    <LibreSSLVersion>3.8.2.0</LibreSSLVersion>
+    <ZLibVersion>1.3</ZLibVersion>
+    <fido2Version>1.14.0</fido2Version>
+    <!--libcbor version is not used in the build; it is needed for pipeline compliance tasks-->  
+    <libcborVersion>0.10.1</libcborVersion> 
     <LibreSSL-Path>$(SolutionDir)\LibreSSL\sdk\</LibreSSL-Path>
     <LibreSSL-x86-Path>$(SolutionDir)\LibreSSL\bin\desktop\x86\</LibreSSL-x86-Path>
     <LibreSSL-x64-Path>$(SolutionDir)\LibreSSL\bin\desktop\x64\</LibreSSL-x64-Path>
     <LibreSSL-arm64-Path>$(SolutionDir)\LibreSSL\bin\desktop\arm64\</LibreSSL-arm64-Path>
     <LibreSSL-arm-Path>$(SolutionDir)\LibreSSL\bin\desktop\arm\</LibreSSL-arm-Path>
+    <fido2-Path>$(SolutionDir)\libfido2\</fido2-Path>
+    <fido2-x86-Path>$(SolutionDir)\libfido2\Win32\Release\static\</fido2-x86-Path>
+    <fido2-x64-Path>$(SolutionDir)\libfido2\Win64\Release\static\</fido2-x64-Path>
+    <fido2-arm64-Path>$(SolutionDir)\libfido2\ARM64\Release\static\</fido2-arm64-Path>
+    <fido2-arm-Path>$(SolutionDir)\libfido2\ARM\Release\static\</fido2-arm-Path>
     <ZLib-Path>$(SolutionDir)\ZLib\sdk\</ZLib-Path>
     <ZLib-x86-Path>$(SolutionDir)\ZLib\bin\x86\</ZLib-x86-Path>
     <ZLib-x64-Path>$(SolutionDir)\ZLib\bin\x64\</ZLib-x64-Path>
@@ -18,7 +26,7 @@
     <ZLib-arm-Path>$(SolutionDir)\ZLib\bin\arm\</ZLib-arm-Path>
     <UseOpenSSL>true</UseOpenSSL>
     <SSLLib>libcrypto.lib;</SSLLib>
-    <WindowsSDKVersion>8.1</WindowsSDKVersion>
+    <WindowsSDKVersion>10.0.22621.0</WindowsSDKVersion>
     <AdditionalDependentLibs>bcrypt.lib;Userenv.lib;Crypt32.lib;Ws2_32.lib;Secur32.lib;Shlwapi.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;Netapi32.lib;Rpcrt4.lib;ntdll.lib</AdditionalDependentLibs>
     <MinimalCoreWin>false</MinimalCoreWin>
   </PropertyGroup>

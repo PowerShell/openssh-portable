@@ -1,4 +1,9 @@
-﻿$scriptpath = $MyInvocation.MyCommand.Path
+﻿if (!([bool]([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")))
+{
+    throw "You must be running as an administrator, please restart as administrator"
+}
+
+$scriptpath = $MyInvocation.MyCommand.Path
 $scriptdir = Split-Path $scriptpath
 $etwman = Join-Path $scriptdir "openssh-events.man"
 
@@ -12,8 +17,14 @@ else {
     Write-Host -ForegroundColor Yellow "sshd service is not installed"
 }
 
-# unregister etw provider
-wevtutil um `"$etwman`"
+# Unregister etw provider
+# PowerShell 7.3+ has new/different native command argument parsing
+if ($PSVersiontable.PSVersion -le '7.2.9') {
+    wevtutil um `"$etwman`"
+}
+else {
+    wevtutil um "$etwman"
+}
 
 if (Get-Service ssh-agent -ErrorAction SilentlyContinue) 
 {

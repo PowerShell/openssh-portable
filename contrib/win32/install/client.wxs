@@ -1,0 +1,32 @@
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Fragment>
+        <!-- KeyPath is necessary for multi-file components to identify the key file - preferrably versioned. -->
+        <ComponentGroup Id="Client" Directory="INSTALLFOLDER">
+            <ComponentGroupRef Id="Shared" />
+            <ComponentGroupRef Id="Manifest" />
+            <Component>
+                <File Name="ssh.exe" KeyPath="yes" />
+            </Component>
+            <Component>
+                <File Name="sftp.exe" KeyPath="yes" />
+            </Component>
+            <Component>
+                <File Name="ssh-add.exe" KeyPath="yes" />
+            </Component>
+            <Component>
+                <File Name="ssh-keyscan.exe" KeyPath="yes" />
+            </Component>
+            <Component>
+                <File Name="ssh-sk-helper.exe" KeyPath="yes" />
+            </Component>
+            <Component>
+                <File Name="ssh-pkcs11-helper.exe" KeyPath="yes" />
+            </Component>
+            <Component Id="ClientPATH" Guid="F07FFA0C-B5CF-45A3-9013-A7420DDFD654">
+                <!-- Use same property condition as PowerShell. We can use a shared component GUID here because there should be only one installed on a system. -->
+                <Condition>ADD_PATH=1</Condition>
+                <Environment Id="ClientPATH" Name="PATH" Value="[INSTALLFOLDER]" Action="set" Part="first" System="yes" />
+            </Component>
+        </ComponentGroup>
+    </Fragment>
+</Wix>

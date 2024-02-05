@@ -193,6 +193,7 @@ void file_simple_fileio()
 		retValue = lseek(f, offset, SEEK_SET);
 		ASSERT_INT_EQ(retValue, 0);
 		char *tmp = dup_str(small_read_buf);
+		ASSERT_PTR_NE(tmp, NULL); // CodeQL [SM02311] false positive: ASSERT_PTR_NE is checking if tmp is NULL.
 
 		retValue = read(f, small_read_buf, SMALL_RECV_BUF_SIZE);
 		small_read_buf[retValue] = '\0';
@@ -419,6 +420,8 @@ file_miscellaneous_tests()
 	ASSERT_INT_NE(retValue, -1);
 
 	char *tmp = dup_str(thishost);
+	if (tmp == NULL)
+		goto out;
 	int len = strlen(tmp);
 
 	int f = dup(STDOUT_FILENO);
@@ -486,7 +489,7 @@ file_miscellaneous_tests()
 	close(f);
 	retValue = unlink(tmp_filename);
 	ASSERT_INT_EQ(retValue, 0);	
-
+out:
 	TEST_DONE();
 }
 

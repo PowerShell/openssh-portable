@@ -16,6 +16,7 @@ Describe "E2E scenarios for AuthorizedKeysCommand" -Tags "CI" {
         $opensshbinpath = $OpenSSHTestInfo['OpenSSHBinPath']
         $ssouser = $OpenSSHTestInfo["SSOUser"]
         $sshdconfig = Join-Path $Global:OpenSSHTestInfo["ServiceConfigDir"] sshd_config
+        $sshdDelay = $OpenSSHTestInfo["DelayTime"]
 
         $testDir = Join-Path $OpenSSHTestInfo["TestDataPath"] $suite
         if(-not (Test-Path $testDir))
@@ -41,17 +42,34 @@ Describe "E2E scenarios for AuthorizedKeysCommand" -Tags "CI" {
             #override authorizedkeysfile location to an unknown location, so AuthorizedKeysCommand gets executed
             $kcOutFile = Join-Path $testDir "$tC.$tI.kcout.txt"
             Remove-Item -Force $kcOutFile -ErrorAction SilentlyContinue
-            $sshdArgs = "-d -f $sshdconfig  -E $logFile -o `"AuthorizedKeysFile .fake/authorized_keys`""
+            $sshdArgs = "-ddd -f $sshdconfig  -E $logFile -o `"AuthorizedKeysFile .fake/authorized_keys`""
             $sshdArgs += " -o `"AuthorizedKeysCommand=$env:windir\system32\cmd.exe /c echo ssh-ed25519 %k & whoami > $kcOutFile`""
             $sshdArgs += " -o `"AuthorizedKeysCommandUser=$ssouser`""
             $sshdArgs += " -o PasswordAuthentication=no"
             Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments $sshdArgs -Port $port
             $o = ssh -p $port test_target echo 1234
             Stop-SSHDTestDaemon -Port $port
+            sleep $sshdDelay
             $o | Should Be "1234"
             #check the command is run as AuthorizedKeysCommandUser
             (gc $kcOutFile).Contains($ssouser) | Should Be $true
         }
 
+        It "$tC.$tI - keys command with %k argument AuthorizedKeysCommandUser as SYSTEM" {
+            #override authorizedkeysfile location to an unknown location, so AuthorizedKeysCommand gets executed
+            $kcOutFile = Join-Path $testDir "$tC.$tI.kcout.txt"
+            Remove-Item -Force $kcOutFile -ErrorAction SilentlyContinue
+            $sshdArgs = "-ddd -f $sshdconfig  -E $logFile -o `"AuthorizedKeysFile .fake/authorized_keys`""
+            $sshdArgs += " -o `"AuthorizedKeysCommand=$env:windir\system32\cmd.exe /c echo ssh-ed25519 %k & whoami > $kcOutFile`""
+            $sshdArgs += " -o `"AuthorizedKeysCommandUser=system`""
+            $sshdArgs += " -o PasswordAuthentication=no"
+            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments $sshdArgs -Port $port
+            $o = ssh -p $port test_target echo 12345
+            Stop-SSHDTestDaemon -Port $port
+            sleep $sshdDelay
+            $o | Should Be "12345"
+            #check the command is run as AuthorizedKeysCommandUser
+            (gc $kcOutFile).Contains("nt authority\system") | Should Be $true
+        }
     }
 }

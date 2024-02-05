@@ -38,6 +38,7 @@
 #include "servconf.h"
 #include "pal_doexec.h"
 #include "misc_internal.h"
+#include "sshTelemetry.h"
 
 #ifndef SUBSYSTEM_NONE
 #define SUBSYSTEM_NONE				0
@@ -55,6 +56,7 @@
 /* import */
 extern ServerOptions options;
 extern struct sshauthopt *auth_opts;
+int get_in_chroot();
 char **
 do_setup_env_proxy(struct ssh *, Session *, const char *);
 
@@ -76,8 +78,30 @@ do_setup_env_proxy(struct ssh *, Session *, const char *);
 		goto cleanup;					\
 } while(0)
 
+
+static char*
+get_registry_operation_error_message(const LONG error_code) 
+{
+	char* message = NULL;
+	wchar_t* wmessage = NULL;
+	DWORD length = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER, NULL, error_code, 0, (wchar_t*)&wmessage, 0, NULL);
+	if (length == 0)
+		return NULL;
+
+	if (wmessage[length - 1] == L'\n')
+		wmessage[length - 1] = L'\0';
+	if (length > 1 && wmessage[length - 2] == L'\r')
+		wmessage[length - 2] = L'\0';
+
+	message = utf16_to_utf8(wmessage);
+	LocalFree(wmessage);
+
+	return message;
+}
+
 /* TODO  - built env var set and pass it along with CreateProcess */
-/* set user environment variables from user profile */
+/* Set environment variables with values from the registry */
+/* Ensure that environment of new connections reflect the current state of the machine */
 static void
 setup_session_user_vars(wchar_t* profile_path)
 {
@@ -88,6 +112,10 @@ setup_session_user_vars(wchar_t* profile_path)
 	wchar_t *data = NULL, *data_expanded = NULL, *path_value = NULL, *to_apply;
 	DWORD type, name_chars = 256, data_chars = 0, data_expanded_chars = 0, required, i = 0;
 	LONG ret;
+	char *error_message;
+
+	/*These whitelisted environment variables should not be overwritten with the value from the registry*/
+	wchar_t* whitelist[] = { L"PROCESSOR_ARCHITECTURE", L"USERNAME" };
 
 	SetEnvironmentVariableW(L"USERPROFILE", profile_path);
 
@@ -105,66 +133,111 @@ setup_session_user_vars(wchar_t* profile_path)
 	SetEnvironmentVariableW(L"LOCALAPPDATA", path);
 	swprintf_s(path, _countof(path), L"%s\\AppData\\Roaming", profile_path);
 	SetEnvironmentVariableW(L"APPDATA", path);
+	
+	for (int j = 0; j < 2; j++)
+	{
+		/* First update the environment variables with the value from the System Environment, and then User. */
+		/* User variables overwrite the value of system variables with the same name (Except Path) */
+		if (j == 0)
+			ret = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", 0, KEY_QUERY_VALUE, &reg_key);
+		else
+			ret = RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE, &reg_key);
 
-	ret = RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE, &reg_key);
-	if (ret != ERROR_SUCCESS)
-		//error("Error retrieving user environment variables. RegOpenKeyExW returned %d", ret);
-		return;
-	else while (1) {
-		to_apply = NULL;
-		required = data_chars * sizeof(wchar_t);
-		name_chars = 256;
-		ret = RegEnumValueW(reg_key, i++, name, &name_chars, 0, &type, (LPBYTE)data, &required);
-		if (ret == ERROR_NO_MORE_ITEMS)
-			break;
-		else if (ret == ERROR_MORE_DATA || required > data_chars * 2) {
-			if (data != NULL)
-				free(data);
-			data = xmalloc(required);
-			data_chars = required / 2;
-			i--;
+		if (ret != ERROR_SUCCESS) {
+			error_message = get_registry_operation_error_message(ret);
+			if (error_message)
+			{
+				error("Unable to open Registry Key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"), error_message);
+				free(error_message);
+			}
+			else
+				error("Unable to open Registry Key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"));
 			continue;
 		}
-		else if (ret != ERROR_SUCCESS)
-			break;
-
-		if (type == REG_SZ)
-			to_apply = data;
-		else if (type == REG_EXPAND_SZ) {
-			required = ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
-			if (required > data_expanded_chars) {
-				if (data_expanded)
-					free(data_expanded);
-				data_expanded = xmalloc(required * 2);
-				data_expanded_chars = required;
-				ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+		
+		while (1) {
+			to_apply = NULL;
+			required = data_chars * sizeof(wchar_t);
+			name_chars = 256;
+			ret = RegEnumValueW(reg_key, i++, name, &name_chars, 0, &type, (LPBYTE)data, &required);
+			if (ret == ERROR_NO_MORE_ITEMS)
+				break;
+			else if (ret == ERROR_MORE_DATA || required > data_chars * 2) {
+				if (data != NULL)
+					free(data);
+				data = xmalloc(required);
+				data_chars = required / 2;
+				i--;
+				continue;
 			}
-			to_apply = data_expanded;
-		}
-
-		if (_wcsicmp(name, L"PATH") == 0) {
-			if ((required = GetEnvironmentVariableW(L"PATH", NULL, 0)) != 0) {
-				/* "required" includes null term */
-				path_value = xmalloc((wcslen(to_apply) + 1 + required) * 2);
-				GetEnvironmentVariableW(L"PATH", path_value, required);
-				path_value[required - 1] = L';';
-				GOTO_CLEANUP_ON_ERR(memcpy_s(path_value + required, (wcslen(to_apply) + 1) * 2, to_apply, (wcslen(to_apply) + 1) * 2));
-				to_apply = path_value;
+			else if (ret != ERROR_SUCCESS) {
+				error_message = get_registry_operation_error_message(ret);
+				if (error_message)
+				{
+					error("Failed to enumerate the value for registry key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"), error_message);
+					free(error_message);
+				}
+				else
+					error("Failed to enumerate the value for registry key %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"));
+				break;
 			}
 
+			if (type == REG_SZ)
+				to_apply = data;
+			else if (type == REG_EXPAND_SZ) {
+				required = ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+				if (required > data_expanded_chars) {
+					if (data_expanded)
+						free(data_expanded);
+					data_expanded = xmalloc(required * 2);
+					data_expanded_chars = required;
+					ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
+				}
+				to_apply = data_expanded;
+			}
+
+			/* Ensure that variables in the whitelist are not being overwritten with the value from the registry */
+			for (int k = 0; k < ARRAYSIZE(whitelist); k++) {
+				if (_wcsicmp(name, whitelist[k]) == 0)
+				{
+					to_apply = NULL;
+				}
+			}
+
+			/* Path is a special case. The System Path value is preppended to the User Path value */
+			if (_wcsicmp(name, L"PATH") == 0 && j == 1) {
+				if ((required = GetEnvironmentVariableW(L"PATH", NULL, 0)) != 0) {
+					size_t user_path_size = wcslen(to_apply) + 1;
+					path_value = xmalloc((required + user_path_size) * 2);
+					GetEnvironmentVariableW(L"PATH", path_value, required);
+					path_value[required - 1] = L';';
+					GOTO_CLEANUP_ON_ERR(memcpy_s(path_value + required, user_path_size * 2, to_apply, user_path_size * 2));
+					to_apply = path_value;
+				}
+			}
+
+			if (to_apply)
+				SetEnvironmentVariableW(name, to_apply);
+				
 		}
-		if (to_apply)
-			SetEnvironmentVariableW(name, to_apply);
+	cleanup:
+		if (reg_key)
+			RegCloseKey(reg_key);
+		if (data)
+			free(data);
+		if (data_expanded)
+			free(data_expanded);
+		if (path_value)
+			free(path_value);
+		i = 0;
+		data = NULL; 
+		data_expanded = NULL; 
+		path_value = NULL;
+		name_chars = 256; 
+		data_chars = 0; 
+		data_expanded_chars = 0;
+		reg_key = 0;
 	}
-cleanup:
-	if (reg_key)
-		RegCloseKey(reg_key);
-	if (data)
-		free(data);
-	if (data_expanded)
-		free(data_expanded);
-	if (path_value)
-		free(path_value);
 }
 
 static int
@@ -174,7 +247,7 @@ setup_session_env(struct ssh *ssh, Session* s)
 	char *env_name = NULL, *env_value = NULL, *t = NULL, **env = NULL, *path_env_val = NULL;
 	char buf[1024] = { 0 };
 	wchar_t *env_name_w = NULL, *env_value_w = NULL, *pw_dir_w = NULL, *tmp = NULL, wbuf[1024] = { 0, };
-	char *laddr, *c;
+	char *c;
 
 	UTF8_TO_UTF16_WITH_CLEANUP(pw_dir_w, s->pw->pw_dir);
 	/* skip domain part (if present) while setting USERNAME */
@@ -186,7 +259,7 @@ setup_session_env(struct ssh *ssh, Session* s)
 		_snprintf(buf, ARRAYSIZE(buf), "%s@%s", s->pw->pw_name, getenv("COMPUTERNAME"));
 		UTF8_TO_UTF16_WITH_CLEANUP(tmp, buf);
 		/* escape $ characters as $$ to distinguish from special prompt characters */
-		for (int i = 0, j = 0; i < wcslen(tmp) && j < ARRAYSIZE(wbuf) - 1; i++) {
+		for (size_t i = 0, j = 0; i < wcslen(tmp) && j < ARRAYSIZE(wbuf) - 1; i++) {
 			wbuf[j] = tmp[i];
 			if (wbuf[j++] == L'$')
 				wbuf[j++] = L'$';
@@ -237,10 +310,11 @@ cleanup:
 }
 
 int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
-	int pipein[2], pipeout[2], pipeerr[2], r, ret = -1;
-	char *exec_command = NULL, *posix_cmd_input = NULL, *shell = NULL;
+	int pipein[2], pipeout[2], pipeerr[2], ret = -1;
+	char *exec_command = NULL, *posix_cmd_input = NULL, *shell = NULL, *pty_cmd_cp = NULL;;
 	HANDLE job = NULL, process_handle;
 	extern char* shell_command_option;
+	extern char* shell_arguments;
 	extern BOOLEAN arg_escape;
 
 	/* Create three pipes for stdin, stdout and stderr */
@@ -282,8 +356,8 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info;
 	HANDLE job_dup;
 	pid_t pid = -1;
-	char * shell_option = NULL;
-	int shell_len = 0;
+	char* shell_command_option_local = NULL;
+	size_t shell_len = 0;
 	/*account for the quotes and null*/
 	shell_len = strlen(s->pw->pw_shell) + 2 + 1;
 	if ((shell = malloc(shell_len)) == NULL) {
@@ -308,27 +382,42 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		shell_type = SH_CYGWIN;
 
 	if (shell_command_option)
-		shell_option = shell_command_option;
+		shell_command_option_local = shell_command_option;
 	else if (shell_type == SH_CMD)
-		shell_option = "/c";
+		shell_command_option_local = "/c";
 	else
-		shell_option = "-c";
-	debug3("shell_option: %s", shell_option);
+		shell_command_option_local = "-c";
+	debug3("shell_option: %s", shell_command_option_local);
+	send_shell_telemetry(pty, shell_type);
 
 	if (pty) {
 		fcntl(s->ptyfd, F_SETFD, FD_CLOEXEC);
 		char *pty_cmd = NULL;
 		if (command) {
-			size_t len = strlen(shell) + 1 + strlen(shell_option) + 1 + strlen(command) + 1;
-			pty_cmd = calloc(1, len);
-
-			strcpy_s(pty_cmd, len, shell);
-			strcat_s(pty_cmd, len, " ");
-			strcat_s(pty_cmd, len, shell_option);
-			strcat_s(pty_cmd, len, " ");
-			strcat_s(pty_cmd, len, command);
+			size_t len = strlen(shell) + 1 + strlen(shell_command_option_local) + 1 + strlen(command) + 1;
+			pty_cmd_cp = pty_cmd = calloc(1, len);
+			if (pty_cmd != NULL)
+			{
+				strcpy_s(pty_cmd, len, shell);
+				strcat_s(pty_cmd, len, " ");
+				strcat_s(pty_cmd, len, shell_command_option_local);
+				strcat_s(pty_cmd, len, " ");
+				strcat_s(pty_cmd, len, command);
+			}
 		} else {
-			pty_cmd = shell;
+			if (shell_arguments) {
+				size_t len = strlen(shell) + 1 + strlen(shell_arguments) + 1;
+				pty_cmd = calloc(1, len);
+
+				if (pty_cmd != NULL)
+				{
+					strcpy_s(pty_cmd, len, shell);
+					strcat_s(pty_cmd, len, " ");
+					strcat_s(pty_cmd, len, shell_arguments);
+				}
+			}
+			else
+				pty_cmd = shell;
 		}
 
 		if (exec_command_with_pty(&pid, pty_cmd, pipein[0], pipeout[1], pipeerr[1], s->col, s->row, s->ttyfd) == -1)
@@ -347,7 +436,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 			spawn_argv[0] = shell;
 
 			if (exec_command) {
-				spawn_argv[1] = shell_option;
+				spawn_argv[1] = shell_command_option_local;
 				spawn_argv[2] = exec_command;
 			}
 		}
@@ -357,11 +446,11 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 			 * in registry; pass shell, shell option, and quoted command as cmd path
 			 * of posix_spawn to avoid escaping
 			 */
-			int posix_cmd_input_len = strlen(shell) + 1;
+			size_t posix_cmd_input_len = strlen(shell) + 1;
 
 			/* account for " around and null */
 			if (exec_command) {
-				posix_cmd_input_len += strlen(shell_option) + 1;
+				posix_cmd_input_len += strlen(shell_command_option_local) + 1;
 				posix_cmd_input_len += strlen(exec_command) + 2 + 1;
 			}
 
@@ -372,7 +461,7 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 
 			if (exec_command) {
 				sprintf_s(posix_cmd_input, posix_cmd_input_len, "%s %s \"%s\"",
-					shell, shell_option, exec_command);
+					shell, shell_command_option_local, exec_command);
 			} else {
 				sprintf_s(posix_cmd_input, posix_cmd_input_len, "%s",
 					shell); 
@@ -391,6 +480,18 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 			error("posix_spawn initialization failed");
 			goto cleanup;
 		}
+		
+		//Passing the PRIVSEP_LOG_FD (STDERR_FILENO + 2) to sftp-server for logging
+		if (exec_command) {
+			if (strstr(exec_command, "sftp-server.exe")) {
+				if (posix_spawn_file_actions_adddup2(&actions, STDERR_FILENO + 2, SFTP_SERVER_LOG_FD) != 0) {
+					errno = EOTHER;
+					error("posix_spawn initialization failed");
+					goto cleanup;
+				}
+			}
+		}
+
 		if (posix_spawn(&pid, spawn_argv[0], &actions, NULL, spawn_argv, NULL) != 0) {
 			errno = EOTHER;
 			error("posix_spawn: %s", strerror(errno));
@@ -459,6 +560,8 @@ cleanup:
 		free(shell);
 	if (job)
 		CloseHandle(job);
+	if (pty_cmd_cp)
+		free(pty_cmd_cp);
 
 	return ret;
 }

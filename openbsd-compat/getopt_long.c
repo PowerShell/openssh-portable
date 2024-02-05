@@ -72,6 +72,20 @@
 
 #include "log.h"
 
+struct option {
+	/* name of long option */
+	const char *name;
+	/*
+	 * one of no_argument, required_argument, and optional_argument:
+	 * whether option takes an argument
+	 */
+	int has_arg;
+	/* if not NULL, set *flag to val when option found */
+	int *flag;
+	/* if flag not NULL, value to set *flag to; else return value */
+	int val;
+};
+
 int	opterr = 1;		/* if error message should be printed */
 int	optind = 1;		/* index into parent argv vector */
 int	optopt = '?';		/* character checked for validity */
@@ -87,7 +101,7 @@ char    *optarg;		/* argument associated with option */
 /* return values */
 #define	BADCH		(int)'?'
 #define	BADARG		((*options == ':') ? (int)':' : (int)'?')
-#define	INORDER 	(int)1
+#define	INORDER		(int)1
 
 #define	EMSG		""
 
@@ -346,7 +360,7 @@ start:
 			return (-1);
 		}
 		if (*(place = nargv[optind]) != '-' ||
-		    (place[1] == '\0' && strchr(options, '-') == NULL)) {
+		    (place[1] == '\0' && strchr(options, '-') == NULL)) { // CodeQL [SM01947]: upstream code; place re-assigned in previous line
 			place = EMSG;		/* found non-option */
 			if (flags & FLAG_ALLARGS) {
 				/*
@@ -383,7 +397,7 @@ start:
 		/*
 		 * If we have "-" do nothing, if "--" we are done.
 		 */
-		if (place[1] != '\0' && *++place == '-' && place[1] == '\0') {
+		if (place[1] != '\0' && *++place == '-' && place[1] == '\0') { // CodeQL [SM01947]: upstream code; place re-assigned in previous line
 			optind++;
 			place = EMSG;
 			/*

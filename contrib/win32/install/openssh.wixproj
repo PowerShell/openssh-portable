@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
+        <Platform Condition="'$(Platform)' == ''">x64</Platform>
+        <!-- This ensures there is a default version if it is not defined as part of the release process with the actual product version -->
+        <ProductVersion Condition="'$(ProductVersion)' == ''">1.0.0</ProductVersion>
+        <OutputName>openssh</OutputName>
+        <OutputType>package</OutputType>
+        <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
+        <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
+        <DefineConstants>
+            $(DefineConstants);
+            ProductVersion=$(ProductVersion);
+        </DefineConstants>
+        <DefineSolutionProperties>false</DefineSolutionProperties>
+        <!-- Assumes WixToolPath is an input provided at runtime -->
+        <!-- If building x86/x64 MSI and have Wix 3.11 installed, can also try the below line instead -->
+        <!-- WixTargetsPath Condition="'$(WixTargetsPath)' == ''">$(MSBuildExtensionsPath)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath -->
+        <WixTargetsPath>$(WixToolPath)Wix.targets</WixTargetsPath>
+        <WixTasksPath>$(WixToolPath)wixtasks.dll</WixTasksPath>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+        <DefineConstants>
+            $(DefineConstants);
+            Debug;
+        </DefineConstants>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <BindInputPaths Include="..\..\..\bin\$(Platform)\$(Configuration)" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Include="product.wxs" />
+        <Compile Include="client.wxs" />
+        <Compile Include="server.wxs" />
+        <Compile Include="shared.wxs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <WixExtension Include="WixFirewallExtension" />
+        <WixExtension Include="WixUIExtension" />
+        <WixExtension Include="WixUtilExtension" />
+    </ItemGroup>
+
+    <Import Project="$(WixTargetsPath)" />
+</Project>

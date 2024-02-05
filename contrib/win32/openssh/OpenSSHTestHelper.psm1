@@ -13,8 +13,10 @@ $TestSetupLogFileName = "TestSetupLog.txt"
 $SSOUser = "sshtest_ssouser"
 $PubKeyUser = "sshtest_pubkeyuser"
 $PasswdUser = "sshtest_passwduser"
-$OpenSSHTestAccountsPassword = "P@ssw0rd_1"
-$OpenSSHTestAccounts = $Script:SSOUser, $Script:PubKeyUser, $Script:PasswdUser
+$AdminUser = "sshtest_adminuser"
+$NonAdminUser = "sshtest_nonadminuser"
+$OpenSSHTestAccountsPassword = "Bulldog_123456"
+$OpenSSHTestAccounts = $Script:SSOUser, $Script:PubKeyUser, $Script:PasswdUser, $Script:AdminUser, $Script:NonAdminUser
 $SSHDTestSvcName = "sshdTestSvc"
 
 $Script:TestDataPath = "$env:SystemDrive\OpenSSHTests"
@@ -65,8 +67,11 @@ function Set-OpenSSHTestEnvironment
     $Global:OpenSSHTestInfo.Add("SSOUser", $SSOUser)                                   # test user with single sign on capability
     $Global:OpenSSHTestInfo.Add("PubKeyUser", $PubKeyUser)                             # test user to be used with explicit key for key auth
     $Global:OpenSSHTestInfo.Add("PasswdUser", $PasswdUser)                             # test user to be used for password auth
+    $Global:OpenSSHTestInfo.Add("AdminUser", $AdminUser)                               # test user to be used for admin logging tests
+    $Global:OpenSSHTestInfo.Add("NonAdminUser", $NonAdminUser)                         # test user to be used for non-admin logging tests
     $Global:OpenSSHTestInfo.Add("TestAccountPW", $OpenSSHTestAccountsPassword)         # common password for all test accounts
     $Global:OpenSSHTestInfo.Add("DebugMode", $DebugMode.IsPresent)                     # run openssh E2E in debug mode
+    $Global:OpenSSHTestInfo.Add("DelayTime", 3)                                        # delay between stoppig sshd service and trying to access log files
 
     $Script:EnableAppVerifier = -not ($NoAppVerifier.IsPresent)
     if($Script:WindowsInBox = $true)
@@ -141,7 +146,7 @@ WARNING: Following changes will be made to OpenSSH configuration
     Get-ChildItem $testSvcConfigDir | foreach {$acl | set-acl $_.FullName}
 
 
-    $SSHDTestSvcNameCmdLine = (Join-Path $script:OpenSSHBinPath sshd) + " -f " + $testSshdConfig
+    $SSHDTestSvcNameCmdLine = (Join-Path $script:OpenSSHBinPath 'sshd.exe') + " -f " + $testSshdConfig
     New-Service -Name $SSHDTestSvcName -DisplayName "OpenSSH SSH Test Server for E2E tests" -BinaryPathName $SSHDTestSvcNameCmdLine -StartupType Manual | Out-Null
     sc.exe privs $SSHDTestSvcName SeAssignPrimaryTokenPrivilege/SeTcbPrivilege/SeBackupPrivilege/SeRestorePrivilege/SeImpersonatePrivilege
 
@@ -203,13 +208,24 @@ WARNING: Following changes will be made to OpenSSH configuration
         {
             #only add the local user when it does not exists on the machine        
             net user $user $Script:OpenSSHTestAccountsPassword /ADD 2>&1 >> $Script:TestSetupLogFile
-        }        
+        }
     }
 
     #setup single sign on for ssouser
     $ssouserProfile = Get-LocalUserProfile -User $SSOUser
     $Global:OpenSSHTestInfo.Add("SSOUserProfile", $ssouserProfile)
-    $Global:OpenSSHTestInfo.Add("PubKeyUserProfile", (Get-LocalUserProfile -User $PubKeyUser))
+
+    $PubKeyUserProfile = Get-LocalUserProfile -User $PubKeyUser
+    $Global:OpenSSHTestInfo.Add("PubKeyUserProfile", $PubKeyUserProfile)
+
+    $AdminUserProfile = Get-LocalUserProfile -User $AdminUser
+    $Global:OpenSSHTestInfo.Add("AdminUserProfile", $AdminUserProfile)
+
+    $NonAdminUserProfile = Get-LocalUserProfile -User $NonAdminUser
+    $Global:OpenSSHTestInfo.Add("NonAdminUserProfile", $NonAdminUserProfile)
+
+    #make $AdminUser admin
+    net localgroup Administrators $AdminUser /add
 
     New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
@@ -301,13 +317,11 @@ function Set-BasicTestInfo
     }
     else
     {
-        if (-not (Test-Path (Join-Path $OpenSSHBinPath ssh.exe) -PathType Leaf))
+        $script:OpenSSHBinPath = (Resolve-Path -Path $OpenSSHBinPath -ErrorAction Stop).Path
+
+        if (-not (Test-Path (Join-Path $script:OpenSSHBinPath ssh.exe) -PathType Leaf))
         {
             Throw "Cannot find OpenSSH binaries under $OpenSSHBinPath. Please specify -OpenSSHBinPath to the OpenSSH installed location"
-        }
-        else
-        {
-            $script:OpenSSHBinPath = $OpenSSHBinPath
         }
     }
 
@@ -344,10 +358,12 @@ function Get-LocalUserProfile
         $askpass_util = Join-Path $Script:E2ETestDirectory "utilities\askpass_util\askpass_util.exe"
         $env:SSH_ASKPASS=$askpass_util
         $env:ASKPASS_PASSWORD=$OpenSSHTestAccountsPassword
+        $env:SSH_ASKPASS_REQUIRE="prefer"
         $ret = ssh -p 47002 "$User@localhost" echo %userprofile%
         if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
-        remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
-        Remove-item "env:ASKPASS_PASSWORD" -ErrorAction SilentlyContinue 
+        Remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
+        Remove-item "env:ASKPASS_PASSWORD" -ErrorAction SilentlyContinue
+        Remove-item "env:SSH_ASKPASS_REQUIRE" -ErrorAction SilentlyContinue
     }   
     
     (Get-ItemProperty -Path $userProfileRegistry -Name 'ProfileImagePath').ProfileImagePath    
@@ -385,10 +401,12 @@ function Install-OpenSSHTestDependencies
         Invoke-Expression ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1')) 2>&1 >> $Script:TestSetupLogFile
     }
 
-    $isModuleAvailable = Get-Module 'Pester' -ListAvailable
-    if (-not ($isModuleAvailable))
+    # Pester 5.x is not compatible with tests.
+    $InstalledPesters = Get-Module -Name 'Pester' -ListAvailable | Where-Object { $_.Version -lt '5.0' }
+    if ($InstalledPesters.Count -eq 0)
     {      
         Write-Log -Message "Installing Pester..." 
+        # Install-Module -Name 'Pester' -RequiredVersion 3.4.6
         choco install Pester --version 3.4.6 -y --force --limitoutput 2>&1 >> $Script:TestSetupLogFile
     }
 
@@ -506,8 +524,10 @@ function Get-UserSID
     Clear-OpenSSHTestEnvironment
 #>
 function Clear-OpenSSHTestEnvironment
-{   
-    if($Global:OpenSSHTestInfo -eq $null) {
+{
+    Write-Verbose -Verbose -Message "Running Clear-OpenSSHTestEnvironment..."
+
+    if ($Global:OpenSSHTestInfo -eq $null) {
         throw "OpenSSHTestInfo is not set. Did you run Set-OpenSShTestEnvironment?"
     }
 
@@ -622,9 +642,11 @@ function Get-UnitTestDirectory
     Run OpenSSH Setup tests.
 #>
 function Invoke-OpenSSHSetupTest
-{    
+{
+    # Tests are not compatible with latest Pester 5.x.
+    Import-Module -Name 'Pester' -MaximumVersion 4.9.9 -Force -Global
+
     # Discover all CI tests and run them.
-    Import-Module pester -force -global
     Push-Location $Script:E2ETestDirectory
     Write-Log -Message "Running OpenSSH Setup tests..."
     $testFolders = @(Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique)
@@ -637,9 +659,11 @@ function Invoke-OpenSSHSetupTest
     Run OpenSSH uninstall tests.
 #>
 function Invoke-OpenSSHUninstallTest
-{    
+{
+    # Tests are not compatible with latest Pester 5.x.
+    Import-Module -Name 'Pester' -MaximumVersion 4.9.9 -Force -Global
+
     # Discover all CI tests and run them.
-    Import-Module pester -force -global
     Push-Location $Script:E2ETestDirectory
     Write-Log -Message "Running OpenSSH Uninstall tests..."
     $testFolders = @(Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique)
@@ -654,12 +678,15 @@ function Invoke-OpenSSHUninstallTest
 function Invoke-OpenSSHE2ETest
 {
     [CmdletBinding()]
-    param
-    (
+    param (
         [ValidateSet('CI', 'Scenario')]
-        [string]$pri = "CI")
+        [string]$pri = "CI"
+    )
+
+    # Tests are not compatible with latest Pester 5.x.
+    Import-Module -Name 'Pester' -MaximumVersion 4.9.9 -Force -Global
+
     # Discover all CI tests and run them.
-    Import-Module pester -force -global
     Push-Location $Script:E2ETestDirectory
     Write-Log -Message "Running OpenSSH E2E tests..."
     $testFolders = @(Get-ChildItem *.tests.ps1 -Recurse | ForEach-Object{ Split-Path $_.FullName} | Sort-Object -Unique)
@@ -696,7 +723,7 @@ function Invoke-OpenSSHBashTests
 
     $bashTestDirectory = Join-Path $repositoryRoot.FullName -ChildPath "regress"
 
-    &"$PSScriptRoot\bash_tests_iterator.ps1" -OpenSSHBinPath $Script:OpenSSHBinPath -BashTestsPath $bashTestDirectory -ShellPath $bashPath -ArtifactsDirectoryPath $bashTestDirectory
+    & "$PSScriptRoot\bash_tests_iterator.ps1" -OpenSSHBinPath $Script:OpenSSHBinPath -BashTestsPath $bashTestDirectory -ShellPath $bashPath -ArtifactsDirectoryPath $bashTestDirectory
 }
 
 <#
@@ -704,12 +731,22 @@ function Invoke-OpenSSHBashTests
     Run openssh unit tests.
 #>
 function Invoke-OpenSSHUnitTest
-{     
+{
+    param (
+        [string] $UnitTestDirectory = ""
+    )
+
     # Discover all CI tests and run them.
-    if([string]::Isnullorempty($Script:UnitTestDirectory))
+    if (! [string]::IsNullOrEmpty($UnitTestDirectory) -and (Test-Path -Path $UnitTestDirectory))
+    {
+        $Script:UnitTestDirectory = $UnitTestDirectory
+        $OpenSSHTestInfo["UnitTestDirectory"] = $UnitTestDirectory
+    }
+    elseif ([string]::Isnullorempty($Script:UnitTestDirectory))
     {
         $Script:UnitTestDirectory = $OpenSSHTestInfo["UnitTestDirectory"]
     }
+    
     Push-Location $Script:UnitTestDirectory
     Write-Log -Message "Running OpenSSH unit tests..."
     if (Test-Path $Script:UnitTestResultsFile)
@@ -777,14 +814,19 @@ function Write-Log
         [ValidateNotNullOrEmpty()]
         [string] $Message
     )
-    if(-not (Test-Path (Split-Path $Script:TestSetupLogFile) -PathType Container))
+
+    if (-not (Test-Path (Split-Path $Script:TestSetupLogFile) -PathType Container))
     {
         $null = New-Item -ItemType Directory -Path (Split-Path $Script:TestSetupLogFile) -Force -ErrorAction SilentlyContinue | out-null
     }
+
     if (-not ([string]::IsNullOrEmpty($Script:TestSetupLogFile)))
     {
         Add-Content -Path $Script:TestSetupLogFile -Value $Message
-    }  
+    }
+
+    # Write message to verbose stream.
+    Write-Verbose -Verbose -Message $Message
 }
 
 Export-ModuleMember -Function Set-BasicTestInfo, Set-OpenSSHTestEnvironment, Clear-OpenSSHTestEnvironment, Invoke-OpenSSHSetupTest, Invoke-OpenSSHUnitTest, Invoke-OpenSSHE2ETest, Invoke-OpenSSHUninstallTest, Invoke-OpenSSHBashTests

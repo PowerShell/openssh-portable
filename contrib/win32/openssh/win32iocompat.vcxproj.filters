@@ -22,8 +22,9 @@
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\spawn.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\w32api_proxies.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\win32_usertoken_utils.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\conhost_conpty.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\gss-sspi.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\win32_pty.c" />
+    <ClCompile Include="sshTelemetry.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\w32fd.h" />
@@ -155,6 +156,9 @@
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\gssapi.h">
       <Filter>inc</Filter>
     </ClInclude>
+    <ClInclude Include="MicrosoftTelemetry.h" />
+    <ClInclude Include="sshTelemetry.h" />
+    <ClInclude Include="sshTelemetryInternal.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="inc">

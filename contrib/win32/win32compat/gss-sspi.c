@@ -444,8 +444,10 @@ gss_acquire_cred(_Out_ OM_uint32 *minor_status, _In_opt_ gss_name_t desired_name
 	/* determine expiration if requested */
 	if (time_rec != NULL) {
 		FILETIME current_time;
-		SystemTimeToFileTime(&current_time_system, &current_time);
-		*time_rec = (OM_uint32) (expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
+		if (SystemTimeToFileTime(&current_time_system, &current_time) != 0)
+			*time_rec = (OM_uint32)(expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
+		else
+			error("SystemTimeToFileTime failed with %d", GetLastError());
 	}
 
 	/* set actual supported mechs if requested */
@@ -597,8 +599,10 @@ gss_init_sec_context(
 	/* if requested, translate the expiration time to number of second */
 	if (time_rec != NULL) {
 		FILETIME current_time;
-		SystemTimeToFileTime(&current_time_system, &current_time);
-		*time_rec = (OM_uint32)(expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
+		if (SystemTimeToFileTime(&current_time_system, &current_time) != 0)
+			*time_rec = (OM_uint32)(expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
+		else
+			error("SystemTimeToFileTime failed with %d", GetLastError());
 	}
 
 	/* if requested, return the supported mechanism oid */
@@ -907,8 +911,10 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 	/* if requested, translate the expiration time to number of second */
 	if (time_rec != NULL) {
 		FILETIME current_time;
-		SystemTimeToFileTime(&current_time_system, &current_time);
-		*time_rec = (OM_uint32)(expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
+		if (SystemTimeToFileTime(&current_time_system, &current_time) != 0)
+			*time_rec = (OM_uint32)(expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
+		else
+			error("SystemTimeToFileTime failed with %d", GetLastError());
 	}
 
 	/* only do checks on the finalized context (no continue needed) */
@@ -1072,6 +1078,11 @@ ssh_gssapi_krb5_userok(ssh_gssapi_client *client, char *name)
 	 * onto the next available method.
 	 */
 	struct passwd * user = getpwnam(name);
+	if (user == NULL)
+	{
+		error("sspi getpwnam failed to get user from user-provided, resolved user '%s'", name);
+		return 0;
+	}
 	if (_stricmp(client->displayname.value, user->pw_name) != 0) {
 		/* check failed */
 		debug("sspi user '%s' did not match user-provided, resolved user '%s'", 

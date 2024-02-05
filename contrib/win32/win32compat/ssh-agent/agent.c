@@ -28,11 +28,19 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#include "config.h"
 #include "agent.h"
 #include <sddl.h>
 #include <UserEnv.h>
 #include "..\misc_internal.h"
+#include <pwd.h>
+
 #define BUFSIZE 5 * 1024
+
+extern int remote_add_provider;
+
+char* sshagent_con_username;
+HANDLE sshagent_client_primary_token;
 
 static HANDLE ioc_port = NULL;
 static BOOL debug_mode = FALSE;
@@ -43,6 +51,11 @@ static HANDLE event_stop_agent;
 static OVERLAPPED ol;
 static 	HANDLE pipe;
 static	SECURITY_ATTRIBUTES sa;
+
+static size_t nsession_ids;
+static struct hostkey_sid *session_ids;
+static struct dest_constraint *dest_constraints;
+static size_t ndest_constraints;
 
 static void
 agent_cleanup() 
@@ -85,6 +98,20 @@ agent_listen_loop()
 
 	wait_events[0] = event_stop_agent;
 	wait_events[1] = ol.hEvent;
+
+	wchar_t* sddl_str;
+	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
+	sa.nLength = sizeof(sa);
+	/*
+	 * SDDL - GA to System and Builtin/Admins and restricted access to Authenticated users
+	 * 0x12019b - FILE_GENERIC_READ/WRITE minus FILE_CREATE_PIPE_INSTANCE
+	 */
+	sddl_str = L"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x12019b;;;AU)";
+	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl_str, SDDL_REVISION_1,
+		&sa.lpSecurityDescriptor, &sa.nLength))
+		fatal("cannot convert sddl ERROR:%d", GetLastError());
+
+	sa.bInheritHandle = FALSE;
 
 	while (1) {
 		pipe = CreateNamedPipeW(
@@ -142,10 +169,15 @@ agent_listen_loop()
 				memset(&si, 0, sizeof(STARTUPINFOW));
 				GetModuleFileNameW(NULL, module_path, PATH_MAX);
 				SetHandleInformation(con, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
-				if ((swprintf_s(path, PATH_MAX, L"%s %d", module_path, (int)(intptr_t)con) == -1 ) ||
-				    (CreateProcessW(NULL, path, NULL, NULL, TRUE,
-					DETACHED_PROCESS, NULL, NULL,
-					&si, &pi) == FALSE)) {
+				if (remote_add_provider == 1) {
+					if (swprintf_s(path, PATH_MAX, L"%s %d %s", module_path, (int)(intptr_t)con, L"-Oallow-remote-pkcs11") == -1)
+						verbose("Failed to create child process %ls ERROR:%d", module_path, GetLastError());
+				}
+				else {
+					if (swprintf_s(path, PATH_MAX, L"%s %d", module_path, (int)(intptr_t)con) == -1)
+						verbose("Failed to create child process %ls ERROR:%d", module_path, GetLastError());
+				}
+				if (CreateProcessW(NULL, path, NULL, NULL, TRUE, DETACHED_PROCESS, NULL, NULL, &si, &pi) == FALSE) {
 					verbose("Failed to create child process %ls ERROR:%d", module_path, GetLastError());
 				} else {
 					debug("spawned worker %d for agent client pid %d ", pi.dwProcessId, client_pid);
@@ -168,13 +200,33 @@ agent_cleanup_connection(struct agent_connection* con)
 {
 	debug("connection %p clean up", con);
 	CloseHandle(con->pipe_handle);
-        if (con->client_impersonation_token)
-                CloseHandle(con->client_impersonation_token);
+	if (con->client_impersonation_token)
+			CloseHandle(con->client_impersonation_token);
 	if (con->client_process_handle)
 		CloseHandle(con->client_process_handle);
+
+	for (size_t i = 0; i < con->nsession_ids; i++) {
+		sshkey_free(con->session_ids[i].key);
+		sshbuf_free(con->session_ids[i].sid);
+	}
+	free(con->session_ids);
+	con->nsession_ids = 0;
+	
 	free(con);
 	CloseHandle(ioc_port);
 	ioc_port = NULL;
+
+	if(sshagent_con_username) {
+		free(sshagent_con_username);
+		sshagent_con_username = NULL;
+	}
+
+#ifdef ENABLE_PKCS11
+	if (sshagent_client_primary_token)
+		CloseHandle(sshagent_client_primary_token);
+
+	pkcs11_terminate();
+#endif
 }
 
 void 
@@ -196,11 +248,9 @@ agent_start(BOOL dbg_mode)
 
 	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
 	sa.nLength = sizeof(sa);
-	/* 
-	 * SDDL - GA to System and Builtin/Admins and restricted access to Authenticated users
-	 * 0x12019b - FILE_GENERIC_READ/WRITE minus FILE_CREATE_PIPE_INSTANCE
-	 */
-	sddl_str = L"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x12019b;;;AU)";
+
+	// SDDL - FullAcess to System and Builtin/Admins
+	sddl_str = L"D:PAI(A;OICI;KA;;;SY)(A;OICI;KA;;;BA)";
 	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl_str, SDDL_REVISION_1,
 	    &sa.lpSecurityDescriptor, &sa.nLength))
 		fatal("cannot convert sddl ERROR:%d", GetLastError());
@@ -245,7 +295,6 @@ get_con_client_info(struct agent_connection* con)
 	DWORD reg_dom_len = 0, info_len = 0, sid_size;
 	DWORD sshd_sid_len = 0;
 	PSID sshd_sid = NULL;
-	SID_NAME_USE nuse;
 	HANDLE client_primary_token = NULL, client_impersonation_token = NULL, client_process_handle = NULL;
 	TOKEN_USER* info = NULL;
 	BOOL isMember = FALSE;
@@ -259,10 +308,12 @@ get_con_client_info(struct agent_connection* con)
 	}
 
 	if (GetTokenInformation(client_primary_token, TokenUser, NULL, 0, &info_len) == TRUE ||
-		(info = (TOKEN_USER*)malloc(info_len)) == NULL ||
-		GetTokenInformation(client_primary_token, TokenUser, info, info_len, &info_len) == FALSE)
+		(info = (TOKEN_USER*)malloc(info_len)) == NULL) // CodeQL [SM02320]: GetTokenInformation will initialize info
 		goto done;
 
+	if (GetTokenInformation(client_primary_token, TokenUser, info, info_len, &info_len) == FALSE)
+		goto done;
+	
 	/* check if its localsystem */
 	if (IsWellKnownSid(info->User.Sid, WinLocalSystemSid)) {
 		con->client_type = SYSTEM;
@@ -277,6 +328,18 @@ get_con_client_info(struct agent_connection* con)
 		r = 0;
 		goto done;
 	}
+
+	// Get client primary token
+	if (DuplicateTokenEx(client_primary_token, TOKEN_QUERY | TOKEN_ASSIGN_PRIMARY | TOKEN_DUPLICATE, NULL, SecurityImpersonation, TokenPrimary, &sshagent_client_primary_token) == FALSE) {
+		error_f("Failed to duplicate the primary token. error:%d", GetLastError());
+	}
+
+	// Get username
+	sshagent_con_username= get_username(info->User.Sid);
+	if (sshagent_con_username)
+		debug_f("sshagent_con_username: %s", sshagent_con_username);
+	else
+		error_f("Failed to get the userName");
 
 	/* check if its admin */
 	{
@@ -297,6 +360,7 @@ get_con_client_info(struct agent_connection* con)
 	r = 0;
 done:
 	debug("client type: %s", con_type_to_string(con));
+	con->nsession_ids = 0;
 
 	if (sshd_sid)
 		free(sshd_sid);

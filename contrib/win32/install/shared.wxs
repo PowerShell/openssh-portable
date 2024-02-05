@@ -1,0 +1,89 @@
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+    <Fragment>
+        <!-- KeyPath is necessary for multi-file components to identify the key file - preferrably versioned. -->
+        <ComponentGroup Id="Shared" Directory="INSTALLFOLDER">
+            <Component>
+                <File Name="libcrypto.dll" KeyPath="yes" />
+            </Component>
+            <Component>
+                <File Name="moduli">
+                    <PermissionEx Sddl="D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;WD)" />
+                </File>
+            </Component>
+            <Component>
+                <File Name="LICENSE.txt" />
+            </Component>
+            <Component>
+                <File Name="NOTICE.txt" />
+            </Component>
+            <Component>
+                <File Name="FixHostFilePermissions.ps1" />
+            </Component>
+            <Component>
+                <File Name="OpenSSHUtils.psd1" />
+            </Component>
+            <Component>
+                <File Name="FixUserFilePermissions.ps1" />
+            </Component>
+            <Component>
+                <File Name="OpenSSHUtils.psm1" />
+            </Component>
+            <Component>
+                <File Name="scp.exe" KeyPath="yes" />
+            </Component>
+            <Component>
+                <File Name="ssh-keygen.exe" KeyPath="yes" />
+            </Component>
+
+            <!-- ssh-agent is useful in both client and server scenarios. -->
+            <Component>
+                <File Name="openssh-events.man">
+                    <util:EventManifest ResourceFile="[#ssh_agent.exe]" />
+                </File>
+            </Component>
+            <Component>
+                <!-- Define the File/@Id to reference in util:EventManifest/@ResourceFile above. -->
+                <File Id="ssh_agent.exe" Name="ssh-agent.exe" KeyPath="yes" />
+                <ServiceInstall
+                    Name="ssh-agent"
+                    DisplayName="OpenSSH Authentication Agent"
+                    Description="Agent to hold private keys used for public key authentication."
+                    Start="auto"
+                    Type="ownProcess"
+                    Interactive="no"
+                    ErrorControl="critical"
+                    Vital="yes">
+                    <util:ServiceConfig
+                        ResetPeriodInDays="1"
+                        FirstFailureActionType="restart"
+                        SecondFailureActionType="restart"
+                        ThirdFailureActionType="restart"
+                        />
+                    <PermissionEx Sddl="D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLOCRRC;;;IU)(A;;CCLCSWLOCRRC;;;SU)(A;;RP;;;AU)" />
+                </ServiceInstall>
+                <ServiceControl
+                    Id="ControlSshAgent"
+                    Name="ssh-agent"
+                    Start="install"
+                    Stop="both"
+                    Remove="uninstall" />
+            </Component>
+        </ComponentGroup>
+
+        <ComponentGroup Id="Manifest" Directory="SPDXFOLDER">
+             <Component>
+                <File Name="manifest.spdx.json" Source="_manifest\spdx_2.2\manifest.spdx.json" KeyPath="yes" />
+            </Component>
+            <Component>
+                <File Name="manifest.spdx.json.sha256" Source="_manifest\spdx_2.2\manifest.spdx.json.sha256" KeyPath="yes" />
+            </Component>
+        </ComponentGroup>
+
+        <!-- Automatically add custom actions if referencing the Shared component group. -->
+        <SetProperty Id="SetPrivilegesOnSshAgent" Value="&quot;[SystemFolder]sc.exe&quot; privs ssh-agent SeAssignPrimaryTokenPrivilege/SeTcbPrivilege/SeBackupPrivilege/SeRestorePrivilege/SeImpersonatePrivilege" Sequence="execute" Before="SetPrivilegesOnSshAgent" />
+        <CustomAction Id="SetPrivilegesOnSshAgent" BinaryKey="WixCA" DllEntry="WixQuietExec" Execute="deferred" Return="check" Impersonate="no" />
+        <InstallExecuteSequence>
+            <Custom Action="SetPrivilegesOnSshAgent" After="InstallServices"><![CDATA[&Server = 3]]></Custom>
+        </InstallExecuteSequence>
+    </Fragment>
+</Wix>

@@ -1,4 +1,4 @@
-/* $OpenBSD: xmalloc.c,v 1.35 2019/06/06 05:13:13 otto Exp $ */
+/* $OpenBSD: xmalloc.c,v 1.37 2022/03/13 23:27:54 cheloha Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -91,8 +91,18 @@ xstrdup(const char *str)
 
 	len = strlen(str) + 1;
 	cp = xmalloc(len);
-	strlcpy(cp, str, len);
-	return cp;
+	return memcpy(cp, str, len);
+}
+
+int
+xvasprintf(char **ret, const char *fmt, va_list ap)
+{
+	int i;
+
+	i = vasprintf(ret, fmt, ap);
+	if (i < 0 || *ret == NULL)
+		fatal("xvasprintf: could not allocate memory");
+	return i;
 }
 
 int
@@ -102,11 +112,7 @@ xasprintf(char **ret, const char *fmt, ...)
 	int i;
 
 	va_start(ap, fmt);
-	i = vasprintf(ret, fmt, ap);
+	i = xvasprintf(ret, fmt, ap);
 	va_end(ap);
-
-	if (i < 0 || *ret == NULL)
-		fatal("xasprintf: could not allocate memory");
-
-	return (i);
+	return i;
 }

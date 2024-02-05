@@ -118,9 +118,13 @@ generate_s4u_user_token(wchar_t* user_cpn, int impersonation) {
 
 		/* trusted mode - used for impersonation */
 		LSA_OPERATIONAL_MODE mode;
-		InitLsaString(&logon_process_name, "sshd");
-		if ((ret = LsaRegisterLogonProcess(&logon_process_name, &lsa_handle, &mode)) != STATUS_SUCCESS)
+		InitLsaString(&logon_process_name, __progname);
+		if ((ret = LsaRegisterLogonProcess(&logon_process_name, &lsa_handle, &mode)) != STATUS_SUCCESS) {
+			ULONG winError = LsaNtStatusToWinError(ret);
+			error_f("LsaRegisterLogonProcess failed with error:%d", winError);
+
 			goto done;
+		}
 	}
 	else {
 		/* untrusted mode - used for information lookup */
@@ -688,7 +692,7 @@ get_custom_lsa_package()
 	if (s_processed)
 		return s_lsa_auth_pkg;
 
-	if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\OpenSSH", 0, mask, &reg_key) == ERROR_SUCCESS) &&
+	if ((RegOpenKeyExW(HKEY_LOCAL_MACHINE, SSH_REGISTRY_ROOT, 0, mask, &reg_key) == ERROR_SUCCESS) &&
 	    (RegQueryValueExW(reg_key, L"LSAAuthenticationPackage", 0, NULL, NULL, &lsa_auth_pkg_len) == ERROR_SUCCESS)) {
 		lsa_auth_pkg_w = (wchar_t *)malloc(lsa_auth_pkg_len); // lsa_auth_pkg_len includes the null terminating character.
 		if (!lsa_auth_pkg_w)

@@ -99,6 +99,7 @@ errno_from_Win32Error(int win32_error)
 	case ERROR_INVALID_NAME:
 		return ENOENT;
 	case ERROR_INVALID_FUNCTION:
+	case ERROR_NOT_SUPPORTED:
 		return EOPNOTSUPP;
 	default:
 		return win32_error;
@@ -426,6 +427,14 @@ file_in_chroot_jail(HANDLE handle) {
 	if (!final_path)
 		return 0;
 
+	const wchar_t* uncPrefix = L"UNC\\";
+	int isUNCPath = memcmp(final_path, uncPrefix, 2 * wcslen(uncPrefix));
+
+	if (0 == isUNCPath) {
+		debug3("symlink points to UNCPath");
+		return 1;
+	}
+
 	to_wlower_case(final_path);
 	if ((wcslen(final_path) < wcslen(chroot_pathw)) ||
 	    memcmp(final_path, chroot_pathw, 2 * wcslen(chroot_pathw)) != 0 ||
@@ -671,6 +680,37 @@ WriteCompletionRoutine(_In_ DWORD dwErrorCode,
 	pio->write_details.remaining -= dwNumberOfBytesTransfered;
 	pio->write_details.pending = FALSE;
 	*((__int64*)&lpOverlapped->Offset) += dwNumberOfBytesTransfered;
+}
+
+int
+fileio_write_wrapper(struct w32_io* pio, const void* buf, size_t bytes_to_copy)
+{
+	int bytes_written = 0;
+	if (bytes_to_copy <= WRITE_BUFFER_SIZE) {
+		bytes_written = fileio_write(pio, buf, bytes_to_copy);
+		return bytes_written;
+	}
+
+	void* chunk_buf = NULL;
+	int chunk_count = 0;
+	int bytes_copied = -1;
+	size_t chunk_size = 0;
+
+	for (int i = 0; i < bytes_to_copy; i += WRITE_BUFFER_SIZE, chunk_count++) {
+		chunk_buf = (BYTE*)buf + chunk_count * WRITE_BUFFER_SIZE;
+		chunk_size = ((bytes_to_copy - i) >= WRITE_BUFFER_SIZE) ? WRITE_BUFFER_SIZE : (bytes_to_copy - i);
+		bytes_written = fileio_write(pio, chunk_buf, chunk_size);
+
+		if (bytes_written == -1)
+			return bytes_copied;
+
+		if (bytes_copied == -1)
+			bytes_copied = 0;
+
+		bytes_copied += bytes_written;
+	}
+	return bytes_copied;
+
 }
 
 /* write() implementation */
@@ -1149,7 +1189,7 @@ fileio_readlink(const char *path, char *buf, size_t bufsiz)
 	}
 
 	/* allocate the maximum possible size the reparse buffer size could be */
-	reparse_buffer = (PREPARSE_DATA_BUFFER_SYMLINK)malloc(MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
+	reparse_buffer = (PREPARSE_DATA_BUFFER_SYMLINK)malloc(MAXIMUM_REPARSE_DATA_BUFFER_SIZE); // CodeQL [SM02320]: DeviceIoControl will set reparse_buffer
 	if (reparse_buffer == NULL) {
 		errno = ENOMEM;
 		goto cleanup;

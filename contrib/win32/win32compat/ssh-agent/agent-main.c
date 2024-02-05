@@ -37,6 +37,8 @@
 
 #pragma warning(push, 3)
 
+int remote_add_provider;
+
 int scm_start_service(DWORD, LPWSTR*);
 
 SERVICE_TABLE_ENTRYW dispatch_table[] =
@@ -113,43 +115,66 @@ fix_cwd()
 	_wchdir(path);
 }
 
-/* TODO - get rid of this dependency */
-void log_init(char*, int, int, int);
+extern void sanitise_stdfd(void);
 
 int 
-wmain(int argc, wchar_t **argv) 
+wmain(int argc, wchar_t **wargv)
 {
 	_set_invalid_parameter_handler(invalid_parameter_handler);
 	w32posix_initialize();
 	fix_cwd();
+	/* Check if -Oallow-remote-pkcs11 has been passed in for all scenarios */
+	if (argc >= 2) {
+		for (int i = 0; i < argc; i++) {
+			if (wcsncmp(wargv[i], L"-O", 2) == 0) {
+				if (wcsncmp(wargv[i], L"-Oallow-remote-pkcs11", 21) == 0) {
+					remote_add_provider = 1;
+				}
+				else {
+					fatal("Unknown -O option; only allow-remote-pkcs11 is supported");
+				}
+			}
+		}
+	}
 	if (!StartServiceCtrlDispatcherW(dispatch_table)) {
 		if (GetLastError() == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT) {
-			/* 
-			 * agent is not spawned by SCM 
-			 * Its either started in debug mode or a worker child 
+			/* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */
+			sanitise_stdfd();
+
+			/*
+			 * agent is not spawned by SCM
+			 * Its either started in debug mode or a worker child
+			 * If running in debug mode, args are (any order): -d, -dd, or -ddd and -Oallow-remote-pkcs11 (optional)
+			 * If a worker child, args are (in this order): int (connection handle) and -Oallow-remote-pkcs11 (optional) 
 			 */
-			if (argc == 2) {
-				if (wcsncmp(argv[1], L"-ddd", 4) == 0)
-					log_init("ssh-agent", 7, 1, 1);
-				else if (wcsncmp(argv[1], L"-dd", 3) == 0)
-					log_init("ssh-agent", 6, 1, 1);
-				else if (wcsncmp(argv[1], L"-d", 2) == 0)
-					log_init("ssh-agent", 5, 1, 1);
 
-				/* Set Ctrl+C handler if starting in debug mode */
-				if (wcsncmp(argv[1], L"-d", 2) == 0) {
-					SetConsoleCtrlHandler(ctrl_c_handler, TRUE);
-					agent_start(TRUE);
-					return 0;
-				}
+			if (argc >= 2) {
+				for (int i = 0; i < argc; i++) {
+					if (wcsncmp(wargv[i], L"-ddd", 4) == 0) {
+						log_init("ssh-agent", 7, 1, 1);
+					}
+					else if (wcsncmp(wargv[i], L"-dd", 3) == 0) {
+						log_init("ssh-agent", 6, 1, 1);
+					}
+					else if (wcsncmp(wargv[i], L"-d", 2) == 0) {
+						log_init("ssh-agent", 5, 1, 1);
+					}
 
-				/*agent process is likely a spawned child*/
-				char* h = 0;
-				h += _wtoi(*(argv + 1));
-				if (h != 0) {
-					log_init("ssh-agent", 3, 1, 0);
-					agent_process_connection(h);
-					return 0;
+					/* Set Ctrl+C handler if starting in debug mode */
+					if (wcsncmp(wargv[i], L"-d", 2) == 0) {
+						SetConsoleCtrlHandler(ctrl_c_handler, TRUE);
+						agent_start(TRUE);
+						return 0;
+					}
+
+					/*agent process is likely a spawned child*/
+					char* h = 0;
+					h += _wtoi(*(wargv + i));
+					if (h != 0) {
+						log_init("ssh-agent", 3, 1, 0);
+						agent_process_connection(h);
+						return 0;
+					}
 				}
 			}
 			/* to support linux compat scenarios where ssh-agent.exe is typically launched per session*/

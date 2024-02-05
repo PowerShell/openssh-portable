@@ -7,6 +7,11 @@
 
 #include "console.h"
 
+// previous codepage
+UINT g_previous_codepage = 0;
+
+void
+mrestorelocale(void);
 
 int
 vfmprintf(FILE *stream, const char *fmt, va_list ap)
@@ -62,10 +67,55 @@ snmprintf(char *buf, size_t len, int *written, const char *fmt, ...)
 	return ret;
 }
 
+/* TODO - Make windows implementation insync with Unix */
+int
+vasnmprintf(char **str, size_t maxsz, int *wp, const char *fmt, va_list ap)
+{
+	int ret;
+	size_t sz;
+
+	if((sz = vsnprintf(NULL, 0, fmt, ap)) < 0)
+		return -1;
+
+	*str = (char *) malloc(sizeof(char) * (sz + 1));
+	ret = vsnprintf_s(*str, sz + 1, _TRUNCATE, fmt, ap);		
+	if (wp != NULL && ret != -1)
+		*wp = ret;
+
+	return ret;
+}
+
+int
+asmprintf(char **outp, size_t sz, int *written, const char *fmt, ...)
+{
+	int ret;
+	va_list valist;
+	va_start(valist, fmt);
+	ret = vasnmprintf(outp, sz, written, fmt, valist);
+	va_end(valist);
+
+	return ret;
+}
+
 void
 msetlocale(void)
 {
+	// save previous codepage
+	g_previous_codepage = GetConsoleOutputCP();
+
 	// allow console output of unicode characters
 	SetConsoleOutputCP(CP_UTF8);
+
+	// register a restore function at exit
+	atexit(mrestorelocale);
 }
 
+void
+mrestorelocale(void)
+{
+	if( 0 != g_previous_codepage )
+	{
+		// restore console output codepage to previous one
+		SetConsoleOutputCP(g_previous_codepage);
+	}
+}

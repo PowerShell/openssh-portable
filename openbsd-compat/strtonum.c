@@ -26,9 +26,9 @@
 #include <limits.h>
 #include <errno.h>
 
-#define INVALID 	1
-#define TOOSMALL 	2
-#define TOOLARGE 	3
+#define INVALID		1
+#define TOOSMALL	2
+#define TOOLARGE	3
 
 long long
 strtonum(const char *numstr, long long minval, long long maxval,
@@ -52,7 +52,7 @@ strtonum(const char *numstr, long long minval, long long maxval,
 	if (minval > maxval)
 		error = INVALID;
 	else {
-		ll = strtoll(numstr, &ep, 10);
+		ll = strtoll(numstr, &ep, 10); // CodeQL [SM02313]: strtoll will initialize ep
 		if (numstr == ep || *ep != '\0')
 			error = INVALID;
 		else if ((ll == LLONG_MIN && errno == ERANGE) || ll < minval)

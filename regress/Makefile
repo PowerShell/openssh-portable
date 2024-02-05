@@ -1,4 +1,4 @@
-#	$OpenBSD: Makefile,v 1.104 2019/09/03 08:37:45 djm Exp $
+#	$OpenBSD: Makefile,v 1.131 2023/12/18 14:50:08 djm Exp $
 
 tests:		prep file-tests t-exec unit
 
@@ -10,22 +10,27 @@ file-tests: $(REGRESS_TARGETS)
 # Interop tests are not run by default
 interop interop-tests: t-exec-interop
 
+extra extra-tests: t-extra
+
 prep:
 	test "x${USE_VALGRIND}" = "x" || mkdir -p $(OBJ)/valgrind-out
 
 clean:
 	for F in $(CLEANFILES); do rm -f $(OBJ)$$F; done
 	rm -rf $(OBJ).putty
+	rm -rf $(OBJ).dropbear
 
 distclean:	clean
 
 LTESTS= 	connect \
 		proxy-connect \
+		sshfp-connect \
 		connect-privsep \
 		connect-uri \
 		proto-version \
 		proto-mismatch \
 		exit-status \
+		exit-status-signal \
 		envpass \
 		transfer \
 		banner \
@@ -41,12 +46,17 @@ LTESTS= 	connect \
 		agent-getpeereid \
 		agent-timeout \
 		agent-ptrace \
+		agent-subprocess \
 		keyscan \
 		keygen-change \
+		keygen-comment \
 		keygen-convert \
+		keygen-knownhosts \
 		keygen-moduli \
+		keygen-sshfp \
 		key-options \
 		scp \
+		scp3 \
 		scp-uri \
 		sftp \
 		sftp-chroot \
@@ -66,6 +76,7 @@ LTESTS= 	connect \
 		cfgparse \
 		cfgmatch \
 		cfgmatchlisten \
+		percent \
 		addrmatch \
 		localcommand \
 		forcecommand \
@@ -82,18 +93,26 @@ LTESTS= 	connect \
 		multipubkey \
 		limit-keytype \
 		hostkey-agent \
-		keygen-knownhosts \
 		hostkey-rotate \
 		principals-command \
 		cert-file \
 		cfginclude \
+		servcfginclude \
 		allow-deny-users \
 		authinfo \
-		sshsig
-
-
+		sshsig \
+		knownhosts \
+		knownhosts-command \
+		agent-restrict \
+		hostbased \
+		channel-timeout \
+		connection-timeout \
+		match-subsystem \
+		agent-pkcs11-restrict \
+		agent-pkcs11-cert
 
 INTEROP_TESTS=	putty-transfer putty-ciphers putty-kex conch-ciphers
+INTEROP_TESTS+=	dropbear-ciphers dropbear-kex
 #INTEROP_TESTS+=ssh-com ssh-com-client ssh-com-keygen ssh-com-sftp
 
 EXTRA_TESTS=	agent-pkcs11
@@ -111,7 +130,7 @@ CLEANFILES=	*.core actual agent-key.* authorized_keys_${USERNAME} \
 		host.ecdsa-sha2-nistp521 host.ssh-dss host.ssh-ed25519 \
 		host.ssh-rsa host_ca_key* host_krl_* host_revoked_* key.* \
 		key.dsa-* key.ecdsa-* key.ed25519-512 \
-		key.ed25519-512.pub key.rsa-* keys-command-args kh.* \
+		key.ed25519-512.pub key.rsa-* keys-command-args kh.* askpass \
 		known_hosts known_hosts-cert known_hosts.* krl-* ls.copy \
 		modpipe netcat no_identity_config \
 		pidfile putty.rsa2 ready regress.log remote_pid \
@@ -119,14 +138,15 @@ CLEANFILES=	*.core actual agent-key.* authorized_keys_${USERNAME} \
 		rsa_ssh2_crnl.prv scp-ssh-wrapper.exe \
 		scp-ssh-wrapper.scp setuid-allowed sftp-server.log \
 		sftp-server.sh sftp.log ssh-log-wrapper.sh ssh.log \
-		ssh-rsa_oldfmt \
+		ssh-agent.log ssh-add.log slow-sftp-server.sh \
+		ssh-rsa_oldfmt knownhosts_command \
 		ssh_config ssh_config.* ssh_proxy ssh_proxy_bak \
-		ssh_proxy_envpass sshd.log sshd_config sshd_config_minimal \
-		sshd_config.orig sshd_proxy sshd_proxy.* sshd_proxy_bak \
+		ssh_proxy_* sshd.log sshd_config sshd_config.* \
+		sshd_config.* sshd_proxy sshd_proxy.* sshd_proxy_bak \
 		sshd_proxy_orig t10.out t10.out.pub t12.out t12.out.pub \
 		t2.out t3.out t6.out1 t6.out2 t7.out t7.out.pub \
-		t8.out t8.out.pub t9.out t9.out.pub testdata \
-		user_*key* user_ca* user_key*
+		t8.out t8.out.pub t9.out t9.out.pub \
+		timestamp testdata user_*key* user_ca* user_key*
 
 # Enable all malloc(3) randomisations and checks
 TEST_ENV=      "MALLOC_OPTIONS=CFGJRSUX"
@@ -180,13 +200,13 @@ t8: $(OBJ)/t8.out
 	${TEST_SSH_SSHKEYGEN} -Bf $(OBJ)/t8.out > /dev/null
 
 $(OBJ)/t9.out:
-	test "${TEST_SSH_ECC}" != yes || \
+	! ${TEST_SSH_SSH} -Q key-plain | grep ecdsa >/dev/null || \
 	${TEST_SSH_SSHKEYGEN} -q -t ecdsa -N '' -f $@
 
 t9: $(OBJ)/t9.out
-	test "${TEST_SSH_ECC}" != yes || \
+	! ${TEST_SSH_SSH} -Q key-plain | grep ecdsa >/dev/null || \
 	${TEST_SSH_SSHKEYGEN} -lf $(OBJ)/t9.out > /dev/null
-	test "${TEST_SSH_ECC}" != yes || \
+	! ${TEST_SSH_SSH} -Q key-plain | grep ecdsa >/dev/null || \
 	${TEST_SSH_SSHKEYGEN} -Bf $(OBJ)/t9.out > /dev/null
 
 
@@ -209,7 +229,15 @@ t12: $(OBJ)/t12.out
 
 t-exec:	${LTESTS:=.sh}
 	@if [ "x$?" = "x" ]; then exit 0; fi; \
+	_started=""; test -z "${LTESTS_FROM}" && _started=1 ;\
 	for TEST in ""$?; do \
+		if [ -z "$$_started" ] ; then \
+			if [ "x$$TEST" = "x${LTESTS_FROM}.sh" ]; then \
+				_started=1; \
+			else \
+				continue; \
+			fi ; \
+		fi ; \
 		skip=no; \
 		for t in ""$${SKIP_LTESTS}; do \
 			if [ "x$${t}.sh" = "x$${TEST}" ]; then skip=yes; fi; \
@@ -245,15 +273,20 @@ unit:
 		V="" ; \
 		test "x${USE_VALGRIND}" = "x" || \
 		    V=${.CURDIR}/valgrind-unit.sh ; \
-		$$V ${.OBJDIR}/unittests/sshbuf/test_sshbuf ; \
-		$$V ${.OBJDIR}/unittests/sshkey/test_sshkey \
+		 $$V ${.OBJDIR}/unittests/sshbuf/test_sshbuf ; \
+		 $$V ${.OBJDIR}/unittests/sshkey/test_sshkey \
 			-d ${.CURDIR}/unittests/sshkey/testdata ; \
+		$$V ${.OBJDIR}/unittests/sshsig/test_sshsig \
+			-d ${.CURDIR}/unittests/sshsig/testdata ; \
+		$$V ${.OBJDIR}/unittests/authopt/test_authopt \
+			-d ${.CURDIR}/unittests/authopt/testdata ; \
 		$$V ${.OBJDIR}/unittests/bitmap/test_bitmap ; \
 		$$V ${.OBJDIR}/unittests/conversion/test_conversion ; \
 		$$V ${.OBJDIR}/unittests/kex/test_kex ; \
 		$$V ${.OBJDIR}/unittests/hostkeys/test_hostkeys \
 			-d ${.CURDIR}/unittests/hostkeys/testdata ; \
 		$$V ${.OBJDIR}/unittests/match/test_match ; \
+		$$V ${.OBJDIR}/unittests/misc/test_misc ; \
 		if test "x${TEST_SSH_UTF8}" = "xyes"  ; then \
 			$$V ${.OBJDIR}/unittests/utf8/test_utf8 ; \
 		fi \

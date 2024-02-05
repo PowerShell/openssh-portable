@@ -20,7 +20,8 @@ Describe "Tests of sshd_config" -Tags "CI" {
         $sshdLogName = "sshdlog.txt"
         $server = $OpenSSHTestInfo["Target"]
         $opensshbinpath = $OpenSSHTestInfo['OpenSSHBinPath']
-        $port = 47003        
+        $port = 47003
+        $sshdDelay = $OpenSSHTestInfo["DelayTime"]        
         Remove-Item -Path (Join-Path $testDir "*$sshLogName") -Force -ErrorAction SilentlyContinue
 
         Add-Type -AssemblyName System.DirectoryServices.AccountManagement
@@ -141,7 +142,7 @@ Match User matchuser
         {
             Stop-SSHDTestDaemon   -Port $port
         }
-        if(($platform -eq [PlatformType]::Windows) -and ([Environment]::OSVersion.Version.Major -le 6))
+        if($IsWindows -and ([Environment]::OSVersion.Version.Major -le 6))
         {
             #suppress the firewall blocking dialogue on win7
             netsh advfirewall firewall add rule name="sshd" program="$($OpenSSHTestInfo['OpenSSHBinPath'])\sshd.exe" protocol=any action=allow dir=in
@@ -152,7 +153,7 @@ Match User matchuser
     
     AfterAll {        
         $PrincipalContext.Dispose()
-        if(($platform -eq [PlatformType]::Windows) -and ($psversiontable.BuildVersion.Major -le 6))
+        if($IsWindows -and ($psversiontable.BuildVersion.Major -le 6))
         {            
             netsh advfirewall firewall delete rule name="sshd" program="$($OpenSSHTestInfo['OpenSSHBinPath'])\sshd.exe" protocol=any dir=in
         }    
@@ -168,7 +169,7 @@ Match User matchuser
 #>
      Context "Tests of AllowGroups, AllowUsers, DenyUsers, DenyGroups" {
         BeforeAll {            
-            $password = "Bull_dog1"
+            $password = "Bull_dog123456"
 
             $allowUser1 = "allowuser1"
             $allowUser2 = "allowuser2"
@@ -218,6 +219,7 @@ Match User matchuser
 
            $o = ssh  -p $port $allowUser1@$server echo 1234
            Stop-SSHDTestDaemon   -Port $port
+           sleep $sshdDelay
            $o | Should Be "1234"
            Remove-UserFromLocalGroup -UserName $allowUser1 -GroupName $allowGroup1
 
@@ -231,6 +233,7 @@ Match User matchuser
            
            $o = ssh  -p $port $allowUser2@$server echo 1234
            Stop-SSHDTestDaemon   -Port $port
+           sleep $sshdDelay
            $o | Should Be "1234"
            Remove-UserFromLocalGroup -UserName $allowUser2 -GroupName $allowGroup1
 
@@ -243,6 +246,7 @@ Match User matchuser
            
            $o = ssh  -p $port $allowUser3@$server echo 1234
            Stop-SSHDTestDaemon   -Port $port
+           sleep $sshdDelay
            $o | Should Be "1234"
            Remove-UserFromLocalGroup -UserName $allowUser3 -GroupName $allowGroup1
 
@@ -257,6 +261,7 @@ Match User matchuser
            ssh -p $port -E $sshlog $denyUser1@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
            Stop-SSHDTestDaemon   -Port $port
+           sleep $sshdDelay
            $sshdlog | Should Contain "not allowed because listed in DenyUsers"
 
            Remove-UserFromLocalGroup -UserName $denyUser1 -GroupName $allowGroup1
@@ -272,6 +277,7 @@ Match User matchuser
            ssh -p $port -E $sshlog $denyUser2@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
            Stop-SSHDTestDaemon   -Port $port
+           sleep $sshdDelay
            $sshdlog | Should Contain "not allowed because listed in DenyUsers"
 
            Remove-UserFromLocalGroup -UserName $denyUser2 -GroupName $allowGroup1
@@ -287,6 +293,7 @@ Match User matchuser
            ssh -p $port -E $sshlog $denyUser3@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
            Stop-SSHDTestDaemon   -Port $port
+           sleep $sshdDelay
            $sshdlog | Should Contain "not allowed because not listed in AllowUsers"
            
            Remove-UserFromLocalGroup -UserName $denyUser3 -GroupName $allowGroup1
@@ -303,6 +310,7 @@ Match User matchuser
            ssh -p $port -E $sshlog $localuser1@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
            Stop-SSHDTestDaemon   -Port $port
+           sleep $sshdDelay
            $sshdlog | Should Contain "not allowed because a group is listed in DenyGroups"
 
            Remove-UserFromLocalGroup -UserName $localuser1 -GroupName $allowGroup1
@@ -319,6 +327,7 @@ Match User matchuser
            ssh -p $port -E $sshlog $localuser2@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
            Stop-SSHDTestDaemon   -Port $port
+           sleep $sshdDelay
            $sshdlog | Should Contain "not allowed because a group is listed in DenyGroups"
            
            Remove-UserFromLocalGroup -UserName $localuser2 -GroupName $denyGroup2
@@ -334,6 +343,7 @@ Match User matchuser
            ssh -p $port -E $sshlog $localuser3@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
            Stop-SSHDTestDaemon   -Port $port
+           sleep $sshdDelay
            $sshdlog | Should Contain "not allowed because a group is listed in DenyGroups"
            
            Remove-UserFromLocalGroup -UserName $localuser3 -GroupName $denyGroup3
@@ -351,6 +361,7 @@ Match User matchuser
             $o[1].Contains("randomcommand") | Should Be $true
             
             Stop-SSHDTestDaemon   -Port $port
+            sleep $sshdDelay
             Remove-UserFromLocalGroup -UserName $matchuser -GroupName $allowGroup1
         }
     }

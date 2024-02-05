@@ -137,6 +137,22 @@
 /* Enable for PKCS#11 support */
 #define ENABLE_PKCS11 1
 
+/* Enable for U2F/FIDO support */
+#define ENABLE_SK
+
+/* Enable for built-in U2F/FIDO support */
+#define ENABLE_SK_INTERNAL
+
+/* Define for discoverable credential support */
+#define HAVE_FIDO_CRED_PROT
+#define HAVE_FIDO_CRED_SET_PROT
+#define HAVE_FIDO_DEV_SUPPORTS_CRED_PROT
+#define HAVE_FIDO_DEV_GET_TOUCH_BEGIN
+#define HAVE_FIDO_DEV_GET_TOUCH_STATUS
+#define HAVE_FIDO_CRED_SET_CLIENTDATA
+#define HAVE_FIDO_ASSERT_SET_CLIENTDATA
+#define HAVE_FIDO_DEV_IS_WINHELLO
+
 /* File names may not contain backslash characters */
 /* #undef FILESYSTEM_NO_BACKSLASH */
 
@@ -191,13 +207,13 @@
 /* #undef HAVE_ADDR_V6_IN_UTMPX */
 
 /* Define to 1 if you have the `arc4random' function. */
-/* #undef HAVE_ARC4RANDOM */
+#define HAVE_ARC4RANDOM 1
 
 /* Define to 1 if you have the `arc4random_buf' function. */
-/* #undef HAVE_ARC4RANDOM_BUF */
+#define HAVE_ARC4RANDOM_BUF 1
 
 /* Define to 1 if you have the `arc4random_uniform' function. */
-/* #undef HAVE_ARC4RANDOM_UNIFORM */
+#define HAVE_ARC4RANDOM_UNIFORM 1
 
 /* Define to 1 if you have the `asprintf' function. */
 /* #undef HAVE_ASPRINTF */
@@ -779,7 +795,7 @@
 /* #undef HAVE_READPASSPHRASE_H */
 
 /* Define to 1 if you have the `realpath' function. */
-/* #define HAVE_REALPATH 1 */
+#define HAVE_REALPATH 1
 
 /* Define to 1 if you have the `recvmsg' function. */
 /* #undef HAVE_RECVMSG */
@@ -915,7 +931,7 @@
 /* #undef HAVE_SO_PEERCRED */
 
 /* define if you have ssize_t data type */
-#define HAVE_SSIZE_T 1
+/* #define HAVE_SSIZE_T 1 */
 
 /* Fields in struct sockaddr_storage */
 #define HAVE_SS_FAMILY_IN_SS 1
@@ -1000,6 +1016,7 @@
 
 /* Define to 1 if the system has the type `struct timespec'. */
 /* #undef HAVE_STRUCT_TIMESPEC */
+#define HAVE_STRUCT_TIMESPEC 1
 
 /* define if you have struct timeval */
 #define HAVE_STRUCT_TIMEVAL 1
@@ -1342,6 +1359,7 @@
 /* libcrypto includes complete ECC support */
 #define OPENSSL_HAS_ECC 1
 #define OPENSSL_HAS_NISTP521 1
+#define HAVE_EC_KEY_METHOD_NEW 1
 
 /* libcrypto is missing AES 192 and 256 bit functions */
 /* #undef OPENSSL_LOBOTOMISED_AES */
@@ -1711,3 +1729,42 @@
 #define FORK_NOT_SUPPORTED
 #define HAVE_FREEZERO
 #define FILESYSTEM_NO_BACKSLASH
+#define HAVE_LOCALTIME_R
+#define HAVE_DECL_MEMMEM 0
+#define WITH_ZLIB
+#define _PATH_TTY "conin$"
+#define HAVE_STRUCT_POLLFD_FD 1
+#define HAVE_KILLPG 1
+
+/* Definitions needed to prevent re-definition of OpenSSL functions and structs */
+#define HAVE_DSA_GET0_PQG 1
+#define HAVE_DSA_SET0_PQG 1
+#define HAVE_DSA_GET0_KEY 1
+#define HAVE_DSA_SET0_KEY 1
+#define HAVE_RSA_GET0_KEY 1
+#define HAVE_RSA_SET0_KEY 1
+#define HAVE_RSA_GET0_CRT_PARAMS 1
+#define HAVE_RSA_SET0_CRT_PARAMS 1
+#define HAVE_RSA_GET0_FACTORS 1
+#define HAVE_RSA_SET0_FACTORS 1
+#define HAVE_EVP_CIPHER_CTX_GET_IV 1
+#define HAVE_EVP_CIPHER_CTX_SET_IV 1
+#define HAVE_DSA_SIG_GET0 1
+#define HAVE_DSA_SIG_SET0 1
+#define HAVE_ECDSA_SIG_GET0 1
+#define HAVE_ECDSA_SIG_SET0 1
+#define HAVE_DH_GET0_PQG 1
+#define HAVE_DH_SET0_PQG 1
+#define HAVE_DH_GET0_KEY 1
+#define HAVE_DH_SET0_KEY 1
+#define HAVE_DH_SET_LENGTH 1
+#define HAVE_RSA_METH_FREE 1
+#define HAVE_RSA_METH_DUP 1
+#define HAVE_RSA_METH_SET1_NAME 1
+#define HAVE_RSA_METH_GET_FINISH 1
+#define HAVE_RSA_METH_SET_PRIV_ENC 1
+#define HAVE_RSA_METH_SET_PRIV_DEC 1
+#define HAVE_RSA_METH_SET_FINISH 1
+#define HAVE_EVP_PKEY_GET0_RSA 1
+#define HAVE_EVP_MD_CTX_NEW 1
+#define HAVE_EVP_MD_CTX_FREE 1

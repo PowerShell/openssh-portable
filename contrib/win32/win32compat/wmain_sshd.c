@@ -36,9 +36,11 @@
 #include <wchar.h>
 #include <Lm.h>
 #include <sddl.h>
+#include <stdio.h>
 
 #include "inc\utf.h"
 #include "misc_internal.h"
+#include "Debug.h"
 
 int main(int, char **);
 extern HANDLE main_thread;
@@ -134,7 +136,7 @@ create_prgdata_ssh_folder()
 	wcscpy_s(ssh_cfg_dir, _countof(ssh_cfg_dir), __wprogdata);
 	wcscat_s(ssh_cfg_dir, _countof(ssh_cfg_dir), L"\\ssh");
 	if (create_directory_withsddl(ssh_cfg_dir, L"O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;AU)") < 0) {
-		printf("failed to create %s", ssh_cfg_dir);
+		printf("failed to create %S", ssh_cfg_dir);
 		exit(255);
 	}
 
@@ -143,7 +145,7 @@ create_prgdata_ssh_folder()
 	wcscat_s(logs_dir, _countof(logs_dir), ssh_cfg_dir);
 	wcscat_s(logs_dir, _countof(logs_dir), L"\\logs");
 	if (create_directory_withsddl(logs_dir, L"O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)") < 0) {
-		printf("failed to create %s", logs_dir);
+		printf("failed to create %S", logs_dir);
 		exit(255);
 	}
 
@@ -156,7 +158,7 @@ create_prgdata_ssh_folder()
 		swprintf_s(sshd_config_default_path, PATH_MAX, L"%S\\%s", __progdir, L"sshd_config_default");
 
 		if (CopyFileW(sshd_config_default_path, sshd_config_path, TRUE) == 0) {
-			printf("Failed to copy %s to %s, error:%d", sshd_config_default_path, sshd_config_path, GetLastError());
+			printf("Failed to copy %S to %S, error:%d", sshd_config_default_path, sshd_config_path, GetLastError());
 			exit(255);
 		}
 	}
@@ -174,11 +176,8 @@ create_openssh_registry_key()
 	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
 	sa.nLength = sizeof(sa);
 
-	/*
-	* SDDL - FullAcess to System and Builtin/Admins and restricted access to Authenticated users
-	* 0x12019b - FILE_GENERIC_READ/WRITE minus FILE_CREATE_PIPE_INSTANCE
-	*/
-	sddl_str = L"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;0x12019b;;;AU)";
+	// SDDL - FullAcess to System and Builtin/Admins and read only access to Authenticated users
+	sddl_str = L"D:PAI(A;OICI;KA;;;SY)(A;OICI;KA;;;BA)(A;OICI;KR;;;AU)";
 	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl_str, SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sa.nLength)) {
 		printf("cannot convert sddl ERROR:%d", GetLastError());
 		return;

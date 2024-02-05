@@ -1,19 +1,34 @@
-#	$OpenBSD: hostkey-rotate.sh,v 1.6 2019/08/30 05:08:28 dtucker Exp $
+#	$OpenBSD: hostkey-rotate.sh,v 1.10 2022/01/05 08:25:05 djm Exp $
 #	Placed in the Public Domain.
 
 tid="hostkey rotate"
 
-# Need full names here since they are used in HostKeyAlgorithms
-if [ "$os" == "windows" ]; then
-	HOSTKEY_TYPES=`${SSH} -Q key-plain | sed 's/\r$//'` # remove CR (carriage return)
-else
-	HOSTKEY_TYPES=`${SSH} -Q key-plain`
+#
+# GNU (f)grep <=2.18, as shipped by FreeBSD<=12 and NetBSD<=9 will occasionally
+# fail to find ssh host keys in the hostkey-rotate test.  If we have those
+# versions, use awk instead.
+# See # https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=258616
+#
+case `grep --version 2>&1 | awk '/GNU grep/{print $4}'` in
+2.19)			fgrep=good ;;
+1.*|2.?|2.?.?|2.1?)	fgrep=bad ;;	# stock GNU grep
+2.5.1*)			fgrep=bad ;;	# FreeBSD and NetBSD
+*)			fgrep=good ;;
+esac
+if test "x$fgrep" = "xbad"; then
+	fgrep()
+{
+	awk 'BEGIN{e=1} {if (index($0,"'$1'")>0){e=0;print}} END{exit e}' $2
+}
 fi
 
-rm -f $OBJ/hkr.* $OBJ/ssh_proxy.orig
+rm -f $OBJ/hkr.* $OBJ/ssh_proxy.orig $OBJ/ssh_proxy.orig
 
 grep -vi 'hostkey' $OBJ/sshd_proxy > $OBJ/sshd_proxy.orig
+mv $OBJ/ssh_proxy $OBJ/ssh_proxy.orig
+grep -vi 'globalknownhostsfile' $OBJ/ssh_proxy.orig > $OBJ/ssh_proxy
 echo "UpdateHostkeys=yes" >> $OBJ/ssh_proxy
+echo "GlobalKnownHostsFile=none" >> $OBJ/ssh_proxy
 rm $OBJ/known_hosts
 
 # The "primary" key type is ed25519 since it's supported even when built
@@ -24,14 +39,19 @@ secondary="$primary"
 trace "prepare hostkeys"
 nkeys=0
 all_algs=""
-for k in $HOSTKEY_TYPES; do
+for k in $SSH_HOSTKEY_TYPES; do
 	${SSHKEYGEN} -qt $k -f $OBJ/hkr.$k -N '' || fatal "ssh-keygen $k"
 	echo "Hostkey $OBJ/hkr.${k}" >> $OBJ/sshd_proxy.orig
 	nkeys=`expr $nkeys + 1`
 	test "x$all_algs" = "x" || all_algs="${all_algs},"
-	all_algs="${all_algs}$k"
 	case "$k" in
-		ssh-rsa)	secondary="ssh-rsa" ;;
+	ssh-rsa)
+		secondary="ssh-rsa"
+		all_algs="${all_algs}rsa-sha2-256,rsa-sha2-512,$k"
+		;;
+	*)
+		all_algs="${all_algs}$k"
+		;;
 	esac
 done
 
@@ -71,17 +91,18 @@ verbose "learn additional hostkeys"
 dossh -oStrictHostKeyChecking=yes -oHostKeyAlgorithms=$all_algs
 # Check that other keys learned
 expect_nkeys $nkeys "learn hostkeys"
-for k in $HOSTKEY_TYPES; do
+for k in $SSH_HOSTKEY_TYPES; do
 	check_key_present $k || fail "didn't learn keytype $k"
 done
 
 # Check each key type
-for k in $HOSTKEY_TYPES; do
-	if [ "$os" == "windows" ]; then
-		k=`echo $k | sed 's/\r$//'` # remove CR (carriage return)
-	fi
+for k in $SSH_HOSTKEY_TYPES; do
+	case "$k" in
+	ssh-rsa) alg="rsa-sha2-256,rsa-sha2-512,ssh-rsa" ;;
+	*) alg="$k" ;;
+	esac
 	verbose "learn additional hostkeys, type=$k"
-	dossh -oStrictHostKeyChecking=yes -oHostKeyAlgorithms=$k,$all_algs
+	dossh -oStrictHostKeyChecking=yes -oHostKeyAlgorithms=$alg,$all_algs
 	expect_nkeys $nkeys "learn hostkeys $k"
 	check_key_present $k || fail "didn't learn $k correctly"
 done

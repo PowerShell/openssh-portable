@@ -1,4 +1,4 @@
-/* 	$OpenBSD: test_fuzz.c,v 1.9 2018/10/17 23:28:05 djm Exp $ */
+/* 	$OpenBSD: test_fuzz.c,v 1.13 2021/12/14 21:25:27 deraadt Exp $ */
 /*
  * Fuzz tests for key parsing
  *
@@ -8,7 +8,6 @@
 #include "includes.h"
 
 #include <sys/types.h>
-#include <sys/param.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -19,12 +18,14 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef WITH_OPENSSL
 #include <openssl/bn.h>
 #include <openssl/rsa.h>
 #include <openssl/dsa.h>
 #include <openssl/objects.h>
 #ifdef OPENSSL_HAS_NISTP256
 # include <openssl/ec.h>
+#endif
 #endif
 
 #include "../test_helper/test_helper.h"
@@ -87,10 +88,11 @@ sig_fuzz(struct sshkey *k, const char *sig_alg)
 	if (test_is_slow())
 		fuzzers |= FUZZ_2_BIT_FLIP;
 
-	ASSERT_INT_EQ(sshkey_sign(k, &sig, &l, c, sizeof(c), sig_alg, 0), 0);
+	ASSERT_INT_EQ(sshkey_sign(k, &sig, &l, c, sizeof(c),
+	    sig_alg, NULL, NULL, 0), 0);
 	ASSERT_SIZE_T_GT(l, 0);
 	fuzz = fuzz_begin(fuzzers, sig, l);
-	ASSERT_INT_EQ(sshkey_verify(k, sig, l, c, sizeof(c), NULL, 0), 0);
+	ASSERT_INT_EQ(sshkey_verify(k, sig, l, c, sizeof(c), NULL, 0, NULL), 0);
 	free(sig);
 	TEST_ONERROR(onerror, fuzz);
 	for(; !fuzz_done(fuzz); fuzz_next(fuzz)) {
@@ -98,7 +100,7 @@ sig_fuzz(struct sshkey *k, const char *sig_alg)
 		if (fuzz_matches_original(fuzz))
 			continue;
 		ASSERT_INT_NE(sshkey_verify(k, fuzz_ptr(fuzz), fuzz_len(fuzz),
-		    c, sizeof(c), NULL, 0), 0);
+		    c, sizeof(c), NULL, 0, NULL), 0);
 	}
 	fuzz_cleanup(fuzz);
 }

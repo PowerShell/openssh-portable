@@ -9,33 +9,6 @@ Add-Type -TypeDefinition @"
    }
 "@
 
-function Get-Platform {
-    # Use the .NET Core APIs to determine the current platform; if a runtime
-    # exception is thrown, we are on FullCLR, not .NET Core.
-    try {
-        $Runtime = [System.Runtime.InteropServices.RuntimeInformation]
-        $OSPlatform = [System.Runtime.InteropServices.OSPlatform]
-        
-        $IsLinux = $Runtime::IsOSPlatform($OSPlatform::Linux)
-        $IsOSX = $Runtime::IsOSPlatform($OSPlatform::OSX)
-        $IsWindows = $Runtime::IsOSPlatform($OSPlatform::Windows)
-    } catch {    
-        try {            
-            $IsLinux = $false
-            $IsOSX = $false
-            $IsWindows = $true
-        }
-        catch { }
-    }
-    if($IsOSX) {
-        [PlatformType]::OSX
-    } elseif($IsLinux) {
-        [PlatformType]::Linux
-    } else {        
-        [PlatformType]::Windows    
-    }
-}
-
 function Set-FilePermission
 {    
     param(
@@ -94,20 +67,21 @@ function Set-FilePermission
 function Add-PasswordSetting 
 {
     param([string] $pass)
-    $platform = Get-Platform
-    if ($platform -eq [PlatformType]::Windows) {
+    if ($IsWindows) {
         if (-not($env:DISPLAY)) {$env:DISPLAY = 1}
         $askpass_util = Join-Path $PSScriptRoot "utilities\askpass_util\askpass_util.exe"
         $env:SSH_ASKPASS=$askpass_util
         $env:ASKPASS_PASSWORD=$pass
+        $env:SSH_ASKPASS_REQUIRE="prefer"
     }
 }
 
 function Remove-PasswordSetting
 {
-    if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY }
+    if ($env:DISPLAY -eq 1) { Remove-Item env:\DISPLAY -ErrorAction SilentlyContinue }
     Remove-item "env:SSH_ASKPASS" -ErrorAction SilentlyContinue
     Remove-item "env:ASKPASS_PASSWORD" -ErrorAction SilentlyContinue
+    Remove-item "env:SSH_ASKPASS_REQUIRE" -ErrorAction SilentlyContinue
 }
 
 $Taskfolder = "\OpenSSHTestTasks\"
@@ -155,8 +129,8 @@ function Stop-SSHDTestDaemon
     {
         foreach ($ps in $p) {
             $pss =$ps.ToString() -split "\s+"; 
-            $pid = $pss[$pss.length -1] 
-            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+            $processid = $pss[$pss.length -1] 
+            Stop-Process -Id $processid -Force -ErrorAction SilentlyContinue
         }
         #if still running, wait a little while for task to complete
         $num = 0

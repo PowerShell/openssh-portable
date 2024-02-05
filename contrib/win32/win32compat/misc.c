@@ -60,6 +60,7 @@
 #include "w32fd.h"
 #include "inc\string.h"
 #include "inc\time.h"
+#include "..\..\..\sshfileperm.h"
 
 #include <wchar.h>
 
@@ -190,7 +191,7 @@ nanosleep(const struct timespec *req, struct timespec *rem)
  * Copyright (c) 2009, 2010 NoMachine
  * All rights reserved
  */
-int
+static int
 gettimeofday(struct timeval *tv, void *tz)
 {
 	union {
@@ -212,7 +213,7 @@ gettimeofday(struct timeval *tv, void *tz)
 	return 0;
 }
 
-void
+static void
 explicit_bzero(void *b, size_t len)
 {
 	SecureZeroMemory(b, len);
@@ -291,7 +292,7 @@ error:
 }
 
 /*fopen on Windows to mimic https://linux.die.net/man/3/fopen
-* only r, w, a are supported for now
+* only r, w, a, a+ are supported for now
 */
 FILE *
 w32_fopen_utf8(const char *input_path, const char *mode)
@@ -304,7 +305,7 @@ w32_fopen_utf8(const char *input_path, const char *mode)
 	errno_t r = 0;
 	int nonfs_dev = 0; /* opening a non file system device */
 
-	if (mode == NULL || mode[1] != '\0') {
+	if (mode == NULL || (mode[1] != '\0' && strncmp(mode, "a+", 2) != 0)) {
 		errno = ENOTSUP;
 		return NULL;
 	}
@@ -405,8 +406,10 @@ char*
 		* stop reading until reach '\n' or the converted utf8 string length is n-1
 		*/
 		do {
-			if (str_tmp)
-				free(str_tmp);			
+			if (str_tmp) {
+				free(str_tmp);
+				str_tmp = NULL;
+			}
 			if (fgetws(str_w, 2, stream) == NULL)
 				goto cleanup;
 			if ((str_tmp = utf16_to_utf8(str_w)) == NULL) {
@@ -1441,6 +1444,13 @@ create_directory_withsddl(wchar_t *path_w, wchar_t *sddl_w)
 			return -1;
 		}
 	}
+	else {
+		// directory already exists; need to confirm permissions are correct
+		if (check_secure_folder_permission(path_w, 1) != 0) {
+			error("Directory already exists but folder permissions are invalid");
+			return -1;
+		}
+	}
 
 	return 0;
 }
@@ -1478,6 +1488,28 @@ struct tm *
 localtime_r(const time_t *timep, struct tm *result)
 {
 	return localtime_s(result, timep) == 0 ? result : NULL;
+}
+
+struct tm *
+w32_localtime(const time_t* sourceTime)
+{
+	struct tm* destTime = (struct tm*)malloc(sizeof(struct tm));
+	if (destTime == NULL)
+	{
+		return NULL;
+	}
+	return localtime_s(destTime, sourceTime) == 0 ? destTime : NULL;
+}
+
+char*
+w32_ctime(const time_t* sourceTime)
+{
+	char *destTime = malloc(26);
+	if (destTime == NULL)
+	{
+		return NULL;
+	}
+	return ctime_s(destTime, 26, sourceTime) == 0 ? destTime : NULL;
 }
 
 void
@@ -1573,8 +1605,11 @@ am_system()
 
 	if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &proc_token) == FALSE ||
 		GetTokenInformation(proc_token, TokenUser, NULL, 0, &info_len) == TRUE ||
-		(info = (TOKEN_USER*)malloc(info_len)) == NULL ||
-		GetTokenInformation(proc_token, TokenUser, info, info_len, &info_len) == FALSE)
+		(info = (TOKEN_USER*)malloc(info_len)) == NULL) {  	// CodeQL [SM02320]: GetTokenInformation will initialize info
+			fatal("unable to know if I am running as system");
+	}
+
+	if (GetTokenInformation(proc_token, TokenUser, info, info_len, &info_len) == FALSE) 
 		fatal("unable to know if I am running as system");
 
 	if (IsWellKnownSid(info->User.Sid, WinLocalSystemSid))
@@ -1585,6 +1620,108 @@ am_system()
 	CloseHandle(proc_token);
 	free(info);
 	return running_as_system;
+}
+
+/*
+ * Returns SID of user/group. If psid argument is NULL, allocates a new one,
+ * otherwise saves SID into the supplied memory area.
+ * Sets psid_len (if non-NULL) to the actual SID size.
+ * Caller should free() return value if psid argument was NULL.
+ */
+PSID
+lookup_sid(const wchar_t* name_utf16, PSID psid, DWORD * psid_len)
+{
+	PSID ret = NULL, alloc_psid = NULL, target_psid;
+	DWORD sid_len = 0;
+	SID_NAME_USE n_use;
+	WCHAR dom[DNLEN + 1] = L"";
+	DWORD dom_len = DNLEN + 1;
+	wchar_t* name_utf16_modified = NULL;
+	BOOL resolveAsAdminsSid = 0, r;
+
+	LookupAccountNameW(NULL, name_utf16, NULL, &sid_len, dom, &dom_len, &n_use); // CodeQL [SM02313]: false positive n_use will not be uninitialized
+
+	if (sid_len == 0 && _wcsicmp(name_utf16, L"administrators") == 0) {
+		CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, NULL, &sid_len);
+		resolveAsAdminsSid = 1;
+		debug3_f("resolveAsAdminsSid:%d", resolveAsAdminsSid);
+	}
+
+	if (sid_len == 0) {
+		errno = errno_from_Win32LastError();
+		goto cleanup;
+	}
+
+	target_psid = psid;
+	if (target_psid == NULL) {
+		if ((alloc_psid = malloc(sid_len)) == NULL) {
+			errno = ENOMEM;
+			error_f("Failed to allocate memory");
+			goto cleanup;
+		}
+		target_psid = alloc_psid;
+	}
+
+	if (resolveAsAdminsSid)
+		r = CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, target_psid, &sid_len);
+	else
+		r = LookupAccountNameW(NULL, name_utf16, target_psid, &sid_len, dom, &dom_len, &n_use);
+
+	if (!r) {
+		error_f("Failed to retrieve SID for user:%S error:%d", name_utf16, GetLastError());
+		errno = errno_from_Win32LastError();
+		goto cleanup;
+	}
+
+	if (n_use == SidTypeDomain) {
+		// Additionally check the case when name is the same as computer name and
+		// thus same as local domain. Try to resolve <name>\<name>.
+		/* fetch the computer name so we can determine if the specified user is local or not */
+		wchar_t computer_name[CNLEN + 1];
+		DWORD computer_name_size = ARRAYSIZE(computer_name);
+		if (GetComputerNameW(computer_name, &computer_name_size) == 0) {
+			error_f("GetComputerNameW() failed with error:%d", GetLastError());
+			goto cleanup;
+		}
+
+		if (_wcsicmp(name_utf16, computer_name) != 0) {
+			errno = ENOENT;
+			error_f("Invalid account type: %d for user:%S", n_use, name_utf16);
+			goto cleanup;
+		}
+
+		debug3_f("local user name is same as machine name");
+		size_t name_size = wcslen(name_utf16) * 2U + 2U;
+		name_utf16_modified = malloc(name_size * sizeof(wchar_t));
+		if (name_utf16_modified == NULL)
+		{
+			errno = ENOMEM;
+			error_f("Failed to allocate memory");
+			goto cleanup;
+		}
+		name_utf16_modified[0] = L'\0';
+		wcscat_s(name_utf16_modified, name_size, name_utf16);
+		wcscat_s(name_utf16_modified, name_size, L"\\");
+		wcscat_s(name_utf16_modified, name_size, name_utf16);
+
+		ret = lookup_sid(name_utf16_modified, psid, psid_len);
+	}
+	else {
+		if (psid_len != NULL)
+			*psid_len = sid_len;
+
+		alloc_psid = NULL;
+		ret = target_psid;
+	}
+
+cleanup:
+
+	if (name_utf16_modified)
+		free(name_utf16_modified);
+	if (alloc_psid)
+		free(alloc_psid);
+
+	return ret;
 }
 
 /* 
@@ -1601,42 +1738,22 @@ get_sid(const char* name)
 	wchar_t* name_utf16 = NULL;
 
 	if (name) {
-		DWORD sid_len = 0;
-		SID_NAME_USE n_use;
-		WCHAR dom[DNLEN + 1] = L"";
-		DWORD dom_len = DNLEN + 1;
-
 		if ((name_utf16 = utf8_to_utf16(name)) == NULL)
 			goto cleanup;
 
-		LookupAccountNameW(NULL, name_utf16, NULL, &sid_len, dom, &dom_len, &n_use);
-
-		if (sid_len == 0) {
-			errno = errno_from_Win32LastError();
-			goto cleanup;
-		}
-
-		if ((psid = malloc(sid_len)) == NULL) {
-			errno = ENOMEM;
-			goto cleanup;
-		}
-
-		if (!LookupAccountNameW(NULL, name_utf16, psid, &sid_len, dom, &dom_len, &n_use)) {
-			errno = errno_from_Win32LastError();
-			goto cleanup;
-		}
+		psid = lookup_sid(name_utf16, NULL, NULL);
 	}
 	else {
 		if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token) == FALSE ||
-		    GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE) {
+		    GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE) { // CodeQL [SM02320]: GetTokenInformation will initialize info
 			errno = EOTHER;
 			goto cleanup;
 		}
 
-		if ((info = (TOKEN_USER*)malloc(info_len)) == NULL) {
+		if ((info = (TOKEN_USER*)malloc(info_len)) == NULL) { // CodeQL [SM02320]: GetTokenInformation will initialize info
 			errno = ENOMEM;
 			goto cleanup;
-		}
+		};
 
 		if (GetTokenInformation(token, TokenUser, info, info_len, &info_len) == FALSE) {
 			errno = errno_from_Win32LastError();
@@ -1669,6 +1786,7 @@ cleanup:
 
 	return ret;
 }
+
 /* Interpret scp and sftp executables*/
 char *
 build_exec_command(const char * command)
@@ -2042,3 +2160,4 @@ strrstr(const char *inStr, const char *pattern)
 
 	return last;
 }
+

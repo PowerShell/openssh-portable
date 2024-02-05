@@ -1,4 +1,4 @@
-#	$OpenBSD: rekey.sh,v 1.18 2018/04/10 00:14:10 djm Exp $
+#	$OpenBSD: rekey.sh,v 1.19 2021/07/19 05:08:54 dtucker Exp $
 #	Placed in the Public Domain.
 
 tid="rekey"
@@ -76,11 +76,12 @@ for s in 5 10; do
 	rm -f ${COPY} ${LOG}
 	if [ "$os" == "windows" ]; then
 		cat ${DATA} | ${SSH} -oCompression=no -oRekeyLimit="default $s" -F \
-			$OBJ/ssh_proxy somehost "cat >${COPY};sleep $s;sleep 3"
+			$OBJ/ssh_proxy somehost "cat >${COPY};sleep $s;sleep 10"
 	else
 		${SSH} < ${DATA} -oCompression=no -oRekeyLimit="default $s" -F \
-			$OBJ/ssh_proxy somehost "cat >${COPY};sleep $s;sleep 3"
+			$OBJ/ssh_proxy somehost "cat >${COPY};sleep $s;sleep 10"
 	fi
+
 	if [ $? -ne 0 ]; then
 		fail "ssh failed"
 	fi
@@ -97,7 +98,7 @@ for s in 5 10; do
 	verbose "client rekeylimit default ${s} no data"
 	rm -f ${COPY} ${LOG}
 	${SSH} -oCompression=no -oRekeyLimit="default $s" -F \
-		$OBJ/ssh_proxy somehost "sleep $s;sleep 3"
+		$OBJ/ssh_proxy somehost "sleep $s;sleep 10"
 	if [ $? -ne 0 ]; then
 		fail "ssh failed"
 	fi
@@ -133,7 +134,7 @@ for s in 5 10; do
 	cp $OBJ/sshd_proxy_bak $OBJ/sshd_proxy
 	echo "rekeylimit default ${s}" >>$OBJ/sshd_proxy
 	rm -f ${COPY} ${LOG}
-	${SSH} -oCompression=no -F $OBJ/ssh_proxy somehost "sleep $s;sleep 3"
+	${SSH} -oCompression=no -F $OBJ/ssh_proxy somehost "sleep $s;sleep 10"
 	if [ $? -ne 0 ]; then
 		fail "ssh failed"
 	fi

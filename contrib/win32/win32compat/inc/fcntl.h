@@ -6,6 +6,7 @@
 #define F_SETFL 0x2
 #define F_GETFD 0x4
 #define F_SETFD 0x8
+#define F_DUPFD 0x10
 
 /*fd flags*/
 #define FD_CLOEXEC 0x1

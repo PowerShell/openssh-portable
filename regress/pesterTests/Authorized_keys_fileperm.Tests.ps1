@@ -26,13 +26,13 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
         $ssouserProfile = $OpenSSHTestInfo["SSOUserProfile"]
         $opensshbinpath = $OpenSSHTestInfo['OpenSSHBinPath']
         $sshdconfig = Join-Path $Global:OpenSSHTestInfo["ServiceConfigDir"] sshd_config
+        $sshdDelay = $OpenSSHTestInfo["DelayTime"]
         Remove-Item -Path (Join-Path $testDir "*$sshLogName") -Force -ErrorAction SilentlyContinue        
         
         #skip when the task schedular (*-ScheduledTask) cmdlets does not exist
         $ts = (get-command get-ScheduledTask -ErrorAction SilentlyContinue)
         $skip = $ts -eq $null
-        $platform = Get-Platform
-        if(($platform -eq [PlatformType]::Windows) -and ([Environment]::OSVersion.Version.Major -le 6))
+        if($IsWindows -and ([Environment]::OSVersion.Version.Major -le 6))
         {
             #suppress the firewall blocking dialogue on win7
             netsh advfirewall firewall add rule name="sshd" program="$($OpenSSHTestInfo['OpenSSHBinPath'])\sshd.exe" protocol=any action=allow dir=in
@@ -42,8 +42,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
     AfterEach { $tI++ }
     
     AfterAll {
-        $platform = Get-Platform
-        if(($platform -eq [PlatformType]::Windows) -and ($psversiontable.BuildVersion.Major -le 6))
+        if($IsWindows -and ($psversiontable.BuildVersion.Major -le 6))
         {            
             netsh advfirewall firewall delete rule name="sshd" program="$($OpenSSHTestInfo['OpenSSHBinPath'])\sshd.exe" protocol=any dir=in
         }    
@@ -104,6 +103,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
             $o = ssh -p $port $ssouser@$server echo 1234
             Stop-SSHDTestDaemon -Port $port
+            sleep $sshdDelay
             $o | Should Be "1234"
         }
 
@@ -116,6 +116,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             
             $o = ssh -p $port $ssouser@$server  echo 1234
             Stop-SSHDTestDaemon -Port $port
+            sleep $sshdDelay
             $o | Should Be "1234"
         }
 
@@ -127,6 +128,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
             $o = ssh -p $port $ssouser@$server  echo 1234
             Stop-SSHDTestDaemon -Port $port
+            sleep $sshdDelay
             $o | Should Be "1234"
         }
 
@@ -138,7 +140,24 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
             $o = ssh -p $port $ssouser@$server  echo 1234
             Stop-SSHDTestDaemon -Port $port
+            sleep $sshdDelay
             $o | Should Be "1234"          
+        }
+
+        It "$tC.$tI-authorized_keys-positive(other account can read authorized_keys file)"  -skip:$skip {
+            #setup to have current user as owner and grant it full control
+            Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objUserSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
+
+            #add $PwdUser to access the file authorized_keys
+            $objPwdUserSid = Get-UserSid -User $PwdUser
+            Set-FilePermission -FilePath $authorizedkeyPath -User $objPwdUserSid -Perm "Read"
+
+            #Run
+            Start-SSHDTestDaemon -workDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
+            $o = ssh -p $port -E $sshlog $ssouser@$server echo 1234
+            Stop-SSHDTestDaemon -Port $port
+            sleep $sshdDelay
+            $o | Should Be "1234"
         }
 
         It "$tC.$tI-authorized_keys-negative(authorized_keys is owned by other admin user)"  -skip:$skip {
@@ -150,23 +169,25 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             ssh -p $port -E $sshlog $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
             Stop-SSHDTestDaemon -Port $port                  
+            sleep $sshdDelay                  
             $sshlog | Should Contain "Permission denied"
             $sshdlog | Should Contain "Authentication refused."            
         }
 
-        It "$tC.$tI-authorized_keys-negative(other account can access private key file)"  -skip:$skip {
+        It "$tC.$tI-authorized_keys-negative(other account has modify permissions to authorized_keys file)"  -skip:$skip {
             #setup to have current user as owner and grant it full control            
             Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objUserSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
 
             #add $PwdUser to access the file authorized_keys
             $objPwdUserSid = Get-UserSid -User $PwdUser
-            Set-FilePermission -FilePath $authorizedkeyPath -User $objPwdUserSid -Perm "Read"
+            Set-FilePermission -FilePath $authorizedkeyPath -User $objPwdUserSid -Perm "Modify"
 
             #Run
             Start-SSHDTestDaemon -workDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
             ssh -p $port -E $sshlog $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0            
             Stop-SSHDTestDaemon -Port $port
+            sleep $sshdDelay
             $sshlog | Should Contain "Permission denied"
             $sshdlog | Should Contain "Authentication refused."
         }
@@ -181,6 +202,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             ssh -p $port -E $sshlog $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
             Stop-SSHDTestDaemon -Port $port
+            sleep $sshdDelay
             $sshlog | Should Contain "Permission denied"
             $sshdlog | Should Contain "Authentication refused."            
         }
