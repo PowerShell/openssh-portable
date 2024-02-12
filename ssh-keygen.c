@@ -297,7 +297,7 @@ ask_filename(struct passwd *pw, const char *prompt)
 		}
 	}
 	snprintf(identity_file, sizeof(identity_file),
-	    "%s/%s", pw->pw_dir, name);
+	    "%s" _PATH_SEPARATOR "%s", pw->pw_dir, name);
 	printf("%s (%s): ", prompt, identity_file);
 	fflush(stdout);
 	if (fgets(buf, sizeof(buf), stdin) == NULL)

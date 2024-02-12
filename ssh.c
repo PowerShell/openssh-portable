@@ -572,7 +572,7 @@ process_config_files(const char *host_name, struct passwd *pw, int final_pass,
 			fatal("Can't open user config file %.100s: "
 			    "%.100s", config, strerror(errno));
 	} else {
-		r = snprintf(buf, sizeof buf, "%s/%s", pw->pw_dir,
+		r = snprintf(buf, sizeof buf, "%s" _PATH_SEPARATOR "%s", pw->pw_dir,
 		    _PATH_SSH_USER_CONFFILE);
 		if (r > 0 && (size_t)r < sizeof(buf))
 			(void)read_config_file(buf, pw, host, host_name,
