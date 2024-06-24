@@ -11,7 +11,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
         }
 
         $rootDirectory = "$($OpenSSHTestInfo["TestDataPath"])\SFTP"
-        
+
         $outputFileName = "output.txt"
         $batchFileName = "sftp-batchcmds.txt"
         $tempFileName = "tempFile.txt"
@@ -19,6 +19,10 @@ Describe "SFTP Test Cases" -Tags "CI" {
 
         $tempUnicodeFileName = "tempFile_язык.txt"
         $tempUnicodeFilePath = Join-Path $rootDirectory $tempUnicodeFileName
+
+        $largeFileName = "largeFile.txt"
+        $largeFilePath = Join-Path $rootDirectory $largeFileName
+        fsutil file createNew $filename 1000000000
 
         $clientDirectory = Join-Path $rootDirectory 'client_dir'
         $serverDirectory = Join-Path $rootDirectory 'server_dir'
@@ -32,10 +36,10 @@ Describe "SFTP Test Cases" -Tags "CI" {
         $port = $OpenSSHTestInfo["Port"]
         $ssouser = $OpenSSHTestInfo["SSOUser"]
 
-        Remove-item (Join-Path $rootDirectory "*.$outputFileName") -Force -ErrorAction SilentlyContinue                
+        Remove-item (Join-Path $rootDirectory "*.$outputFileName") -Force -ErrorAction SilentlyContinue
         Remove-item (Join-Path $rootDirectory "*.$batchFileName") -Force -ErrorAction SilentlyContinue
         Remove-item (Join-Path $rootDirectory "*.log") -Force -ErrorAction SilentlyContinue
-        
+
         $skip = $IsWindows -and ($PSVersionTable.PSVersion.Major -le 2)
 
         $testData1 = @(
@@ -90,7 +94,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
                 options = ''
                 commands = "put $tempUnicodeFilePath $serverDirectory
                             ls $serverDirectory"
-                expectedoutput = (join-path $serverdirectory $tempUnicodeFileName)			
+                expectedoutput = (join-path $serverdirectory $tempUnicodeFileName)
              },
              @{
                 title = "get, ls for unicode file names"
@@ -133,12 +137,12 @@ Describe "SFTP Test Cases" -Tags "CI" {
                 ExpectedOutput = (Join-Path $clientDirectory "client_test_dir_язык")
              }
         )
-        
+
         $testData2 = @(
             @{
                 title = "rm, rmdir, rename for unicode file, directory"
                 options = '-b $batchFilePath'
-                
+
                 tmpFileName1 = $tempUnicodeFileName
                 tmpFilePath1 = $tempUnicodeFilePath
                 tmpFileName2 = "tempfile_язык_2.txt"
@@ -152,7 +156,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
             @{
                 title = "rm, rmdir, rename for non-unicode file, directory"
                 options = '-b $batchFilePath'
-                
+
                 tmpFileName1 = $tempFileName
                 tmpFilePath1 = $tempFilePath
                 tmpFileName2 = "tempfile_2.txt"
@@ -162,6 +166,33 @@ Describe "SFTP Test Cases" -Tags "CI" {
                 tmpDirectoryPath1 = (join-path $serverDirectory "test_dir_1")
                 tmpDirectoryName2 = "test_dir_2"
                 tmpDirectoryPath2 = (join-path $serverDirectory "test_dir_2")
+            }
+        )
+
+        $testData3 = @(
+            @{
+               title = "put, ls for large file transfer"
+               commands = "put $largeFilePath $serverDirectory
+                           ls $serverDirectory"
+               expectedoutput = (join-path $serverdirectory $largeFileName)
+            },
+            @{
+               title = "get, ls for large file transfer"
+               commands = "get $largeFilePath $clientDirectory
+                           ls $clientDirectory"
+               expectedoutput = (join-path $clientDirectory $largeFileName)
+            },
+            @{
+               title = "mput, ls for large file transfer"
+               commands = "mput $largeFilePath $serverDirectory
+                           ls $serverDirectory"
+               expectedoutput = (join-path $serverdirectory $largeFileName)
+            },
+            @{
+               title = "mget, ls for large file transfer"
+               commands = "mget $largeFilePath $clientDirectory
+                           ls $clientDirectory"
+               expectedoutput = (join-path $clientDirectory $largeFileName)
             }
         )
 
@@ -179,7 +210,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
                 Copy-Item "$env:ProgramData\ssh\logs\ssh-agent.log" "$rootDirectory\ssh-agent_$tI.log" -Force -ErrorAction SilentlyContinue
                 Copy-Item "$env:ProgramData\ssh\logs\sshd.log" "$rootDirectory\sshd_$tI.log" -Force -ErrorAction SilentlyContinue
                 Copy-Item "$env:ProgramData\ssh\logs\sftp-server.log" "$rootDirectory\sftp-server_$tI.log" -Force -ErrorAction SilentlyContinue
-                
+
                 # clear the ssh-agent, sshd logs so that next testcase will get fresh logs.
                 Clear-Content "$env:ProgramData\ssh\logs\ssh-agent.log" -Force -ErrorAction SilentlyContinue
                 Clear-Content "$env:ProgramData\ssh\logs\sshd.log" -Force -ErrorAction SilentlyContinue
@@ -203,7 +234,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
     AfterEach {
         CopyDebugLogs
         $tI++
-    }    
+    }
 
     It '<Title>' -TestCases:$testData1 {
        param([string]$Title, $Options, $Commands, $ExpectedOutput)
@@ -270,9 +301,9 @@ Describe "SFTP Test Cases" -Tags "CI" {
     }
 
     It "$script:testId-ls lists items the user has no read permission" {
-       $adminsSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid)                        
+       $adminsSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid)
        $currentUserSid = Get-UserSID -User "$($env:USERDOMAIN)\$($env:USERNAME)"
-            
+
        $permTestHasAccessFile = "permTestHasAccessFile.txt"
        $permTestHasAccessFilePath = Join-Path $serverDirectory $permTestHasAccessFile
        Remove-Item $permTestHasAccessFilePath -Force -ErrorAction SilentlyContinue
@@ -289,7 +320,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
        $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -b $batchFilePath test_target > $outputFilePath")
        iex $str
        $content = Get-Content $outputFilePath
-       
+
        #cleanup
        $HasAccessPattern = $permTestHasAccessFilePath.Replace("\", "[/\\]")
        $matches = @($content | select-string -Pattern "^/$HasAccessPattern\s{0,}$")
@@ -298,5 +329,17 @@ Describe "SFTP Test Cases" -Tags "CI" {
        $NoAccessPattern = $permTestNoAccessFilePath.Replace("\", "[/\\]")
        $matches = @($content | select-string -Pattern "^/$NoAccessPattern\s{0,}$")
        $matches.count | Should be 1
+    }
+
+    It '<Title>' -TestCases:$testData3 {
+      param([string]$Title, $Options, $Commands, $ExpectedOutput)
+
+      Set-Content $batchFilePath -Encoding UTF8 -value $Commands
+      $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) -b $batchFilePath test_target > $outputFilePath")
+      iex $str
+
+      #validate file content.
+      Test-Path $ExpectedOutput | Should be $true
+      $LASTEXITCODE | Should Be 0
     }
 }

@@ -24,7 +24,7 @@ Describe "Tests for scp command" -Tags "CI" {
         $SourceFileWildCardFile1 = Join-Path $SourceDir $wildcardFileName1
         $DestinationDir = Join-Path "$($OpenSSHTestInfo["TestDataPath"])\SCP" "DestDir"
         $DestinationDirWildcardPath = Join-Path "$($OpenSSHTestInfo["TestDataPath"])\SCP" "DestD?r"
-        $DestinationFilePath = Join-Path $DestinationDir $fileName1        
+        $DestinationFilePath = Join-Path $DestinationDir $fileName1
         $NestedSourceDir= Join-Path $SourceDir "nested"
         $NestedSourceFilePath = Join-Path $NestedSourceDir $fileName2
         $null = New-Item $SourceDir -ItemType directory -Force -ErrorAction SilentlyContinue
@@ -35,7 +35,7 @@ Describe "Tests for scp command" -Tags "CI" {
         "Test content333" | Set-content -Path $SourceFilePath3
         "Test content in nested dir" | Set-content -Path $NestedSourceFilePath
         $null = New-Item $DestinationDir -ItemType directory -Force -ErrorAction SilentlyContinue
-        $sshcmd = (get-command ssh).Path        
+        $sshcmd = (get-command ssh).Path
 
         # for symlink tests
         $SourceDirSymLinkName = "SourceDirSymLink"
@@ -50,6 +50,10 @@ Describe "Tests for scp command" -Tags "CI" {
         $SymLinkDir = Join-Path $SourceDirSymLink $SymLinkName
         $null = New-Item -Path $SymLinkDir -ItemType SymbolicLink -Value $tmpDir
 
+        # for large file transfer tests
+        $largeFileName = 'largefile.txt'
+        fsutil file createNew $largeFileName 1000000000
+
         $server = $OpenSSHTestInfo["Target"]
         $port = $OpenSSHTestInfo["Port"]
         $ssouser = $OpenSSHTestInfo["SSOUser"]
@@ -57,7 +61,7 @@ Describe "Tests for scp command" -Tags "CI" {
         $testData = @(
             @{
                 Title = 'Simple copy local file to local file'
-                Source = $SourceFilePath                   
+                Source = $SourceFilePath
                 Destination = $DestinationFilePath
             },
             @{
@@ -71,14 +75,14 @@ Describe "Tests for scp command" -Tags "CI" {
                 Source = "test_target:$SourceFilePath"
                 Destination = $DestinationFilePath
                 Options = "-p -c aes128-ctr -C"
-            },            
+            },
             @{
                 Title = 'Simple copy local file to local dir'
                 Source = $SourceFilePath
                 Destination = $DestinationDir
             },
             @{
-                Title = 'simple copy local file to remote dir'         
+                Title = 'simple copy local file to remote dir'
                 Source = $SourceFilePath
                 Destination = "test_target:$DestinationDir"
                 Options = "-C -q"
@@ -99,7 +103,7 @@ Describe "Tests for scp command" -Tags "CI" {
                 Destination = $DestinationDir
             },
             @{
-                Title = 'simple copy local file to remote dir with wild card name'         
+                Title = 'simple copy local file to remote dir with wild card name'
                 Source = $SourceFilePath
                 Destination = "test_target:$DestinationFilePath"
                 Options = "-C -q"
@@ -120,7 +124,7 @@ Describe "Tests for scp command" -Tags "CI" {
                 Options = "-r "
             },
             @{
-                Title = 'copy from remote dir to local dir'            
+                Title = 'copy from remote dir to local dir'
                 Source = "test_target:$sourceDir"
                 Destination = $DestinationDir
                 Options = "-C -r -q"
@@ -141,10 +145,24 @@ Describe "Tests for scp command" -Tags "CI" {
                 Options = "-r "
             },
             @{
-                Title = 'symlink copy from remote dir to local dir'            
+                Title = 'symlink copy from remote dir to local dir'
                 Source = "test_target:$SourceDirSymLink"
                 Destination = $DestinationDir
                 Options = "-C -r -q"
+            }
+        )
+
+        $testData3 = @(
+            @{
+                Title = 'copy large file from local dir to remote dir'
+                Source = $sourceDir
+                Destination = "test_target:$DestinationDir"
+                Options = "-S `"$sshcmd`""
+            },
+            @{
+                Title = 'copy large file from remote dir to local dir'
+                Source = "test_target:$sourceDir"
+                Destination = $DestinationDir
             }
         )
 
@@ -163,15 +181,31 @@ Describe "Tests for scp command" -Tags "CI" {
                 {
                     Copy-Item "$env:ProgramData\ssh\logs\ssh-agent.log" "$testDir\failedagent$tI.log" -Force -ErrorAction SilentlyContinue
                     Copy-Item "$env:ProgramData\ssh\logs\sshd.log" "$testDir\failedsshd$tI.log" -Force -ErrorAction SilentlyContinue
-                    
+
                     # clear the ssh-agent, sshd logs so that next testcase will get fresh logs.
                     Clear-Content "$env:ProgramData\ssh\logs\ssh-agent.log" -Force -ErrorAction SilentlyContinue
                     Clear-Content "$env:ProgramData\ssh\logs\sshd.log" -Force -ErrorAction SilentlyContinue
                 }
-             
+
                 return $false
             }
             return $true
+        }
+
+        function ConfigureDefaultShell {
+            param
+            (
+                  [string] $default_shell_path,
+                  [string] $default_shell_cmd_option_val = $null
+            )
+
+            if (!(Test-Path $dfltShellRegPath)) {
+                New-Item -Path $dfltShellRegPath -Force | Out-Null
+            }
+            New-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -Value $default_shell_path -PropertyType String -Force
+            if ($default_shell_cmd_option_val -ne $null) {
+                New-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -Value $default_shell_cmd_option_val -PropertyType String -Force
+            }
         }
     }
     AfterAll {
@@ -205,74 +239,160 @@ Describe "Tests for scp command" -Tags "CI" {
         Get-ChildItem $DestinationDir -Recurse | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         Start-Sleep 1
         $tI++
-    }       
-    
+    }
 
-    It 'File copy: <Title> ' -TestCases:$testData {
-        param([string]$Title, $Source, $Destination, [string]$Options)
-        iex  "scp $Options $Source $Destination"
-        $LASTEXITCODE | Should Be 0
-        #validate file content. DestPath is the path to the file.
-        CheckTarget -target $DestinationFilePath | Should Be $true
-        
-        $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
-        $equal | Should Be $true
+    Context "$tI - Basic Scenarios" {
 
-        if($Options.contains("-p ") -and [environment]::OSVersion.Version.Major -ge 10)
-        {
-            $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath).LastWriteTime.DateTime (Get-ChildItem -path $DestinationFilePath).LastWriteTime.DateTime ).Length -eq 0
+        It 'File copy: <Title> ' -TestCases:$testData {
+            param([string]$Title, $Source, $Destination, [string]$Options)
+            iex  "scp $Options $Source $Destination"
+            $LASTEXITCODE | Should Be 0
+            #validate file content. DestPath is the path to the file.
+            CheckTarget -target $DestinationFilePath | Should Be $true
+
+            $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
+            $equal | Should Be $true
+
+            if($Options.contains("-p ") -and [environment]::OSVersion.Version.Major -ge 10)
+            {
+                $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath).LastWriteTime.DateTime (Get-ChildItem -path $DestinationFilePath).LastWriteTime.DateTime ).Length -eq 0
+                $equal | Should Be $true
+            }
+        }
+
+        It 'Directory recursive copy: <Title> ' -TestCases:$testData1 {
+            param([string]$Title, $Source, $Destination, [string]$Options)
+
+            iex  "scp $Options $Source $Destination"
+            $LASTEXITCODE | Should Be 0
+            CheckTarget -target (join-path $DestinationDir $SourceDirName) | Should Be $true
+
+            $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length).Length -eq 0
+            $equal | Should Be $true
+
+            if($Options.contains("-p "))
+            {
+                $equal = @(Compare-Object (Get-Item -path $SourceDir).LastWriteTime.DateTime (Get-Item -path (join-path $DestinationDir $SourceDirName)).LastWriteTime.DateTime).Length -eq 0
+                $equal | Should Be $true
+            }
+
+            $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir) (Get-ChildItem -Recurse -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length).Length -eq 0
+            $equal | Should Be $true
+
+            if($Options.contains("-p ") -and $IsWindows -and ($PSVersionTable.PSVersion.Major -gt 2))
+            {
+                $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir).LastWriteTime.DateTime (Get-ChildItem -Recurse -path (join-path $DestinationDir $SourceDirName) ).LastWriteTime.DateTime).Length -eq 0
+                $equal | Should Be $true
+            }
+        }
+
+        It 'Directory with symlink recursive copy: <Title> ' -TestCases:$testData2 {
+            param([string]$Title, $Source, $Destination, [string]$Options)
+
+            iex  "scp $Options $Source $Destination"
+            $LASTEXITCODE | Should Be 0
+            $expectedFilepath = join-path $DestinationDir $SourceDirSymLinkName $SymLinkName $fileName1
+            CheckTarget -target $expectedFilepath | Should Be $true
+            Get-Content $expectedFilepath | Should Be "Test content in tmp dir for sym link"
+        }
+
+        It 'File copy: path contains wildcards ' {
+            $Source = Join-Path $SourceDir $wildcardFileName2
+            scp -p $Source $DestinationDir
+            $LASTEXITCODE | Should Be 0
+            #validate file content. DestPath is the path to the file.
+            CheckTarget -target $DestinationFilePath | Should Be $true
+            CheckTarget -target (Join-path $DestinationDir $fileName3) | Should Be $true
+
+            $equal = @(Compare-Object (Get-ChildItem -path $Source) (Get-ChildItem -path (join-path $DestinationDir $wildcardFileName2)) -Property Name, Length ).Length -eq 0
+            $equal | Should Be $true
+
+            $equal = @(Compare-Object (Get-ChildItem -path $Source).LastWriteTime.DateTime (Get-ChildItem -path (join-path $DestinationDir $wildcardFileName3)).LastWriteTime.DateTime ).Length -eq 0
+            $equal | Should Be $true
+        }
+
+        It '<Title> ' -TestCases:$testData3 {
+            param([string]$Title, $Source, $Destination, [string]$Options)
+
+            iex "scp $Options $Source $Destination"
+            $LASTEXITCODE | Should Be 0
+
+            $DestinationFilePath = Join-Path $Destination $largeFileName
+            CheckTarget -target $DestinationFilePath | Should Be $true
+
+            $equal = @(Compare-Object (Get-ChildItem -path $Source) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
+            $equal | Should Be $true
+
+            $equal = @(Compare-Object (Get-ChildItem -path $Source).LastWriteTime.DateTime (Get-ChildItem -path $DestinationFilePath).LastWriteTime.DateTime ).Length -eq 0
             $equal | Should Be $true
         }
     }
-                
-    It 'Directory recursive copy: <Title> ' -TestCases:$testData1 {
-        param([string]$Title, $Source, $Destination, [string]$Options)                        
-            
-        iex  "scp $Options $Source $Destination"
-        $LASTEXITCODE | Should Be 0
-        CheckTarget -target (join-path $DestinationDir $SourceDirName) | Should Be $true
 
-        $equal = @(Compare-Object (Get-Item -path $SourceDir ) (Get-Item -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length).Length -eq 0        
-        $equal | Should Be $true
-
-        if($Options.contains("-p "))
-        {
-            $equal = @(Compare-Object (Get-Item -path $SourceDir).LastWriteTime.DateTime (Get-Item -path (join-path $DestinationDir $SourceDirName)).LastWriteTime.DateTime).Length -eq 0            
-            $equal | Should Be $true
+    Context "$tI - configure powershell default shell scenarios" {
+        BeforeAll {
+            $dfltShellRegPath = "HKLM:\Software\OpenSSH"
+            $dfltShellRegKeyName = "DefaultShell"
+            $dfltShellCmdOptionRegKeyName = "DefaultShellCommandOption"
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
+            $shell_path = (Get-Command powershell.exe -ErrorAction SilentlyContinue).path
+            if($shell_path -ne $null) {
+                ConfigureDefaultShell -default_shell_path $shell_path -default_shell_cmd_option_val "-c"
+            }
+        }
+        AfterAll{
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
         }
 
-        $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir) (Get-ChildItem -Recurse -path (join-path $DestinationDir $SourceDirName) ) -Property Name, Length).Length -eq 0
-        $equal | Should Be $true
+        It 'File copy: <Title> ' -TestCases:$testData {
+            param([string]$Title, $Source, $Destination, [string]$Options)
+            iex  "scp $Options $Source $Destination"
+            $LASTEXITCODE | Should Be 0
+            #validate file content. DestPath is the path to the file.
+            CheckTarget -target $DestinationFilePath | Should Be $true
 
-        if($Options.contains("-p ") -and $IsWindows -and ($PSVersionTable.PSVersion.Major -gt 2))
-        {
-            $equal = @(Compare-Object (Get-ChildItem -Recurse -path $SourceDir).LastWriteTime.DateTime (Get-ChildItem -Recurse -path (join-path $DestinationDir $SourceDirName) ).LastWriteTime.DateTime).Length -eq 0            
+            $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
             $equal | Should Be $true
+
+            if($Options.contains("-p ") -and [environment]::OSVersion.Version.Major -ge 10)
+            {
+                $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath).LastWriteTime.DateTime (Get-ChildItem -path $DestinationFilePath).LastWriteTime.DateTime ).Length -eq 0
+                $equal | Should Be $true
+            }
         }
     }
 
-    It 'Directory with symlink recursive copy: <Title> ' -TestCases:$testData2 {
-        param([string]$Title, $Source, $Destination, [string]$Options)                        
-            
-        iex  "scp $Options $Source $Destination"
-        $LASTEXITCODE | Should Be 0
-        $expectedFilepath = join-path $DestinationDir $SourceDirSymLinkName $SymLinkName $fileName1
-        CheckTarget -target $expectedFilepath | Should Be $true
-        Get-Content $expectedFilepath | Should Be "Test content in tmp dir for sym link"
-    }
+    Context "$tI - configure shell-host default shell scenarios" {
+        BeforeAll {
+            $dfltShellRegPath = "HKLM:\Software\OpenSSH"
+            $dfltShellRegKeyName = "DefaultShell"
+            $dfltShellCmdOptionRegKeyName = "DefaultShellCommandOption"
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
+            $shell_path = (Get-Command ssh-shellhost -ErrorAction SilentlyContinue).path
+            ConfigureDefaultShell -default_shell_path $shell_path
+        }
+        AfterAll{
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
+        }
 
-    It 'File copy: path contains wildcards ' {
-        $Source = Join-Path $SourceDir $wildcardFileName2
-        scp -p $Source $DestinationDir
-        $LASTEXITCODE | Should Be 0
-        #validate file content. DestPath is the path to the file.
-        CheckTarget -target $DestinationFilePath | Should Be $true
-        CheckTarget -target (Join-path $DestinationDir $fileName3) | Should Be $true
+        It 'File copy: <Title> ' -TestCases:$testData {
+            param([string]$Title, $Source, $Destination, [string]$Options)
+            iex  "scp $Options $Source $Destination"
+            $LASTEXITCODE | Should Be 0
+            #validate file content. DestPath is the path to the file.
+            CheckTarget -target $DestinationFilePath | Should Be $true
 
-        $equal = @(Compare-Object (Get-ChildItem -path $Source) (Get-ChildItem -path (join-path $DestinationDir $wildcardFileName2)) -Property Name, Length ).Length -eq 0
-        $equal | Should Be $true
-        
-        $equal = @(Compare-Object (Get-ChildItem -path $Source).LastWriteTime.DateTime (Get-ChildItem -path (join-path $DestinationDir $wildcardFileName3)).LastWriteTime.DateTime ).Length -eq 0
-        $equal | Should Be $true        
+            $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
+            $equal | Should Be $true
+
+            if($Options.contains("-p ") -and [environment]::OSVersion.Version.Major -ge 10)
+            {
+                $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath).LastWriteTime.DateTime (Get-ChildItem -path $DestinationFilePath).LastWriteTime.DateTime ).Length -eq 0
+                $equal | Should Be $true
+            }
+        }
     }
-}   
+}
