@@ -97,6 +97,14 @@ _rs_init(u_char *buf, size_t n)
 {
 	if (n < KEYSZ + IVSZ)
 		return;
+
+	if (rs == NULL) {
+		if (_rs_allocate(&rs, &rsx) == -1)
+			_exit(1);
+	}
+
+	chacha_keysetup(&rsx->rs_chacha, buf, KEYSZ * 8);
+	chacha_ivsetup(&rsx->rs_chacha, buf + KEYSZ);
 }
 
 #ifndef WITH_OPENSSL
@@ -135,14 +143,18 @@ getrnd(u_char *s, size_t len)
 			return;
 		fatal("Couldn't open %s: %s", SSH_RANDOM_DEV,
 		    strerror(save_errno));
-
-	if (rs == NULL) {
-		if (_rs_allocate(&rs, &rsx) == -1)
-			_exit(1);
 	}
-
-	chacha_keysetup(&rsx->rs_chacha, buf, KEYSZ * 8);
-	chacha_ivsetup(&rsx->rs_chacha, buf + KEYSZ);
+	while (o < len) {
+		r = read(fd, s + o, len - o);
+		if (r < 0) {
+			if (errno == EAGAIN || errno == EINTR ||
+			    errno == EWOULDBLOCK)
+				continue;
+			fatal("read %s: %s", SSH_RANDOM_DEV, strerror(errno));
+		}
+		o += r;
+	}
+	close(fd);
 }
 #endif /* !WINDOWS */
 #endif /* WITH_OPENSSL */
