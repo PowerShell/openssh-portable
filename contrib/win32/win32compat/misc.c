@@ -207,7 +207,7 @@ gettimeofday(struct timeval *tv, void *tz)
 	us = (timehelper.ns - EPOCH_DELTA) / 10;
 
 	/* Stuff result into the timeval */
-	tv->tv_sec = (long)(us / USEC_IN_SEC);
+	tv->tv_sec = (long long)(us / USEC_IN_SEC);
 	tv->tv_usec = (long)(us % USEC_IN_SEC);
 
 	return 0;
