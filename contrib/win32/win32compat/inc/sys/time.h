@@ -7,8 +7,8 @@
 #define timeval w32_timeval
 struct timeval
 {
-	long long	tv_sec;
-	long        tv_usec;
+    long long    tv_sec;
+    long         tv_usec;
 };
 
 int usleep(unsigned int);
