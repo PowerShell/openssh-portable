@@ -1,7 +1,15 @@
+#pragma once
 #include <sys\utime.h>
 
 #define utimbuf _utimbuf
 #define utimes w32_utimes
+
+#define timeval w32_timeval
+struct timeval
+{
+	long long	tv_sec;
+	long        tv_usec;
+};
 
 int usleep(unsigned int);
 int gettimeofday(struct timeval *, void *);
