@@ -349,7 +349,7 @@
 /* #undef HAVE_DEV_PTS_AND_PTC */
 
 /* Define to 1 if you have the <dirent.h> header file. */
-/* #undef HAVE_DIRENT_H
+/* #undef HAVE_DIRENT_H */
 
 /* Define to 1 if you have the `dirfd' function. */
 /* #undef HAVE_DIRFD */
