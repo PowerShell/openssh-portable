@@ -248,18 +248,17 @@ ga_init(const char *user, gid_t base)
 
 	if ((user_token = get_user_token(user_name, 0)) == NULL) {
 		/*
-		 * TODO - We need to fatal() all the times when we fail to generate the user token.
+		 * No fatal call here so experience when called by servconf parsing Match block
+		 * is consistent for an invalid user (does not find password, but is not fatal yet)
+		 * and a valid user without a token (ex: group policy forbidding login)
 		 */
-		if (get_custom_lsa_package()) {
-			error("%s, unable to resolve user %s", __func__, user_name);
-			return 0;
-		} else {
-			fatal("%s, unable to resolve user %s", __func__, user_name);
-		}
+		get_custom_lsa_package();
+		error("%s, unable to resolve user %s", __func__, user_name);
+		return 0;
 	}
 		
 	/* 
-	 * supposed to retun number of groups associated with user 
+	 * supposed to return number of groups associated with user 
 	 * since we do lazy group evaluation, returning 1 here
 	 */
 
