@@ -8,7 +8,7 @@
     <ZLibVersion>1.3.1</ZLibVersion>
     <fido2Version>1.15.0</fido2Version>
     <!--libcbor version is not used in the build; it is needed for pipeline compliance tasks-->  
-    <libcborVersion>0.10.1</libcborVersion> 
+    <libcborVersion>0.11.0</libcborVersion> 
     <LibreSSL-Path>$(SolutionDir)\LibreSSL\sdk\</LibreSSL-Path>
     <LibreSSL-x86-Path>$(SolutionDir)\LibreSSL\bin\desktop\x86\</LibreSSL-x86-Path>
     <LibreSSL-x64-Path>$(SolutionDir)\LibreSSL\bin\desktop\x64\</LibreSSL-x64-Path>
