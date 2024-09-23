@@ -1,4 +1,4 @@
-/* $OpenBSD: clientloop.c,v 1.398 2023/09/10 03:51:55 djm Exp $ */
+/* $OpenBSD: clientloop.c,v 1.408 2024/07/01 04:31:17 djm Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -156,7 +156,6 @@ static time_t control_persist_exit_time = 0;
 volatile sig_atomic_t quit_pending; /* Set non-zero to quit the loop. */
 static int last_was_cr;		/* Last character was a newline. */
 static int exit_status;		/* Used to store the command exit status. */
-static struct sshbuf *stderr_buffer;	/* Used for final exit message. */
 static int connection_in;	/* Connection to server (input). */
 static int connection_out;	/* Connection to server (output). */
 static int need_rekeying;	/* Set to non-zero if rekeying is requested. */
@@ -194,23 +193,24 @@ TAILQ_HEAD(global_confirms, global_confirm);
 static struct global_confirms global_confirms =
     TAILQ_HEAD_INITIALIZER(global_confirms);
 
-void ssh_process_session2_setup(int, int, int, struct sshbuf *);
 static void quit_message(const char *fmt, ...)
     __attribute__((__format__ (printf, 1, 2)));
 
 static void
 quit_message(const char *fmt, ...)
 {
-	char *msg;
+	char *msg, *fmt2;
 	va_list args;
-	int r;
+	xasprintf(&fmt2, "%s\r\n", fmt);
 
 	va_start(args, fmt);
-	xvasprintf(&msg, fmt, args);
+	xvasprintf(&msg, fmt2, args);
 	va_end(args);
 
-	if ((r = sshbuf_putf(stderr_buffer, "%s\r\n", msg)) != 0)
-		fatal_fr(r, "sshbuf_putf");
+	(void)atomicio(vwrite, STDERR_FILENO, msg, strlen(msg));
+	free(msg);
+	free(fmt2);
+
 	quit_pending = 1;
 }
 
@@ -524,7 +524,7 @@ send_chaff(struct ssh *ssh)
 {
 	int r;
 
-	if ((ssh->kex->flags & KEX_HAS_PING) == 0)
+	if (ssh->kex == NULL || (ssh->kex->flags & KEX_HAS_PING) == 0)
 		return 0;
 	/* XXX probabilistically send chaff? */
 	/*
@@ -597,7 +597,7 @@ obfuscate_keystroke_timing(struct ssh *ssh, struct timespec *timeout,
 	if (options.obscure_keystroke_timing_interval <= 0)
 		return 1;	/* disabled in config */
 
-	if (!channel_still_open(ssh) || quit_pending) {
+	if (!channel_tty_open(ssh) || quit_pending) {
 		/* Stop if no channels left of we're waiting for one to close */
 		stop_reason = "no active channels";
 	} else if (ssh_packet_is_rekeying(ssh)) {
@@ -615,8 +615,9 @@ obfuscate_keystroke_timing(struct ssh *ssh, struct timespec *timeout,
 		if (timespeccmp(&now, &chaff_until, >=)) {
 			/* Stop if there have been no keystrokes for a while */
 			stop_reason = "chaff time expired";
-		} else if (timespeccmp(&now, &next_interval, >=)) {
-			/* Otherwise if we were due to send, then send chaff */
+		} else if (timespeccmp(&now, &next_interval, >=) &&
+		    !ssh_packet_have_data_to_write(ssh)) {
+			/* If due to send but have no data, then send chaff */
 			if (send_chaff(ssh))
 				nchaff++;
 		}
@@ -689,7 +690,7 @@ obfuscate_keystroke_timing(struct ssh *ssh, struct timespec *timeout,
 static void
 client_wait_until_can_do_something(struct ssh *ssh, struct pollfd **pfdp,
     u_int *npfd_allocp, u_int *npfd_activep, int channel_did_enqueue,
-    int *conn_in_readyp, int *conn_out_readyp)
+    sigset_t *sigsetp, int *conn_in_readyp, int *conn_out_readyp)
 {
 	struct timespec timeout;
 	int ret, oready;
@@ -736,7 +737,7 @@ client_wait_until_can_do_something(struct ssh *ssh, struct pollfd **pfdp,
 		    ssh_packet_get_rekey_timeout(ssh));
 	}
 
-	ret = ppoll(*pfdp, *npfd_activep, ptimeout_get_tsp(&timeout), NULL);
+	ret = ppoll(*pfdp, *npfd_activep, ptimeout_get_tsp(&timeout), sigsetp);
 
 	if (ret == -1) {
 		/*
@@ -1453,9 +1454,10 @@ client_loop(struct ssh *ssh, int have_pty, int escape_char_arg,
 	struct pollfd *pfd = NULL;
 	u_int npfd_alloc = 0, npfd_active = 0;
 	double start_time, total_time;
-	int channel_did_enqueue = 0, r, len;
+	int channel_did_enqueue = 0, r;
 	u_int64_t ibytes, obytes;
 	int conn_in_ready, conn_out_ready;
+	sigset_t bsigset, osigset;
 
 	debug("Entering interactive session.");
 	session_ident = ssh2_chan_id;
@@ -1504,10 +1506,6 @@ client_loop(struct ssh *ssh, int have_pty, int escape_char_arg,
 
 	quit_pending = 0;
 
-	/* Initialize buffer. */
-	if ((stderr_buffer = sshbuf_new()) == NULL)
-		fatal_f("sshbuf_new failed");
-
 	client_init_dispatch(ssh);
 
 	/*
@@ -1541,6 +1539,13 @@ client_loop(struct ssh *ssh, int have_pty, int escape_char_arg,
 
 	schedule_server_alive_check();
 
+	if (sigemptyset(&bsigset) == -1 ||
+	    sigaddset(&bsigset, SIGHUP) == -1 ||
+	    sigaddset(&bsigset, SIGINT) == -1 ||
+	    sigaddset(&bsigset, SIGQUIT) == -1 ||
+	    sigaddset(&bsigset, SIGTERM) == -1)
+		error_f("bsigset setup: %s", strerror(errno));
+
 	/* Main loop of the client for the interactive session mode. */
 	while (!quit_pending) {
 		channel_did_enqueue = 0;
@@ -1572,17 +1577,20 @@ client_loop(struct ssh *ssh, int have_pty, int escape_char_arg,
 			 * message about it to the server if so.
 			 */
 			client_check_window_change(ssh);
-
-			if (quit_pending)
-				break;
 		}
 		/*
 		 * Wait until we have something to do (something becomes
 		 * available on one of the descriptors).
 		 */
+		if (sigprocmask(SIG_BLOCK, &bsigset, &osigset) == -1)
+			error_f("bsigset sigprocmask: %s", strerror(errno));
+		if (quit_pending)
+			break;
 		client_wait_until_can_do_something(ssh, &pfd, &npfd_alloc,
-		    &npfd_active, channel_did_enqueue,
+		    &npfd_active, channel_did_enqueue, &osigset,
 		    &conn_in_ready, &conn_out_ready);
+		if (sigprocmask(SIG_SETMASK, &osigset, NULL) == -1)
+			error_f("osigset sigprocmask: %s", strerror(errno));
 
 		if (quit_pending)
 			break;
@@ -1628,6 +1636,14 @@ client_loop(struct ssh *ssh, int have_pty, int escape_char_arg,
 
 	/* Terminate the session. */
 
+	/*
+	 * In interactive mode (with pseudo tty) display a message indicating
+	 * that the connection has been closed.
+	 */
+	if (have_pty && options.log_level >= SYSLOG_LEVEL_INFO)
+		quit_message("Connection to %s closed.", host);
+
+
 	/* Stop watching for window change. */
 	ssh_signal(SIGWINCH, SIG_DFL);
 
@@ -1659,27 +1675,6 @@ client_loop(struct ssh *ssh, int have_pty, int escape_char_arg,
 		verbose("Killed by signal %d.", (int) received_signal);
 		cleanup_exit(255);
 	}
-
-	/*
-	 * In interactive mode (with pseudo tty) display a message indicating
-	 * that the connection has been closed.
-	 */
-	if (have_pty && options.log_level >= SYSLOG_LEVEL_INFO)
-		quit_message("Connection to %s closed.", host);
-
-	/* Output any buffered data for stderr. */
-	if (sshbuf_len(stderr_buffer) > 0) {
-		len = atomicio(vwrite, fileno(stderr),
-		    (u_char *)sshbuf_ptr(stderr_buffer),
-		    sshbuf_len(stderr_buffer));
-		if (len < 0 || (u_int)len != sshbuf_len(stderr_buffer))
-			error("Write failed flushing stderr buffer.");
-		else if ((r = sshbuf_consume(stderr_buffer, len)) != 0)
-			fatal_fr(r, "sshbuf_consume");
-	}
-
-	/* Clear and free any buffers. */
-	sshbuf_free(stderr_buffer);
 
 	/* Report bytes transferred, and transfer rates. */
 	total_time = monotime_double() - start_time;
@@ -1809,7 +1804,7 @@ client_request_x11(struct ssh *ssh, const char *request_type, int rchan)
 	sock = x11_connect_display(ssh);
 	if (sock < 0)
 		return NULL;
-	c = channel_new(ssh, "x11",
+	c = channel_new(ssh, "x11-connection",
 	    SSH_CHANNEL_X11_OPEN, sock, sock, -1,
 	    CHAN_TCP_WINDOW_DEFAULT, CHAN_X11_PACKET_DEFAULT, 0, "x11", 1);
 	c->force_drain = 1;
@@ -1844,7 +1839,7 @@ client_request_agent(struct ssh *ssh, const char *request_type, int rchan)
 	else
 		debug2_fr(r, "ssh_agent_bind_hostkey");
 
-	c = channel_new(ssh, "authentication agent connection",
+	c = channel_new(ssh, "agent-connection",
 	    SSH_CHANNEL_OPEN, sock, sock, -1,
 	    CHAN_X11_WINDOW_DEFAULT, CHAN_TCP_PACKET_DEFAULT, 0,
 	    "authentication agent connection", 1);
@@ -1872,7 +1867,7 @@ client_request_tun_fwd(struct ssh *ssh, int tun_mode,
 	}
 	debug("Tunnel forwarding using interface %s", ifname);
 
-	c = channel_new(ssh, "tun", SSH_CHANNEL_OPENING, fd, fd, -1,
+	c = channel_new(ssh, "tun-connection", SSH_CHANNEL_OPENING, fd, fd, -1,
 	    CHAN_TCP_WINDOW_DEFAULT, CHAN_TCP_PACKET_DEFAULT, 0, "tun", 1);
 	c->datagram = 1;
 
@@ -2438,25 +2433,6 @@ client_global_hostkeys_prove_confirm(struct ssh *ssh, int type,
 }
 
 /*
- * Returns non-zero if the key is accepted by HostkeyAlgorithms.
- * Made slightly less trivial by the multiple RSA signature algorithm names.
- */
-static int
-key_accepted_by_hostkeyalgs(const struct sshkey *key)
-{
-	const char *ktype = sshkey_ssh_name(key);
-	const char *hostkeyalgs = options.hostkeyalgorithms;
-
-	if (key->type == KEY_UNSPEC)
-		return 0;
-	if (key->type == KEY_RSA &&
-	    (match_pattern_list("rsa-sha2-256", hostkeyalgs, 0) == 1 ||
-	    match_pattern_list("rsa-sha2-512", hostkeyalgs, 0) == 1))
-		return 1;
-	return match_pattern_list(ktype, hostkeyalgs, 0) == 1;
-}
-
-/*
  * Handle hostkeys-00@openssh.com global request to inform the client of all
  * the server's hostkeys. The keys are checked against the user's
  * HostkeyAlgorithms preference before they are accepted.
@@ -2500,7 +2476,7 @@ client_input_hostkeys(struct ssh *ssh)
 		debug3_f("received %s key %s", sshkey_type(key), fp); // CodeQL [SM02311]: debug3_f can accept NULL value for fp
 		free(fp);
 
-		if (!key_accepted_by_hostkeyalgs(key)) {
+		if (!hostkey_accepted_by_hostkeyalgs(key)) {
 			debug3_f("%s key not permitted by "
 			    "HostkeyAlgorithms", sshkey_ssh_name(key));
 			continue;

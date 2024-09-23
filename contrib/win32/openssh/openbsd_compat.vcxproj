@@ -58,6 +58,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)openbsd-compat\bsd-waitpid.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)openbsd-compat\daemon.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)openbsd-compat\dirname.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)openbsd-compat\freezero.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)openbsd-compat\explicit_bzero.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)openbsd-compat\fake-rfc2553.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)openbsd-compat\fmt_scaled.c" />
@@ -102,7 +103,10 @@
     <ClCompile Include="$(OpenSSH-Src-Path)openbsd-compat\glob.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)openbsd-compat\strcasestr.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)openbsd-compat\strndup.c" />
+    <ClCompile Include="..\..\..\openbsd-compat\arc4random_uniform.c" />
+    <ClCompile Include="..\..\..\openbsd-compat\bsd-getentropy.c" />
     <ClCompile Include="..\..\..\openbsd-compat\bsd-pselect.c" />
+    <ClCompile Include="..\..\..\openbsd-compat\bsd-timegm.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(OpenSSH-Src-Path)openbsd-compat\base64.h" />
@@ -136,6 +140,7 @@
     <ClInclude Include="$(OpenSSH-Src-Path)openbsd-compat\sys-queue.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)openbsd-compat\sys-tree.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)openbsd-compat\vis.h" />
+    <ClInclude Include="..\..\..\openbsd-compat\arc4random_win.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{DD483F7D-C553-4740-BC1A-903805AD0174}</ProjectGuid>

@@ -1,4 +1,4 @@
-/* $OpenBSD: kex.c,v 1.181 2023/08/28 03:28:43 djm Exp $ */
+/* $OpenBSD: kex.c,v 1.186 2024/05/17 00:30:23 djm Exp $ */
 /*
  * Copyright (c) 2000, 2001 Markus Friedl.  All rights reserved.
  *
@@ -85,254 +85,6 @@ static const char * const proposal_names[PROPOSAL_MAX] = {
 	"languages stoc",
 };
 
-struct kexalg {
-	char *name;
-	u_int type;
-	int ec_nid;
-	int hash_alg;
-};
-static const struct kexalg kexalgs[] = {
-#ifdef WITH_OPENSSL
-	{ KEX_DH1, KEX_DH_GRP1_SHA1, 0, SSH_DIGEST_SHA1 },
-	{ KEX_DH14_SHA1, KEX_DH_GRP14_SHA1, 0, SSH_DIGEST_SHA1 },
-	{ KEX_DH14_SHA256, KEX_DH_GRP14_SHA256, 0, SSH_DIGEST_SHA256 },
-	{ KEX_DH16_SHA512, KEX_DH_GRP16_SHA512, 0, SSH_DIGEST_SHA512 },
-	{ KEX_DH18_SHA512, KEX_DH_GRP18_SHA512, 0, SSH_DIGEST_SHA512 },
-	{ KEX_DHGEX_SHA1, KEX_DH_GEX_SHA1, 0, SSH_DIGEST_SHA1 },
-#ifdef HAVE_EVP_SHA256
-	{ KEX_DHGEX_SHA256, KEX_DH_GEX_SHA256, 0, SSH_DIGEST_SHA256 },
-#endif /* HAVE_EVP_SHA256 */
-#ifdef OPENSSL_HAS_ECC
-	{ KEX_ECDH_SHA2_NISTP256, KEX_ECDH_SHA2,
-	    NID_X9_62_prime256v1, SSH_DIGEST_SHA256 },
-	{ KEX_ECDH_SHA2_NISTP384, KEX_ECDH_SHA2, NID_secp384r1,
-	    SSH_DIGEST_SHA384 },
-# ifdef OPENSSL_HAS_NISTP521
-	{ KEX_ECDH_SHA2_NISTP521, KEX_ECDH_SHA2, NID_secp521r1,
-	    SSH_DIGEST_SHA512 },
-# endif /* OPENSSL_HAS_NISTP521 */
-#endif /* OPENSSL_HAS_ECC */
-#endif /* WITH_OPENSSL */
-#if defined(HAVE_EVP_SHA256) || !defined(WITH_OPENSSL)
-	{ KEX_CURVE25519_SHA256, KEX_C25519_SHA256, 0, SSH_DIGEST_SHA256 },
-	{ KEX_CURVE25519_SHA256_OLD, KEX_C25519_SHA256, 0, SSH_DIGEST_SHA256 },
-#ifdef USE_SNTRUP761X25519
-	{ KEX_SNTRUP761X25519_SHA512, KEX_KEM_SNTRUP761X25519_SHA512, 0,
-	    SSH_DIGEST_SHA512 },
-#endif
-#endif /* HAVE_EVP_SHA256 || !WITH_OPENSSL */
-	{ NULL, 0, -1, -1},
-};
-
-char *
-kex_alg_list(char sep)
-{
-	char *ret = NULL, *tmp;
-	size_t nlen, rlen = 0;
-	const struct kexalg *k;
-
-	for (k = kexalgs; k->name != NULL; k++) {
-		if (ret != NULL)
-			ret[rlen++] = sep;
-		nlen = strlen(k->name);
-		if ((tmp = realloc(ret, rlen + nlen + 2)) == NULL) {
-			free(ret);
-			return NULL;
-		}
-		ret = tmp;
-		memcpy(ret + rlen, k->name, nlen + 1);
-		rlen += nlen;
-	}
-	return ret;
-}
-
-static const struct kexalg *
-kex_alg_by_name(const char *name)
-{
-	const struct kexalg *k;
-
-	for (k = kexalgs; k->name != NULL; k++) {
-		if (strcmp(k->name, name) == 0)
-			return k;
-	}
-	return NULL;
-}
-
-/* Validate KEX method name list */
-int
-kex_names_valid(const char *names)
-{
-	char *s, *cp, *p;
-
-	if (names == NULL || strcmp(names, "") == 0)
-		return 0;
-	if ((s = cp = strdup(names)) == NULL)
-		return 0;
-	for ((p = strsep(&cp, ",")); p && *p != '\0';
-	    (p = strsep(&cp, ","))) {
-		if (kex_alg_by_name(p) == NULL) {
-			error("Unsupported KEX algorithm \"%.100s\"", p);
-			free(s);
-			return 0;
-		}
-	}
-	debug3("kex names ok: [%s]", names);
-	free(s);
-	return 1;
-}
-
-/* returns non-zero if proposal contains any algorithm from algs */
-static int
-has_any_alg(const char *proposal, const char *algs)
-{
-	char *cp;
-
-	if ((cp = match_list(proposal, algs, NULL)) == NULL)
-		return 0;
-	free(cp);
-	return 1;
-}
-
-/*
- * Concatenate algorithm names, avoiding duplicates in the process.
- * Caller must free returned string.
- */
-char *
-kex_names_cat(const char *a, const char *b)
-{
-	char *ret = NULL, *tmp = NULL, *cp, *p;
-	size_t len;
-
-	if (a == NULL || *a == '\0')
-		return strdup(b);
-	if (b == NULL || *b == '\0')
-		return strdup(a);
-	if (strlen(b) > 1024*1024)
-		return NULL;
-	len = strlen(a) + strlen(b) + 2;
-	if ((tmp = cp = strdup(b)) == NULL ||
-	    (ret = calloc(1, len)) == NULL) {
-		free(tmp);
-		return NULL;
-	}
-	strlcpy(ret, a, len);
-	for ((p = strsep(&cp, ",")); p && *p != '\0'; (p = strsep(&cp, ","))) {
-		if (has_any_alg(ret, p))
-			continue; /* Algorithm already present */
-		if (strlcat(ret, ",", len) >= len ||
-		    strlcat(ret, p, len) >= len) {
-			free(tmp);
-			free(ret);
-			return NULL; /* Shouldn't happen */
-		}
-	}
-	free(tmp);
-	return ret;
-}
-
-/*
- * Assemble a list of algorithms from a default list and a string from a
- * configuration file. The user-provided string may begin with '+' to
- * indicate that it should be appended to the default, '-' that the
- * specified names should be removed, or '^' that they should be placed
- * at the head.
- */
-int
-kex_assemble_names(char **listp, const char *def, const char *all)
-{
-	char *cp, *tmp, *patterns;
-	char *list = NULL, *ret = NULL, *matching = NULL, *opatterns = NULL;
-	int r = SSH_ERR_INTERNAL_ERROR;
-
-	if (listp == NULL || def == NULL || all == NULL)
-		return SSH_ERR_INVALID_ARGUMENT;
-
-	if (*listp == NULL || **listp == '\0') {
-		if ((*listp = strdup(def)) == NULL)
-			return SSH_ERR_ALLOC_FAIL;
-		return 0;
-	}
-
-	list = *listp;
-	*listp = NULL;
-	if (*list == '+') {
-		/* Append names to default list */
-		if ((tmp = kex_names_cat(def, list + 1)) == NULL) {
-			r = SSH_ERR_ALLOC_FAIL;
-			goto fail;
-		}
-		free(list);
-		list = tmp;
-	} else if (*list == '-') {
-		/* Remove names from default list */
-		if ((*listp = match_filter_denylist(def, list + 1)) == NULL) {
-			r = SSH_ERR_ALLOC_FAIL;
-			goto fail;
-		}
-		free(list);
-		/* filtering has already been done */
-		return 0;
-	} else if (*list == '^') {
-		/* Place names at head of default list */
-		if ((tmp = kex_names_cat(list + 1, def)) == NULL) {
-			r = SSH_ERR_ALLOC_FAIL;
-			goto fail;
-		}
-		free(list);
-		list = tmp;
-	} else {
-		/* Explicit list, overrides default - just use "list" as is */
-	}
-
-	/*
-	 * The supplied names may be a pattern-list. For the -list case,
-	 * the patterns are applied above. For the +list and explicit list
-	 * cases we need to do it now.
-	 */
-	ret = NULL;
-	if ((patterns = opatterns = strdup(list)) == NULL) {
-		r = SSH_ERR_ALLOC_FAIL;
-		goto fail;
-	}
-	/* Apply positive (i.e. non-negated) patterns from the list */
-	while ((cp = strsep(&patterns, ",")) != NULL) {
-		if (*cp == '!') {
-			/* negated matches are not supported here */
-			r = SSH_ERR_INVALID_ARGUMENT;
-			goto fail;
-		}
-		free(matching);
-		if ((matching = match_filter_allowlist(all, cp)) == NULL) {
-			r = SSH_ERR_ALLOC_FAIL;
-			goto fail;
-		}
-		if ((tmp = kex_names_cat(ret, matching)) == NULL) {
-			r = SSH_ERR_ALLOC_FAIL;
-			goto fail;
-		}
-		free(ret);
-		ret = tmp;
-	}
-	if (ret == NULL || *ret == '\0') {
-		/* An empty name-list is an error */
-		/* XXX better error code? */
-		r = SSH_ERR_INVALID_ARGUMENT;
-		goto fail;
-	}
-
-	/* success */
-	*listp = ret;
-	ret = NULL;
-	r = 0;
-
- fail:
-	free(matching);
-	free(opatterns);
-	free(list);
-	free(ret);
-	return r;
-}
-
 /*
  * Fill out a proposal array with dynamically allocated values, which may
  * be modified as required for compatibility reasons.
@@ -357,7 +109,7 @@ kex_proposal_populate_entries(struct ssh *ssh, char *prop[PROPOSAL_MAX],
 	if (kexalgos == NULL)
 		kexalgos = defprop[PROPOSAL_KEX_ALGS];
 	if ((cp = kex_names_cat(kexalgos, ssh->kex->server ?
-	    "kex-strict-s-v00@openssh.com" :
+	    "ext-info-s,kex-strict-s-v00@openssh.com" :
 	    "ext-info-c,kex-strict-c-v00@openssh.com")) == NULL)
 		fatal_f("kex_names_cat");
 
@@ -509,34 +261,136 @@ kex_reset_dispatch(struct ssh *ssh)
 	    SSH2_MSG_TRANSPORT_MAX, &kex_protocol_error);
 }
 
+void
+kex_set_server_sig_algs(struct ssh *ssh, const char *allowed_algs)
+{
+	char *alg, *oalgs, *algs, *sigalgs;
+	const char *sigalg;
+
+	/*
+	 * NB. allowed algorithms may contain certificate algorithms that
+	 * map to a specific plain signature type, e.g.
+	 * rsa-sha2-512-cert-v01@openssh.com => rsa-sha2-512
+	 * We need to be careful here to match these, retain the mapping
+	 * and only add each signature algorithm once.
+	 */
+	if ((sigalgs = sshkey_alg_list(0, 1, 1, ',')) == NULL)
+		fatal_f("sshkey_alg_list failed");
+	oalgs = algs = xstrdup(allowed_algs);
+	free(ssh->kex->server_sig_algs);
+	ssh->kex->server_sig_algs = NULL;
+	for ((alg = strsep(&algs, ",")); alg != NULL && *alg != '\0';
+	    (alg = strsep(&algs, ","))) {
+		if ((sigalg = sshkey_sigalg_by_name(alg)) == NULL)
+			continue;
+		if (!kex_has_any_alg(sigalg, sigalgs))
+			continue;
+		/* Don't add an algorithm twice. */
+		if (ssh->kex->server_sig_algs != NULL &&
+		    kex_has_any_alg(sigalg, ssh->kex->server_sig_algs))
+			continue;
+		xextendf(&ssh->kex->server_sig_algs, ",", "%s", sigalg);
+	}
+	free(oalgs);
+	free(sigalgs);
+	if (ssh->kex->server_sig_algs == NULL)
+		ssh->kex->server_sig_algs = xstrdup("");
+}
+
 static int
-kex_send_ext_info(struct ssh *ssh)
+kex_compose_ext_info_server(struct ssh *ssh, struct sshbuf *m)
 {
 	int r;
-	char *algs;
 
-	debug("Sending SSH2_MSG_EXT_INFO");
-	if ((algs = sshkey_alg_list(0, 1, 1, ',')) == NULL)
+	if (ssh->kex->server_sig_algs == NULL &&
+	    (ssh->kex->server_sig_algs = sshkey_alg_list(0, 1, 1, ',')) == NULL)
 		return SSH_ERR_ALLOC_FAIL;
-	/* XXX filter algs list by allowed pubkey/hostbased types */
-	if ((r = sshpkt_start(ssh, SSH2_MSG_EXT_INFO)) != 0 ||
-	    (r = sshpkt_put_u32(ssh, 3)) != 0 ||
-	    (r = sshpkt_put_cstring(ssh, "server-sig-algs")) != 0 ||
-	    (r = sshpkt_put_cstring(ssh, algs)) != 0 ||
-	    (r = sshpkt_put_cstring(ssh,
+	if ((r = sshbuf_put_u32(m, 3)) != 0 ||
+	    (r = sshbuf_put_cstring(m, "server-sig-algs")) != 0 ||
+	    (r = sshbuf_put_cstring(m, ssh->kex->server_sig_algs)) != 0 ||
+	    (r = sshbuf_put_cstring(m,
 	    "publickey-hostbound@openssh.com")) != 0 ||
-	    (r = sshpkt_put_cstring(ssh, "0")) != 0 ||
-	    (r = sshpkt_put_cstring(ssh, "ping@openssh.com")) != 0 ||
-	    (r = sshpkt_put_cstring(ssh, "0")) != 0 ||
-	    (r = sshpkt_send(ssh)) != 0) {
+	    (r = sshbuf_put_cstring(m, "0")) != 0 ||
+	    (r = sshbuf_put_cstring(m, "ping@openssh.com")) != 0 ||
+	    (r = sshbuf_put_cstring(m, "0")) != 0) {
+		error_fr(r, "compose");
+		return r;
+	}
+	return 0;
+}
+
+static int
+kex_compose_ext_info_client(struct ssh *ssh, struct sshbuf *m)
+{
+	int r;
+
+	if ((r = sshbuf_put_u32(m, 1)) != 0 ||
+	    (r = sshbuf_put_cstring(m, "ext-info-in-auth@openssh.com")) != 0 ||
+	    (r = sshbuf_put_cstring(m, "0")) != 0) {
 		error_fr(r, "compose");
 		goto out;
 	}
 	/* success */
 	r = 0;
  out:
-	free(algs);
 	return r;
+}
+
+static int
+kex_maybe_send_ext_info(struct ssh *ssh)
+{
+	int r;
+	struct sshbuf *m = NULL;
+
+	if ((ssh->kex->flags & KEX_INITIAL) == 0)
+		return 0;
+	if (!ssh->kex->ext_info_c && !ssh->kex->ext_info_s)
+		return 0;
+
+	/* Compose EXT_INFO packet. */
+	if ((m = sshbuf_new()) == NULL)
+		fatal_f("sshbuf_new failed");
+	if (ssh->kex->ext_info_c &&
+	    (r = kex_compose_ext_info_server(ssh, m)) != 0)
+		goto fail;
+	if (ssh->kex->ext_info_s &&
+	    (r = kex_compose_ext_info_client(ssh, m)) != 0)
+		goto fail;
+
+	/* Send the actual KEX_INFO packet */
+	debug("Sending SSH2_MSG_EXT_INFO");
+	if ((r = sshpkt_start(ssh, SSH2_MSG_EXT_INFO)) != 0 ||
+	    (r = sshpkt_putb(ssh, m)) != 0 ||
+	    (r = sshpkt_send(ssh)) != 0) {
+		error_f("send EXT_INFO");
+		goto fail;
+	}
+
+	r = 0;
+
+ fail:
+	sshbuf_free(m);
+	return r;
+}
+
+int
+kex_server_update_ext_info(struct ssh *ssh)
+{
+	int r;
+
+	if ((ssh->kex->flags & KEX_HAS_EXT_INFO_IN_AUTH) == 0)
+		return 0;
+
+	debug_f("Sending SSH2_MSG_EXT_INFO");
+	if ((r = sshpkt_start(ssh, SSH2_MSG_EXT_INFO)) != 0 ||
+	    (r = sshpkt_put_u32(ssh, 1)) != 0 ||
+	    (r = sshpkt_put_cstring(ssh, "server-sig-algs")) != 0 ||
+	    (r = sshpkt_put_cstring(ssh, ssh->kex->server_sig_algs)) != 0 ||
+	    (r = sshpkt_send(ssh)) != 0) {
+		error_f("send EXT_INFO");
+		return r;
+	}
+	return 0;
 }
 
 int
@@ -550,9 +404,8 @@ kex_send_newkeys(struct ssh *ssh)
 		return r;
 	debug("SSH2_MSG_NEWKEYS sent");
 	ssh_dispatch_set(ssh, SSH2_MSG_NEWKEYS, &kex_input_newkeys);
-	if (ssh->kex->ext_info_c && (ssh->kex->flags & KEX_INITIAL) != 0)
-		if ((r = kex_send_ext_info(ssh)) != 0)
-			return r;
+	if ((r = kex_maybe_send_ext_info(ssh)) != 0)
+		return r;
 	debug("expecting SSH2_MSG_NEWKEYS");
 	return 0;
 }
@@ -574,10 +427,61 @@ kex_ext_info_check_ver(struct kex *kex, const char *name,
 	return 0;
 }
 
+static int
+kex_ext_info_client_parse(struct ssh *ssh, const char *name,
+    const u_char *value, size_t vlen)
+{
+	int r;
+
+	/* NB. some messages are only accepted in the initial EXT_INFO */
+	if (strcmp(name, "server-sig-algs") == 0) {
+		/* Ensure no \0 lurking in value */
+		if (memchr(value, '\0', vlen) != NULL) {
+			error_f("nul byte in %s", name);
+			return SSH_ERR_INVALID_FORMAT;
+		}
+		debug_f("%s=<%s>", name, value);
+		free(ssh->kex->server_sig_algs);
+		ssh->kex->server_sig_algs = xstrdup((const char *)value);
+	} else if (ssh->kex->ext_info_received == 1 &&
+	    strcmp(name, "publickey-hostbound@openssh.com") == 0) {
+		if ((r = kex_ext_info_check_ver(ssh->kex, name, value, vlen,
+		    "0", KEX_HAS_PUBKEY_HOSTBOUND)) != 0) {
+			return r;
+		}
+	} else if (ssh->kex->ext_info_received == 1 &&
+	    strcmp(name, "ping@openssh.com") == 0) {
+		if ((r = kex_ext_info_check_ver(ssh->kex, name, value, vlen,
+		    "0", KEX_HAS_PING)) != 0) {
+			return r;
+		}
+	} else
+		debug_f("%s (unrecognised)", name);
+
+	return 0;
+}
+
+static int
+kex_ext_info_server_parse(struct ssh *ssh, const char *name,
+    const u_char *value, size_t vlen)
+{
+	int r;
+
+	if (strcmp(name, "ext-info-in-auth@openssh.com") == 0) {
+		if ((r = kex_ext_info_check_ver(ssh->kex, name, value, vlen,
+		    "0", KEX_HAS_EXT_INFO_IN_AUTH)) != 0) {
+			return r;
+		}
+	} else
+		debug_f("%s (unrecognised)", name);
+	return 0;
+}
+
 int
 kex_input_ext_info(int type, u_int32_t seq, struct ssh *ssh)
 {
 	struct kex *kex = ssh->kex;
+	const int max_ext_info = kex->server ? 1 : 2;
 	u_int32_t i, ninfo;
 	char *name;
 	u_char *val;
@@ -585,6 +489,10 @@ kex_input_ext_info(int type, u_int32_t seq, struct ssh *ssh)
 	int r;
 
 	debug("SSH2_MSG_EXT_INFO received");
+	if (++kex->ext_info_received > max_ext_info) {
+		error("too many SSH2_MSG_EXT_INFO messages sent by peer");
+		return dispatch_protocol_error(type, seq, ssh);
+	}
 	ssh_dispatch_set(ssh, SSH2_MSG_EXT_INFO, &kex_protocol_error);
 	if ((r = sshpkt_get_u32(ssh, &ninfo)) != 0)
 		return r;
@@ -600,34 +508,16 @@ kex_input_ext_info(int type, u_int32_t seq, struct ssh *ssh)
 			free(name);
 			return r;
 		}
-		if (strcmp(name, "server-sig-algs") == 0) {
-			/* Ensure no \0 lurking in value */
-			if (memchr(val, '\0', vlen) != NULL) {
-				error_f("nul byte in %s", name);
-				free(name);
-				free(val);
-				return SSH_ERR_INVALID_FORMAT;
-			}
-			debug_f("%s=<%s>", name, val);
-			kex->server_sig_algs = val;
-			val = NULL;
-		} else if (strcmp(name,
-		    "publickey-hostbound@openssh.com") == 0) {
-			if ((r = kex_ext_info_check_ver(kex, name, val, vlen,
-			    "0", KEX_HAS_PUBKEY_HOSTBOUND)) != 0) {
-				free(name);
-				free(val);
+		debug3_f("extension %s", name);
+		if (kex->server) {
+			if ((r = kex_ext_info_server_parse(ssh, name,
+			    val, vlen)) != 0)
 				return r;
-			}
-		} else if (strcmp(name, "ping@openssh.com") == 0) {
-			if ((r = kex_ext_info_check_ver(kex, name, val, vlen,
-			    "0", KEX_HAS_PING)) != 0) {
-				free(name);
-				free(val);
+		} else {
+			if ((r = kex_ext_info_client_parse(ssh, name,
+			    val, vlen)) != 0)
 				return r;
-			}
-		} else
-			debug_f("%s (unrecognised)", name);
+		}
 		free(name);
 		free(val);
 	}
@@ -638,19 +528,44 @@ static int
 kex_input_newkeys(int type, u_int32_t seq, struct ssh *ssh)
 {
 	struct kex *kex = ssh->kex;
-	int r;
+	int r, initial = (kex->flags & KEX_INITIAL) != 0;
+	char *cp, **prop;
 
 	debug("SSH2_MSG_NEWKEYS received");
+	if (kex->ext_info_c && initial)
+		ssh_dispatch_set(ssh, SSH2_MSG_EXT_INFO, &kex_input_ext_info);
 	ssh_dispatch_set(ssh, SSH2_MSG_NEWKEYS, &kex_protocol_error);
 	ssh_dispatch_set(ssh, SSH2_MSG_KEXINIT, &kex_input_kexinit);
 	if ((r = sshpkt_get_end(ssh)) != 0)
 		return r;
 	if ((r = ssh_set_newkeys(ssh, MODE_IN)) != 0)
 		return r;
+	if (initial) {
+		/* Remove initial KEX signalling from proposal for rekeying */
+		if ((r = kex_buf2prop(kex->my, NULL, &prop)) != 0)
+			return r;
+		if ((cp = match_filter_denylist(prop[PROPOSAL_KEX_ALGS],
+		    kex->server ?
+		    "ext-info-s,kex-strict-s-v00@openssh.com" :
+		    "ext-info-c,kex-strict-c-v00@openssh.com")) == NULL) {
+			error_f("match_filter_denylist failed");
+			goto fail;
+		}
+		free(prop[PROPOSAL_KEX_ALGS]);
+		prop[PROPOSAL_KEX_ALGS] = cp;
+		if ((r = kex_prop2buf(ssh->kex->my, prop)) != 0) {
+			error_f("kex_prop2buf failed");
+ fail:
+			kex_proposal_free_entries(prop);
+			free(prop);
+			return SSH_ERR_INTERNAL_ERROR;
+		}
+		kex_proposal_free_entries(prop);
+		free(prop);
+	}
 	kex->done = 1;
 	kex->flags &= ~KEX_INITIAL;
 	sshbuf_reset(kex->peer);
-	/* sshbuf_reset(kex->my); */
 	kex->flags &= ~KEX_INIT_SENT;
 	free(kex->name);
 	kex->name = NULL;
@@ -953,20 +868,18 @@ choose_comp(struct sshcomp *comp, char *client, char *server)
 static int
 choose_kex(struct kex *k, char *client, char *server)
 {
-	const struct kexalg *kexalg;
-
 	k->name = match_list(client, server, NULL);
 
 	debug("kex: algorithm: %s", k->name ? k->name : "(no match)");
 	if (k->name == NULL)
 		return SSH_ERR_NO_KEX_ALG_MATCH;
-	if ((kexalg = kex_alg_by_name(k->name)) == NULL) {
+	if (!kex_name_valid(k->name)) {
 		error_f("unsupported KEX method %s", k->name);
 		return SSH_ERR_INTERNAL_ERROR;
 	}
-	k->kex_type = kexalg->type;
-	k->hash_alg = kexalg->hash_alg;
-	k->ec_nid = kexalg->ec_nid;
+	k->kex_type = kex_type_from_name(k->name);
+	k->hash_alg = kex_hash_from_name(k->name);
+	k->ec_nid = kex_nid_from_name(k->name);
 	return 0;
 }
 
@@ -1016,7 +929,7 @@ proposals_match(char *my[PROPOSAL_MAX], char *peer[PROPOSAL_MAX])
 static int
 kexalgs_contains(char **peer, const char *ext)
 {
-	return has_any_alg(peer[PROPOSAL_KEX_ALGS], ext);
+	return kex_has_any_alg(peer[PROPOSAL_KEX_ALGS], ext);
 }
 
 static int
@@ -1052,6 +965,7 @@ kex_choose_conf(struct ssh *ssh, uint32_t seq)
 			kex->kex_strict = kexalgs_contains(peer,
 			    "kex-strict-c-v00@openssh.com");
 		} else {
+			kex->ext_info_s = kexalgs_contains(peer, "ext-info-s");
 			kex->kex_strict = kexalgs_contains(peer,
 			    "kex-strict-s-v00@openssh.com");
 		}
@@ -1066,10 +980,10 @@ kex_choose_conf(struct ssh *ssh, uint32_t seq)
 
 	/* Check whether client supports rsa-sha2 algorithms */
 	if (kex->server && (kex->flags & KEX_INITIAL)) {
-		if (has_any_alg(peer[PROPOSAL_SERVER_HOST_KEY_ALGS],
+		if (kex_has_any_alg(peer[PROPOSAL_SERVER_HOST_KEY_ALGS],
 		    "rsa-sha2-256,rsa-sha2-256-cert-v01@openssh.com"))
 			kex->flags |= KEX_RSA_SHA2_256_SUPPORTED;
-		if (has_any_alg(peer[PROPOSAL_SERVER_HOST_KEY_ALGS],
+		if (kex_has_any_alg(peer[PROPOSAL_SERVER_HOST_KEY_ALGS],
 		    "rsa-sha2-512,rsa-sha2-512-cert-v01@openssh.com"))
 			kex->flags |= KEX_RSA_SHA2_512_SUPPORTED;
 	}
@@ -1354,7 +1268,7 @@ kex_exchange_identification(struct ssh *ssh, int timeout_ms,
 	sshbuf_reset(our_version);
 	if (version_addendum != NULL && *version_addendum == '\0')
 		version_addendum = NULL;
-	if ((r = sshbuf_putf(our_version, "SSH-%d.%d-%.100s%s%s\r\n",
+	if ((r = sshbuf_putf(our_version, "SSH-%d.%d-%s%s%s\r\n",
 	    PROTOCOL_MAJOR_2, PROTOCOL_MINOR_2, SSH_VERSION,
 	    version_addendum == NULL ? "" : " ",
 	    version_addendum == NULL ? "" : version_addendum)) != 0) {

@@ -94,7 +94,11 @@ process_sign(struct sshbuf *req)
 	struct sshbuf *resp, *kbuf;
 	struct sshkey *key = NULL;
 	uint32_t compat;
-	const u_char *message;
+#ifdef WINDOWS
+	const u_char *message = NULL;
+#else
+	const u_char* message;
+#endif /* WINDOWS */
 	u_char *sig = NULL;
 	size_t msglen, siglen = 0;
 	char *provider = NULL, *pin = NULL;
@@ -160,9 +164,15 @@ process_enroll(struct sshbuf *req)
 {
 	int r;
 	u_int type;
-	char *provider, *application, *pin, *device, *userid;
+#ifdef WINDOWS
+	char *provider = NULL, *application = NULL, *pin, *device, *userid;
 	uint8_t flags;
-	struct sshbuf *challenge, *attest, *kbuf, *resp;
+	struct sshbuf *challenge = NULL, *attest, *kbuf = NULL, *resp;
+#else
+	char* provider, * application, * pin, * device, * userid;
+	uint8_t flags;
+	struct sshbuf* challenge, * attest, * kbuf, * resp;
+#endif /* WINDOWS*/
 	struct sshkey *key;
 
 	if ((attest = sshbuf_new()) == NULL ||
@@ -294,7 +304,11 @@ main(int argc, char **argv)
 {
 	SyslogFacility log_facility = SYSLOG_FACILITY_AUTH;
 	LogLevel log_level = SYSLOG_LEVEL_ERROR;
-	struct sshbuf *req, *resp;
+#ifdef WINDOWS
+	struct sshbuf *req, *resp = NULL;
+#else
+	struct sshbuf* req, * resp;
+#endif /* WINDOWS */
 	int in, out, ch, r, vflag = 0;
 	u_int rtype, ll = 0;
 	uint8_t version, log_stderr = 0;

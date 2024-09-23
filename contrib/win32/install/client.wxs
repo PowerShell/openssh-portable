@@ -3,7 +3,6 @@
         <!-- KeyPath is necessary for multi-file components to identify the key file - preferrably versioned. -->
         <ComponentGroup Id="Client" Directory="INSTALLFOLDER">
             <ComponentGroupRef Id="Shared" />
-            <ComponentGroupRef Id="Manifest" />
             <Component>
                 <File Name="ssh.exe" KeyPath="yes" />
             </Component>

@@ -1,4 +1,4 @@
-/* $OpenBSD: sshconnect.h,v 1.46 2020/12/22 00:15:23 djm Exp $ */
+/* $OpenBSD: sshconnect.h,v 1.48 2024/04/30 02:10:49 djm Exp $ */
 
 /*
  * Copyright (c) 2000 Markus Friedl.  All rights reserved.
@@ -24,6 +24,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+struct sshkey;
+
 typedef struct Sensitive Sensitive;
 struct Sensitive {
 	struct sshkey	**keys;
@@ -42,6 +44,7 @@ struct ssh_conn_info {
 	char *remuser;
 	char *homedir;
 	char *locuser;
+	char *jmphost;
 };
 
 struct addrinfo;
@@ -61,7 +64,8 @@ struct ssh_conn_info;
 	"d", conn_info->homedir, \
 	"h", conn_info->remhost, \
 	"r", conn_info->remuser, \
-	"u", conn_info->locuser
+	"u", conn_info->locuser, \
+	"j", conn_info->jmphost
 
 int	 ssh_connect(struct ssh *, const char *, const char *,
 	    struct addrinfo *, struct sockaddr_storage *, u_short,
@@ -92,3 +96,5 @@ void	 maybe_add_key_to_agent(const char *, struct sshkey *,
 void	 load_hostkeys_command(struct hostkeys *, const char *,
     const char *, const struct ssh_conn_info *,
     const struct sshkey *, const char *);
+
+int hostkey_accepted_by_hostkeyalgs(const struct sshkey *);

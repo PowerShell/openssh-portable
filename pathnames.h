@@ -1,4 +1,4 @@
-/* $OpenBSD: pathnames.h,v 1.31 2019/11/12 19:33:08 markus Exp $ */
+/* $OpenBSD: pathnames.h,v 1.32 2024/05/17 00:30:24 djm Exp $ */
 
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
@@ -45,6 +45,15 @@
 
 #ifndef _PATH_SSH_PROGRAM
 #define _PATH_SSH_PROGRAM		"/usr/bin/ssh"
+#endif
+
+/* Binary paths for the sshd components */
+#ifndef _PATH_SSHD_SESSION
+#ifdef WINDOWS
+#define _PATH_SSHD_SESSION		"sshd-session.exe" /* PATH looks in same directory as sshd automatically */
+#else /* WINDOWS */
+#define _PATH_SSHD_SESSION		"/usr/libexec/sshd-session"
+#endif /* WINDOWS */
 #endif
 
 /*

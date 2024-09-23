@@ -1,4 +1,4 @@
-/* $OpenBSD: readconf.c,v 1.381 2023/08/28 03:31:16 djm Exp $ */
+/* $OpenBSD: readconf.c,v 1.387 2024/05/17 02:39:11 jsg Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -179,7 +179,7 @@ typedef enum {
 	oFingerprintHash, oUpdateHostkeys, oHostbasedAcceptedAlgorithms,
 	oPubkeyAcceptedAlgorithms, oCASignatureAlgorithms, oProxyJump,
 	oSecurityKeyProvider, oKnownHostsCommand, oRequiredRSASize,
-	oEnableEscapeCommandline, oObscureKeystrokeTiming,
+	oEnableEscapeCommandline, oObscureKeystrokeTiming, oChannelTimeout,
 	oTunnelOptions,
 	oIgnore, oIgnoredUnknownOption, oDeprecated, oUnsupported
 } OpCodes;
@@ -330,6 +330,7 @@ static struct {
 	{ "requiredrsasize", oRequiredRSASize },
 	{ "enableescapecommandline", oEnableEscapeCommandline },
 	{ "obscurekeystroketiming", oObscureKeystrokeTiming },
+	{ "channeltimeout", oChannelTimeout },
 	{ "tunneloptions", oTunnelOptions },
 
 	{ NULL, oBadOption }
@@ -355,7 +356,7 @@ kex_default_pk_alg(void)
 
 char *
 ssh_connection_hash(const char *thishost, const char *host, const char *portstr,
-    const char *user)
+    const char *user, const char *jumphost)
 {
 	struct ssh_digest_ctx *md;
 	u_char conn_hash[SSH_DIGEST_MAX_LENGTH];
@@ -365,6 +366,7 @@ ssh_connection_hash(const char *thishost, const char *host, const char *portstr,
 	    ssh_digest_update(md, host, strlen(host)) < 0 ||
 	    ssh_digest_update(md, portstr, strlen(portstr)) < 0 ||
 	    ssh_digest_update(md, user, strlen(user)) < 0 ||
+	    ssh_digest_update(md, jumphost, strlen(jumphost)) < 0 ||
 	    ssh_digest_final(md, conn_hash, sizeof(conn_hash)) < 0)
 		fatal_f("mux digest failed");
 	ssh_digest_free(md);
@@ -772,17 +774,19 @@ match_cfg_line(Options *options, char **condition, struct passwd *pw,
 			if (r == (negate ? 1 : 0))
 				this_result = result = 0;
 		} else if (strcasecmp(attrib, "exec") == 0) {
-			char *conn_hash_hex, *keyalias;
+			char *conn_hash_hex, *keyalias, *jmphost;
 
 			if (gethostname(thishost, sizeof(thishost)) == -1)
 				fatal("gethostname: %s", strerror(errno));
+			jmphost = option_clear_or_none(options->jump_host) ?
+			    "" : options->jump_host;
 			strlcpy(shorthost, thishost, sizeof(shorthost));
 			shorthost[strcspn(thishost, ".")] = '\0';
 			snprintf(portstr, sizeof(portstr), "%d", port);
 			snprintf(uidstr, sizeof(uidstr), "%llu",
 			    (unsigned long long)pw->pw_uid);
 			conn_hash_hex = ssh_connection_hash(thishost, host,
-			    portstr, ruser);
+			    portstr, ruser, jmphost);
 			keyalias = options->host_key_alias ?
 			    options->host_key_alias : host;
 
@@ -798,6 +802,7 @@ match_cfg_line(Options *options, char **condition, struct passwd *pw,
 			    "r", ruser,
 			    "u", pw->pw_name,
 			    "i", uidstr,
+			    "j", jmphost,
 			    (char *)NULL);
 			free(conn_hash_hex);
 			if (result != 1) {
@@ -892,6 +897,20 @@ parse_token(const char *cp, const char *filename, int linenum,
 	error("%s: line %d: Bad configuration option: %s",
 	    filename, linenum, cp);
 	return oBadOption;
+}
+
+static void
+free_canon_cnames(struct allowed_cname *cnames, u_int n)
+{
+	u_int i;
+
+	if (cnames == NULL || n == 0)
+		return;
+	for (i = 0; i < n; i++) {
+		free(cnames[i].source_list);
+		free(cnames[i].target_list);
+	}
+	free(cnames);
 }
 
 /* Multistate option parsing */
@@ -1036,21 +1055,24 @@ process_config_line_depth(Options *options, struct passwd *pw, const char *host,
 {
 	char *str, **charptr, *endofnumber, *keyword, *arg, *arg2, *p;
 	char **cpptr, ***cppptr, fwdarg[256];
-	u_int *uintptr, uvalue, max_entries = 0;
+	u_int *uintptr, max_entries = 0;
 	int r, oactive, negated, opcode, *intptr, value, value2, cmdline = 0;
-	int remotefwd, dynamicfwd, ca_only = 0;
+	int remotefwd, dynamicfwd, ca_only = 0, found = 0;
 	LogLevel *log_level_ptr;
 	SyslogFacility *log_facility_ptr;
 	long long val64;
 	size_t len, i; // fix CodeQL SM01735
 	struct Forward fwd;
 	const struct multistate *multistate_ptr;
-	struct allowed_cname *cname;
 	glob_t gl;
 	const char *errstr;
 	char **oav = NULL, **av;
 	int oac = 0, ac;
 	int ret = -1;
+	struct allowed_cname *cnames = NULL;
+	u_int ncnames = 0;
+	char **strs = NULL; /* string array arguments; freed implicitly */
+	u_int nstrs = 0;
 
 	if (activep == NULL) { /* We are processing a command line directive */
 		cmdline = 1;
@@ -1666,14 +1688,13 @@ parse_pubkey_algos:
 	case oPermitRemoteOpen:
 		uintptr = &options->num_permitted_remote_opens;
 		cppptr = &options->permitted_remote_opens;
-		uvalue = *uintptr;	/* modified later */
-		i = 0;
+		found = *uintptr == 0;
 		while ((arg = argv_next(&ac, &av)) != NULL) {
 			arg2 = xstrdup(arg);
 			/* Allow any/none only in first position */
 			if (strcasecmp(arg, "none") == 0 ||
 			    strcasecmp(arg, "any") == 0) {
-				if (i > 0 || ac > 0) {
+				if (nstrs > 0 || ac > 0) {
 					error("%s line %d: keyword %s \"%s\" "
 					    "argument must appear alone.",
 					    filename, linenum, keyword, arg);
@@ -1699,17 +1720,20 @@ parse_pubkey_algos:
 					    lookup_opcode_name(opcode));
 				}
 			}
-			if (*activep && uvalue == 0) {
-				opt_array_append(filename, linenum,
-				    lookup_opcode_name(opcode),
-				    cppptr, uintptr, arg2);
-			}
+			opt_array_append(filename, linenum,
+			    lookup_opcode_name(opcode),
+			    &strs, &nstrs, arg2);
 			free(arg2);
-			i++;
 		}
-		if (i == 0)
+		if (nstrs == 0)
 			fatal("%s line %d: missing %s specification",
 			    filename, linenum, lookup_opcode_name(opcode));
+		if (found && *activep) {
+			*cppptr = strs;
+			*uintptr = nstrs;
+			strs = NULL; /* transferred */
+			nstrs = 0;
+		}
 		break;
 
 	case oClearAllForwardings:
@@ -1827,12 +1851,14 @@ parse_pubkey_algos:
 		goto parse_int;
 
 	case oSendEnv:
+		/* XXX appends to list; doesn't respect first-match-wins */
 		while ((arg = argv_next(&ac, &av)) != NULL) {
 			if (*arg == '\0' || strchr(arg, '=') != NULL) {
 				error("%s line %d: Invalid environment name.",
 				    filename, linenum);
 				goto out;
 			}
+			found = 1;
 			if (!*activep)
 				continue;
 			if (*arg == '-') {
@@ -1844,27 +1870,38 @@ parse_pubkey_algos:
 			    lookup_opcode_name(opcode),
 			    &options->send_env, &options->num_send_env, arg);
 		}
+		if (!found) {
+			fatal("%s line %d: no %s specified",
+			    filename, linenum, keyword);
+		}
 		break;
 
 	case oSetEnv:
-		value = options->num_setenv;
+		found = options->num_setenv == 0;
 		while ((arg = argv_next(&ac, &av)) != NULL) {
 			if (strchr(arg, '=') == NULL) {
 				error("%s line %d: Invalid SetEnv.",
 				    filename, linenum);
 				goto out;
 			}
-			if (!*activep || value != 0)
-				continue;
-			if (lookup_setenv_in_list(arg, options->setenv,
-			    options->num_setenv) != NULL) {
+			if (lookup_setenv_in_list(arg, strs, nstrs) != NULL) {
 				debug2("%s line %d: ignoring duplicate env "
 				    "name \"%.64s\"", filename, linenum, arg);
 				continue;
 			}
 			opt_array_append(filename, linenum,
 			    lookup_opcode_name(opcode),
-			    &options->setenv, &options->num_setenv, arg);
+			    &strs, &nstrs, arg);
+		}
+		if (nstrs == 0) {
+			fatal("%s line %d: no %s specified",
+			    filename, linenum, keyword);
+		}
+		if (found && *activep) {
+			options->setenv = strs;
+			options->num_setenv = nstrs;
+			strs = NULL; /* transferred */
+			nstrs = 0;
 		}
 		break;
 
@@ -2077,52 +2114,46 @@ parse_pubkey_algos:
 		goto parse_flag;
 
 	case oCanonicalDomains:
-		value = options->num_canonical_domains != 0;
-		i = 0;
+		found = options->num_canonical_domains == 0;
 		while ((arg = argv_next(&ac, &av)) != NULL) {
-			if (*arg == '\0') {
-				error("%s line %d: keyword %s empty argument",
-				    filename, linenum, keyword);
-				goto out;
-			}
 			/* Allow "none" only in first position */
 			if (strcasecmp(arg, "none") == 0) {
-				if (i > 0 || ac > 0) {
+				if (nstrs > 0 || ac > 0) {
 					error("%s line %d: keyword %s \"none\" "
 					    "argument must appear alone.",
 					    filename, linenum, keyword);
 					goto out;
 				}
 			}
-			i++;
 			if (!valid_domain(arg, 1, &errstr)) {
 				error("%s line %d: %s", filename, linenum,
 				    errstr);
 				goto out;
 			}
-			if (!*activep || value)
-				continue;
-			if (options->num_canonical_domains >=
-			    MAX_CANON_DOMAINS) {
-				error("%s line %d: too many hostname suffixes.",
-				    filename, linenum);
-				goto out;
-			}
-			options->canonical_domains[
-			    options->num_canonical_domains++] = xstrdup(arg);
+			opt_array_append(filename, linenum, keyword,
+			    &strs, &nstrs, arg);
+		}
+		if (nstrs == 0) {
+			fatal("%s line %d: no %s specified",
+			    filename, linenum, keyword);
+		}
+		if (found && *activep) {
+			options->canonical_domains = strs;
+			options->num_canonical_domains = nstrs;
+			strs = NULL; /* transferred */
+			nstrs = 0;
 		}
 		break;
 
 	case oCanonicalizePermittedCNAMEs:
-		value = options->num_permitted_cnames != 0;
-		i = 0;
+		found = options->num_permitted_cnames == 0;
 		while ((arg = argv_next(&ac, &av)) != NULL) {
 			/*
 			 * Either 'none' (only in first position), '*' for
 			 * everything or 'list:list'
 			 */
 			if (strcasecmp(arg, "none") == 0) {
-				if (i > 0 || ac > 0) {
+				if (ncnames > 0 || ac > 0) {
 					error("%s line %d: keyword %s \"none\" "
 					    "argument must appear alone.",
 					    filename, linenum, keyword);
@@ -2143,20 +2174,23 @@ parse_pubkey_algos:
 				*arg2 = '\0';
 				arg2++;
 			}
-			i++;
-			if (!*activep || value)
-				continue;
-			if (options->num_permitted_cnames >=
-			    MAX_CANON_DOMAINS) {
-				error("%s line %d: too many permitted CNAMEs.",
-				    filename, linenum);
-				goto out;
-			}
-			cname = options->permitted_cnames +
-			    options->num_permitted_cnames++;
-			cname->source_list = xstrdup(arg);
-			cname->target_list = xstrdup(arg2);
+			cnames = xrecallocarray(cnames, ncnames, ncnames + 1,
+			    sizeof(*cnames));
+			cnames[ncnames].source_list = xstrdup(arg);
+			cnames[ncnames].target_list = xstrdup(arg2);
+			ncnames++;
 		}
+		if (ncnames == 0) {
+			fatal("%s line %d: no %s specified",
+			    filename, linenum, keyword);
+		}
+		if (found && *activep) {
+			options->permitted_cnames = cnames;
+			options->num_permitted_cnames = ncnames;
+			cnames = NULL; /* transferred */
+			ncnames = 0;
+		}
+		/* un-transferred cnames is cleaned up before exit */
 		break;
 
 	case oCanonicalizeHostname:
@@ -2336,6 +2370,37 @@ parse_pubkey_algos:
 			*intptr = value;
 		break;
 
+	case oChannelTimeout:
+		found = options->num_channel_timeouts == 0;
+		while ((arg = argv_next(&ac, &av)) != NULL) {
+			/* Allow "none" only in first position */
+			if (strcasecmp(arg, "none") == 0) {
+				if (nstrs > 0 || ac > 0) {
+					error("%s line %d: keyword %s \"none\" "
+					    "argument must appear alone.",
+					    filename, linenum, keyword);
+					goto out;
+				}
+			} else if (parse_pattern_interval(arg,
+			    NULL, NULL) != 0) {
+				fatal("%s line %d: invalid channel timeout %s",
+				    filename, linenum, arg);
+			}
+			opt_array_append(filename, linenum, keyword,
+			    &strs, &nstrs, arg);
+		}
+		if (nstrs == 0) {
+			fatal("%s line %d: no %s specified",
+			    filename, linenum, keyword);
+		}
+		if (found && *activep) {
+			options->channel_timeouts = strs;
+			options->num_channel_timeouts = nstrs;
+			strs = NULL; /* transferred */
+			nstrs = 0;
+		}
+		break;
+
 	case oDeprecated:
 		debug("%s line %d: Deprecated option \"%s\"",
 		    filename, linenum, keyword);
@@ -2371,6 +2436,8 @@ parse_pubkey_algos:
 	/* success */
 	ret = 0;
  out:
+	free_canon_cnames(cnames, ncnames);
+	opt_array_free2(strs, NULL, nstrs);
 	argv_free(oav, oac);
 	return ret;
 }
@@ -2409,7 +2476,7 @@ read_config_file_depth(const char *filename, struct passwd *pw,
 	if ((f = fopen(filename, "r")) == NULL)
 		return 0;
 
-	if (flags & SSHCONF_CHECKPERM) {		
+	if (flags & SSHCONF_CHECKPERM) {
 #if WINDOWS
 		/*
 		file permissions are designed differently on windows.
@@ -2607,6 +2674,8 @@ initialize_options(Options * options)
 	options->obscure_keystroke_timing_interval = -1;
 	options->tunnel_options = NULL;
 	options->tag = NULL;
+	options->channel_timeouts = NULL;
+	options->num_channel_timeouts = 0;
 }
 
 /*
@@ -2711,7 +2780,9 @@ fill_default_options(Options * options)
 		add_identity_file(options, "~/",
 		    _PATH_SSH_CLIENT_ID_ED25519_SK, 0);
 		add_identity_file(options, "~/", _PATH_SSH_CLIENT_ID_XMSS, 0);
+#ifdef WITH_DSA
 		add_identity_file(options, "~/", _PATH_SSH_CLIENT_ID_DSA, 0);
+#endif
 	}
 	if (options->escape_char == -1)
 		options->escape_char = '~';
@@ -2851,6 +2922,16 @@ fill_default_options(Options * options)
 			v = NULL; \
 		} \
 	} while(0)
+#define CLEAR_ON_NONE_ARRAY(v, nv, none) \
+	do { \
+		if (options->nv == 1 && \
+		    strcasecmp(options->v[0], none) == 0) { \
+			free(options->v[0]); \
+			free(options->v); \
+			options->v = NULL; \
+			options->nv = 0; \
+		} \
+	} while (0)
 	CLEAR_ON_NONE(options->local_command);
 	CLEAR_ON_NONE(options->remote_command);
 	CLEAR_ON_NONE(options->proxy_command);
@@ -2860,7 +2941,9 @@ fill_default_options(Options * options)
 	CLEAR_ON_NONE(options->sk_provider);
 	CLEAR_ON_NONE(options->known_hosts_command);
 	CLEAR_ON_NONE(options->tunnel_options);
-
+	CLEAR_ON_NONE_ARRAY(channel_timeouts, num_channel_timeouts, "none");
+#undef CLEAR_ON_NONE
+#undef CLEAR_ON_NONE_ARRAY
 	if (options->jump_host != NULL &&
 	    strcmp(options->jump_host, "none") == 0 &&
 	    options->jump_port == 0 && options->jump_user == NULL) {
@@ -3291,7 +3374,7 @@ parse_ssh_uri(const char *uri, char **userp, char **hostp, int *portp)
 	return r;
 }
 
-/* XXX the following is a near-vebatim copy from servconf.c; refactor */
+/* XXX the following is a near-verbatim copy from servconf.c; refactor */
 static const char *
 fmt_multistate_int(int val, const struct multistate *m)
 {
@@ -3565,6 +3648,8 @@ dump_client_config(Options *o, const char *host)
 	dump_cfg_strarray(oSetEnv, o->num_setenv, o->setenv);
 	dump_cfg_strarray_oneline(oLogVerbose,
 	    o->num_log_verbose, o->log_verbose);
+	dump_cfg_strarray_oneline(oChannelTimeout,
+	    o->num_channel_timeouts, o->channel_timeouts);
 
 	/* Special cases */
 

@@ -88,53 +88,19 @@ static struct _rsx {
 
 static inline int _rs_allocate(struct _rs **, struct _rsx **);
 static inline void _rs_forkdetect(void);
+#ifdef WINDOWS
+#include "arc4random_win.h"
+#else
 #include "arc4random.h"
+#endif /* WINDOWS*/
 
 static inline void _rs_rekey(u_char *dat, size_t datlen);
 
 static inline void
-_rs_init(u_char *buf, size_t n)
+_rs_init(u_char* buf, size_t n)
 {
 	if (n < KEYSZ + IVSZ)
 		return;
-}
-
-#ifndef WITH_OPENSSL
-#ifdef WINDOWS
-#include <Wincrypt.h>
-static void
-getrnd(u_char *s, size_t len) {
-	HCRYPTPROV hProvider;
-	if (CryptAcquireContextW(&hProvider, 0, 0, PROV_RSA_FULL, 
-		CRYPT_VERIFYCONTEXT | CRYPT_SILENT) == FALSE ||
-	    CryptGenRandom(hProvider, len, s) == FALSE ||
-	    CryptReleaseContext(hProvider, 0) == FALSE)
-		fatal("%s Crypto error: %d", __func__, GetLastError());
-}
-
-#else /* !WINDOWS */
-# ifndef SSH_RANDOM_DEV
-#  define SSH_RANDOM_DEV "/dev/urandom"
-# endif /* SSH_RANDOM_DEV */
-static void
-getrnd(u_char *s, size_t len)
-{
-	int fd, save_errno;
-	ssize_t r;
-	size_t o = 0;
-
-#ifdef HAVE_GETRANDOM
-	if ((r = getrandom(s, len, 0)) > 0 && (size_t)r == len)
-		return;
-#endif /* HAVE_GETRANDOM */
-
-	if ((fd = open(SSH_RANDOM_DEV, O_RDONLY)) == -1) {
-		save_errno = errno;
-		/* Try egd/prngd before giving up. */
-		if (seed_from_prngd(s, len) == 0)
-			return;
-		fatal("Couldn't open %s: %s", SSH_RANDOM_DEV,
-		    strerror(save_errno));
 
 	if (rs == NULL) {
 		if (_rs_allocate(&rs, &rsx) == -1)
@@ -144,8 +110,6 @@ getrnd(u_char *s, size_t len)
 	chacha_keysetup(&rsx->rs_chacha, buf, KEYSZ * 8);
 	chacha_ivsetup(&rsx->rs_chacha, buf + KEYSZ);
 }
-#endif /* !WINDOWS */
-#endif /* WITH_OPENSSL */
 
 static void
 _rs_stir(void)

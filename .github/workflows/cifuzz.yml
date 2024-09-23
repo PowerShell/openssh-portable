@@ -1,6 +1,10 @@
 name: CIFuzz
 on:
-  workflow_dispatch:
+  workflow_dispatch: # disable for win32-openssh fork
+  # push:
+  #   paths: [ '**.c', '**.h', '**.m4', '**.sh', '**/Makefile.in', 'configure.ac', '.github/configs', '.github/workflows/c-cpp.yaml' ]
+  # pull_request:
+  #   paths: [ '**.c', '**.h', '**.m4', '**.sh', '**/Makefile.in', 'configure.ac', '.github/configs', '.github/workflows/c-cpp.yaml' ]
 
 jobs:
   Fuzzing:

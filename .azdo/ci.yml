@@ -10,13 +10,6 @@ pr:
     include:
     - latestw_all
 
-resources:
-  repositories:
-  - repository: ComplianceRepo
-    type: github
-    endpoint: ComplianceGHRepo
-    name: PowerShell/compliance
-
 stages:
 - stage: Build
   displayName: Build Win32-OpenSSH
@@ -87,36 +80,6 @@ stages:
         $configFilePath = "$(Build.SourcesDirectory)/config.h"
         Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$configFilePath"
       displayName: Upload Win32-OpenSSH build artifacts
-
-- stage: Compliance
-  displayName: Compliance
-  dependsOn: Build
-  jobs:
-  - job: ComplianceJob
-    pool:
-      vmImage: windows-latest
-    steps:
-    - checkout: self
-      clean: true
-    - checkout: ComplianceRepo
-      clean: true
-    - download: current
-      artifact: 'Win32-OpenSSH'
-    - template: ci-compliance.yml@ComplianceRepo
-      parameters:
-        # credscan
-        suppressionsFile: ''
-    # Documentation: https://eng.ms/docs/security-compliance-identity-and-management-scim/security/azure-security/cloudai-security-fundamentals-engineering/security-integration/guardian-wiki/sdl-azdo-extension/security-analysis-report-build-task
-    - task: securedevelopmentteam.vss-secure-development-tools.build-task-report.SdtReport@2
-      continueOnError: true
-      displayName: 'Guardian Export'
-      inputs:
-        GdnExportVstsConsole: true
-        GdnExportSarifFile: true
-        GdnExportHtmlFile: true
-        GdnExportAllTools: false
-        GdnExportGdnToolCredScan: true
-        #this didn't do anything GdnExportCustomLogsFolder: '$(Build.ArtifactStagingDirectory)/Guardian'
 
 - stage: Test
   displayName: Test Win32-OpenSSH

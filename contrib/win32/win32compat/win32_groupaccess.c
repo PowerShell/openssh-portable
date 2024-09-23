@@ -190,6 +190,29 @@ check_group_membership(const char* group)
 {
 	PSID sid = NULL;
 	BOOL is_member = 0;
+	char* utf8_group_name = NULL;
+	
+	// it can be a SID string; if it is - use localized name for that SID
+	wchar_t* group_utf16 = utf8_to_utf16(group);
+	if (ConvertStringSidToSidW(group_utf16, &sid) != 0) {
+		WCHAR group_name[UNLEN + 1];
+		DWORD group_name_length = UNLEN + 1;
+		WCHAR domain_name[DNLEN + 1] = L"";
+		DWORD domain_name_size = DNLEN + 1;
+		SID_NAME_USE account_type = 0;
+		if (LookupAccountSidW(NULL, sid, group_name, &group_name_length,
+			domain_name, &domain_name_size, &account_type) != 0) {
+			utf8_group_name = utf16_to_utf8(group_name);
+			debug3_f("'%s' is translated to '%s'", group, utf8_group_name);
+			group = utf8_group_name;
+		} else {
+			debug3_f("LookupAccountSid failed for '%s'", group);
+		}
+	}
+	else
+	{
+		debug3_f("'%s' not recognized as SID", group);
+	}
 	
 	if ((sid = get_sid(group)) == NULL) {
 		error("unable to resolve group %s", group);
@@ -202,6 +225,10 @@ check_group_membership(const char* group)
 cleanup:
 	if (sid)
 		free(sid);
+	if (group_utf16)
+		free(group_utf16);
+	if (utf8_group_name)
+		free(utf8_group_name);
 	return is_member? 1: 0;
 }
 
@@ -221,18 +248,17 @@ ga_init(const char *user, gid_t base)
 
 	if ((user_token = get_user_token(user_name, 0)) == NULL) {
 		/*
-		 * TODO - We need to fatal() all the times when we fail to generate the user token.
+		 * No fatal call here so experience when called by servconf parsing Match block
+		 * is consistent for an invalid user (does not find password, but is not fatal yet)
+		 * and a valid user without a token (ex: group policy forbidding login)
 		 */
-		if (get_custom_lsa_package()) {
-			error("%s, unable to resolve user %s", __func__, user_name);
-			return 0;
-		} else {
-			fatal("%s, unable to resolve user %s", __func__, user_name);
-		}
+		get_custom_lsa_package();
+		error("%s, unable to resolve user %s", __func__, user_name);
+		return 0;
 	}
 		
 	/* 
-	 * supposed to retun number of groups associated with user 
+	 * supposed to return number of groups associated with user 
 	 * since we do lazy group evaluation, returning 1 here
 	 */
 

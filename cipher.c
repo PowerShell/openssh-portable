@@ -1,4 +1,4 @@
-/* $OpenBSD: cipher.c,v 1.119 2021/04/03 06:18:40 djm Exp $ */
+/* $OpenBSD: cipher.c,v 1.121 2024/05/17 02:39:11 jsg Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -372,7 +372,7 @@ cipher_crypt(struct sshcipher_ctx *cc, u_int seqnr, u_char *dest,
 		if (!EVP_CIPHER_CTX_ctrl(cc->evp, EVP_CTRL_GCM_IV_GEN,
 		    1, lastiv))
 			return SSH_ERR_LIBCRYPTO_ERROR;
-		/* set tag on decyption */
+		/* set tag on decryption */
 		if (!cc->encrypt &&
 		    !EVP_CIPHER_CTX_ctrl(cc->evp, EVP_CTRL_GCM_SET_TAG,
 		    authlen, (u_char *)src + aadlen + len))
@@ -432,27 +432,6 @@ cipher_free(struct sshcipher_ctx *cc)
 	cc->evp = NULL;
 #endif
 	freezero(cc, sizeof(*cc));
-}
-
-/*
- * Exports an IV from the sshcipher_ctx required to export the key
- * state back from the unprivileged child to the privileged parent
- * process.
- */
-int
-cipher_get_keyiv_len(const struct sshcipher_ctx *cc)
-{
-	const struct sshcipher *c = cc->cipher;
-
-	if ((c->flags & CFLAG_CHACHAPOLY) != 0)
-		return 0;
-	else if ((c->flags & CFLAG_AESCTR) != 0)
-		return sizeof(cc->ac_ctx.ctr);
-#ifdef WITH_OPENSSL
-	return EVP_CIPHER_CTX_iv_length(cc->evp);
-#else
-	return 0;
-#endif
 }
 
 int

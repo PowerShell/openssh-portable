@@ -75,6 +75,9 @@
     <ClCompile Include="$(OpenSSH-Src-Path)openbsd-compat\dirname.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="$(OpenSSH-Src-Path)openbsd-compat\freezero.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)openbsd-compat\explicit_bzero.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -216,6 +219,15 @@
     <ClCompile Include="..\..\..\openbsd-compat\bsd-pselect.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\openbsd-compat\bsd-timegm.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\openbsd-compat\arc4random_uniform.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\openbsd-compat\bsd-getentropy.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(OpenSSH-Src-Path)openbsd-compat\base64.h">
@@ -309,6 +321,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="$(OpenSSH-Src-Path)openbsd-compat\vis.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\openbsd-compat\arc4random_win.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

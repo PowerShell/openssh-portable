@@ -1,7 +1,7 @@
 [cmdletbinding()]
 # PowerShell Script to clone, build and package PowerShell from specified fork and branch
 param (    
-    [string] $repolocation = "$pwd\openssh-portable",
+    [string] $repolocation = "$PSScriptRoot\..\..\..",
     [string] $destination = "$env:WORKSPACE",
     [ValidateSet('x86', 'x64', 'arm64', 'arm')]
     [String]$NativeHostArch = 'x64',        

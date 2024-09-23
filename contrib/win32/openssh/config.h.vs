@@ -102,7 +102,7 @@
 
 /* Define if your platform needs to skip post auth
  file descriptor passing */
-/* #undef DISABLE_FD_PASSING */
+#define DISABLE_FD_PASSING
 
 /* Define if you don't want to use lastlog */
 /* #undef DISABLE_LASTLOG */
@@ -207,13 +207,13 @@
 /* #undef HAVE_ADDR_V6_IN_UTMPX */
 
 /* Define to 1 if you have the `arc4random' function. */
-#define HAVE_ARC4RANDOM 1
+/* #undef HAVE_ARC4RANDOM */
 
 /* Define to 1 if you have the `arc4random_buf' function. */
-#define HAVE_ARC4RANDOM_BUF 1
+/* #undef HAVE_ARC4RANDOM_BUF */
 
 /* Define to 1 if you have the `arc4random_uniform' function. */
-#define HAVE_ARC4RANDOM_UNIFORM 1
+/* #undef HAVE_ARC4RANDOM_UNIFORM */
 
 /* Define to 1 if you have the `asprintf' function. */
 /* #undef HAVE_ASPRINTF */
@@ -349,7 +349,7 @@
 /* #undef HAVE_DEV_PTS_AND_PTC */
 
 /* Define to 1 if you have the <dirent.h> header file. */
-/* #undef HAVE_DIRENT_H
+/* #undef HAVE_DIRENT_H */
 
 /* Define to 1 if you have the `dirfd' function. */
 /* #undef HAVE_DIRFD */
@@ -1701,7 +1701,7 @@
 
 #define HAVE_BZERO 1
 #define PATH_MAX 32768
-#define S_IFIFO        0x1000  
+#define S_IFIFO        0x1000
 #define HAVE_EXPLICIT_BZERO
 #define HAVE_MBTOWC 1
 #define HAVE_LLABS 1
@@ -1716,7 +1716,7 @@
 #define __STDC__ 1
 
 #define umac128_new umac_new
-#define umac128_update umac_update 
+#define umac128_update umac_update
 #define umac_final umac128_final
 #define umac_delete umac128_delete
 
@@ -1730,7 +1730,6 @@
 #define _PATH_LS			"dir"
 #define _PATH_DEVNULL "NUL"
 #define FORK_NOT_SUPPORTED
-#define HAVE_FREEZERO
 #define FILESYSTEM_NO_BACKSLASH
 #define HAVE_LOCALTIME_R
 #define HAVE_DECL_MEMMEM 0

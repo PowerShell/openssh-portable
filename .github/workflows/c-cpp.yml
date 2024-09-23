@@ -1,10 +1,15 @@
 name: C/C++ CI
 
 on:
-  workflow_dispatch:
-  
+  workflow_dispatch: # disable for win32-openssh fork
+  # push:
+  #   paths: [ '**.c', '**.h', '**.m4', '**.sh', '**/Makefile.in', 'configure.ac', '.github/configs', '.github/workflows/c-cpp.yaml' ]
+  # pull_request:
+  #   paths: [ '**.c', '**.h', '**.m4', '**.sh', '**/Makefile.in', 'configure.ac', '.github/configs', '.github/workflows/c-cpp.yaml' ]
+
 jobs:
   ci:
+    name: "${{ matrix.target }} ${{ matrix.config }}"
     if: github.repository != 'openssh/openssh-portable-selfhosted'
     strategy:
       fail-fast: false
@@ -13,9 +18,9 @@ jobs:
         target:
           - ubuntu-20.04
           - ubuntu-22.04
-          - macos-11
           - macos-12
           - macos-13
+          - macos-14
           - windows-2019
           - windows-2022
         config: [default]
@@ -44,7 +49,8 @@ jobs:
           - { target: ubuntu-20.04, config: gcc-7 }
           - { target: ubuntu-20.04, config: gcc-8 }
           - { target: ubuntu-20.04, config: gcc-10 }
-          - { target: ubuntu-20.04, config: gcc-11-Werror }
+          - { target: ubuntu-22.04, config: gcc-11-Werror }
+          - { target: ubuntu-22.04, config: gcc-12-Werror }
           - { target: ubuntu-20.04, config: pam }
           - { target: ubuntu-20.04, config: kitchensink }
           - { target: ubuntu-22.04, config: hardenedmalloc }
@@ -58,18 +64,35 @@ jobs:
           - { target: ubuntu-latest, config: libressl-3.5.3 }
           - { target: ubuntu-latest, config: libressl-3.6.1 }
           - { target: ubuntu-latest, config: libressl-3.7.2 }
+          - { target: ubuntu-latest, config: libressl-3.8.4 }
+          - { target: ubuntu-latest, config: libressl-3.9.1 }
           - { target: ubuntu-latest, config: openssl-master }
           - { target: ubuntu-latest, config: openssl-noec }
           - { target: ubuntu-latest, config: openssl-1.1.1 }
-          - { target: ubuntu-latest, config: openssl-1.1.1k }
-          - { target: ubuntu-latest, config: openssl-1.1.1n }
-          - { target: ubuntu-latest, config: openssl-1.1.1q }
           - { target: ubuntu-latest, config: openssl-1.1.1t }
+          - { target: ubuntu-latest, config: openssl-1.1.1w }
           - { target: ubuntu-latest, config: openssl-3.0.0 }
-          - { target: ubuntu-latest, config: openssl-3.0.7 }
+          - { target: ubuntu-latest, config: openssl-3.0.13 }
           - { target: ubuntu-latest, config: openssl-3.1.0 }
+          - { target: ubuntu-latest, config: openssl-3.1.5 }
+          - { target: ubuntu-latest, config: openssl-3.2.1 }
+          - { target: ubuntu-latest, config: openssl-3.3.0 }
           - { target: ubuntu-latest, config: openssl-1.1.1_stable }
           - { target: ubuntu-latest, config: openssl-3.0 }  # stable branch
+          - { target: ubuntu-latest, config: openssl-3.1 }  # stable branch
+          - { target: ubuntu-latest, config: openssl-3.2 }  # stable branch
+          - { target: ubuntu-latest, config: openssl-3.3 }  # stable branch
+          - { target: ubuntu-latest, config: putty-0.71 }
+          - { target: ubuntu-latest, config: putty-0.72 }
+          - { target: ubuntu-latest, config: putty-0.73 }
+          - { target: ubuntu-latest, config: putty-0.74 }
+          - { target: ubuntu-latest, config: putty-0.75 }
+          - { target: ubuntu-latest, config: putty-0.76 }
+          - { target: ubuntu-latest, config: putty-0.77 }
+          - { target: ubuntu-latest, config: putty-0.78 }
+          - { target: ubuntu-latest, config: putty-0.79 }
+          - { target: ubuntu-latest, config: putty-0.80 }
+          - { target: ubuntu-latest, config: putty-snapshot }
           - { target: ubuntu-latest, config: zlib-develop }
           - { target: ubuntu-22.04, config: pam }
           - { target: ubuntu-22.04, config: krb5 }
@@ -79,9 +102,9 @@ jobs:
           - { target: ubuntu-22.04, config: selinux }
           - { target: ubuntu-22.04, config: kitchensink }
           - { target: ubuntu-22.04, config: without-openssl }
-          - { target: macos-11, config: pam }
           - { target: macos-12, config: pam }
           - { target: macos-13, config: pam }
+          - { target: macos-14, config: pam }
     runs-on: ${{ matrix.target }}
     steps:
     - name: set cygwin git params
@@ -105,7 +128,7 @@ jobs:
     - name: make clean
       run: make clean
     - name: make
-      run: make -j2
+      run: make
     - name: make tests
       run: sh ./.github/run_test.sh ${{ matrix.config }}
       env:

@@ -1,4 +1,4 @@
-/* $OpenBSD: kex.h,v 1.119 2023/08/28 03:28:43 djm Exp $ */
+/* $OpenBSD: kex.h,v 1.123 2024/05/17 00:30:23 djm Exp $ */
 
 /*
  * Copyright (c) 2000, 2001 Markus Friedl.  All rights reserved.
@@ -92,7 +92,7 @@ enum kex_modes {
 };
 
 enum kex_exchange {
-	KEX_DH_GRP1_SHA1,
+	KEX_DH_GRP1_SHA1 = 1,
 	KEX_DH_GRP14_SHA1,
 	KEX_DH_GRP14_SHA256,
 	KEX_DH_GRP16_SHA512,
@@ -109,9 +109,10 @@ enum kex_exchange {
 #define KEX_INIT_SENT			0x0001
 #define KEX_INITIAL			0x0002
 #define KEX_HAS_PUBKEY_HOSTBOUND	0x0004
-#define KEX_RSA_SHA2_256_SUPPORTED 	0x0008 /* only set in server for now */
-#define KEX_RSA_SHA2_512_SUPPORTED 	0x0010 /* only set in server for now */
-#define KEX_HAS_PING		 	0x0020
+#define KEX_RSA_SHA2_256_SUPPORTED	0x0008 /* only set in server for now */
+#define KEX_RSA_SHA2_512_SUPPORTED	0x0010 /* only set in server for now */
+#define KEX_HAS_PING			0x0020
+#define KEX_HAS_EXT_INFO_IN_AUTH	0x0040
 
 struct sshenc {
 	char	*name;
@@ -149,7 +150,9 @@ struct kex {
 	u_int	kex_type;
 	char	*server_sig_algs;
 	int	ext_info_c;
+	int	ext_info_s;
 	int	kex_strict;
+	int	ext_info_received;
 	struct sshbuf *my;
 	struct sshbuf *peer;
 	struct sshbuf *client_version;
@@ -180,9 +183,14 @@ struct kex {
 	struct sshbuf *client_pub;
 };
 
+int	 kex_name_valid(const char *);
+u_int	 kex_type_from_name(const char *);
+int	 kex_hash_from_name(const char *);
+int	 kex_nid_from_name(const char *);
 int	 kex_names_valid(const char *);
 char	*kex_alg_list(char);
 char	*kex_names_cat(const char *, const char *);
+int	 kex_has_any_alg(const char *, const char *);
 int	 kex_assemble_names(char **, const char *, const char *);
 void	 kex_proposal_populate_entries(struct ssh *, char *prop[PROPOSAL_MAX],
     const char *, const char *, const char *, const char *, const char *);
@@ -209,6 +217,8 @@ int	 kex_protocol_error(int, u_int32_t, struct ssh *);
 int	 kex_derive_keys(struct ssh *, u_char *, u_int, const struct sshbuf *);
 int	 kex_send_newkeys(struct ssh *);
 int	 kex_start_rekex(struct ssh *);
+int	 kex_server_update_ext_info(struct ssh *);
+void	 kex_set_server_sig_algs(struct ssh *, const char *);
 
 int	 kexgex_client(struct ssh *);
 int	 kexgex_server(struct ssh *);

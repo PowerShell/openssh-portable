@@ -70,15 +70,6 @@
             </Component>
         </ComponentGroup>
 
-        <ComponentGroup Id="Manifest" Directory="SPDXFOLDER">
-             <Component>
-                <File Name="manifest.spdx.json" Source="_manifest\spdx_2.2\manifest.spdx.json" KeyPath="yes" />
-            </Component>
-            <Component>
-                <File Name="manifest.spdx.json.sha256" Source="_manifest\spdx_2.2\manifest.spdx.json.sha256" KeyPath="yes" />
-            </Component>
-        </ComponentGroup>
-
         <!-- Automatically add custom actions if referencing the Shared component group. -->
         <SetProperty Id="SetPrivilegesOnSshAgent" Value="&quot;[SystemFolder]sc.exe&quot; privs ssh-agent SeAssignPrimaryTokenPrivilege/SeTcbPrivilege/SeBackupPrivilege/SeRestorePrivilege/SeImpersonatePrivilege" Sequence="execute" Before="SetPrivilegesOnSshAgent" />
         <CustomAction Id="SetPrivilegesOnSshAgent" BinaryKey="WixCA" DllEntry="WixQuietExec" Execute="deferred" Return="check" Impersonate="no" />
