@@ -182,6 +182,8 @@ typedef struct {
 	int	enable_escape_commandline;	/* ~C commandline */
 	int	obscure_keystroke_timing_interval;
 
+	char	*tunnel_options;
+
 	char	*ignored_unknown; /* Pattern list of unknown tokens to ignore */
 }       Options;
 

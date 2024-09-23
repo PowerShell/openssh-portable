@@ -175,6 +175,7 @@ initialize_server_options(ServerOptions *options)
 	options->num_accept_env = 0;
 	options->num_setenv = 0;
 	options->permit_tun = -1;
+	options->tunnel_options = NULL;
 	options->permitted_opens = NULL;
 	options->permitted_listens = NULL;
 	options->adm_forced_command = NULL;
@@ -484,6 +485,7 @@ fill_default_server_options(ServerOptions *options)
 	CLEAR_ON_NONE(options->chroot_directory);
 	CLEAR_ON_NONE(options->routing_domain);
 	CLEAR_ON_NONE(options->host_key_agent);
+	CLEAR_ON_NONE(options->tunnel_options);
 
 	for (i = 0; i < options->num_host_key_files; i++)
 		CLEAR_ON_NONE(options->host_key_files[i]);
@@ -520,7 +522,7 @@ typedef enum {
 	sHostKeyAlgorithms, sPerSourceMaxStartups, sPerSourceNetBlockSize,
 	sClientAliveInterval, sClientAliveCountMax, sAuthorizedKeysFile,
 	sGssAuthentication, sGssCleanupCreds, sGssStrictAcceptor,
-	sAcceptEnv, sSetEnv, sPermitTunnel,
+	sAcceptEnv, sSetEnv, sPermitTunnel, sTunnelOptions,
 	sMatch, sPermitOpen, sPermitListen, sForceCommand, sChrootDirectory,
 	sUsePrivilegeSeparation, sAllowAgentForwarding,
 	sHostCertificate, sInclude,
@@ -663,6 +665,7 @@ static struct {
 	{ "acceptenv", sAcceptEnv, SSHCFG_ALL },
 	{ "setenv", sSetEnv, SSHCFG_ALL },
 	{ "permittunnel", sPermitTunnel, SSHCFG_ALL },
+	{ "tunneloptions", sTunnelOptions, SSHCFG_GLOBAL },
 	{ "permittty", sPermitTTY, SSHCFG_ALL },
 	{ "permituserrc", sPermitUserRC, SSHCFG_ALL },
 	{ "match", sMatch, SSHCFG_ALL },
@@ -2162,6 +2165,14 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 			*intptr = value;
 		break;
 
+	case sTunnelOptions:
+		charptr = &options->tunnel_options;
+		arg = argv_next(&ac, &av);
+		if (*activep && *charptr == NULL)
+			*charptr = xstrdup((arg == NULL) ? "" : arg);
+		break;
+
+
 	case sInclude:
 		if (cmdline) {
 			fatal("Include directive not supported as a "
@@ -3259,6 +3270,7 @@ dump_config(ServerOptions *o)
 		}
 	}
 	dump_cfg_string(sPermitTunnel, s);
+	dump_cfg_string(sTunnelOptions, o->tunnel_options);
 
 	printf("ipqos %s ", iptos2str(o->ip_qos_interactive));
 	printf("%s\n", iptos2str(o->ip_qos_bulk));

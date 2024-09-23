@@ -201,6 +201,8 @@ typedef struct {
 
 	int	permit_tun;
 
+	char* tunnel_options;
+
 	char   **permitted_opens;	/* May also be one of PERMITOPEN_* */
 	u_int   num_permitted_opens;
 	char   **permitted_listens; /* May also be one of PERMITOPEN_* */

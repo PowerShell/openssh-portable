@@ -129,7 +129,7 @@ void	 freeargs(arglist *);
 void	 duplicateargs(arglist *, const arglist *);
 #endif
 
-int	 tun_open(int, int, char **);
+int	 tun_open(int, int, const char *, char **);
 
 /* Common definitions for ssh tunnel device forwarding */
 #define SSH_TUNMODE_NO		0x00

@@ -180,6 +180,7 @@ typedef enum {
 	oPubkeyAcceptedAlgorithms, oCASignatureAlgorithms, oProxyJump,
 	oSecurityKeyProvider, oKnownHostsCommand, oRequiredRSASize,
 	oEnableEscapeCommandline, oObscureKeystrokeTiming,
+	oTunnelOptions,
 	oIgnore, oIgnoredUnknownOption, oDeprecated, oUnsupported
 } OpCodes;
 
@@ -329,6 +330,7 @@ static struct {
 	{ "requiredrsasize", oRequiredRSASize },
 	{ "enableescapecommandline", oEnableEscapeCommandline },
 	{ "obscurekeystroketiming", oObscureKeystrokeTiming },
+	{ "tunneloptions", oTunnelOptions },
 
 	{ NULL, oBadOption }
 };
@@ -2346,6 +2348,13 @@ parse_pubkey_algos:
 		argv_consume(&ac);
 		break;
 
+	case oTunnelOptions:
+		charptr = &options->tunnel_options;
+		arg = argv_next(&ac, &av);
+		if (*activep && *charptr == NULL)
+			*charptr = xstrdup((arg == NULL) ? "" : arg);
+		break;
+
 	default:
 		error("%s line %d: Unimplemented opcode %d",
 		    filename, linenum, opcode);
@@ -2596,6 +2605,7 @@ initialize_options(Options * options)
 	options->required_rsa_size = -1;
 	options->enable_escape_commandline = -1;
 	options->obscure_keystroke_timing_interval = -1;
+	options->tunnel_options = NULL;
 	options->tag = NULL;
 }
 
@@ -2849,6 +2859,8 @@ fill_default_options(Options * options)
 	CLEAR_ON_NONE(options->pkcs11_provider);
 	CLEAR_ON_NONE(options->sk_provider);
 	CLEAR_ON_NONE(options->known_hosts_command);
+	CLEAR_ON_NONE(options->tunnel_options);
+
 	if (options->jump_host != NULL &&
 	    strcmp(options->jump_host, "none") == 0 &&
 	    options->jump_port == 0 && options->jump_user == NULL) {
@@ -3595,6 +3607,9 @@ dump_client_config(Options *o, const char *host)
 	else
 		printf(":%d", o->tun_remote);
 	printf("\n");
+
+	dump_cfg_string(oTunnelOptions, o->tunnel_options);
+
 
 	/* oCanonicalizePermittedCNAMEs */
 	printf("canonicalizePermittedcnames");

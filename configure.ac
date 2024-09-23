@@ -758,6 +758,7 @@ int main(void) { if (NSVersionOfRunTimeLibrary("System") >= (60 << 16))
 	AC_DEFINE_UNQUOTED([BIND_8_COMPAT], [1],
 		[Define if your resolver libs need this for getrrsetbyname])
 	AC_DEFINE([SSH_TUN_FREEBSD], [1], [Open tunnel devices the FreeBSD way])
+	AC_DEFINE([SSH_TUN_TAP_WINDOWS_V9], [1], [Use TAP-Windows Adapter V9 (>=W10 only)])
 	AC_DEFINE([SSH_TUN_COMPAT_AF], [1],
 	    [Use tunnel device compatibility to OpenBSD])
 	AC_DEFINE([SSH_TUN_PREPEND_AF], [1],
