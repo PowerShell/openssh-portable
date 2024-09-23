@@ -1,5 +1,5 @@
 
-Experimental tunnel management has been added on Windows. It relies on
+Experimental tunnel management has been addedÂ on Windows. It relies on
 TAP-Windows V9 driver, avilable here:
 
  https://build.openvpn.net/downloads/releases/tap-windows-9.23.3-I601-Win10.exe
