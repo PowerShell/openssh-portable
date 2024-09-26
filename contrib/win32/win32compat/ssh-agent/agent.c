@@ -34,9 +34,11 @@
 #include <UserEnv.h>
 #include "..\misc_internal.h"
 #include <pwd.h>
+#include "xmalloc.h"
 
 #define BUFSIZE 5 * 1024
 
+extern char* allowed_providers;
 extern int remote_add_provider;
 
 char* sshagent_con_username;
@@ -170,11 +172,11 @@ agent_listen_loop()
 				GetModuleFileNameW(NULL, module_path, PATH_MAX);
 				SetHandleInformation(con, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
 				if (remote_add_provider == 1) {
-					if (swprintf_s(path, PATH_MAX, L"%s %d %s", module_path, (int)(intptr_t)con, L"-Oallow-remote-pkcs11") == -1)
+					if (swprintf_s(path, PATH_MAX, L"%s %d %s -P \"%S\"", module_path, (int)(intptr_t)con, L"-Oallow-remote-pkcs11", allowed_providers) == -1)
 						verbose("Failed to create child process %ls ERROR:%d", module_path, GetLastError());
 				}
 				else {
-					if (swprintf_s(path, PATH_MAX, L"%s %d", module_path, (int)(intptr_t)con) == -1)
+					if (swprintf_s(path, PATH_MAX, L"%s %d -P \"%S\"", module_path, (int)(intptr_t)con, allowed_providers) == -1)
 						verbose("Failed to create child process %ls ERROR:%d", module_path, GetLastError());
 				}
 				if (CreateProcessW(NULL, path, NULL, NULL, TRUE, DETACHED_PROCESS, NULL, NULL, &si, &pi) == FALSE) {
@@ -408,3 +410,30 @@ agent_process_connection(HANDLE pipe)
 	iocp_work(NULL);
 }
 
+void 
+agent_initialize_allow_list() {
+	/* 
+	 * allowed paths for PKCS11 libraries,
+	 * initialize to ProgramFiles and ProgramFiles(x86) by default 
+	 * upstream uses /usr/lib/* and /usr/local/lib/* 
+	 */
+	size_t prog_files_len = 0, prog_files_x86_len = 0;
+	char* prog_files = NULL, * prog_files_x86 = NULL;
+
+	_dupenv_s(&prog_files, &prog_files_len, "ProgramFiles");
+	if (!prog_files)
+		fatal("couldn't find ProgramFiles environment variable");
+	convertToForwardslash(prog_files);
+
+	_dupenv_s(&prog_files_x86, &prog_files_x86_len, "ProgramFiles(x86)");
+	if (!prog_files_x86)
+		fatal("couldn't find ProgramFiles environment variable");
+	convertToForwardslash(prog_files_x86);
+
+	size_t allowed_providers_len = 1 + prog_files_len + 4 + prog_files_x86_len + 3;
+	allowed_providers = xmalloc(allowed_providers_len);
+	sprintf_s(allowed_providers, allowed_providers_len, "/%s/*,/%s/*", prog_files, prog_files_x86);
+
+	free(prog_files);
+	free(prog_files_x86);
+}

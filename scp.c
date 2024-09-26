@@ -2117,7 +2117,11 @@ sink(int argc, char **argv, const char *src)
 			SCREWUP("size out of range");
 		size = (off_t)ull;
 
+#ifdef WINDOWS
+		if (*cp == '\0' || strchr(cp, '/') != NULL || strchr(cp, '\\') != NULL ||
+#else
 		if (*cp == '\0' || strchr(cp, '/') != NULL ||
+#endif
 		    strcmp(cp, ".") == 0 || strcmp(cp, "..") == 0) {
 			run_err("error: unexpected filename: %s", cp);
 			exit(1);

@@ -63,3 +63,4 @@ void agent_start(BOOL);
 void agent_process_connection(HANDLE);
 void agent_shutdown();
 void agent_cleanup_connection(struct agent_connection*);
+void agent_initialize_allow_list();
