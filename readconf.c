@@ -1949,6 +1949,13 @@ parse_pubkey_algos:
 		intptr = &options->tun_open;
 		multistate_ptr = multistate_tunnel;
 		arg = argv_next(&ac, &av);
+		if (arg != NULL) {
+			char* opt = strchr(arg, ':');
+			if (opt != NULL) {
+				options->tun_options = xstrdup(opt + 1);
+				*opt = '\0';
+			}
+		}
 		goto parse_multistate_arg;
 
 	case oTunnelDevice:
@@ -2830,8 +2837,6 @@ fill_default_options(Options * options)
 		options->hash_known_hosts = 0;
 	if (options->tun_open == -1)
 		options->tun_open = SSH_TUNMODE_NO;
-	if (options->tun_options == NULL)
-		options->tun_options = xstrdup("");
 	if (options->tun_local == -1)
 		options->tun_local = SSH_TUNID_ANY;
 	if (options->tun_remote == -1)
@@ -3582,7 +3587,9 @@ dump_client_config(Options *o, const char *host)
 	dump_cfg_fmtint(oStreamLocalBindUnlink, o->fwd_opts.streamlocal_bind_unlink);
 	dump_cfg_fmtint(oStrictHostKeyChecking, o->strict_host_key_checking);
 	dump_cfg_fmtint(oTCPKeepAlive, o->tcp_keep_alive);
-	dump_cfg_fmtint(oTunnel, o->tun_open);
+	printf("%s %s%s%s\n", lookup_opcode_name(oTunnel), fmt_intarg(oTunnel, o->tun_open),
+		((o->tun_options == NULL) ? "" : ":"),
+		((o->tun_options == NULL) ? "" : o->tun_options));
 	dump_cfg_fmtint(oVerifyHostKeyDNS, o->verify_host_key_dns);
 	dump_cfg_fmtint(oVisualHostKey, o->visual_host_key);
 	dump_cfg_fmtint(oUpdateHostkeys, o->update_hostkeys);

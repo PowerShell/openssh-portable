@@ -21,7 +21,9 @@ begins with the prefix. The number of adapters created in this way is the number
 of simultaneous sessions that can be opened. For clients (ssh.exe) one
 single instance is usually enough, but for servers (sshd.exe) a largest number
 of reserved adapters is required. The name prefix SSH looks for can be
-configured by setting the new option "TunnelOptions". At the moment, only
+configured by appendig a ":" caracter and the prefix it to "ethernet" string
+in "Tunnel" (or "PermitTunnel" sor sshd) option.
+(e.g: "Tunnel=ethernet:MY_PREFIX")) . At the moment, only
 ASCII characters are allowed, although Windows uses WCHAR for adapter names
 (property "FriendlyName").
 

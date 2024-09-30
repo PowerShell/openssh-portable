@@ -411,8 +411,9 @@ sys_tun_outfilter(struct ssh *ssh, struct Channel *c,
 // whose IfIndex match the given value. If the index is not
 // specified ("any"), the function takes the adapters whose
 // friendly name starts with "SSH Tunnel" (case insensitive)
-// or whatever is configured (see "TunnelOptions" configuration
-// item).
+// or whatever is configured. The name prefix SSH looks for can be
+// configured by appendig a ":" caracter and the prefix it to "ethernet" string
+// in "Tunnel" (or "PermitTunnel" sor sshd) option.
 // - If a matching adapter if found, the function tries to open
 // and activate it. In case of failure, it takes the next matching
 // adapter.

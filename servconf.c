@@ -472,8 +472,6 @@ fill_default_server_options(ServerOptions *options)
 	}
 	if (options->permit_tun == -1)
 		options->permit_tun = SSH_TUNMODE_NO;
-	if (options->tun_options == NULL)
-		options->tun_options = xstrdup("");
 	if (options->ip_qos_interactive == -1)
 		options->ip_qos_interactive = IPTOS_DSCP_AF21;
 	if (options->ip_qos_bulk == -1)
@@ -3026,6 +3024,7 @@ copy_set_server_options(ServerOptions *dst, ServerOptions *src, int preauth)
 		free(dst->chroot_directory);
 		dst->chroot_directory = NULL;
 	}
+	M_CP_STROPT(tun_options);
 
 	/* Subsystems require merging. */
 	servconf_merge_subsystems(dst, src);
