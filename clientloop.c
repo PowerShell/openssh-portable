@@ -1861,7 +1861,7 @@ client_request_tun_fwd(struct ssh *ssh, int tun_mode,
 	debug("Requesting tun unit %d in mode %d", local_tun, tun_mode);
 
 	/* Open local tunnel device */
-	if ((fd = tun_open(local_tun, tun_mode, options.tunnel_options, &ifname)) == -1) {
+	if ((fd = tun_open(local_tun, tun_mode, options.tun_options, &ifname)) == -1) {
 		error("Tunnel device open failed.");
 		return NULL;
 	}

@@ -687,12 +687,12 @@ FAIL:
 }
 
 int
-sys_tun_open(int tun, int mode, const char *tunnel_options, char** ifname)
+sys_tun_open(int tun, int mode, const char *tun_options, char** ifname)
 {
 	int tun_fd = -1;
 	const char *prefix = NULL;
 
-	prefix = tunnel_options;
+	prefix = tun_options;
 
 	if (ifname != NULL) {
 		*ifname = NULL;

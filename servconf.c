@@ -194,7 +194,7 @@ initialize_server_options(ServerOptions *options)
 	options->num_accept_env = 0;
 	options->num_setenv = 0;
 	options->permit_tun = -1;
-	options->tunnel_options = NULL;
+	options->tun_options = NULL;
 	options->permitted_opens = NULL;
 	options->permitted_listens = NULL;
 	options->adm_forced_command = NULL;
@@ -472,6 +472,8 @@ fill_default_server_options(ServerOptions *options)
 	}
 	if (options->permit_tun == -1)
 		options->permit_tun = SSH_TUNMODE_NO;
+	if (options->tun_options == NULL)
+		options->tun_options = xstrdup("");
 	if (options->ip_qos_interactive == -1)
 		options->ip_qos_interactive = IPTOS_DSCP_AF21;
 	if (options->ip_qos_bulk == -1)
@@ -531,7 +533,6 @@ fill_default_server_options(ServerOptions *options)
 	CLEAR_ON_NONE(options->chroot_directory);
 	CLEAR_ON_NONE(options->routing_domain);
 	CLEAR_ON_NONE(options->host_key_agent);
-	CLEAR_ON_NONE(options->tunnel_options);
 	CLEAR_ON_NONE(options->per_source_penalty_exempt);
 
 	for (i = 0; i < options->num_host_key_files; i++)
@@ -570,7 +571,7 @@ typedef enum {
 	sPerSourcePenalties, sPerSourcePenaltyExemptList,
 	sClientAliveInterval, sClientAliveCountMax, sAuthorizedKeysFile,
 	sGssAuthentication, sGssCleanupCreds, sGssStrictAcceptor,
-	sAcceptEnv, sSetEnv, sPermitTunnel, sTunnelOptions,
+	sAcceptEnv, sSetEnv, sPermitTunnel,
 	sMatch, sPermitOpen, sPermitListen, sForceCommand, sChrootDirectory,
 	sUsePrivilegeSeparation, sAllowAgentForwarding,
 	sHostCertificate, sInclude,
@@ -718,7 +719,6 @@ static struct {
 	{ "acceptenv", sAcceptEnv, SSHCFG_ALL },
 	{ "setenv", sSetEnv, SSHCFG_ALL },
 	{ "permittunnel", sPermitTunnel, SSHCFG_ALL },
-	{ "tunneloptions", sTunnelOptions, SSHCFG_GLOBAL },
 	{ "permittty", sPermitTTY, SSHCFG_ALL },
 	{ "permituserrc", sPermitUserRC, SSHCFG_ALL },
 	{ "match", sMatch, SSHCFG_ALL },
@@ -2292,9 +2292,17 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 	case sPermitTunnel:
 		intptr = &options->permit_tun;
 		arg = argv_next(&ac, &av);
-		if (!arg || *arg == '\0')
+		if (!arg || *arg == '\0') {
 			fatal("%s line %d: %s missing argument.",
-			    filename, linenum, keyword);
+				filename, linenum, keyword);
+		}
+		else {
+			char* opt = strchr(arg, ':');
+			if (opt != NULL) {
+				options->tun_options = xstrdup(opt + 1);
+				*opt = '\0';
+			}
+		}
 		value = -1;
 		for (i = 0; tunmode_desc[i].val != -1; i++)
 			if (strcmp(tunmode_desc[i].text, arg) == 0) {
@@ -2307,14 +2315,6 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 		if (*activep && *intptr == -1)
 			*intptr = value;
 		break;
-
-	case sTunnelOptions:
-		charptr = &options->tunnel_options;
-		arg = argv_next(&ac, &av);
-		if (*activep && *charptr == NULL)
-			*charptr = xstrdup((arg == NULL) ? "" : arg);
-		break;
-
 
 	case sInclude:
 		if (cmdline) {
@@ -3436,7 +3436,6 @@ dump_config(ServerOptions *o)
 		}
 	}
 	dump_cfg_string(sPermitTunnel, s);
-	dump_cfg_string(sTunnelOptions, o->tunnel_options);
 
 	printf("ipqos %s ", iptos2str(o->ip_qos_interactive));
 	printf("%s\n", iptos2str(o->ip_qos_bulk));

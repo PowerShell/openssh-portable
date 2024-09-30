@@ -516,7 +516,7 @@ server_request_tun(struct ssh *ssh)
 			goto done;
 		tun = auth_opts->force_tun_device;
 	}
-	sock = tun_open(tun, mode, options.tunnel_options, &ifname);
+	sock = tun_open(tun, mode, options.tun_options, &ifname);
 	if (sock < 0)
 		goto done;
 	debug("Tunnel forwarding using interface %s", ifname);

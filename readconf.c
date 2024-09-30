@@ -180,7 +180,6 @@ typedef enum {
 	oPubkeyAcceptedAlgorithms, oCASignatureAlgorithms, oProxyJump,
 	oSecurityKeyProvider, oKnownHostsCommand, oRequiredRSASize,
 	oEnableEscapeCommandline, oObscureKeystrokeTiming, oChannelTimeout,
-	oTunnelOptions,
 	oIgnore, oIgnoredUnknownOption, oDeprecated, oUnsupported
 } OpCodes;
 
@@ -331,7 +330,6 @@ static struct {
 	{ "enableescapecommandline", oEnableEscapeCommandline },
 	{ "obscurekeystroketiming", oObscureKeystrokeTiming },
 	{ "channeltimeout", oChannelTimeout },
-	{ "tunneloptions", oTunnelOptions },
 
 	{ NULL, oBadOption }
 };
@@ -1185,6 +1183,7 @@ parse_time:
 		multistate_ptr = multistate_flag;
  parse_multistate:
 		arg = argv_next(&ac, &av);
+ parse_multistate_arg:
 		if ((value = parse_multistate_value(arg, filename, linenum,
 		    multistate_ptr)) == -1) {
 			error("%s line %d: unsupported option \"%s\".",
@@ -1949,7 +1948,8 @@ parse_pubkey_algos:
 	case oTunnel:
 		intptr = &options->tun_open;
 		multistate_ptr = multistate_tunnel;
-		goto parse_multistate;
+		arg = argv_next(&ac, &av);
+		goto parse_multistate_arg;
 
 	case oTunnelDevice:
 		arg = argv_next(&ac, &av);
@@ -2413,13 +2413,6 @@ parse_pubkey_algos:
 		argv_consume(&ac);
 		break;
 
-	case oTunnelOptions:
-		charptr = &options->tunnel_options;
-		arg = argv_next(&ac, &av);
-		if (*activep && *charptr == NULL)
-			*charptr = xstrdup((arg == NULL) ? "" : arg);
-		break;
-
 	default:
 		error("%s line %d: Unimplemented opcode %d",
 		    filename, linenum, opcode);
@@ -2672,7 +2665,7 @@ initialize_options(Options * options)
 	options->required_rsa_size = -1;
 	options->enable_escape_commandline = -1;
 	options->obscure_keystroke_timing_interval = -1;
-	options->tunnel_options = NULL;
+	options->tun_options = NULL;
 	options->tag = NULL;
 	options->channel_timeouts = NULL;
 	options->num_channel_timeouts = 0;
@@ -2837,6 +2830,8 @@ fill_default_options(Options * options)
 		options->hash_known_hosts = 0;
 	if (options->tun_open == -1)
 		options->tun_open = SSH_TUNMODE_NO;
+	if (options->tun_options == NULL)
+		options->tun_options = xstrdup("");
 	if (options->tun_local == -1)
 		options->tun_local = SSH_TUNID_ANY;
 	if (options->tun_remote == -1)
@@ -2940,7 +2935,6 @@ fill_default_options(Options * options)
 	CLEAR_ON_NONE(options->pkcs11_provider);
 	CLEAR_ON_NONE(options->sk_provider);
 	CLEAR_ON_NONE(options->known_hosts_command);
-	CLEAR_ON_NONE(options->tunnel_options);
 	CLEAR_ON_NONE_ARRAY(channel_timeouts, num_channel_timeouts, "none");
 #undef CLEAR_ON_NONE
 #undef CLEAR_ON_NONE_ARRAY
@@ -3692,8 +3686,6 @@ dump_client_config(Options *o, const char *host)
 	else
 		printf(":%d", o->tun_remote);
 	printf("\n");
-
-	dump_cfg_string(oTunnelOptions, o->tunnel_options);
 
 
 	/* oCanonicalizePermittedCNAMEs */
