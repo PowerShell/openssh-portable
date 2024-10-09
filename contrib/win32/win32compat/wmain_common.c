@@ -43,13 +43,12 @@ wmain(int argc, wchar_t **wargv) {
 	char** argv = NULL;
 	int i, r;
 	_set_invalid_parameter_handler(invalid_parameter_handler);
-	if (argc) {
-		if ((argv = malloc(argc * sizeof(char*))) == NULL)
+	if ((argv = malloc((argc + 1) * sizeof(char*))) == NULL)
+		fatal("out of memory");
+	for (i = 0; i < argc; i++)
+		if ((argv[i] = utf16_to_utf8(wargv[i])) == NULL)
 			fatal("out of memory");
-		for (i = 0; i < argc; i++)
-			if ((argv[i] = utf16_to_utf8(wargv[i])) == NULL)
-				fatal("out of memory");
-        }
+	argv[argc] = NULL;
 
 	if (getenv("SSH_AUTH_SOCK") == NULL)
 		_putenv("SSH_AUTH_SOCK=\\\\.\\pipe\\openssh-ssh-agent");
