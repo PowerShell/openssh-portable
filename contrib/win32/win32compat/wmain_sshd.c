@@ -135,7 +135,7 @@ create_prgdata_ssh_folder()
 	wchar_t ssh_cfg_dir[PATH_MAX] = { 0, };
 	wcscpy_s(ssh_cfg_dir, _countof(ssh_cfg_dir), __wprogdata);
 	wcscat_s(ssh_cfg_dir, _countof(ssh_cfg_dir), L"\\ssh");
-	if (create_directory_withsddl(ssh_cfg_dir, L"O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;AU)") < 0) {
+	if (create_directory_withsddl(ssh_cfg_dir, L"O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;0x1200a9;;;AU)", TRUE) < 0) {
 		printf("failed to create %S", ssh_cfg_dir);
 		exit(255);
 	}
@@ -144,7 +144,7 @@ create_prgdata_ssh_folder()
 	wchar_t logs_dir[PATH_MAX] = { 0, };
 	wcscat_s(logs_dir, _countof(logs_dir), ssh_cfg_dir);
 	wcscat_s(logs_dir, _countof(logs_dir), L"\\logs");
-	if (create_directory_withsddl(logs_dir, L"O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)") < 0) {
+	if (create_directory_withsddl(logs_dir, L"O:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)", FALSE) < 0) {
 		printf("failed to create %S", logs_dir);
 		exit(255);
 	}
