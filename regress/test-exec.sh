@@ -735,8 +735,8 @@ Host *
 	HostKeyAlias		localhost-with-alias
 	Port			$PORT
 	User			$USER
-	GlobalKnownHostsFile	$OBJ/known_hosts
-	UserKnownHostsFile	$OBJ/known_hosts
+	GlobalKnownHostsFile	`windows_path $OBJ/known_hosts`
+	UserKnownHostsFile	`windows_path $OBJ/known_hosts`
 	PubkeyAuthentication	yes
 	ChallengeResponseAuthentication	no
 	PasswordAuthentication	no
@@ -787,6 +787,7 @@ if [ "$os" == "windows" ]; then
 	SSH_KEYTYPES=`echo $SSH_KEYTYPES | tr -d '\r','\n'`  # remove \r\n
 	SSH_HOSTKEY_TYPES=`echo $SSH_HOSTKEY_TYPES | tr -d '\r','\n'`  # remove \r\n
 	OBJ_WIN_FORMAT=`windows_path $OBJ`
+	SRC_WIN_FORMAT=`windows_path $SRC`
 	first_key_type=${SSH_KEYTYPES%% *}
 	if [ "x$USER_DOMAIN" != "x" ]; then
 		# For domain user, create folders
@@ -835,8 +836,12 @@ for t in ${SSH_HOSTKEY_TYPES}; do
 
 	echo HostKey $OBJ/host.$t >> $OBJ/sshd_config
 
-	# don't use SUDO for proxy connect
-	echo HostKey $OBJ/$t >> $OBJ/sshd_proxy
+	if [ "$os" == "windows" ]; then
+		echo HostKey `windows_path $OBJ/$t` >> $OBJ/sshd_proxy
+	else
+		# don't use SUDO for proxy connect
+		echo HostKey $OBJ/$t >> $OBJ/sshd_proxy
+	fi
 done
 
 if [ "$os" == "windows" ]; then
@@ -960,7 +965,7 @@ fi
 	if [ "$os" == "windows" ]; then
 		# TODO - having SSH_SK_HELPER is causing issues. Need to find a way.
 		# This is fine for now as we don't have FIDO enabled.
-		echo proxycommand  `windows_path ${SSHD}` -i -f $OBJ_WIN_FORMAT/sshd_proxy
+		echo proxycommand  `windows_path ${SSHD}` -i -f `windows_path $OBJ`/sshd_proxy
 	else
 		echo proxycommand ${SUDO} env SSH_SK_HELPER=\"$SSH_SK_HELPER\" ${OBJ}/sshd-log-wrapper.sh -i -f $OBJ/sshd_proxy
 	fi

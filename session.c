@@ -208,8 +208,26 @@ auth_input_request_forwarding(struct ssh *ssh, struct passwd * pw)
 	/* Temporarily drop privileged uid for mkdir/bind. */
 	temporarily_use_uid(pw);
 
+#ifdef WINDOWS
+	/* Use Windows temporal directory instead of unix `/tmp` folder */
+	static char tmp_file_path[MAX_PATH];
+	DWORD tmp_path_len = GetTempPath(MAX_PATH, tmp_file_path);
+	if (tmp_path_len > MAX_PATH || tmp_file_path == 0) {
+		error("Agent forwarding disabled: GetTempPath() failed.");
+		return 0;
+	}
+
+	char* ssh_prefix = xstrdup("ssh-XXXXXXXXXX");
+	size_t sock_dir_len = tmp_path_len + strlen(ssh_prefix) + 1;
+
+	auth_sock_dir = xmalloc(sock_dir_len);
+	memset(auth_sock_dir, 0, sock_dir_len);
+	strcat(auth_sock_dir, tmp_file_path);
+	strcat(auth_sock_dir, ssh_prefix);
+#else
 	/* Allocate a buffer for the socket name, and format the name. */
 	auth_sock_dir = xstrdup("/tmp/ssh-XXXXXXXXXX");
+#endif
 
 	/* Create private directory for socket */
 	if (mkdtemp(auth_sock_dir) == NULL) {
@@ -221,8 +239,13 @@ auth_input_request_forwarding(struct ssh *ssh, struct passwd * pw)
 		goto authsock_err;
 	}
 
+#ifdef WINDOWS
+	xasprintf(&auth_sock_name, "%s\\agent.%ld",
+		auth_sock_dir, (long)getpid());
+#else
 	xasprintf(&auth_sock_name, "%s/agent.%ld",
-	    auth_sock_dir, (long) getpid());
+		auth_sock_dir, (long)getpid());
+#endif
 
 	/* Start a Unix listener on auth_sock_name. */
 	sock = unix_listener(auth_sock_name, SSH_LISTEN_BACKLOG, 0);

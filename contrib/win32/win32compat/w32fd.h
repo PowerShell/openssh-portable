@@ -125,6 +125,7 @@ struct w32_io {
 #define FILETYPE(pio) (GetFileType(WINHANDLE(pio)))
 extern HANDLE main_thread;
 
+int w32_afunix_socket(struct sockaddr_un* addr);
 BOOL w32_io_is_blocking(struct w32_io*);
 BOOL w32_io_is_io_available(struct w32_io* pio, BOOL rd);
 int wait_for_any_event(HANDLE* events, int num_events, DWORD milli_seconds);

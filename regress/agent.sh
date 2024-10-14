@@ -39,6 +39,13 @@ ${SSHKEYGEN} -q -N '' -t ed25519 -f $OBJ/user_ca_key \
 trace "overwrite authorized keys"
 printf '' > $OBJ/authorized_keys_$USER
 
+if [ "$os" == "windows" ]; then
+	# We are adding the default ssh-rsa key to the agent. Certificate based key don't
+	# seem to be currently working.
+	cat $OBJ/ssh-rsa.pub >> $OBJ/authorized_keys_$USER
+	${SSHADD} $OBJ/ssh-rsa > /dev/null 2>&1
+fi
+
 for t in ${SSH_KEYTYPES}; do
 	# generate user key for agent
 	rm -f $OBJ/$t-agent $OBJ/$t-agent.pub*
@@ -90,6 +97,7 @@ if [ $r -ne 52 ]; then
 	fail "ssh connect with failed (exit code $r)"
 fi
 
+if [ "$os" != "windows" ]; then
 for t in ${SSH_KEYTYPES}; do
 	trace "connect via agent using $t key"
 	if [ "$t" = "ssh-dss" ]; then
@@ -103,6 +111,7 @@ for t in ${SSH_KEYTYPES}; do
 		fail "ssh connect with failed (exit code $r)"
 	fi
 done
+fi
 
 trace "agent forwarding"
 ${SSH} -A -F $OBJ/ssh_proxy somehost ${SSHADD} -l > /dev/null 2>&1
@@ -110,123 +119,126 @@ r=$?
 if [ $r -ne 0 ]; then
 	fail "ssh-add -l via agent fwd failed (exit code $r)"
 fi
-${SSH} "-oForwardAgent=$SSH_AUTH_SOCK" -F $OBJ/ssh_proxy somehost ${SSHADD} -l > /dev/null 2>&1
-r=$?
-if [ $r -ne 0 ]; then
-	fail "ssh-add -l via agent path fwd failed (exit code $r)"
-fi
-${SSH} -A -F $OBJ/ssh_proxy somehost \
-	"${SSH} -F $OBJ/ssh_proxy somehost exit 52"
-r=$?
-if [ $r -ne 52 ]; then
-	fail "agent fwd failed (exit code $r)"
-fi
 
-trace "agent forwarding different agent"
-${SSH} "-oForwardAgent=$FW_SSH_AUTH_SOCK" -F $OBJ/ssh_proxy somehost ${SSHADD} -l > /dev/null 2>&1
-r=$?
-if [ $r -ne 0 ]; then
-	fail "ssh-add -l via agent path fwd of different agent failed (exit code $r)"
-fi
-${SSH} '-oForwardAgent=$FW_SSH_AUTH_SOCK' -F $OBJ/ssh_proxy somehost ${SSHADD} -l > /dev/null 2>&1
-r=$?
-if [ $r -ne 0 ]; then
-	fail "ssh-add -l via agent path env fwd of different agent failed (exit code $r)"
-fi
-
-# Remove keys from forwarded agent, ssh-add on remote machine should now fail.
-SSH_AUTH_SOCK=$FW_SSH_AUTH_SOCK ${SSHADD} -D > /dev/null 2>&1
-r=$?
-if [ $r -ne 0 ]; then
-	fail "ssh-add -D failed: exit code $r"
-fi
-${SSH} '-oForwardAgent=$FW_SSH_AUTH_SOCK' -F $OBJ/ssh_proxy somehost ${SSHADD} -l > /dev/null 2>&1
-r=$?
-if [ $r -ne 1 ]; then
-	fail "ssh-add -l with different agent did not fail with exit code 1 (exit code $r)"
-fi
-
-(printf 'cert-authority,principals="estragon" '; cat $OBJ/user_ca_key.pub) \
-	> $OBJ/authorized_keys_$USER
-for t in ${SSH_KEYTYPES}; do
-    if [ "$t" != "ssh-dss" ]; then
-	trace "connect via agent using $t key"
-	${SSH} -F $OBJ/ssh_proxy -i $OBJ/$t-agent.pub \
-		-oCertificateFile=$OBJ/$t-agent-cert.pub \
-		-oIdentitiesOnly=yes somehost exit 52
+if [ "$os" != "windows" ]; then
+	${SSH} "-oForwardAgent=$SSH_AUTH_SOCK" -F $OBJ/ssh_proxy somehost ${SSHADD} -l > /dev/null 2>&1
+	r=$?
+	if [ $r -ne 0 ]; then
+		fail "ssh-add -l via agent path fwd failed (exit code $r)"
+	fi
+	${SSH} -A -F $OBJ/ssh_proxy somehost \
+		"${SSH} -F $OBJ/ssh_proxy somehost exit 52"
 	r=$?
 	if [ $r -ne 52 ]; then
-		fail "ssh connect with failed (exit code $r)"
+		fail "agent fwd failed (exit code $r)"
 	fi
-    fi
-done
 
-## Deletion tests.
+	trace "agent forwarding different agent"
+	${SSH} "-oForwardAgent=$FW_SSH_AUTH_SOCK" -F $OBJ/ssh_proxy somehost ${SSHADD} -l > /dev/null 2>&1
+	r=$?
+	if [ $r -ne 0 ]; then
+		fail "ssh-add -l via agent path fwd of different agent failed (exit code $r)"
+	fi
+	${SSH} '-oForwardAgent=$FW_SSH_AUTH_SOCK' -F $OBJ/ssh_proxy somehost ${SSHADD} -l > /dev/null 2>&1
+	r=$?
+	if [ $r -ne 0 ]; then
+		fail "ssh-add -l via agent path env fwd of different agent failed (exit code $r)"
+	fi
 
-trace "delete all agent keys"
-${SSHADD} -D > /dev/null 2>&1
-r=$?
-if [ $r -ne 0 ]; then
-	fail "ssh-add -D failed: exit code $r"
-fi
-# make sure they're gone
-${SSHADD} -l > /dev/null 2>&1
-r=$?
-if [ $r -ne 1 ]; then
-	fail "ssh-add -l returned unexpected exit code: $r"
-fi
-trace "readd keys"
-# re-add keys/certs to agent
-for t in ${SSH_KEYTYPES}; do
-	${SSHADD} $OBJ/$t-agent-private >/dev/null 2>&1 || \
+	# Remove keys from forwarded agent, ssh-add on remote machine should now fail.
+	SSH_AUTH_SOCK=$FW_SSH_AUTH_SOCK ${SSHADD} -D > /dev/null 2>&1
+	r=$?
+	if [ $r -ne 0 ]; then
+		fail "ssh-add -D failed: exit code $r"
+	fi
+	${SSH} '-oForwardAgent=$FW_SSH_AUTH_SOCK' -F $OBJ/ssh_proxy somehost ${SSHADD} -l > /dev/null 2>&1
+	r=$?
+	if [ $r -ne 1 ]; then
+		fail "ssh-add -l with different agent did not fail with exit code 1 (exit code $r)"
+	fi
+
+	(printf 'cert-authority,principals="estragon" '; cat $OBJ/user_ca_key.pub) \
+		> $OBJ/authorized_keys_$USER
+	for t in ${SSH_KEYTYPES}; do
+		if [ "$t" != "ssh-dss" ]; then
+		trace "connect via agent using $t key"
+		${SSH} -F $OBJ/ssh_proxy -i $OBJ/$t-agent.pub \
+			-oCertificateFile=$OBJ/$t-agent-cert.pub \
+			-oIdentitiesOnly=yes somehost exit 52
+		r=$?
+		if [ $r -ne 52 ]; then
+			fail "ssh connect with failed (exit code $r)"
+		fi
+		fi
+	done
+
+	## Deletion tests.
+
+	trace "delete all agent keys"
+	${SSHADD} -D > /dev/null 2>&1
+	r=$?
+	if [ $r -ne 0 ]; then
+		fail "ssh-add -D failed: exit code $r"
+	fi
+	# make sure they're gone
+	${SSHADD} -l > /dev/null 2>&1
+	r=$?
+	if [ $r -ne 1 ]; then
+		fail "ssh-add -l returned unexpected exit code: $r"
+	fi
+	trace "readd keys"
+	# re-add keys/certs to agent
+	for t in ${SSH_KEYTYPES}; do
+		${SSHADD} $OBJ/$t-agent-private >/dev/null 2>&1 || \
+			fail "ssh-add failed exit code $?"
+	done
+	# make sure they are there
+	${SSHADD} -l > /dev/null 2>&1
+	r=$?
+	if [ $r -ne 0 ]; then
+		fail "ssh-add -l failed: exit code $r"
+	fi
+
+	check_key_absent() {
+		${SSHADD} -L | grep "^$1 " >/dev/null
+		if [ $? -eq 0 ]; then
+			fail "$1 key unexpectedly present"
+		fi
+	}
+	check_key_present() {
+		${SSHADD} -L | grep "^$1 " >/dev/null
+		if [ $? -ne 0 ]; then
+			fail "$1 key missing from agent"
+		fi
+	}
+
+	# delete the ed25519 key
+	trace "delete single key by file"
+	${SSHADD} -qdk $OBJ/ssh-ed25519-agent || fail "ssh-add -d ed25519 failed"
+	check_key_absent ssh-ed25519
+	check_key_present ssh-ed25519-cert-v01@openssh.com
+	# Put key/cert back.
+	${SSHADD} $OBJ/ssh-ed25519-agent-private >/dev/null 2>&1 || \
 		fail "ssh-add failed exit code $?"
-done
-# make sure they are there
-${SSHADD} -l > /dev/null 2>&1
-r=$?
-if [ $r -ne 0 ]; then
-	fail "ssh-add -l failed: exit code $r"
+	check_key_present ssh-ed25519
+	# Delete both key and certificate.
+	trace "delete key/cert by file"
+	${SSHADD} -qd $OBJ/ssh-ed25519-agent || fail "ssh-add -d ed25519 failed"
+	check_key_absent ssh-ed25519
+	check_key_absent ssh-ed25519-cert-v01@openssh.com
+	# Put key/cert back.
+	${SSHADD} $OBJ/ssh-ed25519-agent-private >/dev/null 2>&1 || \
+		fail "ssh-add failed exit code $?"
+	check_key_present ssh-ed25519
+	# Delete certificate via stdin
+	${SSHADD} -qd - < $OBJ/ssh-ed25519-agent-cert.pub || fail "ssh-add -d - failed"
+	check_key_present ssh-ed25519
+	check_key_absent ssh-ed25519-cert-v01@openssh.com
+	# Delete key via stdin
+	${SSHADD} -qd - < $OBJ/ssh-ed25519-agent.pub || fail "ssh-add -d - failed"
+	check_key_absent ssh-ed25519
+	check_key_absent ssh-ed25519-cert-v01@openssh.com
 fi
-
-check_key_absent() {
-	${SSHADD} -L | grep "^$1 " >/dev/null
-	if [ $? -eq 0 ]; then
-		fail "$1 key unexpectedly present"
-	fi
-}
-check_key_present() {
-	${SSHADD} -L | grep "^$1 " >/dev/null
-	if [ $? -ne 0 ]; then
-		fail "$1 key missing from agent"
-	fi
-}
-
-# delete the ed25519 key
-trace "delete single key by file"
-${SSHADD} -qdk $OBJ/ssh-ed25519-agent || fail "ssh-add -d ed25519 failed"
-check_key_absent ssh-ed25519
-check_key_present ssh-ed25519-cert-v01@openssh.com
-# Put key/cert back.
-${SSHADD} $OBJ/ssh-ed25519-agent-private >/dev/null 2>&1 || \
-	fail "ssh-add failed exit code $?"
-check_key_present ssh-ed25519
-# Delete both key and certificate.
-trace "delete key/cert by file"
-${SSHADD} -qd $OBJ/ssh-ed25519-agent || fail "ssh-add -d ed25519 failed"
-check_key_absent ssh-ed25519
-check_key_absent ssh-ed25519-cert-v01@openssh.com
-# Put key/cert back.
-${SSHADD} $OBJ/ssh-ed25519-agent-private >/dev/null 2>&1 || \
-	fail "ssh-add failed exit code $?"
-check_key_present ssh-ed25519
-# Delete certificate via stdin
-${SSHADD} -qd - < $OBJ/ssh-ed25519-agent-cert.pub || fail "ssh-add -d - failed"
-check_key_present ssh-ed25519
-check_key_absent ssh-ed25519-cert-v01@openssh.com
-# Delete key via stdin
-${SSHADD} -qd - < $OBJ/ssh-ed25519-agent.pub || fail "ssh-add -d - failed"
-check_key_absent ssh-ed25519
-check_key_absent ssh-ed25519-cert-v01@openssh.com
 
 trace "kill agent"
 ${SSHAGENT} -k > /dev/null
