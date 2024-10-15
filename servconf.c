@@ -194,6 +194,7 @@ initialize_server_options(ServerOptions *options)
 	options->num_accept_env = 0;
 	options->num_setenv = 0;
 	options->permit_tun = -1;
+	options->tun_options = NULL;
 	options->permitted_opens = NULL;
 	options->permitted_listens = NULL;
 	options->adm_forced_command = NULL;
@@ -2289,9 +2290,17 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 	case sPermitTunnel:
 		intptr = &options->permit_tun;
 		arg = argv_next(&ac, &av);
-		if (!arg || *arg == '\0')
+		if (!arg || *arg == '\0') {
 			fatal("%s line %d: %s missing argument.",
-			    filename, linenum, keyword);
+				filename, linenum, keyword);
+		}
+		else {
+			char* opt = strchr(arg, ':');
+			if (opt != NULL) {
+				options->tun_options = xstrdup(opt + 1);
+				*opt = '\0';
+			}
+		}
 		value = -1;
 		for (i = 0; tunmode_desc[i].val != -1; i++)
 			if (strcmp(tunmode_desc[i].text, arg) == 0) {
@@ -3015,6 +3024,7 @@ copy_set_server_options(ServerOptions *dst, ServerOptions *src, int preauth)
 		free(dst->chroot_directory);
 		dst->chroot_directory = NULL;
 	}
+	M_CP_STROPT(tun_options);
 
 	/* Subsystems require merging. */
 	servconf_merge_subsystems(dst, src);

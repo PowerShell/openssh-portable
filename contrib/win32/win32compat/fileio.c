@@ -317,7 +317,7 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 	}
 
 	/*only following create and status flags currently supported*/
-	if (c_s_flags & ~(O_NONBLOCK | O_APPEND | O_CREAT | O_TRUNC | O_EXCL | O_BINARY)) {
+	if (c_s_flags & ~(O_NONBLOCK | O_APPEND | O_CREAT | O_TRUNC | O_EXCL | O_BINARY | O_SYSTEM)) {
 		debug3("open - ERROR: Unsupported flags: %d", flags);
 		errno = ENOTSUP;
 		return -1;
@@ -354,7 +354,14 @@ createFile_flags_setup(int flags, mode_t mode, struct createFile_flags* cf_flags
 	if (c_s_flags & O_APPEND)
 		cf_flags->dwDesiredAccess = FILE_APPEND_DATA;
 
-	cf_flags->dwFlagsAndAttributes = FILE_FLAG_OVERLAPPED | FILE_FLAG_BACKUP_SEMANTICS;
+	// Hack to deal with TAP driver requirements: FILE_ATTRIBUTE_SYSTEM, no FILE_FLAG_BACKUP_SEMANTICS
+	if (c_s_flags & O_SYSTEM) {
+		cf_flags->dwFlagsAndAttributes = FILE_FLAG_OVERLAPPED | FILE_ATTRIBUTE_SYSTEM;
+		mode = USHRT_MAX;
+	}
+	else {
+		cf_flags->dwFlagsAndAttributes = FILE_FLAG_OVERLAPPED | FILE_FLAG_BACKUP_SEMANTICS;
+	}
 
 	// If the mode is USHRT_MAX then we will inherit the permissions from the parent folder.
 	if (mode != USHRT_MAX) {

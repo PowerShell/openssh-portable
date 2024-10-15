@@ -1183,6 +1183,7 @@ parse_time:
 		multistate_ptr = multistate_flag;
  parse_multistate:
 		arg = argv_next(&ac, &av);
+ parse_multistate_arg:
 		if ((value = parse_multistate_value(arg, filename, linenum,
 		    multistate_ptr)) == -1) {
 			error("%s line %d: unsupported option \"%s\".",
@@ -1947,7 +1948,15 @@ parse_pubkey_algos:
 	case oTunnel:
 		intptr = &options->tun_open;
 		multistate_ptr = multistate_tunnel;
-		goto parse_multistate;
+		arg = argv_next(&ac, &av);
+		if (arg != NULL) {
+			char* opt = strchr(arg, ':');
+			if (opt != NULL) {
+				options->tun_options = xstrdup(opt + 1);
+				*opt = '\0';
+			}
+		}
+		goto parse_multistate_arg;
 
 	case oTunnelDevice:
 		arg = argv_next(&ac, &av);
@@ -2663,6 +2672,7 @@ initialize_options(Options * options)
 	options->required_rsa_size = -1;
 	options->enable_escape_commandline = -1;
 	options->obscure_keystroke_timing_interval = -1;
+	options->tun_options = NULL;
 	options->tag = NULL;
 	options->channel_timeouts = NULL;
 	options->num_channel_timeouts = 0;
@@ -3577,7 +3587,9 @@ dump_client_config(Options *o, const char *host)
 	dump_cfg_fmtint(oStreamLocalBindUnlink, o->fwd_opts.streamlocal_bind_unlink);
 	dump_cfg_fmtint(oStrictHostKeyChecking, o->strict_host_key_checking);
 	dump_cfg_fmtint(oTCPKeepAlive, o->tcp_keep_alive);
-	dump_cfg_fmtint(oTunnel, o->tun_open);
+	printf("%s %s%s%s\n", lookup_opcode_name(oTunnel), fmt_intarg(oTunnel, o->tun_open),
+		((o->tun_options == NULL) ? "" : ":"),
+		((o->tun_options == NULL) ? "" : o->tun_options));
 	dump_cfg_fmtint(oVerifyHostKeyDNS, o->verify_host_key_dns);
 	dump_cfg_fmtint(oVisualHostKey, o->visual_host_key);
 	dump_cfg_fmtint(oUpdateHostkeys, o->update_hostkeys);
@@ -3681,6 +3693,7 @@ dump_client_config(Options *o, const char *host)
 	else
 		printf(":%d", o->tun_remote);
 	printf("\n");
+
 
 	/* oCanonicalizePermittedCNAMEs */
 	printf("canonicalizePermittedcnames");

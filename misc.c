@@ -1492,10 +1492,10 @@ percent_dollar_expand(const char *string, ...)
 }
 
 int
-tun_open(int tun, int mode, char **ifname)
+tun_open(int tun, int mode, const char* tun_options, char **ifname)
 {
 #if defined(CUSTOM_SYS_TUN_OPEN)
-	return (sys_tun_open(tun, mode, ifname));
+	return (sys_tun_open(tun, mode, tun_options, ifname));
 #elif defined(SSH_TUN_OPENBSD)
 	struct ifreq ifr;
 	char name[100];
