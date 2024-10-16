@@ -521,4 +521,28 @@ Describe "Setup Tests" -Tags "Setup" {
             $fwportFilter.RemotePort | Should Be 'Any'
         }        
     }
+
+    Context "$tC - Validate SSHD service startup" {
+        BeforeAll { $tI=1 }
+        AfterAll { $tC++ }
+        AfterEach { 
+            $tI++ 
+            Stop-Service sshd
+        }
+
+        It "$tC.$tI - SSHD starts when Authenticated Users have full control over log folder" {
+            $folderPath = Join-Path $env:ProgramData "ssh" "logs"
+            if (-not (Test-Path -Path $folderPath)) {
+                New-Item -Path $folderPath -ItemType Directory -Force
+            }
+            # Set ACLs on the folder
+            $acl = Get-Acl $folderPath
+            $group = "NT AUTHORITY\Authenticated Users"
+            $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($group, "FullControl", "Allow")
+            $acl.SetAccessRule($accessRule)
+            Set-Acl -Path $folderPath -AclObject $acl
+            Start-Service sshd
+            $LASTEXITCODE | Should Be 0            
+        }  
+    }
 }

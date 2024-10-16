@@ -248,6 +248,7 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 		}
 		else {
 			ret = -1;
+			break;
 		}
 	}
 cleanup:
