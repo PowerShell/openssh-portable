@@ -854,7 +854,9 @@ listen_on_addrs(struct listenaddr *la)
 			continue;
 		}
 		/* Socket options */
+#ifndef WINDOWS
 		set_reuseaddr(listen_sock);
+#endif
 		if (la->rdomain != NULL &&
 		    set_rdomain(listen_sock, la->rdomain) == -1) {
 			close(listen_sock);
