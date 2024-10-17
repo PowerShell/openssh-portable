@@ -12,6 +12,14 @@
  * called by a name other than "ssh" or "Secure Shell".
  */
 
+#ifdef WINDOWS
+#define _PATH_SEPARATOR "\\"
+#define HOME_ENV_VAR "USERPROFILE"
+#else
+#define _PATH_SEPARATOR "/"
+#define HOME_ENV_VAR "HOME"
+#endif
+
 #define ETCDIR				"/etc"
 
 #ifndef SSHDIR
@@ -73,21 +81,21 @@
  * readable by anyone except the user him/herself, though this does not
  * contain anything particularly secret.
  */
-#define _PATH_SSH_USER_HOSTFILE		"~/" _PATH_SSH_USER_DIR "/known_hosts"
+#define _PATH_SSH_USER_HOSTFILE     "~" _PATH_SEPARATOR _PATH_SSH_USER_DIR _PATH_SEPARATOR "known_hosts"
 /* backward compat for protocol 2 */
-#define _PATH_SSH_USER_HOSTFILE2	"~/" _PATH_SSH_USER_DIR "/known_hosts2"
+#define _PATH_SSH_USER_HOSTFILE2    "~" _PATH_SEPARATOR _PATH_SSH_USER_DIR _PATH_SEPARATOR "/known_hosts2"
 
 /*
  * Name of the default file containing client-side authentication key. This
  * file should only be readable by the user him/herself.
  */
-#define _PATH_SSH_CLIENT_ID_DSA		_PATH_SSH_USER_DIR "/id_dsa"
-#define _PATH_SSH_CLIENT_ID_ECDSA	_PATH_SSH_USER_DIR "/id_ecdsa"
-#define _PATH_SSH_CLIENT_ID_RSA		_PATH_SSH_USER_DIR "/id_rsa"
-#define _PATH_SSH_CLIENT_ID_ED25519	_PATH_SSH_USER_DIR "/id_ed25519"
-#define _PATH_SSH_CLIENT_ID_XMSS	_PATH_SSH_USER_DIR "/id_xmss"
-#define _PATH_SSH_CLIENT_ID_ECDSA_SK	_PATH_SSH_USER_DIR "/id_ecdsa_sk"
-#define _PATH_SSH_CLIENT_ID_ED25519_SK	_PATH_SSH_USER_DIR "/id_ed25519_sk"
+#define _PATH_SSH_CLIENT_ID_DSA         _PATH_SSH_USER_DIR _PATH_SEPARATOR "id_dsa"
+#define _PATH_SSH_CLIENT_ID_ECDSA       _PATH_SSH_USER_DIR _PATH_SEPARATOR "id_ecdsa"
+#define _PATH_SSH_CLIENT_ID_RSA         _PATH_SSH_USER_DIR _PATH_SEPARATOR "id_rsa"
+#define _PATH_SSH_CLIENT_ID_ED25519     _PATH_SSH_USER_DIR _PATH_SEPARATOR "id_ed25519"
+#define _PATH_SSH_CLIENT_ID_XMSS        _PATH_SSH_USER_DIR _PATH_SEPARATOR "id_xmss"
+#define _PATH_SSH_CLIENT_ID_ECDSA_SK    _PATH_SSH_USER_DIR _PATH_SEPARATOR "id_ecdsa_sk"
+#define _PATH_SSH_CLIENT_ID_ED25519_SK  _PATH_SSH_USER_DIR _PATH_SEPARATOR "id_ed25519_sk"
 
 /*
  * Configuration file in user's home directory.  This file need not be
@@ -95,7 +103,7 @@
  * particularly secret.  If the user's home directory resides on an NFS
  * volume where root is mapped to nobody, this may need to be world-readable.
  */
-#define _PATH_SSH_USER_CONFFILE		_PATH_SSH_USER_DIR "/config"
+#define _PATH_SSH_USER_CONFFILE		_PATH_SSH_USER_DIR _PATH_SEPARATOR "config"
 
 /*
  * File containing a list of those rsa keys that permit logging in as this
@@ -105,10 +113,10 @@
  * may need to be world-readable.  (This file is read by the daemon which is
  * running as root.)
  */
-#define _PATH_SSH_USER_PERMITTED_KEYS	_PATH_SSH_USER_DIR "/authorized_keys"
+#define _PATH_SSH_USER_PERMITTED_KEYS	_PATH_SSH_USER_DIR _PATH_SEPARATOR "authorized_keys"
 
 /* backward compat for protocol v2 */
-#define _PATH_SSH_USER_PERMITTED_KEYS2	_PATH_SSH_USER_DIR "/authorized_keys2"
+#define _PATH_SSH_USER_PERMITTED_KEYS2	_PATH_SSH_USER_DIR _PATH_SEPARATOR "authorized_keys2"
 
 /*
  * Per-user and system-wide ssh "rc" files.  These files are executed with
@@ -116,7 +124,7 @@
  * passed "proto cookie" as arguments if X11 forwarding with spoofing is in
  * use.  xauth will be run if neither of these exists.
  */
-#define _PATH_SSH_USER_RC		_PATH_SSH_USER_DIR "/rc"
+#define _PATH_SSH_USER_RC		_PATH_SSH_USER_DIR _PATH_SEPARATOR "rc"
 #define _PATH_SSH_SYSTEM_RC		SSHDIR "/sshrc"
 
 /*
