@@ -435,14 +435,20 @@ file_in_chroot_jail(HANDLE handle) {
 		return 1;
 	}
 
+	return file_in_chroot_jail_helper(final_path);
+}
+
+/* returns 1 if true, 0 otherwise */
+int
+file_in_chroot_jail_helper(wchar_t* final_path) {
+	/* ensure final path is within chroot */
 	to_wlower_case(final_path);
 	if ((wcslen(final_path) < wcslen(chroot_pathw)) ||
-	    memcmp(final_path, chroot_pathw, 2 * wcslen(chroot_pathw)) != 0 ||
-	    final_path[wcslen(chroot_pathw)] != '\\') {
+		memcmp(final_path, chroot_pathw, 2 * wcslen(chroot_pathw)) != 0 ||
+		final_path[wcslen(chroot_pathw)] != '\\') {
 		debug3("access denied due to attempt to escape chroot jail");
 		return 0;
 	}
-
 	return 1;
 }
 
@@ -1305,6 +1311,11 @@ fileio_symlink(const char *target, const char *linkpath)
 	wchar_t *resolved_target_utf16 = utf8_to_utf16(target_modified);
 	if (resolved_target_utf16 == NULL || linkpath_utf16 == NULL) {
 		errno = ENOMEM;
+		goto cleanup;
+	}
+
+	if (chroot_pathw != NULL && file_in_chroot_jail_helper(resolved_target_utf16) != 1) {
+		errno = EPERM;
 		goto cleanup;
 	}
 
