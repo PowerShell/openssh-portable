@@ -41,6 +41,7 @@ Describe "Tests of sshd_config" -Tags "CI" {
         
         Add-Content $sshdconfig_custom @"
 
+UnusedConnectionTimeout 2
 DenyUsers denyuser1 deny*2 denyuse?3, 
 AllowUsers allowuser1 allowu*r2 allow?se?3 allowuser4 localuser1 localu*r2 loc?lu?er3 localadmin matchuser
 DenyGroups denygroup1 denygr*p2 deny?rou?3
@@ -209,6 +210,27 @@ Match User matchuser
         AfterAll {            
             Remove-PasswordSetting
             $tC++
+        }
+
+        It "$tC.$tI-Test UnusedConnectionTimeout"  -skip:$skip {
+            #Run
+            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port
+            Add-UserToLocalGroup -UserName $localuser1 -Password $password -GroupName $allowGroup1
+
+            # Start SSH process with Remote Forwarding Option to create a connection that doesn't prevent "Unused Connection Timeout"
+            $p = Start-Process -FilePath ssh -ArgumentList "-p $port -N -T -R 35000 $localuser1@$server" -PassThru
+            Wait-Process $p.Id -Timeout 10 -ErrorAction SilentlyContinue -ErrorVariable timeouted
+            if (-not $p.HasExited) 
+            {
+                Stop-Process $p.Id -Force
+            }
+
+            $timeouted | Should Be $null
+            $p.ExitCode | Should Be 255
+            
+            Stop-SSHDTestDaemon   -Port $port
+            sleep $sshdDelay
+            Remove-UserFromLocalGroup -UserName $localuser1 -GroupName $allowGroup1
         }
 
         It "$tC.$tI-User with full name in the list of AllowUsers"  -skip:$skip {
