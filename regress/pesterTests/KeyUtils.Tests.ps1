@@ -17,6 +17,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             $null = New-Item $testDir -ItemType directory -Force -ErrorAction SilentlyContinue
         }
 
+        $pkcs11Pin = "testpin"
         $keypassphrase = "testpassword"
         $NoLibreSSL = $OpenSSHTestInfo["NoLibreSSL"]
         if($NoLibreSSL)
@@ -297,6 +298,33 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
 
             $allkeys = @(ssh-add -L)
             ValidateRegistryACL -count $allkeys.count
+        }
+
+        It "$tC.$tI - ssh-add - pkcs11 library (if available)" {
+            $pkcs11Path = "C:\\Program Files\\OpenSC Project\\OpenSC\\pkcs11\\opensc-pkcs11.dll"
+            if (Test-Path $pkcs11Path) {
+                #set up SSH_ASKPASS
+                Add-PasswordSetting -Pass $pkcs11Pin
+
+                ssh-add -s "$pkcs11Path"
+                $LASTEXITCODE | Should Be 0
+                #remove SSH_ASKPASS
+                Remove-PasswordSetting
+
+                #ensure added keys are listed
+                $allkeys = ssh-add -L
+                $allKeys -notmatch "The agent has no identities." | Should Be $True
+
+                #delete added keys
+                iex "cmd /c `"ssh-add -D 2> nul `""
+
+                #check keys are deleted
+                $allkeys = ssh-add -L
+                $allKeys -match "The agent has no identities." | Should Be $True
+            }
+            else {
+                Write-Host "skipping pkcs11 test because provider not found"
+            }
         }
     }
 
