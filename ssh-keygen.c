@@ -67,7 +67,11 @@
 #include "sk-api.h" /* XXX for SSH_SK_USER_PRESENCE_REQD; remove */
 #include "cipher.h"
 
+#ifdef WINDOWS
+#define DEFAULT_KEY_TYPE_NAME "ecdsa"
+#else
 #define DEFAULT_KEY_TYPE_NAME "ed25519"
+#endif /* WINDOWS */
 
 /*
  * Default number of bits in the RSA, DSA and ECDSA keys.  These value can be
