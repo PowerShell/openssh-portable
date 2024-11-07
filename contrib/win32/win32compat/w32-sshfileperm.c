@@ -40,6 +40,8 @@
 #include "misc_internal.h"
 #include "config.h"
 
+extern int log_on_stderr;
+
 /*
 * The function is to check if current user is secure to access to the file. 
 * Check the owner of the file is one of these types: Local Administrators groups, system account, current user account
@@ -178,9 +180,9 @@ cleanup:
 * Check the owner of the file is one of these types: Local Administrators groups or system account
 * Check the users have access permission to the file don't violate the following rules:
 	1. no user other than local administrators group and system account have write permission on the folder
-* Returns 0 on success and -1 on failure
+* Logs a message if the rules are violated, but does not prevent further execution.
 */
-int
+void
 check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 {
 	PSECURITY_DESCRIPTOR pSD = NULL;
@@ -247,7 +249,53 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 			continue;
 		}
 		else {
-			ret = -1;
+			log_on_stderr = 0;
+
+			PSID adminSid = NULL;
+			WCHAR adminName[UNLEN + 1];
+			WCHAR adminDomain[DNLEN + 1];
+			PSID systemSid = NULL;
+			WCHAR systemName[UNLEN + 1];
+			WCHAR systemDomain[DNLEN + 1];
+			DWORD nameSize = UNLEN + 1;
+			DWORD domainSize = DNLEN + 1;
+			DWORD sidSize = SECURITY_MAX_SID_SIZE;
+			SID_NAME_USE sidType;
+			int adminResult = 0;
+			int systemResult = 0;
+
+			adminSid = (PSID)malloc(SECURITY_MAX_SID_SIZE);
+			if (adminSid != NULL) {
+				if (CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, adminSid, &sidSize) != 0) {
+					adminResult = LookupAccountSidW(NULL, adminSid, adminName, &nameSize, adminDomain, &domainSize, &sidType);
+				}
+			}
+
+			if (adminResult == 0) {
+				wcscpy_s(adminDomain, 8, L"BUILTIN");
+				wcscpy_s(adminName, 15, L"Administrators");
+			}
+
+			systemSid = (PSID)malloc(SECURITY_MAX_SID_SIZE);
+			sidSize = SECURITY_MAX_SID_SIZE;
+			nameSize = UNLEN + 1;
+			domainSize = DNLEN + 1;
+			if (systemSid != NULL) {
+				if (CreateWellKnownSid(WinLocalSystemSid, NULL, systemSid, &sidSize) != 0) {
+					adminResult = LookupAccountSidW(NULL, systemSid, systemName, &nameSize, systemDomain, &domainSize, &sidType);
+				}
+			}
+
+			if (systemResult == 0) {
+				wcscpy_s(systemDomain, 13, L"NT AUTHORITY");
+				wcscpy_s(systemName, 7, L"SYSTEM");
+			}
+			logit("Suggest restricting write permissions on '%S' folder to %S\\%S and %S\\%S.", path_utf16, systemDomain, systemName, adminDomain, adminName);
+			log_on_stderr = 1;
+			if (adminSid)
+				free(adminSid);
+			if (systemSid)
+				free(systemSid);
 			break;
 		}
 	}
@@ -258,5 +306,4 @@ cleanup:
 		LocalFree(pSD);
 	if (ti_sid)
 		free(ti_sid);
-	return ret;
 }

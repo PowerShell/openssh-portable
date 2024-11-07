@@ -1446,10 +1446,7 @@ create_directory_withsddl(wchar_t *path_w, wchar_t *sddl_w, BOOL check_permissio
 	}
 	else if (check_permissions) {
 		// directory already exists; need to confirm permissions are correct
-		if (check_secure_folder_permission(path_w, 1) != 0) {
-			error("Directory already exists but folder permissions are invalid");
-			return -1;
-		}
+		check_secure_folder_permission(path_w, 1);
 	}
 
 	return 0;
