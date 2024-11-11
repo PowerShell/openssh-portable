@@ -469,6 +469,7 @@ monitor_read_log(struct monitor *pmonitor)
 
 #ifdef WINDOWS
 	char* pname;
+	char* user;
 	u_int sftp_log_level, sftp_log_facility, sftp_log_stderr;
 	extern int log_stderr;
 	if ((r = sshbuf_get_cstring(logmsg, &pname, NULL)) != 0)
@@ -479,6 +480,8 @@ monitor_read_log(struct monitor *pmonitor)
 			(r = sshbuf_get_u32(logmsg, &sftp_log_facility)) != 0 ||
 			(r = sshbuf_get_u32(logmsg, &sftp_log_stderr)) != 0)
 			fatal_fr(r, "parse");
+		if ((r = sshbuf_get_cstring(logmsg, &user, NULL)) != 0)
+			user = NULL;
 	}
 
 	/*log it*/
@@ -487,7 +490,7 @@ monitor_read_log(struct monitor *pmonitor)
 	else {
 		if (strcmp(pname, "sftp-server") == 0) {
 			log_init(pname, sftp_log_level, sftp_log_facility, sftp_log_stderr);
-			sshlogdirect(level, forced, "%s", msg);
+			sshlogdirect(level, forced, "user: %s: %s", user, msg);
 			log_init("sshd", options.log_level, options.log_facility, log_stderr);
 		} else  
 			sshlogdirect(level, forced, "%s", msg);
