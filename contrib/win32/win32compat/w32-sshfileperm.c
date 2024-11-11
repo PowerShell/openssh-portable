@@ -274,10 +274,10 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 				}
 			}
 
-			//if (adminResult == 0) {
-			//	wcscpy_s(adminDomain, 8, L"BUILTIN");
-			//	wcscpy_s(adminName, 15, L"Administrators");
-			//}
+			if (adminResult == 0) {
+				wcscpy_s(adminDomain, 8, L"BUILTIN");
+				wcscpy_s(adminName, 15, L"Administrators");
+			}
 
 			systemSid = (PSID)malloc(SECURITY_MAX_SID_SIZE);
 			if (systemSid != NULL) {
@@ -286,10 +286,10 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 				}
 			}
 
-			//if (systemResult == 0) {
-			//	wcscpy_s(systemDomain, 13, L"NT AUTHORITY");
-			//	wcscpy_s(systemName, 7, L"SYSTEM");
-			//}
+			if (systemResult == 0) {
+				wcscpy_s(systemDomain, 13, L"NT AUTHORITY");
+				wcscpy_s(systemName, 7, L"SYSTEM");
+			}
 			logit("Suggest restricting write permissions on '%S' folder to %S\\%S and %S\\%S.", path_utf16, systemDomain, systemName, adminDomain, adminName);
 			log_on_stderr = 1;
 			if (adminSid)
