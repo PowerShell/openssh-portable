@@ -254,42 +254,42 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 			PSID adminSid = NULL;
 			WCHAR adminName[UNLEN + 1];
 			WCHAR adminDomain[DNLEN + 1];
+			DWORD adminNameSize = UNLEN + 1;
+			DWORD adminDomainSize = DNLEN + 1;
+			DWORD adminSidSize = SECURITY_MAX_SID_SIZE;
 			PSID systemSid = NULL;
 			WCHAR systemName[UNLEN + 1];
 			WCHAR systemDomain[DNLEN + 1];
-			DWORD nameSize = UNLEN + 1;
-			DWORD domainSize = DNLEN + 1;
-			DWORD sidSize = SECURITY_MAX_SID_SIZE;
+			DWORD systemNameSize = UNLEN + 1;
+			DWORD systemDomainSize = DNLEN + 1;
+			DWORD systemSidSize = SECURITY_MAX_SID_SIZE;
 			SID_NAME_USE sidType;
 			int adminResult = 0;
 			int systemResult = 0;
 
 			adminSid = (PSID)malloc(SECURITY_MAX_SID_SIZE);
 			if (adminSid != NULL) {
-				if (CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, adminSid, &sidSize) != 0) {
-					adminResult = LookupAccountSidW(NULL, adminSid, adminName, &nameSize, adminDomain, &domainSize, &sidType);
+				if (CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, adminSid, &adminSidSize) != 0) {
+					adminResult = LookupAccountSidW(NULL, adminSid, adminName, &adminNameSize, adminDomain, &adminDomainSize, &sidType);
 				}
 			}
 
-			if (adminResult == 0) {
-				wcscpy_s(adminDomain, 8, L"BUILTIN");
-				wcscpy_s(adminName, 15, L"Administrators");
-			}
+			//if (adminResult == 0) {
+			//	wcscpy_s(adminDomain, 8, L"BUILTIN");
+			//	wcscpy_s(adminName, 15, L"Administrators");
+			//}
 
 			systemSid = (PSID)malloc(SECURITY_MAX_SID_SIZE);
-			sidSize = SECURITY_MAX_SID_SIZE;
-			nameSize = UNLEN + 1;
-			domainSize = DNLEN + 1;
 			if (systemSid != NULL) {
-				if (CreateWellKnownSid(WinLocalSystemSid, NULL, systemSid, &sidSize) != 0) {
-					adminResult = LookupAccountSidW(NULL, systemSid, systemName, &nameSize, systemDomain, &domainSize, &sidType);
+				if (CreateWellKnownSid(WinLocalSystemSid, NULL, systemSid, &systemSidSize) != 0) {
+					adminResult = LookupAccountSidW(NULL, systemSid, systemName, &systemNameSize, systemDomain, &systemDomainSize, &sidType);
 				}
 			}
 
-			if (systemResult == 0) {
-				wcscpy_s(systemDomain, 13, L"NT AUTHORITY");
-				wcscpy_s(systemName, 7, L"SYSTEM");
-			}
+			//if (systemResult == 0) {
+			//	wcscpy_s(systemDomain, 13, L"NT AUTHORITY");
+			//	wcscpy_s(systemName, 7, L"SYSTEM");
+			//}
 			logit("Suggest restricting write permissions on '%S' folder to %S\\%S and %S\\%S.", path_utf16, systemDomain, systemName, adminDomain, adminName);
 			log_on_stderr = 1;
 			if (adminSid)
