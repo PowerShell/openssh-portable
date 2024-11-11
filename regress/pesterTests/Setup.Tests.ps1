@@ -523,26 +523,51 @@ Describe "Setup Tests" -Tags "Setup" {
     }
 
     Context "$tC - Validate SSHD service startup" {
-        BeforeAll { $tI=1 }
-        AfterAll { $tC++ }
+        BeforeAll { 
+            $tI=1
+            $sshFolderPath = Join-Path $env:ProgramData "ssh"
+            $sshACL = $null
+            if (Test-Path -Path $sshFolderPath) {
+                $sshACL = Get-Acl $sshFolderPath
+            }
+            $logFolderPath = Join-Path $env:ProgramData "ssh" "logs"
+            $logACL = $null
+            if (Test-Path -Path $logFolderPath) {
+                $logACL = Get-Acl $logFolderPath
+            }
+        }
+        AfterAll { 
+            $tC++ 
+            if ($logACL -eq $null) {
+                Remove-Item -Path $logFolderPath -Recurse -Force
+            }
+            if ($sshACL -eq $null) {
+                Remove-Item -Path $sshFolderPath -Recurse -Force
+            }
+        }
         AfterEach { 
             $tI++ 
-            Stop-Service sshd
+            net stop sshd
+            if ($sshACL -ne $null) {
+                Set-Acl -Path $sshFolderPath -AclObject $sshACL
+            }
+            if ($logACL -ne $null) {
+                Set-Acl -Path $logFolderPath -AclObject $logACL
+            }
         }
 
-        It "$tC.$tI - SSHD starts when Authenticated Users have full control over log folder" {
-            $folderPath = Join-Path $env:ProgramData "ssh" "logs"
-            if (-not (Test-Path -Path $folderPath)) {
-                New-Item -Path $folderPath -ItemType Directory -Force
+        It "$tC.$tI - SSHD starts up successfully when Authenticated Users have read control over log folder" {
+            if (-not (Test-Path -Path $logFolderPath)) {
+                New-Item -Path $logFolderPath -ItemType Directory -Force
             }
             # Set ACLs on the folder
-            $acl = Get-Acl $folderPath
+            $acl = Get-Acl $logFolderPath
             $group = "NT AUTHORITY\Authenticated Users"
-            $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($group, "FullControl", "Allow")
+            $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($group, "ReadAndExecute", "Allow")
             $acl.SetAccessRule($accessRule)
-            Set-Acl -Path $folderPath -AclObject $acl
-            Start-Service sshd
+            Set-Acl -Path $logFolderPath -AclObject $acl
+            net start sshd
             $LASTEXITCODE | Should Be 0            
-        }  
+        }    
     }
 }
