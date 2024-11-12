@@ -468,8 +468,7 @@ monitor_read_log(struct monitor *pmonitor)
 		fatal_f("invalid log level %u (corrupted message?)", level);
 
 #ifdef WINDOWS
-	char* pname;
-	char* user;
+	char* pname, * user = "(unknown user)";
 	u_int sftp_log_level, sftp_log_facility, sftp_log_stderr;
 	extern int log_stderr;
 	if ((r = sshbuf_get_cstring(logmsg, &pname, NULL)) != 0)
@@ -481,7 +480,7 @@ monitor_read_log(struct monitor *pmonitor)
 			(r = sshbuf_get_u32(logmsg, &sftp_log_stderr)) != 0)
 			fatal_fr(r, "parse");
 		if ((r = sshbuf_get_cstring(logmsg, &user, NULL)) != 0)
-			user = NULL;
+			user = "(unknown user)";
 	}
 
 	/*log it*/
