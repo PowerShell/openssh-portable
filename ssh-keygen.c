@@ -267,7 +267,11 @@ ask_filename(struct passwd *pw, const char *prompt)
 	char *name = NULL;
 
 	if (key_type_name == NULL)
+#ifdef WINDOWS
+		name = _PATH_SSH_CLIENT_ID_ECDSA;
+#else
 		name = _PATH_SSH_CLIENT_ID_ED25519;
+#endif /* WINDOWS */
 	else {
 		switch (sshkey_type_from_name(key_type_name)) {
 #ifdef WITH_DSA
