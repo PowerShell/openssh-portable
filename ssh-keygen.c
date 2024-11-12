@@ -86,7 +86,11 @@
  */
 #define DEFAULT_BITS		3072
 #define DEFAULT_BITS_DSA	1024
+#ifdef WINDOWS
+#define DEFAULT_BITS_ECDSA	384
+#else
 #define DEFAULT_BITS_ECDSA	256
+#endif /* WINDOWS */
 
 static int quiet = 0;
 
