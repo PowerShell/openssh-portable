@@ -1937,7 +1937,6 @@ log_handler(LogLevel level, int forced, const char* msg, void* ctx)
 		(r = sshbuf_put_u32(log_msg, log_facility_g)) != 0 ||
 		(r = sshbuf_put_u32(log_msg, log_stderr_g)) != 0)
 		fatal_fr(r, "assemble");
-
 	if ((len = sshbuf_len(log_msg)) < 4 || len > 0xffffffff)
 		fatal_f("bad length %zu", len);
 	POKE_U32(sshbuf_mutable_ptr(log_msg), len - 4);
