@@ -468,7 +468,7 @@ monitor_read_log(struct monitor *pmonitor)
 		fatal_f("invalid log level %u (corrupted message?)", level);
 
 #ifdef WINDOWS
-	char* pname, * user = "(unknown user)";
+	char* pname;
 	u_int sftp_log_level, sftp_log_facility, sftp_log_stderr;
 	extern int log_stderr;
 	if ((r = sshbuf_get_cstring(logmsg, &pname, NULL)) != 0)
@@ -479,20 +479,18 @@ monitor_read_log(struct monitor *pmonitor)
 			(r = sshbuf_get_u32(logmsg, &sftp_log_facility)) != 0 ||
 			(r = sshbuf_get_u32(logmsg, &sftp_log_stderr)) != 0)
 			fatal_fr(r, "parse");
-		if ((r = sshbuf_get_cstring(logmsg, &user, NULL)) != 0)
-			user = "(unknown user)";
 	}
 
 	/*log it*/
 	if (authctxt->authenticated == 0) 
-		sshlogdirect(level, forced, "%s [preauth]", msg);
+		sshlogdirect(level, forced, "user: %s: %s [preauth]", authctxt->user, msg);
 	else {
 		if (strcmp(pname, "sftp-server") == 0) {
 			log_init(pname, sftp_log_level, sftp_log_facility, sftp_log_stderr);
-			sshlogdirect(level, forced, "user: %s: %s", user, msg);
+			sshlogdirect(level, forced, "user: %s: %s", authctxt->user, msg);
 			log_init("sshd", options.log_level, options.log_facility, log_stderr);
 		} else  
-			sshlogdirect(level, forced, "%s", msg);
+			sshlogdirect(level, forced, "user: %s: %s", authctxt->user, msg);
 	}
 #else
 	/*log it*/
