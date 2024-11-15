@@ -513,13 +513,19 @@ sshkey_save_public(const struct sshkey *key, const char *path,
 	FILE *f = NULL;
 	int r = SSH_ERR_INTERNAL_ERROR;
 
-	if ((fd = open(path, O_WRONLY|O_CREAT|O_TRUNC, 0644)) == -1)
+#ifdef WINDOWS
+	/* Windows POSIX adapter does not support fdopen() on open(file)*/
+	if ((f = fopen(path, "w")) == NULL)
+		return SSH_ERR_SYSTEM_ERROR;
+#else /* !WINDOWS */
+	if ((fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644)) == -1)
 		return SSH_ERR_SYSTEM_ERROR;
 	if ((f = fdopen(fd, "w")) == NULL) {
 		r = SSH_ERR_SYSTEM_ERROR;
 		close(fd);
 		goto fail;
 	}
+#endif /* WINDOWS */
 	if ((r = sshkey_write(key, f)) != 0)
 		goto fail;
 	fprintf(f, " %s\n", comment);
