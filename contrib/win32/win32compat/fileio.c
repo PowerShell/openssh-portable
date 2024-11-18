@@ -1359,11 +1359,11 @@ cleanup:
 	if (linkpath_utf16)
 		free(linkpath_utf16);
 
-	if (resolved_target_utf16)
-		free(resolved_target_utf16);
-
 	if (resolved_target_chroot)
 		free(resolved_target_chroot);
+
+	if (resolved_target_utf16)
+		free(resolved_target_utf16);
 
 	if (target_resolved)
 		free(target_resolved);
