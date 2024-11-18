@@ -513,11 +513,11 @@ sshkey_save_public(const struct sshkey *key, const char *path,
 	FILE *f = NULL;
 	int r = SSH_ERR_INTERNAL_ERROR;
 
-	if ((fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644)) == -1)
+	if ((fd = open(path, O_WRONLY|O_CREAT|O_TRUNC, 0644)) == -1)
 		return SSH_ERR_SYSTEM_ERROR;
 #ifdef WINDOWS
 	/* Windows POSIX adapter does not support fdopen() on open(file)
-	   but still want to create file with 0644 permissions */
+	   but still want file created with same owner as upstream */
 	close(fd);
 	if ((f = fopen(path, "w")) == NULL)
 		return SSH_ERR_SYSTEM_ERROR;
