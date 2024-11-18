@@ -1274,6 +1274,7 @@ fileio_symlink(const char *target, const char *linkpath)
 	DWORD ret = -1;
 	char target_modified[PATH_MAX] = { 0 };
 	char *linkpath_resolved = NULL, *target_resolved = NULL;
+	wchar_t *linkpath_utf16 = NULL, *resolved_target_utf16 = NULL, *resolved_target_chroot = NULL;
 
 	if (target == NULL || linkpath == NULL) {
 		errno = EFAULT;
@@ -1307,14 +1308,17 @@ fileio_symlink(const char *target, const char *linkpath)
 		strcpy_s(target_modified, _countof(target_modified), target_resolved);
 	}
 
-	wchar_t *linkpath_utf16 = resolved_path_utf16(linkpath);
-	wchar_t *resolved_target_utf16 = utf8_to_utf16(target_modified);
-	if (resolved_target_utf16 == NULL || linkpath_utf16 == NULL) {
+	if ((linkpath_utf16 = resolved_path_utf16(linkpath)) == NULL || 
+		(resolved_target_utf16 = utf8_to_utf16(target_modified)) == NULL) {
 		errno = ENOMEM;
 		goto cleanup;
 	}
 
-	if (chroot_pathw != NULL && file_in_chroot_jail_helper(resolved_target_utf16) != 1) {
+	/* if chroot, get full path for target, similar to behavior in realpath() in misc.c 
+	   note: _wfullpath() is required to resolve paths containing unicode characters */
+	if (chroot_pathw != NULL &&
+		(resolved_target_chroot = _wfullpath(NULL, resolved_target_utf16, 0)) != NULL &&
+		file_in_chroot_jail_helper(resolved_target_chroot) != 1) {
 		errno = EPERM;
 		goto cleanup;
 	}
@@ -1349,14 +1353,17 @@ fileio_symlink(const char *target, const char *linkpath)
 	ret = 0;
 cleanup:
 
+	if (linkpath_resolved)
+		free(linkpath_resolved);
+
 	if (linkpath_utf16)
 		free(linkpath_utf16);
 
 	if (resolved_target_utf16)
 		free(resolved_target_utf16);
 
-	if (linkpath_resolved)
-		free(linkpath_resolved);
+	if (resolved_target_chroot)
+		free(resolved_target_chroot);
 
 	if (target_resolved)
 		free(target_resolved);
