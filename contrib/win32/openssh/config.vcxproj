@@ -4,6 +4,9 @@
   <PropertyGroup>
     <DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
   </PropertyGroup>
+  <PropertyGroup>
+    <UseVcpkg Condition="'$(UseVcpkg)' == ''">false</UseVcpkg>
+  </PropertyGroup>
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|ARM">
       <Configuration>Debug</Configuration>
@@ -168,6 +171,13 @@
     <OutDir>$(OpenSSH-Bin-Path)$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(Platform)\$(Configuration)\$(TargetName)\</IntDir>
   </PropertyGroup>
+  <Target Name="FetchDependenciesWithoutVcpkg" BeforeTargets="PreBuildEvent" Condition="'$(UseVcpkg)' != 'true'">
+    <Exec Command =
+      "powershell.exe -Executionpolicy Bypass -File $(SolutionDir)GetFIDO2.ps1
+      powershell.exe -Executionpolicy Bypass -File $(SolutionDir)GetLibreSSL.ps1
+      powershell.exe -Executionpolicy Bypass -File $(SolutionDir)GetZlib.ps1"
+    />
+  </Target>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <PrecompiledHeader>
@@ -185,14 +195,16 @@
       <AdditionalDependencies>openbsd_compat.lib;libssh.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-x86-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
+    <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      <PreBuildEvent>
+        <Command>echo Running pre-build event for Debug x64 configuration</Command>
+      </PreBuildEvent>
+    </ItemDefinitionGroup>
     <PreBuildEvent>
-      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetFIDO2.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1"</Command>
+      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
@@ -225,13 +237,10 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
       <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-x64-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
-      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetFIDO2.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1"</Command>
+      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
@@ -264,13 +273,10 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
       <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-arm64-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
-      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetFIDO2.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1"</Command>
+      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
@@ -303,13 +309,10 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
       <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-arm-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
-      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetFIDO2.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1"</Command>
+      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
@@ -346,13 +349,10 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
       <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-x86-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
-      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetFIDO2.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1"</Command>
+      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
@@ -389,13 +389,10 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
       <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-x64-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
-      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetFIDO2.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1"</Command>
+      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
@@ -432,13 +429,10 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
       <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-arm64-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
-      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetFIDO2.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1"</Command>
+      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
@@ -475,13 +469,10 @@ copy /Y "$(SolutionDir)openssh-events.man" "$(OutDir)"</Command>
       <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-arm-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <PreBuildEvent>
-      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetFIDO2.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetLibreSSL.ps1
-powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)GetZlib.ps1"</Command>
+      <Command>powershell.exe -Executionpolicy Bypass -File "$(SolutionDir)config.ps1" -Config_h_vs "$(SolutionDir)config.h.vs" -Config_h "$(OpenSSH-Src-Path)config.h" -VCIncludePath "$(VC_IncludePath)" -OutCRTHeader "$(OpenSSH-Src-Path)contrib\win32\win32compat\inc\crtheaders.h"</Command>
     </PreBuildEvent>
     <PreBuildEvent>
-      <Message>Generate crtheaders.h and config.h; fetch libressl sdk</Message>
+      <Message>Generate crtheaders.h and config.h</Message>
     </PreBuildEvent>
     <PostBuildEvent>
       <Command>copy /Y "$(SolutionDir)install-ssh*ps1" "$(OutDir)"
