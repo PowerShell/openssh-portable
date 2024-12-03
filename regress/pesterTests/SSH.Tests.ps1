@@ -352,13 +352,13 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         It "$tC.$tI - tilde expand for path with forward slash" {
             $o = ssh -v -i ~/test/key/path -E $logFile test_target echo 1234
             $o | Should Be "1234"
-            $logFile | Should -Not Contain "tilde_expand: No such user"
+            $logFile | Should Not Contain "tilde_expand: No such user"
         }
 
         It "$tC.$tI - tilde expand for path with backslash" {
             $o = ssh -v -i ~\test\key\path -E $logFile test_target echo 1234
             $o | Should Be "1234"
-            $logFile | Should -Not Contain "tilde_expand: No such user"
+            $logFile | Should Not Contain "tilde_expand: No such user"
         }
 
         It "$tC.$tI - auto populate known hosts" {
