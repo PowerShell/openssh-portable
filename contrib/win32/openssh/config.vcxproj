@@ -171,12 +171,11 @@
     <OutDir>$(OpenSSH-Bin-Path)$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(Platform)\$(Configuration)\$(TargetName)\</IntDir>
   </PropertyGroup>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+  </PropertyGroup>
   <Target Name="FetchDependenciesWithoutVcpkg" BeforeTargets="PreBuildEvent" Condition="'$(UseVcpkg)' != 'true'">
-    <Exec Command =
-      "powershell.exe -Executionpolicy Bypass -File $(SolutionDir)GetFIDO2.ps1
-      powershell.exe -Executionpolicy Bypass -File $(SolutionDir)GetLibreSSL.ps1
-      powershell.exe -Executionpolicy Bypass -File $(SolutionDir)GetZlib.ps1"
-    />
+    <Exec Command="powershell.exe -Executionpolicy Bypass -File $(SolutionDir)GetFIDO2.ps1&#xD;&#xA;      powershell.exe -Executionpolicy Bypass -File $(SolutionDir)GetLibreSSL.ps1" />
   </Target>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
