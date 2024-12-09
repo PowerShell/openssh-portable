@@ -191,7 +191,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_WIN32_WINNT=0x601;WIN32;_DEBUG;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(ZLib-Path);$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAs>CompileAsC</CompileAs>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <ExceptionHandling>Sync</ExceptionHandling>
@@ -200,7 +200,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-x86-Path);$(ZLib-x86-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-x86-Path);$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;zlib.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 /ignore:4098 %(AdditionalOptions)</AdditionalOptions>
@@ -219,7 +219,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_WIN32_WINNT=0x601;WIN32;_DEBUG;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(ZLib-Path);$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAs>CompileAsC</CompileAs>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
@@ -227,7 +227,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-x64-Path);$(ZLib-x64-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-x64-Path);$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;zlib.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 /ignore:4098 %(AdditionalOptions)</AdditionalOptions>
@@ -246,7 +246,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_WIN32_WINNT=0x601;WIN32;_DEBUG;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(ZLib-Path);$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAs>CompileAsC</CompileAs>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
@@ -254,7 +254,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-arm64-Path);$(ZLib-arm64-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-arm64-Path);$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;zlib.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 /ignore:4098 %(AdditionalOptions)</AdditionalOptions>
@@ -273,7 +273,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_WIN32_WINNT=0x601;WIN32;_DEBUG;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(ZLib-Path);$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAs>CompileAsC</CompileAs>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
@@ -281,7 +281,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-arm-Path);$(ZLib-arm-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-arm-Path);$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;zlib.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 /ignore:4098 %(AdditionalOptions)</AdditionalOptions>
@@ -302,7 +302,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_WIN32_WINNT=0x601;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(ZLib-Path);$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -310,7 +310,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-x86-Path);$(ZLib-x86-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-x86-Path);$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;zlib.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 %(AdditionalOptions)</AdditionalOptions>
@@ -331,7 +331,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_WIN32_WINNT=0x601;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(ZLib-Path);$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <WholeProgramOptimization>true</WholeProgramOptimization>
     </ClCompile>
@@ -340,7 +340,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-x64-Path);$(ZLib-x64-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-x64-Path);$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;zlib.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 %(AdditionalOptions)</AdditionalOptions>
@@ -361,7 +361,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_WIN32_WINNT=0x601;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(ZLib-Path);$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <WholeProgramOptimization>true</WholeProgramOptimization>
     </ClCompile>
@@ -370,7 +370,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-arm64-Path);$(ZLib-arm64-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-arm64-Path);$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;zlib.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 %(AdditionalOptions)</AdditionalOptions>
@@ -391,7 +391,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>_WIN32_WINNT=0x601;_LIB;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>false</SDLCheck>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(ZLib-Path);$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(LibreSSL-Path)include;$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\include;$(OpenSSH-Src-Path)includes;$(OpenSSH-Src-Path);$(OpenSSH-Src-Path)contrib\win32\win32compat;$(OpenSSH-Src-Path)libkrb;$(OpenSSH-Src-Path)libkrb\libKrb5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <WholeProgramOptimization>true</WholeProgramOptimization>
     </ClCompile>
@@ -400,7 +400,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-arm-Path);$(ZLib-arm-Path);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration);$(LibreSSL-arm-Path);$(SolutionDir)\vcpkg_installed\$(VcpkgTriplet)\$(VcpkgTriplet)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>posix_compat.lib;libssh.lib;openbsd_compat.lib;zlib.lib;$(SSLLib)$(AdditionalDependentLibs);%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>wmainCRTStartup</EntryPointSymbol>
       <AdditionalOptions>/ignore:4099 %(AdditionalOptions)</AdditionalOptions>

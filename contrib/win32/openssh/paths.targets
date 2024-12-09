@@ -19,11 +19,11 @@
     <fido2-x64-Path>$(SolutionDir)\libfido2\Win64\Release\static\</fido2-x64-Path>
     <fido2-arm64-Path>$(SolutionDir)\libfido2\ARM64\Release\static\</fido2-arm64-Path>
     <fido2-arm-Path>$(SolutionDir)\libfido2\ARM\Release\static\</fido2-arm-Path>
-    <ZLib-Path>$(SolutionDir)\vcpkg_installed\x64-windows\x64-windows\include\</ZLib-Path>
-    <ZLib-x86-Path>$(SolutionDir)\vcpkg_installed\x64-windows\x64-windows\lib\</ZLib-x86-Path>
-    <ZLib-x64-Path>$(SolutionDir)\vcpkg_installed\x64-windows\x64-windows\lib\</ZLib-x64-Path>
-    <ZLib-arm64-Path>$(SolutionDir)\ZLib\bin\arm64\</ZLib-arm64-Path>
-    <ZLib-arm-Path>$(SolutionDir)\ZLib\bin\arm\</ZLib-arm-Path>
+    <!--ZLib-Path>$(SolutionDir)\vcpkg_installed\x64-windows\x64-windows\include\</ZLib-Path-->
+    <!--ZLib-x86-Path>$(SolutionDir)\vcpkg_installed\x64-windows\x64-windows\lib\</ZLib-x86-Path-->
+    <!--ZLib-x64-Path>$(SolutionDir)\vcpkg_installed\x64-windows\x64-windows\lib\</ZLib-x64-Path-->
+    <!--ZLib-arm64-Path>$(SolutionDir)\ZLib\bin\arm64\</ZLib-arm64-Path-->
+    <!--ZLib-arm-Path>$(SolutionDir)\ZLib\bin\arm\</ZLib-arm-Path-->
     <UseOpenSSL>true</UseOpenSSL>
     <SSLLib>libcrypto.lib;</SSLLib>
     <WindowsSDKVersion>10.0.22621.0</WindowsSDKVersion>

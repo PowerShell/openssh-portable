@@ -146,12 +146,6 @@
     <ClCompile Include="$(OpenSSH-Src-Path)fatal.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(OpenSSH-Src-Path)fe25519.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="$(OpenSSH-Src-Path)ge25519.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)gss-genr.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -204,9 +198,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)poly1305.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="$(OpenSSH-Src-Path)sc25519.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)smult_curve25519_ref.c">
