@@ -2319,7 +2319,11 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 			}
 			value++;
 			found = 0;
+#ifdef WINDOWS
+			if (!path_absolute(arg2) && *arg2 != '~') {
+#else
 			if (*arg2 != '/' && *arg2 != '~') {
+#endif
 				xasprintf(&arg, "%s/%s", SSHDIR, arg2);
 			} else
 				arg = xstrdup(arg2);
