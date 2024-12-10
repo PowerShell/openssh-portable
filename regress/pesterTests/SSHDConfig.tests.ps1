@@ -414,13 +414,13 @@ Match User matchuser
         }
 
         It "$tC.$tI - Include Directive with absolute path starting with drive" {
-            Set-SSHDConfigLine -line "Include $absoluteFilePath"
+            Set-SSHDConfigLine -line "Include $absoluteFilePath" -file $sshdconfig_custom
             $result = Invoke-Expression "$binPath -T -f '$sshdconfig_custom'"            
             $result.Contains($content) | Should Be $true
         }
 
         It "$tC.$tI - Include Directive with filename, relative to ProgramData" {
-            Set-SSHDConfigLine -line "Include $relativeFilePath"
+            Set-SSHDConfigLine -line "Include $relativeFilePath" -file $sshdconfig_custom
             $result = Invoke-Expression "$binPath -T -f '$sshdconfig_custom'"            
             $result.Contains($content) | Should Be $true
         }
