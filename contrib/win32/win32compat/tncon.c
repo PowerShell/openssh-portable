@@ -198,6 +198,10 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 								20,
 								NULL,
 								NULL);
+							
+							// When terminal sends backspace as 0x7F replace with '\b' (0x08)
+							if (n == 1 && octets[0] == VK_F16)
+								octets[0] = VK_BACK;
 
 							WriteToBuffer((char *)octets, n);
 						}
