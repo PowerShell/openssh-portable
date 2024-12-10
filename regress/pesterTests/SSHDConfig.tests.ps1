@@ -403,7 +403,7 @@ Match User matchuser
                 Remove-Item $progDataPath -force
             }
             if (Test-Path $sshdconfig_custom) {
-                Remove-Item $sshd_config_custom -force
+                Remove-Item $sshdconfig_custom -force
             }
         }
 
