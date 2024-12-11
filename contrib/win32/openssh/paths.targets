@@ -10,10 +10,10 @@
     <!--libcbor version is not used in the build; it is needed for pipeline compliance tasks-->  
     <libcborVersion>0.11.0</libcborVersion> 
     <LibreSSL-Path>$(SolutionDir)\LibreSSL\sdk\</LibreSSL-Path>
-    <LibreSSL-x86-Path>$(SolutionDir)\LibreSSL\bin\desktop\x86\</LibreSSL-x86-Path>
-    <LibreSSL-x64-Path>$(SolutionDir)\LibreSSL\bin\desktop\x64\</LibreSSL-x64-Path>
-    <LibreSSL-arm64-Path>$(SolutionDir)\LibreSSL\bin\desktop\arm64\</LibreSSL-arm64-Path>
-    <LibreSSL-arm-Path>$(SolutionDir)\LibreSSL\bin\desktop\arm\</LibreSSL-arm-Path>
+    <!--LibreSSL-x86-Path>$(SolutionDir)\LibreSSL\bin\desktop\x86\</LibreSSL-x86-Path-->
+    <!--LibreSSL-x64-Path>$(SolutionDir)\LibreSSL\bin\desktop\x64\</LibreSSL-x64-Path-->
+    <!--LibreSSL-arm64-Path>$(SolutionDir)\LibreSSL\bin\desktop\arm64\</LibreSSL-arm64-Path-->
+    <!--LibreSSL-arm-Path>$(SolutionDir)\LibreSSL\bin\desktop\arm\</LibreSSL-arm-Path-->
     <fido2-Path>$(SolutionDir)\libfido2\</fido2-Path>
     <fido2-x86-Path>$(SolutionDir)\libfido2\Win32\Release\static\</fido2-x86-Path>
     <fido2-x64-Path>$(SolutionDir)\libfido2\Win64\Release\static\</fido2-x64-Path>

@@ -1,6 +1,17 @@
 {
-    "dependencies": [
-      "zlib"
-    ]
-  }
-  
+  "dependencies": [
+    "zlib",
+    "libressl"
+  ],
+  "overrides": [
+    {
+      "name": "zlib",
+      "version": "1.3.1"
+    },
+    {
+      "name": "libressl",
+      "version": "3.9.2"
+    }
+  ],
+  "builtin-baseline": "a345bbdc68cdfda65603e24413b21afb28f110fb"
+}
