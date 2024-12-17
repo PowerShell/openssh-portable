@@ -180,7 +180,7 @@ cleanup:
 * Check the owner of the file is one of these types: Local Administrators groups or system account
 * Check the users have access permission to the file don't violate the following rules:
 	1. no user other than local administrators group and system account have write permission on the folder
-* Logs a message if the rules are violated, but does not prevent further execution.
+* Logs a message if the rules are violated, but does not prevent further execution
 */
 void
 check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
@@ -264,34 +264,30 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 			DWORD systemDomainSize = DNLEN + 1;
 			DWORD systemSidSize = SECURITY_MAX_SID_SIZE;
 			SID_NAME_USE sidType;
-			int adminResult = 0;
-			int systemResult = 0;
 
 			adminSid = (PSID)malloc(SECURITY_MAX_SID_SIZE);
 			if (adminSid != NULL) {
 				if (CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, adminSid, &adminSidSize) != 0) {
-					adminResult = LookupAccountSidW(NULL, adminSid, adminName, &adminNameSize, adminDomain, &adminDomainSize, &sidType);
+					if (LookupAccountSidW(NULL, adminSid, adminName, &adminNameSize, adminDomain, &adminDomainSize, &sidType) != 0) {
+						systemSid = (PSID)malloc(SECURITY_MAX_SID_SIZE);
+						if (systemSid != NULL) {
+							if (CreateWellKnownSid(WinLocalSystemSid, NULL, systemSid, &systemSidSize) != 0) {
+								if (LookupAccountSidW(NULL, systemSid, systemName, &systemNameSize, systemDomain, &systemDomainSize, &sidType) != 0) {
+									logit("Suggest restricting write permissions on '%S' folder to %S\\%S and %S\\%S.", path_utf16, systemDomain, systemName, adminDomain, adminName);
+									log_on_stderr = 1;
+								}
+							}
+						}
+					}
 				}
 			}
-
-			if (adminResult == 0) {
-				wcscpy_s(adminDomain, 8, L"BUILTIN");
-				wcscpy_s(adminName, 15, L"Administrators");
+			
+			if (log_on_stderr == 0) {
+				/* log generic warning message in unlikely case that lookup for either well-known SID fails */
+				logit("Suggest restricting write permissions on '%S' folder", path_utf16);
+				log_on_stderr = 1;
 			}
 
-			systemSid = (PSID)malloc(SECURITY_MAX_SID_SIZE);
-			if (systemSid != NULL) {
-				if (CreateWellKnownSid(WinLocalSystemSid, NULL, systemSid, &systemSidSize) != 0) {
-					adminResult = LookupAccountSidW(NULL, systemSid, systemName, &systemNameSize, systemDomain, &systemDomainSize, &sidType);
-				}
-			}
-
-			if (systemResult == 0) {
-				wcscpy_s(systemDomain, 13, L"NT AUTHORITY");
-				wcscpy_s(systemName, 7, L"SYSTEM");
-			}
-			logit("Suggest restricting write permissions on '%S' folder to %S\\%S and %S\\%S.", path_utf16, systemDomain, systemName, adminDomain, adminName);
-			log_on_stderr = 1;
 			if (adminSid)
 				free(adminSid);
 			if (systemSid)
