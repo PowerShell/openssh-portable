@@ -202,15 +202,14 @@ int sshd_main(int argc, wchar_t **wargv) {
 	int i, r;
 	_set_invalid_parameter_handler(invalid_parameter_handler);
 
-	if (argc) {
-		if ((argv = malloc(argc * sizeof(char*))) == NULL) {
-			printf("out of memory");
-			exit(255);
-		}
+	if ((argv = malloc((argc + 1) * sizeof(char*))) == NULL)
+		fatal("out of memory");
 
-		for (i = 0; i < argc; i++)
-			argv[i] = utf16_to_utf8(wargv[i]);
-	}
+	for (i = 0; i < argc; i++)
+		if ((argv[i] = utf16_to_utf8(wargv[i])) == NULL)
+			fatal("out of memory");
+
+	argv[argc] = NULL;
 
 	w32posix_initialize();
 

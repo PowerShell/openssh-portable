@@ -134,6 +134,20 @@ Match User matchuser
                 }
             }
         }
+
+        function Set-SSHDConfigLine
+        {
+            param([string]$line, [string]$file)
+            $sshdconfig_ori = Join-Path $Global:OpenSSHTestInfo["ServiceConfigDir"] sshd_config
+            if (Test-Path $file) {
+                Remove-Item $file -Force
+            }
+            Copy-Item $sshdconfig_ori $file
+            get-acl $sshdconfig_ori | set-acl $file
+            $content = Get-Content -Path $file
+            $newContent = @($line) + $content
+            Set-Content -Path $file -Value $newContent
+        }
         
         #skip when the task schedular (*-ScheduledTask) cmdlets does not exist
         $ts = (get-command get-ScheduledTask -ErrorAction SilentlyContinue)
@@ -363,6 +377,52 @@ Match User matchuser
             Stop-SSHDTestDaemon   -Port $port
             sleep $sshdDelay
             Remove-UserFromLocalGroup -UserName $matchuser -GroupName $allowGroup1
+        }
+    }
+
+    Context "Tests of Other SSHD Config Directives via -T" {
+        BeforeAll {                      
+            $tI=1
+            $absoluteFilePath = Join-Path $testDir "includeFile"
+            $relativeFilePath = "includeFile"
+            $progDataPath = Join-Path $env:ProgramData $relativeFilePath
+            # adding a line that would not be in a default sshd_config file
+            $content = "loglevel DEBUG3"
+            $content | Set-Content $absoluteFilePath
+            $content | Set-Content $progDataPath
+            $sshdconfig_custom = Join-Path $Global:OpenSSHTestInfo["ServiceConfigDir"] sshd_config_custom
+            $binPath = Join-Path $($OpenSSHTestInfo['OpenSSHBinPath']) "sshd.exe"
+        }
+
+        AfterAll {            
+            $tC++
+            if (Test-Path $absoluteFilePath) {
+                Remove-Item $absoluteFilePath -force
+            }
+            if (Test-Path $progDataPath) {
+                Remove-Item $progDataPath -force
+            }
+            if (Test-Path $sshdconfig_custom) {
+                Remove-Item $sshdconfig_custom -force
+            }
+        }
+
+        It "$tC.$tI - Include Directive with absolute path starting with forward slash" {
+            Set-SSHDConfigLine -line "Include /$absoluteFilePath" -file $sshdconfig_custom
+            $result = Invoke-Expression "$binPath -T -f '$sshdconfig_custom'"          
+            $result.Contains($content) | Should Be $true
+        }
+
+        It "$tC.$tI - Include Directive with absolute path starting with drive" {
+            Set-SSHDConfigLine -line "Include $absoluteFilePath" -file $sshdconfig_custom
+            $result = Invoke-Expression "$binPath -T -f '$sshdconfig_custom'"            
+            $result.Contains($content) | Should Be $true
+        }
+
+        It "$tC.$tI - Include Directive with filename, relative to ProgramData" {
+            Set-SSHDConfigLine -line "Include $relativeFilePath" -file $sshdconfig_custom
+            $result = Invoke-Expression "$binPath -T -f '$sshdconfig_custom'"            
+            $result.Contains($content) | Should Be $true
         }
     }
 }

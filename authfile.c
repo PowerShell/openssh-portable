@@ -515,11 +515,19 @@ sshkey_save_public(const struct sshkey *key, const char *path,
 
 	if ((fd = open(path, O_WRONLY|O_CREAT|O_TRUNC, 0644)) == -1)
 		return SSH_ERR_SYSTEM_ERROR;
+#ifdef WINDOWS
+	/* Windows POSIX adapter does not support fdopen() on open(file)
+	   but still want file created with same owner as upstream */
+	close(fd);
+	if ((f = fopen(path, "w")) == NULL)
+		return SSH_ERR_SYSTEM_ERROR;
+#else /* WINDOWS */
 	if ((f = fdopen(fd, "w")) == NULL) {
 		r = SSH_ERR_SYSTEM_ERROR;
 		close(fd);
 		goto fail;
 	}
+#endif /* WINDOWS */
 	if ((r = sshkey_write(key, f)) != 0)
 		goto fail;
 	fprintf(f, " %s\n", comment);
