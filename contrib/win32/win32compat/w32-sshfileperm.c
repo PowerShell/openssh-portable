@@ -327,8 +327,8 @@ void log_folder_permissions_message(const wchar_t* path_utf16, wchar_t* log_msg)
 		if (systemSid != NULL &&
 			CreateWellKnownSid(WinLocalSystemSid, NULL, systemSid, &systemSidSize) != 0 &&
 			LookupAccountSidW(NULL, systemSid, systemName, &systemNameSize, systemDomain, &systemDomainSize, &sidType) != 0) {
-			logit("""For '%S' folder, write access is granted to the following users: %S. \
-				Consider reviewing users to ensure that only %S\\%S, and the %S\\%S group, and its members, have write access.""", 
+			logit("For '%S' folder, write access is granted to the following users: %S. "
+				"Consider reviewing users to ensure that only %S\\%S, and the %S\\%S group, and its members, have write access.", 
 				path_utf16, log_msg, systemDomain, systemName, adminDomain, adminName);
 			log_on_stderr = 1;
 		}
