@@ -27,4 +27,5 @@
 
 int check_secure_file_permission(const char *, struct passwd *, int);
 void check_secure_folder_permission(const wchar_t*, int);
+void log_folder_permissions_message(const wchar_t*, wchar_t*);
 #endif /* _SSH_FILE_PERM_H */

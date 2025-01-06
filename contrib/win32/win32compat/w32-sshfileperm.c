@@ -33,6 +33,8 @@
 #include <Aclapi.h>
 #include <lm.h>
 #include <stdio.h> 
+#include <stdlib.h>
+#include <string.h>
 
 #include "inc\pwd.h"
 #include "sshfileperm.h"
@@ -189,9 +191,14 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 	PSID owner_sid = NULL, ti_sid = NULL;
 	PACL dacl = NULL;
 	DWORD error_code = ERROR_SUCCESS;
-	BOOL is_valid_sid = FALSE, is_valid_acl = FALSE;
+	BOOL is_valid_sid = FALSE, is_valid_acl = FALSE, is_first = TRUE;
 	wchar_t* bad_user = NULL;
 	int ret = 0;
+	size_t log_msg_len = (DNLEN + 1 + UNLEN + 3)*2;
+	wchar_t* log_msg = (wchar_t*)malloc(log_msg_len * sizeof(wchar_t));
+	if (log_msg != NULL) {
+		log_msg[0] = '\0';
+	}
 
 	/*Get the owner sid of the file.*/
 	if ((error_code = GetNamedSecurityInfoW(path_utf16, SE_FILE_OBJECT,
@@ -199,18 +206,15 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 		&owner_sid, NULL, &dacl, NULL, &pSD)) != ERROR_SUCCESS) {
 		printf("failed to retrieve the owner sid and dacl of file %S with error code: %d", path_utf16, error_code);
 		errno = EOTHER;
-		ret = -1;
 		goto cleanup;
 	}
 	if (((is_valid_sid = IsValidSid(owner_sid)) == FALSE) || ((is_valid_acl = IsValidAcl(dacl)) == FALSE)) {
 		printf("IsValidSid: %d; is_valid_acl: %d", is_valid_sid, is_valid_acl);
-		ret = -1;
 		goto cleanup;
 	}
 	if (!IsWellKnownSid(owner_sid, WinBuiltinAdministratorsSid) &&
 		!IsWellKnownSid(owner_sid, WinLocalSystemSid)) {
 		printf("Bad owner on %S", path_utf16);
-		ret = -1;
 		goto cleanup;
 	}
 	/*
@@ -249,57 +253,95 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 			continue;
 		}
 		else {
-			log_on_stderr = 0;
+			/* collect all SIDs with write permissions */
+			wchar_t resolved_trustee[DNLEN + 1 + UNLEN + 1] = L"UNKNOWN", resolved_trustee_domain[DNLEN + 1] = L"UNKNOWN";
+			DWORD resolved_trustee_len = _countof(resolved_trustee), resolved_trustee_domain_len = _countof(resolved_trustee_domain);
+			SID_NAME_USE resolved_trustee_type;
 
-			PSID adminSid = NULL;
-			WCHAR adminName[UNLEN + 1];
-			WCHAR adminDomain[DNLEN + 1];
-			DWORD adminNameSize = UNLEN + 1;
-			DWORD adminDomainSize = DNLEN + 1;
-			DWORD adminSidSize = SECURITY_MAX_SID_SIZE;
-			PSID systemSid = NULL;
-			WCHAR systemName[UNLEN + 1];
-			WCHAR systemDomain[DNLEN + 1];
-			DWORD systemNameSize = UNLEN + 1;
-			DWORD systemDomainSize = DNLEN + 1;
-			DWORD systemSidSize = SECURITY_MAX_SID_SIZE;
-			SID_NAME_USE sidType;
+			ret = -1; // set ret to -1 to indicate that there are bad permissions so message will be logged
 
-			adminSid = (PSID)malloc(SECURITY_MAX_SID_SIZE);
-			if (adminSid != NULL) {
-				if (CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, adminSid, &adminSidSize) != 0) {
-					if (LookupAccountSidW(NULL, adminSid, adminName, &adminNameSize, adminDomain, &adminDomainSize, &sidType) != 0) {
-						systemSid = (PSID)malloc(SECURITY_MAX_SID_SIZE);
-						if (systemSid != NULL) {
-							if (CreateWellKnownSid(WinLocalSystemSid, NULL, systemSid, &systemSidSize) != 0) {
-								if (LookupAccountSidW(NULL, systemSid, systemName, &systemNameSize, systemDomain, &systemDomainSize, &sidType) != 0) {
-									logit("Suggest restricting write permissions on '%S' folder to %S\\%S and %S\\%S.", path_utf16, systemDomain, systemName, adminDomain, adminName);
-									log_on_stderr = 1;
-								}
-							}
+			if (log_msg != NULL &&
+				LookupAccountSidW(NULL, current_trustee_sid, resolved_trustee, &resolved_trustee_len,
+				resolved_trustee_domain, &resolved_trustee_domain_len, &resolved_trustee_type) != 0) {
+				size_t currentLength = wcslen(log_msg);
+				if (is_first) {
+					_snwprintf_s(log_msg + currentLength, log_msg_len - currentLength, _TRUNCATE, L"%ls\\%ls", resolved_trustee_domain, resolved_trustee);
+					is_first = FALSE;
+				}
+				else {
+					size_t userLength = resolved_trustee_domain_len + 1 + resolved_trustee_len + 2; // +1 for '\\' and +2 for ', '
+					if (wcslen(log_msg) + userLength + 1 > log_msg_len) { // +1 for null terminator
+						log_msg_len *= 2;
+						wchar_t* temp_log_msg = (wchar_t*)malloc(log_msg_len * sizeof(wchar_t));
+						if (temp_log_msg == NULL) {
+							break;
 						}
+						wcscpy_s(temp_log_msg, log_msg_len, log_msg);
+						if (log_msg)
+							free(log_msg);
+						log_msg = temp_log_msg;
 					}
+					_snwprintf_s(log_msg + currentLength, log_msg_len - currentLength, _TRUNCATE, L", %ls\\%ls", resolved_trustee_domain, resolved_trustee);
 				}
 			}
-			
-			if (log_on_stderr == 0) {
-				/* log generic warning message in unlikely case that lookup for either well-known SID fails */
-				logit("Suggest restricting write permissions on '%S' folder", path_utf16);
-				log_on_stderr = 1;
-			}
-
-			if (adminSid)
-				free(adminSid);
-			if (systemSid)
-				free(systemSid);
-			break;
 		}
+	}
+
+	if (ret != 0) {
+		log_folder_permissions_message(path_utf16, log_msg);
 	}
 cleanup:
 	if (bad_user)
 		LocalFree(bad_user);
+	if (log_msg)
+		free(log_msg);
 	if (pSD)
 		LocalFree(pSD);
 	if (ti_sid)
 		free(ti_sid);
+}
+
+/* Helper function used by check_secure_folder_permission */
+void log_folder_permissions_message(const wchar_t* path_utf16, wchar_t* log_msg) {
+	log_on_stderr = 0;
+
+	PSID adminSid = NULL;
+	WCHAR adminName[UNLEN + 1];
+	WCHAR adminDomain[DNLEN + 1];
+	DWORD adminNameSize = UNLEN + 1;
+	DWORD adminDomainSize = DNLEN + 1;
+	DWORD adminSidSize = SECURITY_MAX_SID_SIZE;
+	PSID systemSid = NULL;
+	WCHAR systemName[UNLEN + 1];
+	WCHAR systemDomain[DNLEN + 1];
+	DWORD systemNameSize = UNLEN + 1;
+	DWORD systemDomainSize = DNLEN + 1;
+	DWORD systemSidSize = SECURITY_MAX_SID_SIZE;
+	SID_NAME_USE sidType;
+
+	adminSid = (PSID)malloc(SECURITY_MAX_SID_SIZE);
+	if (log_msg != NULL && adminSid != NULL &&
+		CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, adminSid, &adminSidSize) != 0 &&
+		LookupAccountSidW(NULL, adminSid, adminName, &adminNameSize, adminDomain, &adminDomainSize, &sidType) != 0) {
+		systemSid = (PSID)malloc(SECURITY_MAX_SID_SIZE);
+		if (systemSid != NULL &&
+			CreateWellKnownSid(WinLocalSystemSid, NULL, systemSid, &systemSidSize) != 0 &&
+			LookupAccountSidW(NULL, systemSid, systemName, &systemNameSize, systemDomain, &systemDomainSize, &sidType) != 0) {
+			logit("""For '%S' folder, write access is granted to the following users: %S. \
+				Consider reviewing users to ensure that only %S\\%S, and the %S\\%S group, and its members, have write access.""", 
+				path_utf16, log_msg, systemDomain, systemName, adminDomain, adminName);
+			log_on_stderr = 1;
+		}
+	}
+
+	if (log_on_stderr == 0) {
+		/* log generic warning message in unlikely case that lookup for either well-known SID fails or user list is empty */
+		logit("for '%S' folder, consider downgrading permissions for any users with unnecessary write access.", path_utf16);
+		log_on_stderr = 1;
+	}
+
+	if (adminSid)
+		free(adminSid);
+	if (systemSid)
+		free(systemSid);
 }
