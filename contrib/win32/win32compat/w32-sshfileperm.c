@@ -194,7 +194,7 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 	BOOL is_valid_sid = FALSE, is_valid_acl = FALSE, is_first = TRUE;
 	wchar_t* bad_user = NULL;
 	int ret = 0;
-	size_t log_msg_len = (DNLEN + 1 + UNLEN + 3)*2;
+	size_t log_msg_len = (DNLEN + 1 + UNLEN) * 2 + 3; // +3 for ", " and null terminator
 	wchar_t* log_msg = (wchar_t*)malloc(log_msg_len * sizeof(wchar_t));
 	if (log_msg != NULL) {
 		log_msg[0] = '\0';
@@ -254,7 +254,7 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 		}
 		else {
 			/* collect all SIDs with write permissions */
-			wchar_t resolved_trustee[DNLEN + 1 + UNLEN + 1] = L"UNKNOWN", resolved_trustee_domain[DNLEN + 1] = L"UNKNOWN";
+			wchar_t resolved_trustee[UNLEN + 1] = L"UNKNOWN", resolved_trustee_domain[DNLEN + 1] = L"UNKNOWN";
 			DWORD resolved_trustee_len = _countof(resolved_trustee), resolved_trustee_domain_len = _countof(resolved_trustee_domain);
 			SID_NAME_USE resolved_trustee_type;
 
@@ -263,12 +263,12 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 			if (log_msg != NULL &&
 				LookupAccountSidW(NULL, current_trustee_sid, resolved_trustee, &resolved_trustee_len,
 				resolved_trustee_domain, &resolved_trustee_domain_len, &resolved_trustee_type) != 0) {
-				size_t currentLength = wcslen(log_msg);
 				if (is_first) {
-					_snwprintf_s(log_msg + currentLength, log_msg_len - currentLength, _TRUNCATE, L"%ls\\%ls", resolved_trustee_domain, resolved_trustee);
+					_snwprintf_s(log_msg, log_msg_len, _TRUNCATE, L"%ls\\%ls", resolved_trustee_domain, resolved_trustee);
 					is_first = FALSE;
 				}
 				else {
+					size_t currentLength = wcslen(log_msg);
 					size_t userLength = resolved_trustee_domain_len + 1 + resolved_trustee_len + 2; // +1 for '\\' and +2 for ', '
 					if (wcslen(log_msg) + userLength + 1 > log_msg_len) { // +1 for null terminator
 						log_msg_len *= 2;
@@ -281,7 +281,8 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 							free(log_msg);
 						log_msg = temp_log_msg;
 					}
-					_snwprintf_s(log_msg + currentLength, log_msg_len - currentLength, _TRUNCATE, L", %ls\\%ls", resolved_trustee_domain, resolved_trustee);
+					_snwprintf_s(log_msg + currentLength, log_msg_len - currentLength, _TRUNCATE, 
+						L", %ls\\%ls", resolved_trustee_domain, resolved_trustee);
 				}
 			}
 		}
