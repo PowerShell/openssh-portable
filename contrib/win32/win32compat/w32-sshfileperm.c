@@ -194,7 +194,10 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 	BOOL is_valid_sid = FALSE, is_valid_acl = FALSE, is_first = TRUE;
 	wchar_t* bad_user = NULL;
 	int ret = 0;
-	size_t log_msg_len = (DNLEN + 1 + UNLEN) * 2 + 3; // +3 for ", " and null terminator
+	const size_t NULL_TERMINATOR_LEN = 1;
+	const COMMA_SPACE_LEN = 2;
+	const size_t BACKSLASH_LEN = 1;
+	size_t log_msg_len = (DNLEN + BACKSLASH_LEN + UNLEN) * 2 + COMMA_SPACE_LEN + NULL_TERMINATOR_LEN;
 	wchar_t* log_msg = (wchar_t*)malloc(log_msg_len * sizeof(wchar_t));
 	if (log_msg != NULL) {
 		log_msg[0] = '\0';
@@ -269,8 +272,8 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 				}
 				else {
 					size_t currentLength = wcslen(log_msg);
-					size_t userLength = resolved_trustee_domain_len + 1 + resolved_trustee_len + 2; // +1 for '\\' and +2 for ', '
-					if (wcslen(log_msg) + userLength + 1 > log_msg_len) { // +1 for null terminator
+					size_t userLength = resolved_trustee_domain_len + BACKSLASH_LEN + resolved_trustee_len + COMMA_SPACE_LEN;
+					if (wcslen(log_msg) + userLength + NULL_TERMINATOR_LEN > log_msg_len) {
 						log_msg_len *= 2;
 						wchar_t* temp_log_msg = (wchar_t*)malloc(log_msg_len * sizeof(wchar_t));
 						if (temp_log_msg == NULL) {
@@ -302,7 +305,14 @@ cleanup:
 		free(ti_sid);
 }
 
-/* Helper function used by check_secure_folder_permission */
+/* 
+* This function takes in the full path to the ProgramData\ssh folder
+* and a string of comma-separated domain\usernames. The function converts 
+* the well-known built-in Administrators group sid and the Local System 
+* sid to their corresponding names. With these names, and the input string, 
+* it logs a message to the Event Viewer. If logging the detailed message fails, 
+* a generic log message is written to the Event Viewer instead.
+*/
 void log_folder_permissions_message(const wchar_t* path_utf16, wchar_t* log_msg) {
 	log_on_stderr = 0;
 
