@@ -195,9 +195,8 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 	PSID owner_sid = NULL, ti_sid = NULL;
 	PACL dacl = NULL;
 	DWORD error_code = ERROR_SUCCESS;
-	BOOL is_valid_sid = FALSE, is_valid_acl = FALSE, is_first = TRUE;
+	BOOL is_valid_sid = FALSE, is_valid_acl = FALSE, need_log_msg = FALSE, is_first = TRUE;
 	wchar_t* bad_user = NULL;
-	int ret = 0;
 	size_t log_msg_len = (DNLEN + BACKSLASH_LEN + UNLEN) * 2 + COMMA_SPACE_LEN + NULL_TERMINATOR_LEN;
 	wchar_t* log_msg = (wchar_t*)malloc(log_msg_len * sizeof(wchar_t));
 	if (log_msg != NULL) {
@@ -234,7 +233,6 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 		if (!GetAce(dacl, i, &current_ace)) {
 			printf("GetAce() failed");
 			errno = EOTHER;
-			ret = -1;
 			goto cleanup;
 		}
 
@@ -263,7 +261,7 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 			DWORD resolved_trustee_len = _countof(resolved_trustee), resolved_trustee_domain_len = _countof(resolved_trustee_domain);
 			SID_NAME_USE resolved_trustee_type;
 
-			ret = -1; // set ret to -1 to indicate that there are bad permissions so message will be logged
+			need_log_msg = TRUE;
 
 			if (log_msg != NULL &&
 				LookupAccountSidW(NULL, current_trustee_sid, resolved_trustee, &resolved_trustee_len,
@@ -293,8 +291,8 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 		}
 	}
 
-	if (ret != 0) {
-		log_folder_permissions_message(path_utf16, log_msg);
+	if (need_log_msg) {
+		log_folder_perms_msg_etw(path_utf16, log_msg);
 	}
 cleanup:
 	if (bad_user) {
@@ -319,22 +317,23 @@ cleanup:
 * it logs a message to the Event Viewer. If logging the detailed message fails, 
 * a generic log message is written to the Event Viewer instead.
 */
-void log_folder_permissions_message(const wchar_t* path_utf16, wchar_t* log_msg) {
-	log_on_stderr = 0;
-
+void log_folder_perms_msg_etw(const wchar_t* path_utf16, wchar_t* log_msg) {
 	PSID adminSid = NULL;
-	WCHAR adminName[UNLEN + 1];
-	WCHAR adminDomain[DNLEN + 1];
-	DWORD adminNameSize = UNLEN + 1;
-	DWORD adminDomainSize = DNLEN + 1;
+	WCHAR adminName[UNLEN + NULL_TERMINATOR_LEN];
+	WCHAR adminDomain[DNLEN + NULL_TERMINATOR_LEN];
+	DWORD adminNameSize = UNLEN + NULL_TERMINATOR_LEN;
+	DWORD adminDomainSize = DNLEN + NULL_TERMINATOR_LEN;
 	DWORD adminSidSize = SECURITY_MAX_SID_SIZE;
 	PSID systemSid = NULL;
-	WCHAR systemName[UNLEN + 1];
-	WCHAR systemDomain[DNLEN + 1];
-	DWORD systemNameSize = UNLEN + 1;
-	DWORD systemDomainSize = DNLEN + 1;
+	WCHAR systemName[UNLEN + NULL_TERMINATOR_LEN];
+	WCHAR systemDomain[DNLEN + NULL_TERMINATOR_LEN];
+	DWORD systemNameSize = UNLEN + NULL_TERMINATOR_LEN;
+	DWORD systemDomainSize = DNLEN + NULL_TERMINATOR_LEN;
 	DWORD systemSidSize = SECURITY_MAX_SID_SIZE;
 	SID_NAME_USE sidType;
+	BOOL needLog = TRUE;
+	int temp_log_on_stderr = log_on_stderr;
+	log_on_stderr = 0;
 
 	adminSid = (PSID)malloc(SECURITY_MAX_SID_SIZE);
 	if (log_msg != NULL && adminSid != NULL &&
@@ -347,15 +346,16 @@ void log_folder_permissions_message(const wchar_t* path_utf16, wchar_t* log_msg)
 			logit("For '%S' folder, write access is granted to the following users: %S. "
 				"Consider reviewing users to ensure that only %S\\%S, and the %S\\%S group, and its members, have write access.", 
 				path_utf16, log_msg, systemDomain, systemName, adminDomain, adminName);
-			log_on_stderr = 1;
+			needLog = FALSE;
 		}
 	}
 
-	if (log_on_stderr == 0) {
+	if (needLog) {
 		/* log generic warning message in unlikely case that lookup for either well-known SID fails or user list is empty */
 		logit("for '%S' folder, consider downgrading permissions for any users with unnecessary write access.", path_utf16);
-		log_on_stderr = 1;
 	}
+
+	log_on_stderr = temp_log_on_stderr;
 
 	if (adminSid) {
 		free(adminSid);
