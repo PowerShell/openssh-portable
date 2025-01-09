@@ -42,6 +42,10 @@
 #include "misc_internal.h"
 #include "config.h"
 
+#define NULL_TERMINATOR_LEN		1
+#define COMMA_SPACE_LEN			2
+#define BACKSLASH_LEN			1
+
 extern int log_on_stderr;
 
 /*
@@ -194,9 +198,6 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 	BOOL is_valid_sid = FALSE, is_valid_acl = FALSE, is_first = TRUE;
 	wchar_t* bad_user = NULL;
 	int ret = 0;
-	const size_t NULL_TERMINATOR_LEN = 1;
-	const COMMA_SPACE_LEN = 2;
-	const size_t BACKSLASH_LEN = 1;
 	size_t log_msg_len = (DNLEN + BACKSLASH_LEN + UNLEN) * 2 + COMMA_SPACE_LEN + NULL_TERMINATOR_LEN;
 	wchar_t* log_msg = (wchar_t*)malloc(log_msg_len * sizeof(wchar_t));
 	if (log_msg != NULL) {
@@ -257,7 +258,8 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 		}
 		else {
 			/* collect all SIDs with write permissions */
-			wchar_t resolved_trustee[UNLEN + 1] = L"UNKNOWN", resolved_trustee_domain[DNLEN + 1] = L"UNKNOWN";
+			wchar_t resolved_trustee[UNLEN + NULL_TERMINATOR_LEN] = L"UNKNOWN";
+			wchar_t resolved_trustee_domain[DNLEN + NULL_TERMINATOR_LEN] = L"UNKNOWN";
 			DWORD resolved_trustee_len = _countof(resolved_trustee), resolved_trustee_domain_len = _countof(resolved_trustee_domain);
 			SID_NAME_USE resolved_trustee_type;
 
@@ -295,14 +297,18 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 		log_folder_permissions_message(path_utf16, log_msg);
 	}
 cleanup:
-	if (bad_user)
+	if (bad_user) {
 		LocalFree(bad_user);
-	if (log_msg)
+	}
+	if (log_msg) {
 		free(log_msg);
-	if (pSD)
+	}
+	if (pSD) {
 		LocalFree(pSD);
-	if (ti_sid)
+	}
+	if (ti_sid) {
 		free(ti_sid);
+	}
 }
 
 /* 
@@ -351,8 +357,10 @@ void log_folder_permissions_message(const wchar_t* path_utf16, wchar_t* log_msg)
 		log_on_stderr = 1;
 	}
 
-	if (adminSid)
+	if (adminSid) {
 		free(adminSid);
-	if (systemSid)
+	}
+	if (systemSid) {
 		free(systemSid);
+	}
 }
