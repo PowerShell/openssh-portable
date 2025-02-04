@@ -90,7 +90,7 @@ stages:
       vmImage: windows-latest
     displayName: Win32-OpenSSH On Windows
     variables:
-      systemDrive: '**'
+      testFilesDrivePath: '**'
     steps:
     - powershell: |
         $powerShellPath = Join-Path -Path $env:AGENT_TEMPDIRECTORY -ChildPath 'powershell'
@@ -167,13 +167,13 @@ stages:
       displayName: Run tests
 
     - pwsh: |
-        Write-Host "##vso[task.setvariable variable=systemDrive;]$env:SystemDrive"
+        Write-Host "##vso[task.setvariable variable=testFilesDrivePath;]$env:SystemDrive"
       displayName: Set variable
 
     - task: PublishTestResults@2
       inputs:
         testResultsFormat: 'NUnit'
-        testResultsFiles: '$(systemDrive)/OpenSSHTests/*.xml'
+        testResultsFiles: '$(testFilesDrivePath)/OpenSSHTests/*.xml'
       condition: always()
 
     - pwsh: |
