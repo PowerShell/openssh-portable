@@ -89,6 +89,8 @@ stages:
     pool:
       vmImage: windows-latest
     displayName: Win32-OpenSSH On Windows
+    variables:
+      systemDrive: '**'
     steps:
     - powershell: |
         $powerShellPath = Join-Path -Path $env:AGENT_TEMPDIRECTORY -ChildPath 'powershell'
@@ -164,10 +166,14 @@ stages:
         Invoke-OpenSSHTests -OpenSSHBinPath "$env:SystemDrive/OpenSSH"
       displayName: Run tests
 
+    - pwsh: |
+        Write-Host "##vso[task.setvariable variable=systemDrive;]$env:SystemDrive"
+      displayName: Set variable
+
     - task: PublishTestResults@2
       inputs:
         testResultsFormat: 'NUnit'
-        testResultsFiles: 'C:/OpenSSHTests/setupTestResults.xml'
+        testResultsFiles: '$(systemDrive)/OpenSSHTests/*.xml'
       condition: always()
 
     - pwsh: |
