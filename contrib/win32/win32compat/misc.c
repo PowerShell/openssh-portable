@@ -1419,7 +1419,7 @@ is_absolute_path(const char *path)
 
 /* return -1 - in case of failure, 0 - success */
 int
-create_directory_withsddl(wchar_t *path_w, wchar_t *sddl_w)
+create_directory_withsddl(wchar_t *path_w, wchar_t *sddl_w, BOOL check_permissions)
 {
 	if (GetFileAttributesW(path_w) == INVALID_FILE_ATTRIBUTES) {
 		PSECURITY_DESCRIPTOR pSD = NULL;
@@ -1444,12 +1444,9 @@ create_directory_withsddl(wchar_t *path_w, wchar_t *sddl_w)
 			return -1;
 		}
 	}
-	else {
+	else if (check_permissions) {
 		// directory already exists; need to confirm permissions are correct
-		if (check_secure_folder_permission(path_w, 1) != 0) {
-			error("Directory already exists but folder permissions are invalid");
-			return -1;
-		}
+		check_secure_folder_permission(path_w, 1);
 	}
 
 	return 0;

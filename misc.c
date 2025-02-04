@@ -1261,6 +1261,15 @@ tilde_expand(const char *filename, uid_t uid, char **retp)
 			path = NULL;			/* ~/ */
 		else
 			path = copy;			/* ~/path */
+#ifdef WINDOWS
+	// also need to account for backward slashes on Windows
+	} else if (*copy == '\\') {
+		copy += strspn(copy, "\\");
+		if (*copy == '\0')
+			path = NULL;			/* ~\ */
+		else
+			path = copy;			/* ~\path */
+#endif /* WINDOWS */
 	} else {
 		user = copy;
 		if ((path = strchr(copy, '/')) != NULL) {

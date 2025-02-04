@@ -414,26 +414,41 @@ void
 agent_initialize_allow_list() {
 	/* 
 	 * allowed paths for PKCS11 libraries,
-	 * initialize to ProgramFiles and ProgramFiles(x86) by default 
+	 * attempt to initialize to ProgramFiles and ProgramFiles(x86) by default 
 	 * upstream uses /usr/lib/* and /usr/local/lib/* 
 	 */
-	size_t prog_files_len = 0, prog_files_x86_len = 0;
-	char* prog_files = NULL, * prog_files_x86 = NULL;
+	size_t allowed_len = 0, prog_files_len = 0, prog_files_x86_len = 0;
+	char* allowed_path = NULL, *prog_files = NULL, *prog_files_x86 = NULL;
 
 	_dupenv_s(&prog_files, &prog_files_len, "ProgramFiles");
-	if (!prog_files)
-		fatal("couldn't find ProgramFiles environment variable");
-	convertToForwardslash(prog_files);
-
 	_dupenv_s(&prog_files_x86, &prog_files_x86_len, "ProgramFiles(x86)");
-	if (!prog_files_x86)
-		fatal("couldn't find ProgramFiles environment variable");
-	convertToForwardslash(prog_files_x86);
 
-	size_t allowed_providers_len = 1 + prog_files_len + 4 + prog_files_x86_len + 3;
-	allowed_providers = xmalloc(allowed_providers_len);
-	sprintf_s(allowed_providers, allowed_providers_len, "/%s/*,/%s/*", prog_files, prog_files_x86);
+	if (!prog_files && !prog_files_x86) {
+		allowed_providers = xstrdup("");
+		return;
+	}
 
-	free(prog_files);
-	free(prog_files_x86);
+	if (prog_files && prog_files_x86) {
+		allowed_len = prog_files_len + 3 + prog_files_x86_len + 1;
+		allowed_path = xmalloc(allowed_len);
+		sprintf_s(allowed_path, allowed_len, "%s\\*,%s", prog_files, prog_files_x86);
+		free(prog_files);
+		free(prog_files_x86);
+	}
+	else if (prog_files) {
+		allowed_len = prog_files_len;
+		allowed_path = prog_files;
+	}
+	else if (prog_files_x86) {
+		allowed_len = prog_files_x86_len;
+		allowed_path = prog_files_x86;
+	}
+
+	allowed_len += 3; /* for additional characters below */
+	allowed_providers = xmalloc(allowed_len);
+	sprintf_s(allowed_providers, allowed_len, "%s\\*", allowed_path);
+
+	if (allowed_path) {
+		free(allowed_path);
+	}
 }

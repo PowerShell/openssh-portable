@@ -67,7 +67,7 @@ void to_lower_case(char *s);
 void to_wlower_case(wchar_t *s);
 HANDLE get_user_token(const char* user, int impersonation);
 int load_user_profile(HANDLE user_token, char* user);
-int create_directory_withsddl(wchar_t *path, wchar_t *sddl);
+int create_directory_withsddl(wchar_t *path, wchar_t *sddl, BOOL check_permissions);
 int is_absolute_path(const char *);
 int file_in_chroot_jail(HANDLE);
 PSID lookup_sid(const wchar_t* name_utf16, PSID psid, DWORD * psid_len);
