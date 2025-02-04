@@ -164,6 +164,12 @@ stages:
         Invoke-OpenSSHTests -OpenSSHBinPath "$env:SystemDrive/OpenSSH"
       displayName: Run tests
 
+    - task: PublishTestResults@2
+      inputs:
+        testResultsFormat: 'NUnit'
+        testResultsFiles: '$env:SystemDrive/OpenSSH/setupTestResults.xml'
+      condition: always()
+
     - pwsh: |
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
         #
