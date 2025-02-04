@@ -535,6 +535,9 @@ Describe "Setup Tests" -Tags "Setup" {
             if (Test-Path -Path $logFolderPath) {
                 $logACL = Get-Acl $logFolderPath
             }
+            if ((Get-Service sshd).Status -eq 'Running') {
+                net stop sshd
+            }
         }
         AfterAll {
             $tC++
