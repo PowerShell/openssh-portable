@@ -167,7 +167,7 @@ stages:
     - task: PublishTestResults@2
       inputs:
         testResultsFormat: 'NUnit'
-        testResultsFiles: 'C:/OpenSSH/setupTestResults.xml'
+        testResultsFiles: 'C:/OpenSSHTests/setupTestResults.xml'
       condition: always()
 
     - pwsh: |
