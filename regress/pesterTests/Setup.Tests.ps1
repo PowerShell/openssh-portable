@@ -1,4 +1,4 @@
-﻿If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
+If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
 $suite = "Setup"
 $tC = 1
@@ -535,9 +535,9 @@ Describe "Setup Tests" -Tags "Setup" {
             if (Test-Path -Path $logFolderPath) {
                 $logACL = Get-Acl $logFolderPath
             }
-            if ((Get-Service sshd).Status -eq 'Running') {
-                net stop sshd
-            }
+            #if ((Get-Service sshd).Status -eq 'Running') {
+            #    net stop sshd
+            #}
         }
         AfterAll {
             $tC++
