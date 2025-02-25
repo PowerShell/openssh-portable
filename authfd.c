@@ -97,13 +97,7 @@ ssh_get_authentication_socket_path(const char *authsocket, int *fdp)
 	sunaddr.sun_family = AF_UNIX;
 	strlcpy(sunaddr.sun_path, authsocket, sizeof(sunaddr.sun_path));
 
-	#ifdef HAVE_AFUNIX_H
-	sock = w32_afunix_socket(&sunaddr);
-	#else
-	sock = socket(AF_UNIX, SOCK_STREAM, 0);
-	#endif
-
-	if (sock == -1)
+	if ((sock = w32_afunix_socket(&sunaddr)) == -1)
 		return SSH_ERR_SYSTEM_ERROR;
 
 	/* close on exec */
