@@ -1,8 +1,8 @@
 diff --git a/crypto/CMakeLists.txt b/crypto/CMakeLists.txt
-index 5140a7a..342fbad 100644
+index 5140a7a..ca95669 100644
 --- a/crypto/CMakeLists.txt
 +++ b/crypto/CMakeLists.txt
-@@ -841,8 +841,8 @@ add_library(crypto $<TARGET_OBJECTS:crypto_obj> $<TARGET_OBJECTS:compat_obj> emp
+@@ -841,11 +841,10 @@ add_library(crypto $<TARGET_OBJECTS:crypto_obj> $<TARGET_OBJECTS:compat_obj> emp
  export_symbol(crypto ${CMAKE_CURRENT_BINARY_DIR}/crypto_p.sym)
  target_link_libraries(crypto ${PLATFORM_LIBS})
  set_target_properties(crypto PROPERTIES
@@ -12,4 +12,7 @@ index 5140a7a..342fbad 100644
 +	ARCHIVE_OUTPUT_NAME libcrypto
  	EXPORT_NAME Crypto
  	VERSION ${CRYPTO_VERSION}
- 	SOVERSION ${CRYPTO_MAJOR_VERSION}
+-	SOVERSION ${CRYPTO_MAJOR_VERSION}
+ )
+ if(NOT CMAKE_VERSION VERSION_LESS 3.27.0)
+ 	set_target_properties(crypto PROPERTIES DLL_NAME_WITH_SOVERSION TRUE)
