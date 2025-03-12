@@ -1071,7 +1071,7 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 	si.hStdError = err;
 	si.dwFlags = STARTF_USESTDHANDLES;
 	
-	if (strstr(cmd, "sshd.exe")) {
+	if (strstr(cmd, "sshd-session.exe")) {
 		flags |= DETACHED_PROCESS;
 	}
 
