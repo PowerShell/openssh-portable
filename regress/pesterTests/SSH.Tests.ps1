@@ -244,15 +244,41 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             $o | Should Be `$env:computername
         }
     }
+
+    Context "$tC - configure powershell as default shell with admin user" {
+        BeforeAll {
+            $tI=1
+            $shell_path = (Get-Command powershell.exe -ErrorAction SilentlyContinue).path
+            if ($shell_path -ne $null) {
+                ConfigureDefaultShell -default_shell_path $shell_path -default_shell_cmd_option_val "-c"
+            }
+            $password = $OpenSSHTestInfo['TestAccountPW']
+            Add-PasswordSetting -Pass $password
+        }
+        AfterAll {
+            $tC++
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
+            Remove-PasswordSetting
+        }
+
+        It "$tC.$tI - admin session can write to console" -skip:$skip {
+            $adminusername = $OpenSSHTestInfo['AdminUser']
+            $o = ssh $adminusername@test_target "Get-ComputerInfo"
+            $LASTEXITCODE | Should Be 0 
+            $o | Select-String -Pattern "WindowsVersion" | Should Match "WindowsVersion"
+        }
+    }
+
     Context "$tC - configure cmd as default shell" {
         BeforeAll {
             $tI=1
             $shell_path = (Get-Command cmd.exe -ErrorAction SilentlyContinue).path
             if($shell_path -ne $null) {
                 ConfigureDefaultShell -default_shell_path $shell_path -default_shell_cmd_option_val "/c"
+            }
         }
-        }
-        AfterAll{
+        AfterAll {
             $tC++
             Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
             Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
