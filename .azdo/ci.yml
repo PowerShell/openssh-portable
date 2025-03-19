@@ -31,6 +31,13 @@ stages:
         Write-Host "##$vstsCommandString"
       displayName: Install PowerShell Core
 
+    - pwsh: |-
+        git clone https://github.com/microsoft/vcpkg
+        cd vcpkg
+        & ./bootstrap-vcpkg.bat
+        & ./vcpkg.exe integrate install
+      displayName: Install vcpkg
+
     - pwsh: |
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
         Invoke-AzDOBuild
