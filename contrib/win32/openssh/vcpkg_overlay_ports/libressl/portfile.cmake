@@ -30,6 +30,7 @@ vcpkg_cmake_configure(
         ${FEATURE_OPTIONS}
         -DLIBRESSL_INSTALL_CMAKEDIR=share/${PORT}
         -DLIBRESSL_TESTS=OFF
+        -DBUILD_SHARED_LIBS=ON
     OPTIONS_DEBUG
         -DLIBRESSL_APPS=OFF
 )
@@ -52,6 +53,17 @@ file(REMOVE_RECURSE
     "${CURRENT_PACKAGES_DIR}/debug/include"
     "${CURRENT_PACKAGES_DIR}/debug/share"
     "${CURRENT_PACKAGES_DIR}/share/man"
+)
+
+file(GLOB SSL_ARTIFACTS "${CURRENT_PACKAGES_DIR}/bin/ssl*")
+file(GLOB TLS_ARTIFACTS "${CURRENT_PACKAGES_DIR}/bin/tls*")
+
+file(REMOVE ${SSL_ARTIFACTS})
+file(REMOVE ${TLS_ARTIFACTS})
+
+file (REMOVE
+    "${CURRENT_PACKAGES_DIR}/lib/ssl.lib"
+    "${CURRENT_PACKAGES_DIR}/lib/tls.lib"
 )
 
 vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/COPYING")

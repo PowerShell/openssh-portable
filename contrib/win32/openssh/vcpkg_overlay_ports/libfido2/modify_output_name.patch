@@ -1,0 +1,13 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 4c54198..b20a36d 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -129,7 +129,7 @@ list(APPEND TARGET_LIBRARIES
+ if(BUILD_STATIC_LIBS)
+ 	add_library(fido2 STATIC ${FIDO_SOURCES} ${COMPAT_SOURCES})
+ 	if(WIN32 AND NOT MINGW)
+-		set_target_properties(fido2 PROPERTIES OUTPUT_NAME fido2_static)
++		set_target_properties(fido2 PROPERTIES OUTPUT_NAME fido2)
+ 	endif()
+ 	target_link_libraries(fido2 ${TARGET_LIBRARIES})
+ 	install(TARGETS fido2 ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
