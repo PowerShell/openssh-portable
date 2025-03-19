@@ -16,6 +16,7 @@ vcpkg_extract_source_archive(
     PATCHES
         pkgconfig.diff
         "modify-name-libcrypto.patch"
+        "modify-cmake-arm.patch"
 )
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
