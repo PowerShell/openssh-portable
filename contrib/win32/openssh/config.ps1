@@ -12,7 +12,6 @@ foreach ($header in $headers) {
         {
             $entry = "#define  " + $header.ToUpper().Replace(".","_").Replace("\","_") + "  `"" + (Join-Path $path $header) + "`""
             Add-Content -Path $OutCRTHeader -Value $entry
-            Start-Sleep 3 # temp fix for Add-Content errors 
             break
         }
 
