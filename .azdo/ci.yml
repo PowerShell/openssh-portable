@@ -30,7 +30,7 @@ stages:
         Write-Host "sending " + $vstsCommandString
         Write-Host "##$vstsCommandString"
       displayName: Install PowerShell Core
-    
+
     - pwsh: |
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
         Invoke-AzDOBuild
@@ -42,6 +42,10 @@ stages:
         Get-ChildItem -Path $BuildOutx86Path
         $BuildOutx64Path = Join-Path -Path $BuildOutPath -ChildPath 'x64/Release'
         Get-ChildItem -Path $BuildOutx64Path
+        $BuildOutArm64Path = Join-Path -Path $BuildOutPath -ChildPath 'arm64/Release'
+        Get-ChildItem -Path $BuildOutArm64Path
+        $BuildOutArmPath = Join-Path -Path $BuildOutPath -ChildPath 'arm/Release'
+        Get-ChildItem -Path $BuildOutArmPath
       displayName: Capture build results
 
     - pwsh: |
@@ -57,6 +61,10 @@ stages:
         Copy-BuildResults -BuildResultsPath $BuildDestx86Path -NativeHostArch x86 -Configuration Release
         $BuildDestX64Path = Join-Path -Path $BuildDestPath -ChildPath 'x64/Release'
         Copy-BuildResults -BuildResultsPath $BuildDestx64Path -NativeHostArch x64 -Configuration Release
+        $BuildDestArm64Path = Join-Path -Path $BuildDestPath -ChildPath 'arm64/Release'
+        Copy-BuildResults -BuildResultsPath $BuildDestArm64Path -NativeHostArch arm64 -Configuration Release
+        $BuildDestArmPath = Join-Path -Path $BuildDestPath -ChildPath 'arm/Release'
+        Copy-BuildResults -BuildResultsPath $BuildDestArmPath -NativeHostArch arm -Configuration Release
         #
         # Upload build artifacts
         Write-Verbose -Verbose -Message "Uploading build artifacts"
@@ -68,6 +76,8 @@ stages:
         $UnitTestDestPath = "$(Build.SourcesDirectory)/UnitTests"
         Copy-UnitTests -UnitTestsSrcDir $BuildOutPath -UnitTestsDestDir $UnitTestDestPath -NativeHostArch x86 -Configuration Release
         Copy-UnitTests -UnitTestsSrcDir $BuildOutPath -UnitTestsDestDir $UnitTestDestPath -NativeHostArch x64 -Configuration Release
+        Copy-UnitTests -UnitTestsSrcDir $BuildOutPath -UnitTestsDestDir $UnitTestDestPath -NativeHostArch arm64 -Configuration Release
+        Copy-UnitTests -UnitTestsSrcDir $BuildOutPath -UnitTestsDestDir $UnitTestDestPath -NativeHostArch arm -Configuration Release
         #
         # Upload unit test artifacts
         Write-Verbose -Verbose -Message "Uploading unit test artifacts"
@@ -80,6 +90,26 @@ stages:
         $configFilePath = "$(Build.SourcesDirectory)/config.h"
         Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$configFilePath"
       displayName: Upload Win32-OpenSSH build artifacts
+
+    - pwsh: |
+        $logFileNames = @("OpenSSHReleasex64.log", "OpenSSHReleasex86.log", "OpenSSHReleaseARM64.log", "OpenSSHReleaseARM.log")
+        $uniqueLines = [System.Collections.Generic.HashSet[string]]::new()
+        forEach ($logFile in $logFileNames) {
+          $logFilePath = "$(Build.SourcesDirectory)/contrib/win32/openssh/$logFile"
+          $logLines = Get-Content $logFilePath
+          $buildSucceededIndex = $logLines.IndexOf("Build succeeded.")
+          $linesToCheck = $logLines[($buildSucceededIndex + 1)..$logLines.Length]
+          forEach ($line in $linesToCheck) {
+            if ($line -match "warning C") {
+              $uniqueLines.Add($line) | Out-Null
+            }
+          }
+        }
+        forEach ($uniqueLine in $uniqueLines) {
+          Write-Output $uniqueLine
+          Write-Host "##vso[task.logissue type=warning]$uniqueLine"
+        }
+      displayName: Surface Warnings from Build Logs
 
 - stage: Test
   displayName: Test Win32-OpenSSH
