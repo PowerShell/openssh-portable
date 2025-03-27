@@ -32,6 +32,7 @@
 #include "inc\sys\socket.h"
 #include "inc\sys\select.h"
 #include "inc\sys\uio.h"
+#include "inc\sys\time.h"
 #include "inc\sys\types.h"
 #include "inc\sys\stat.h"
 #include "inc\unistd.h"
@@ -728,12 +729,11 @@ w32_fcntl(int fd, int cmd, ... /* arg */)
 int
 w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* exceptfds, const struct timeval *timeout)
 {
-	ULONGLONG ticks_start = GetTickCount64(), ticks_spent;
+	ULONGLONG ticks_start = GetTickCount64(), ticks_spent, timeout_ms = 0, time_rem = 0;
 	w32_fd_set read_ready_fds, write_ready_fds;
 	HANDLE events[SELECT_EVENT_LIMIT];
 	int num_events = 0;
 	int in_set_fds = 0, out_ready_fds = 0, i;
-	unsigned int timeout_ms = 0, time_rem = 0;
 
 	errno = 0;
 	/* TODO - the size of these can be reduced based on fds */
@@ -856,7 +856,7 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 			else
 				time_rem = INFINITE;
 
-			if (0 != wait_for_any_event(events, num_events, time_rem))
+			if (0 != wait_for_any_event(events, num_events, (DWORD)time_rem))
 				return -1;
 
 			/* check on fd status */

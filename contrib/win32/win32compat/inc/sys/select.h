@@ -27,7 +27,7 @@ typedef struct w32_fd_set_ {
 #define FD_SETSIZE MAX_FDS
 
 int w32_select(int fds, w32_fd_set * , w32_fd_set * , w32_fd_set * ,
-	const struct timeval *);
+	const struct w32_timeval *);
 #define select(a,b,c,d,e)	w32_select((a), (b), (c), (d), (e))
 
 
