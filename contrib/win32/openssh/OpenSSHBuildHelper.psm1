@@ -173,7 +173,7 @@ function Start-OpenSSHBootstrap
         [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
     }    
 
-    $sdkVersion = Get-Windows10SDKVersion
+    $sdkVersion = Get-Windows10SDKVersion -NativeHostArch $NativeHostArch
     if ($null -eq $sdkVersion) 
     {
         Get-Chocolatey
@@ -181,7 +181,7 @@ function Start-OpenSSHBootstrap
         Write-BuildMsg -AsInfo -Message "$packageName not present. Installing $packageName ..."
         choco install $packageName -y --force --limitoutput --execution-timeout 120 2>&1 >> $script:BuildLogFile
         # check that sdk was properly installed
-        $sdkVersion = Get-Windows10SDKVersion
+        $sdkVersion = Get-Windows10SDKVersion -NativeHostArch $NativeHostArch
         if($null -eq $sdkVersion)
         {
             Write-BuildMsg -AsError -ErrorAction Stop -Message "$packageName installation failed with error code $LASTEXITCODE."
@@ -524,7 +524,7 @@ function Start-OpenSSHBuild
         (Get-Content $f).Replace('#define OPENSSL_HAS_NISTP521 1','') | Set-Content $f
     }
     
-    $win10SDKVer = Get-Windows10SDKVersion
+    $win10SDKVer = Get-Windows10SDKVersion -NativeHostArch $NativeHostArch
     [XML]$xml = Get-Content $PathTargets
     $xml.Project.PropertyGroup.WindowsSDKVersion = $win10SDKVer.ToString()
     
@@ -548,7 +548,7 @@ function Start-OpenSSHBuild
 
     if($OneCore)
     {
-        $win10SDKVer = Get-Windows10SDKVersion
+        $win10SDKVer = Get-Windows10SDKVersion -NativeHostArch $NativeHostArch
         [XML]$xml = Get-Content $PathTargets
         $xml.Project.PropertyGroup.WindowsSDKVersion = $win10SDKVer
         $xml.Project.PropertyGroup.AdditionalDependentLibs = 'onecore.lib;shlwapi.lib'
@@ -690,6 +690,11 @@ function Get-BuildToolPath
 
 function Get-Windows10SDKVersion
 {  
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('x86', 'x64', 'arm64', 'arm')]
+        [string]$NativeHostArch
+    )
     ## Search for latest windows sdk available on the machine
     $windowsSDKPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\Lib"
     $minSDKVersion = [version]"10.0.17763.0"
@@ -702,7 +707,8 @@ function Get-Windows10SDKVersion
     $versionsAvailable = $versionsAvailable | Sort-Object -Descending
     foreach ($version in $versionsAvailable) {
         $windowsSDKPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin\$version\x86\register_app.vbs"
-        if (test-path $windowsSDKPath) {
+        $windowsSDKArchPath = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin\$version\$NativeHostArch"
+        if ((Test-Path $windowsSDKPath) -and (Test-Path $windowsSDKArchPath)) {
             return $version
         }
     }
