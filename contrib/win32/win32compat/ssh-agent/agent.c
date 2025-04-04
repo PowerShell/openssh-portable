@@ -121,6 +121,7 @@ agent_listen_loop()
 			PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,       // read/write access 
 			PIPE_TYPE_BYTE |       // message type pipe 
 			PIPE_READMODE_BYTE |   // message-read mode 
+			PIPE_REJECT_REMOTE_CLIENTS | // no remote client connections allowed
 			PIPE_WAIT,                // blocking mode 
 			PIPE_UNLIMITED_INSTANCES, // max. instances  
 			BUFSIZE,                  // output buffer size 
