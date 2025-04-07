@@ -995,6 +995,7 @@ process_ext_session_bind(struct sshbuf* request, struct agent_connection* con)
 	/* record new key/sid */
 	if (con->nsession_ids >= AGENT_MAX_SESSION_IDS) {
 		error_f("too many session IDs recorded");
+		r = -1;
 		goto out;
 	}
 	con->session_ids = xrecallocarray(con->session_ids, con->nsession_ids,
