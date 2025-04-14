@@ -166,6 +166,9 @@ Describe "Setup Tests" -Tags "Setup" {
                     Name = 'sshd.exe'
                 },
                 @{
+                    Name = 'sshd-session.exe'
+                },
+                @{
                     Name = 'ssh.exe'
                 },
                 @{
@@ -250,6 +253,37 @@ Describe "Setup Tests" -Tags "Setup" {
             }
 
             ValidateFileSystem -FilePath (join-path $dataPath $Name) -IsDirectory $IsDirectory -OwnerSid $adminsSid -IsDataFile
+        }
+    }
+
+    Context "$tC - Validate OpenSSH version" {
+        BeforeAll {
+            $tI = 1
+            $sshExePath = Join-Path $binPath "ssh.exe"
+            if (-not (Test-Path -Path $sshExePath)) {
+                Throw "ssh.exe not found at $sshExePath"
+            }
+        }
+        AfterAll { $tC++ }
+        AfterEach { $tI++ }
+
+        It "$tC.$tI - Validate ssh -V output matches ssh.exe properties" {
+            $pattern = "\d+\.\dp\d" # i.e. 9.2p2
+
+            $sshVersionOutput = & $sshExePath -V 2>&1 | Select-String -Pattern "OpenSSH"
+            $match = $sshVersionOutput.Line -match $pattern
+            if (-not $match) {
+                throw "No matching version pattern found from ssh -V output"
+            }
+            $versionNumber = $Matches[0]
+
+            $fileVersionInfo = Get-Item $sshExePath | Select-Object -ExpandProperty VersionInfo
+            $fileVersion = $fileVersionInfo.ProductVersion
+            $match = $fileVersion -match $pattern
+            if (-not $match) {
+                throw "No matching version pattern found from ssh.exe properties"
+            }
+            $versionNumber | Should Match $Matches[0]
         }
     }
 
