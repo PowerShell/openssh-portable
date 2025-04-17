@@ -52,7 +52,8 @@ Describe "Tests for scp command" -Tags "CI" {
 
         # for large file transfer tests
         $largeFileName = 'largefile.txt'
-        fsutil file createNew $largeFileName 1000000000
+        $largeFilePath = Join-Path $sourceDir $largeFileName
+        fsutil file createNew $largeFilePath 1000000000
 
         $server = $OpenSSHTestInfo["Target"]
         $port = $OpenSSHTestInfo["Port"]
@@ -155,13 +156,13 @@ Describe "Tests for scp command" -Tags "CI" {
         $testData3 = @(
             @{
                 Title = 'copy large file from local dir to remote dir'
-                Source = $sourceDir
+                Source = $largeFilePath
                 Destination = "test_target:$DestinationDir"
                 Options = "-S `"$sshcmd`""
             },
             @{
                 Title = 'copy large file from remote dir to local dir'
-                Source = "test_target:$sourceDir"
+                Source = "test_target:$largeFilePath"
                 Destination = $DestinationDir
             }
         )
@@ -328,70 +329,68 @@ Describe "Tests for scp command" -Tags "CI" {
         }
     }
 
-    Context "$tI - configure powershell default shell scenarios" {
+    Context "Configure various default shell scenarios" {
         BeforeAll {
-            $dfltShellRegPath = "HKLM:\Software\OpenSSH"
-            $dfltShellRegKeyName = "DefaultShell"
-            $dfltShellCmdOptionRegKeyName = "DefaultShellCommandOption"
-            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
-            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
-            $shell_path = (Get-Command powershell.exe -ErrorAction SilentlyContinue).path
-            if($shell_path -ne $null) {
-                ConfigureDefaultShell -default_shell_path $shell_path -default_shell_cmd_option_val "-c"
-            }
-        }
-        AfterAll{
-            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
-            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
+           $dfltShellRegPath = "HKLM:\Software\OpenSSH"
+           $dfltShellRegKeyName = "DefaultShell"
+           $dfltShellCmdOptionRegKeyName = "DefaultShellCommandOption"
+           Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
+           Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
         }
 
-        It 'File copy: <Title> ' -TestCases:$testData {
-            param([string]$Title, $Source, $Destination, [string]$Options)
-            iex  "scp $Options $Source $Destination"
-            $LASTEXITCODE | Should Be 0
-            #validate file content. DestPath is the path to the file.
-            CheckTarget -target $DestinationFilePath | Should Be $true
-
-            $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
-            $equal | Should Be $true
-
-            if($Options.contains("-p ") -and [environment]::OSVersion.Version.Major -ge 10)
-            {
-                $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath).LastWriteTime.DateTime (Get-ChildItem -path $DestinationFilePath).LastWriteTime.DateTime ).Length -eq 0
-                $equal | Should Be $true
-            }
-        }
-    }
-
-    Context "$tI - configure shell-host default shell scenarios" {
-        BeforeAll {
-            $dfltShellRegPath = "HKLM:\Software\OpenSSH"
-            $dfltShellRegKeyName = "DefaultShell"
-            $dfltShellCmdOptionRegKeyName = "DefaultShellCommandOption"
-            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
-            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
-            $shell_path = (Get-Command ssh-shellhost -ErrorAction SilentlyContinue).path
-            ConfigureDefaultShell -default_shell_path $shell_path
-        }
-        AfterAll{
-            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
-            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
+        AfterAll {
+           Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
+           Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
         }
 
-        It 'File copy: <Title> ' -TestCases:$testData {
-            param([string]$Title, $Source, $Destination, [string]$Options)
-            iex  "scp $Options $Source $Destination"
-            $LASTEXITCODE | Should Be 0
-            #validate file content. DestPath is the path to the file.
-            CheckTarget -target $DestinationFilePath | Should Be $true
+        $shells = @(
+           @{
+              Name = "Windows PowerShell"
+              Path = (Get-Command powershell.exe -ErrorAction SilentlyContinue).Path
+              CmdOption = "/c"
+           },
+           @{
+              Name = "PowerShell Core"
+              Path = (Get-Command pwsh -ErrorAction SilentlyContinue).Path
+              CmdOption = $null
+           },
+           @{
+              Name = "Bash"
+              Path = (Get-Command bash -ErrorAction SilentlyContinue).Path
+              CmdOption = $null
+           },
+           @{
+              Name = "Cygwin"
+              Path = (Get-Command sh -ErrorAction SilentlyContinue).Path
+              CmdOption = $null
+           }
+        )
 
-            $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
-            $equal | Should Be $true
-
-            if($Options.contains("-p ") -and [environment]::OSVersion.Version.Major -ge 10)
-            {
-                $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath).LastWriteTime.DateTime (Get-ChildItem -path $DestinationFilePath).LastWriteTime.DateTime ).Length -eq 0
-                $equal | Should Be $true
+        foreach ($shell in $shells) {
+            if ($shell.Path -ne $null) {
+               Context "Configure default shell as $($shell.Name)" {
+                    BeforeAll {
+                       ConfigureDefaultShell -default_shell_path $shell.Path -default_shell_cmd_option_val $shell.CmdOption
+                    }
+                    AfterAll {
+                       Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
+                       Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
+                    }
+                    It 'File copy: <Title> ' -TestCases:$testData {
+                       param([string]$Title, $Source, $Destination, [string]$Options)
+                       iex  "scp $Options $Source $Destination"
+                       $LASTEXITCODE | Should Be 0
+                       #validate file content. DestPath is the path to the file.
+                       CheckTarget -target $DestinationFilePath | Should Be $true
+                       $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
+                       $equal | Should Be $true
+                       if($Options.contains("-p ") -and [environment]::OSVersion.Version.Major -ge 10)
+                       {
+                           $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath).LastWriteTime.DateTime (Get-ChildItem -path $DestinationFilePath).LastWriteTime.DateTime ).Length -eq 0
+                           $equal | Should Be $true
+                       }
+                    }
+                }
             }
         }
     }

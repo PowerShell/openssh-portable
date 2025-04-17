@@ -47,7 +47,7 @@ function Invoke-AzDOBuild
 function Install-OpenSSH
 {
     [CmdletBinding()]
-    param ( 
+    param (
         [Parameter(Mandatory=$true)]
         [string]$SourceDir,
 
@@ -62,7 +62,7 @@ function Install-OpenSSH
 
     Copy-Item -Path "$SourceDir/*" -Destination $OpenSSHDir -Recurse -Force -Verbose
 
-    Push-Location $OpenSSHDir 
+    Push-Location $OpenSSHDir
 
     try
     {
@@ -81,8 +81,8 @@ function Install-OpenSSH
         {
             [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
         }
-        
-        Start-Service -Name sshd 
+
+        Start-Service -Name sshd
         Start-Service -Name ssh-agent
     }
     finally
@@ -100,7 +100,7 @@ function Install-OpenSSH
 function UnInstall-OpenSSH
 {
     [CmdletBinding()]
-    param ( 
+    param (
         [string]$OpenSSHDir = "$env:SystemDrive\OpenSSH"
     )
 
@@ -117,15 +117,15 @@ function UnInstall-OpenSSH
             Stop-Service ssh-agent -Force
         }
         & "$OpenSSHDir\uninstall-sshd.ps1"
-            
+
         $machinePath = [Environment]::GetEnvironmentVariable('Path', 'MACHINE')
         $newMachineEnvironmentPath = $machinePath
         if ($machinePath.ToLower().Contains($OpenSSHDir.ToLower()))
-        {        
+        {
             $newMachineEnvironmentPath = $newMachineEnvironmentPath.Replace("$OpenSSHDir;", '')
             $env:Path = $env:Path.Replace("$OpenSSHDir;", '')
         }
-        
+
         if ($newMachineEnvironmentPath -ne $machinePath)
         {
             [Environment]::SetEnvironmentVariable('Path', $newMachineEnvironmentPath, 'MACHINE')
@@ -136,7 +136,7 @@ function UnInstall-OpenSSH
         Pop-Location
     }
 
-    Remove-Item -Path $OpenSSHDir -Recurse -Force -ErrorAction SilentlyContinue    
+    Remove-Item -Path $OpenSSHDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 #
@@ -181,7 +181,7 @@ function Invoke-OpenSSHTests
     }
 
     $xml = [xml](Get-Content $OpenSSHTestInfo["SetupTestResultsFile"] | out-string)
-    if ([int]$xml.'test-results'.failures -gt 0) 
+    if ([int]$xml.'test-results'.failures -gt 0)
     {
         $errorMessage = "$($xml.'test-results'.failures) Setup Tests in regress\pesterTests failed. Detail test log is at $($OpenSSHTestInfo["SetupTestResultsFile"])."
         Write-BuildMessage -Message $errorMessage -Category Error
@@ -218,31 +218,9 @@ function Invoke-OpenSSHTests
     # Run all E2E tests.
     Write-Verbose -Verbose -Message "Running E2E Tests..."
     Set-OpenSSHTestEnvironment -Confirm:$false
-    Invoke-OpenSSHE2ETest
-    if (($OpenSSHTestInfo -eq $null) -or (-not (Test-Path $OpenSSHTestInfo["E2ETestResultsFile"])))
-    {
-        Write-BuildMessage -Message "Test result file $OpenSSHTestInfo["E2ETestResultsFile"] not found after tests." -Category Error
-        $AllTestsPassed =  $false
-    }
-    else
-    {
-        $xml = [xml](Get-Content $OpenSSHTestInfo["E2ETestResultsFile"] | out-string)
-        if ([int]$xml.'test-results'.failures -gt 0)
-        {
-            $errorMessage = "$($xml.'test-results'.failures) E2E tests in regress\pesterTests failed. Detail test log is at $($OpenSSHTestInfo["E2ETestResultsFile"])."
-            Write-BuildMessage -Message $errorMessage -Category Error
-            $AllTestsPassed = $false
-        }
-        else
-        {
-            Write-BuildMessage -Message "All E2E tests passed!" -Category Information
-        }
-    }
-
-    # Bash tests.
-    Write-Verbose -Verbose -Message "Running Bash Tests..."
 
     # Ensure CygWin is installed, and install from Chocolatey if needed.
+    # used for bash tests and default shell pester tests
     $cygwinInstalled = $true
     $cygwinInstallLocation = "$env:SystemDrive/cygwin"
     if (! (Test-Path -Path "$cygwinInstallLocation/bin/sh.exe"))
@@ -269,9 +247,33 @@ function Invoke-OpenSSHTests
         }
     }
 
-    # Run UNIX bash tests.
     if ($cygwinInstalled)
     {
+        Invoke-OpenSSHE2ETest
+        if (($OpenSSHTestInfo -eq $null) -or (-not (Test-Path $OpenSSHTestInfo["E2ETestResultsFile"])))
+        {
+            Write-BuildMessage -Message "Test result file $OpenSSHTestInfo["E2ETestResultsFile"] not found after tests." -Category Error
+            $AllTestsPassed =  $false
+        }
+        else
+        {
+            $xml = [xml](Get-Content $OpenSSHTestInfo["E2ETestResultsFile"] | out-string)
+            if ([int]$xml.'test-results'.failures -gt 0)
+            {
+                $errorMessage = "$($xml.'test-results'.failures) E2E tests in regress\pesterTests failed. Detail test log is at $($OpenSSHTestInfo["E2ETestResultsFile"])."
+                Write-BuildMessage -Message $errorMessage -Category Error
+                $AllTestsPassed = $false
+            }
+            else
+            {
+                Write-BuildMessage -Message "All E2E tests passed!" -Category Information
+            }
+        }
+
+        # Bash tests.
+        Write-Verbose -Verbose -Message "Running Bash Tests..."
+
+        # Run UNIX bash tests.
         Write-Verbose -Verbose -Message "Starting Bash Tests..."
         Invoke-OpenSSHBashTests
         if (-not $Global:bash_tests_summary)
@@ -306,7 +308,7 @@ function Invoke-OpenSSHTests
     else
     {
         $xml = [xml](Get-Content $OpenSSHTestInfo["UninstallTestResultsFile"] | out-string)
-        if ([int]$xml.'test-results'.failures -gt 0) 
+        if ([int]$xml.'test-results'.failures -gt 0)
         {
             $errorMessage = "$($xml.'test-results'.failures) uninstall tests in regress\pesterTests failed. Detail test log is at $($OpenSSHTestInfo["UninstallTestResultsFile"])."
             Write-BuildMessage -Message $errorMessage -Category Error
@@ -318,7 +320,7 @@ function Invoke-OpenSSHTests
     $OpenSSHTestInfo | Export-Clixml -Path "$repoRoot/OpenSSHTestInfo.xml" -Depth 10
 
     # Writing out warning when the $Error.Count is non-zero. Tests Should clean $Error after success.
-    if ($Error.Count -gt 0) 
+    if ($Error.Count -gt 0)
     {
         Write-BuildMessage -Message "Tests Should always clean $Error variable after success." -Category Warning
     }
@@ -339,7 +341,7 @@ function Invoke-OpenSSHTests
       Collect OpenSSH pester test results into one directory
 #>
 function Copy-OpenSSHTestResults
-{ 
+{
     param (
         [Parameter(Mandatory=$true)]
         [string] $ResultsPath
@@ -352,7 +354,7 @@ function Copy-OpenSSHTestResults
 
     Write-Verbose -Verbose "Creating test results directory for artifacts upload: $ResultsPath"
     $null = New-Item -Path $ResultsPath -ItemType Directory -Force
-    
+
     if (! (Test-Path -Path $ResultsPath))
     {
         Write-BuildMessage -Message "Unable to write to test results path for test artifacts upload: $ResultsPath" -Category Error
@@ -498,7 +500,7 @@ function Copy-UnitTests
 function Install-UnitTests
 {
     [CmdletBinding()]
-    param ( 
+    param (
         [Parameter(Mandatory=$true)]
         [string]$SourceDir,
 
