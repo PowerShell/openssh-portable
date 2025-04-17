@@ -49,10 +49,13 @@ Where a constraint consists of:
 
 	string		from_username (must be empty)
 	string		from_hostname
+	string		reserved
 	keyspec[]	from_hostkeys
 	string		to_username
 	string		to_hostname
+	string		reserved
 	keyspec[]	to_hostkeys
+	string		reserved
 
 And a keyspec consists of:
 
@@ -91,7 +94,7 @@ with private keys as they are loaded from a PKCS#11 token.
 	bool		certs_only
 	string		certsblob
 
-Where "certsblob" constists of one or more certificates encoded as public
+Where "certsblob" consists of one or more certificates encoded as public
 key blobs:
 
 	string[]	certificates
@@ -112,4 +115,4 @@ A SSH_AGENTC_ADD_SMARTCARD_KEY_CONSTRAINED will return SSH_AGENT_SUCCESS
 if any key (plain private or certificate) was successfully loaded, or
 SSH_AGENT_FAILURE if no key was loaded.
 
-$OpenBSD: PROTOCOL.agent,v 1.21 2023/12/18 14:46:56 djm Exp $
+$OpenBSD: PROTOCOL.agent,v 1.23 2024/04/30 05:45:56 djm Exp $

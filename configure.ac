@@ -149,6 +149,7 @@ fi
 
 use_stack_protector=1
 use_toolchain_hardening=1
+use_retpoline=1
 AC_ARG_WITH([stackprotect],
     [  --without-stackprotect  Don't use compiler's stack protection], [
     if test "x$withval" = "xno"; then
@@ -158,6 +159,11 @@ AC_ARG_WITH([hardening],
     [  --without-hardening     Don't use toolchain hardening flags], [
     if test "x$withval" = "xno"; then
 	use_toolchain_hardening=0
+    fi ])
+AC_ARG_WITH([retpoline],
+    [  --without-retpoline     Enable retpoline spectre mitigation], [
+    if test "x$withval" = "xno"; then
+	use_retpoline=0
     fi ])
 
 # We use -Werror for the tests only so that we catch warnings like "this is
@@ -216,8 +222,6 @@ if test "$GCC" = "yes" || test "$GCC" = "egcs"; then
 	OSSH_CHECK_CFLAG_COMPILE([-Wbitwise-instead-of-logical])
 	OSSH_CHECK_CFLAG_COMPILE([-fno-strict-aliasing])
     if test "x$use_toolchain_hardening" = "x1"; then
-	OSSH_CHECK_CFLAG_COMPILE([-mretpoline]) # clang
-	OSSH_CHECK_LDFLAG_LINK([-Wl,-z,retpolineplt])
 	OSSH_CHECK_CFLAG_COMPILE([-D_FORTIFY_SOURCE=2])
 	OSSH_CHECK_LDFLAG_LINK([-Wl,-z,relro])
 	OSSH_CHECK_LDFLAG_LINK([-Wl,-z,now])
@@ -239,6 +243,10 @@ if test "$GCC" = "yes" || test "$GCC" = "egcs"; then
 	*)	OSSH_CHECK_CFLAG_LINK([-fzero-call-used-regs=used]) ;;
 	esac
 	OSSH_CHECK_CFLAG_COMPILE([-ftrivial-auto-var-init=zero])
+    fi
+    if test "x$use_retpoline" = "x1"; then
+	OSSH_CHECK_CFLAG_COMPILE([-mretpoline]) # clang
+	OSSH_CHECK_LDFLAG_LINK([-Wl,-z,retpolineplt])
     fi
 
 	AC_MSG_CHECKING([if $CC accepts -fno-builtin-memset])
@@ -907,6 +915,7 @@ int main(void) { if (NSVersionOfRunTimeLibrary("System") >= (60 << 16))
 	AC_DEFINE([_PATH_BTMP], ["/var/log/btmp"], [log for bad login attempts])
 	AC_DEFINE([USE_BTMP])
 	AC_DEFINE([LINUX_OOM_ADJUST], [1], [Adjust Linux out-of-memory killer])
+	AC_DEFINE([SYSTEMD_NOTIFY], [1], [Have sshd notify systemd on start/reload])
 	inet6_default_4in6=yes
 	case `uname -r` in
 	1.*|2.0.*)
@@ -1338,6 +1347,13 @@ EOD
 	CFLAGS="$CFLAGS -D__NO_INCLUDE_WARN__"
 	AC_DEFINE([BROKEN_SETVBUF], [1],
 	    [LynxOS has broken setvbuf() implementation])
+	;;
+*-*-gnu*)
+	dnl GNU Hurd.  Needs to be after the linux and the other *-gnu entries.
+	dnl Target SUSv3/POSIX.1-2001 plus BSD specifics.
+	dnl _DEFAULT_SOURCE is the new name for _BSD_SOURCE
+	dnl _GNU_SOURCE is needed for setres*id prototypes.
+	CPPFLAGS="$CPPFLAGS -D_XOPEN_SOURCE=600 -D_BSD_SOURCE -D_DEFAULT_SOURCE -D_GNU_SOURCE"
 	;;
 esac
 
@@ -2067,6 +2083,16 @@ AC_ARG_WITH([security-key-builtin],
 	[ enable_sk_internal=$withval ]
 )
 
+enable_dsa=
+AC_ARG_ENABLE([dsa-keys],
+	[  --enable-dsa-keys       enable DSA key support [no]],
+	[
+		if test "x$enableval" != "xno" ; then
+			enable_dsa=1
+		fi
+	]
+)
+
 AC_SEARCH_LIBS([dlopen], [dl])
 AC_CHECK_FUNCS([dlopen])
 AC_CHECK_DECL([RTLD_NOW], [], [], [#include <dlfcn.h>])
@@ -2723,7 +2749,15 @@ AC_ARG_WITH([ssl-dir],
 			else
 				CPPFLAGS="-I${withval} ${CPPFLAGS}"
 			fi
-			openssl_bin_PATH="${PATH}${PATH_SEPARATOR}${withval}/bin${PATH_SEPARATOR}${withval}/apps"
+			dnl Ensure specified openssl binary works, eg it can
+			dnl find its runtime libraries, before trying to use.
+			if test -x "${withval}/bin/openssl" && \
+			    "${withval}/bin/openssl" version >/dev/null 2>&1; then
+				openssl_bin_PATH="${withval}/bin${PATH_SEPARATOR}${PATH}"
+			elif test -x "${withval}/apps/openssl" && \
+			    "${withval}/apps/openssl" version >/dev/null 2>&1; then
+				openssl_bin_PATH="${withval}/apps${PATH_SEPARATOR}${PATH}"
+			fi
 		fi
 	]
 )
@@ -2790,8 +2824,8 @@ if test "x$openssl" = "xyes" ; then
 			AC_MSG_RESULT([$ssl_header_ver])
 		],
 		[
-			AC_MSG_RESULT([not found])
-			AC_MSG_ERROR([OpenSSL version header not found.])
+			AC_MSG_RESULT([failed])
+			AC_MSG_ERROR([OpenSSL version test program failed.])
 		],
 		[
 			AC_MSG_WARN([cross compiling: not checking])
@@ -2855,12 +2889,9 @@ if test "x$openssl" = "xyes" ; then
 				*) ;;	# Assume all other versions are good.
 				esac
 				;;
-			300*)
+			30*)
 				# OpenSSL 3; we use the 1.1x API
-				CPPFLAGS="$CPPFLAGS -DOPENSSL_API_COMPAT=0x10100000L"
-				;;
-			301*|302*|303*)
-				# OpenSSL development branch; request 1.1x API
+				# https://openssl.org/policies/general/versioning-policy.html
 				CPPFLAGS="$CPPFLAGS -DOPENSSL_API_COMPAT=0x10100000L"
 				;;
 		        *)
@@ -2994,7 +3025,7 @@ if test "x$openssl" = "xyes" ; then
 	fi
 
 	# Check for OpenSSL without EVP_aes_{192,256}_cbc
-	AC_MSG_CHECKING([whether OpenSSL has crippled AES support])
+	AC_MSG_CHECKING([whether OpenSSL lacks support for AES 192/256])
 	AC_LINK_IFELSE(
 		[AC_LANG_PROGRAM([[
 	#include <stdlib.h>
@@ -3156,7 +3187,7 @@ if test "x$openssl" = "xyes" ; then
 		]], [[
 		unsigned char buf[64];
 		memset(buf, 0, sizeof(buf));
-		exit(EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519,
+		exit(EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, NULL,
 		    buf, sizeof(buf)) == NULL);
 		]])],
 		[
@@ -3168,6 +3199,26 @@ if test "x$openssl" = "xyes" ; then
 			AC_MSG_RESULT([no])
 		]
 	)
+
+	openssl_dsa=no
+	if test ! -z "$enable_dsa" ; then
+		AC_CHECK_DECLS([OPENSSL_NO_DSA], [], [
+			AC_CHECK_DECLS([OPENSSL_IS_BORINGSSL], [],
+			    [ openssl_dsa=yes ],
+			    [ #include <openssl/opensslconf.h> ]
+			)
+		    ],
+		    [ #include <openssl/opensslconf.h> ]
+		)
+		AC_MSG_CHECKING([whether to enable DSA key support])
+		if test "x$openssl_dsa" = "xno"; then
+			AC_MSG_ERROR([DSA requested but not supported by OpenSSL])
+		else
+			AC_MSG_RESULT([yes])
+			AC_DEFINE([WITH_DSA], [1],
+			   [DSA keys explicitly enabled])
+		fi
+	fi
 fi
 
 # PKCS11/U2F depend on OpenSSL and dlopen().
@@ -5292,6 +5343,16 @@ AC_ARG_WITH([pid-dir],
 AC_DEFINE_UNQUOTED([_PATH_SSH_PIDDIR], ["$piddir"],
 	[Specify location of ssh.pid])
 AC_SUBST([piddir])
+
+
+AC_ARG_ENABLE([fd-passing],
+	[  --disable-fd-passing    disable file descriptor passsing [no]],
+	[
+		if test "x$enableval" = "xno" ; then
+			AC_DEFINE([DISABLE_FD_PASSING])
+		fi
+	]
+)
 
 dnl allow user to disable some login recording features
 AC_ARG_ENABLE([lastlog],

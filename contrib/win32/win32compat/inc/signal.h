@@ -33,6 +33,9 @@
 #define W32_SIGKILL             17
 #define W32_SIGUSR1             18
 #define W32_SIGUSR2             19
+#define W32_SIGBUS              20
+#define W32_SIGTRAP             21
+#define W32_SIGSYS              22
 
 /* singprocmask "how" codes*/
 #define SIG_BLOCK		0
@@ -96,6 +99,9 @@ int sigaction(int signum, const struct sigaction * act, struct sigaction * oldac
 #define SIGKILL W32_SIGKILL
 #define SIGUSR1 W32_SIGUSR1
 #define SIGUSR2 W32_SIGUSR2
+#define SIGBUS W32_SIGBUS
+#define SIGTRAP W32_SIGTRAP
+#define SIGSYS W32_SIGSYS
 
 #define SIG_DFL	W32_SIG_DFL
 #define SIG_IGN	W32_SIG_IGN

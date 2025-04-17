@@ -48,8 +48,6 @@
 #include "tnnet.h"
 #include "misc_internal.h"
 
-#define TERM_IO_BUF_SIZE 2048
-
 extern int in_raw_mode;
 BOOL isFirstTime = TRUE;
 
@@ -293,7 +291,10 @@ syncio_close(struct w32_io* pio)
 			CancelSynchronousIo(pio->read_overlapped.hEvent);
 		}
 
-		WaitForSingleObject(pio->read_overlapped.hEvent, INFINITE);
+		// give the read thread some time to wind down, but don't block syncio_close
+		if (WAIT_TIMEOUT == WaitForSingleObject(pio->read_overlapped.hEvent, 1000)) {
+			debug4("read_overlapped thread timed out");
+		}
 	}
 
 	/* drain queued APCs */

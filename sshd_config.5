@@ -33,8 +33,8 @@
 .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.\" $OpenBSD: sshd_config.5,v 1.350 2023/07/28 05:42:36 jmc Exp $
-.Dd $Mdocdate: July 28 2023 $
+.\" $OpenBSD: sshd_config.5,v 1.365 2024/06/24 06:59:39 jmc Exp $
+.Dd $Mdocdate: June 24 2024 $
 .Dt SSHD_CONFIG 5
 .Os
 .Sh NAME
@@ -409,8 +409,10 @@ Timeouts are specified as one or more
 .Dq type=interval
 pairs separated by whitespace, where the
 .Dq type
-must be a channel type name (as described in the table below), optionally
-containing wildcard characters.
+must be the special keyword
+.Dq global
+or a channel type name from the list below, optionally containing
+wildcard characters.
 .Pp
 The timeout value
 .Dq interval
@@ -418,11 +420,20 @@ is specified in seconds or may use any of the units documented in the
 .Sx TIME FORMATS
 section.
 For example,
-.Dq session:*=5m
-would cause all sessions to terminate after five minutes of inactivity.
+.Dq session=5m
+would cause interactive sessions to terminate after five minutes of
+inactivity.
 Specifying a zero value disables the inactivity timeout.
 .Pp
-The available channel types include:
+The special timeout
+.Dq global
+applies to all active channels, taken together.
+Traffic on any active channel will reset the timeout, but when the timeout
+expires then all open channels will be closed.
+Note that this global timeout is not matched by wildcards and must be
+specified explicitly.
+.Pp
+The available channel type names include:
 .Bl -tag -width Ds
 .It Cm agent-connection
 Open connections to
@@ -443,15 +454,15 @@ listening on behalf of a
 .Xr ssh 1
 remote forwarding, i.e.\&
 .Cm RemoteForward .
-.It Cm session:command
-Command execution sessions.
-.It Cm session:shell
-Interactive shell sessions.
-.It Cm session:subsystem:...
-Subsystem sessions, e.g. for
+.It Cm session
+The interactive main session, including shell session, command execution,
+.Xr scp 1 ,
 .Xr sftp 1 ,
-which could be identified as
-.Cm session:subsystem:sftp .
+etc.
+.It Cm tun-connection
+Open
+.Cm TunnelForward
+connections.
 .It Cm x11-connection
 Open X11 forwarding sessions.
 .El
@@ -465,9 +476,6 @@ close the SSH connection, nor does it prevent a client from
 requesting another channel of the same type.
 In particular, expiring an inactive forwarding session does not prevent
 another identical forwarding from being subsequently created.
-See also
-.Cm UnusedConnectionTimeout ,
-which may be used in conjunction with this option.
 .Pp
 The default is not to expire channels of any type for inactivity.
 .It Cm ChrootDirectory
@@ -477,7 +485,7 @@ to after authentication.
 At session startup
 .Xr sshd 8
 checks that all components of the pathname are root-owned directories
-which are not writable by any other user or group.
+which are not writable by group or others.
 After the chroot,
 .Xr sshd 8
 changes the working directory to the user's home directory.
@@ -995,9 +1003,13 @@ file on logout.
 The default is
 .Cm yes .
 .It Cm KexAlgorithms
-Specifies the available KEX (Key Exchange) algorithms.
+Specifies the permitted KEX (Key Exchange) algorithms that the server will
+offer to clients.
+The ordering of this list is not important, as the client specifies the
+preference order.
 Multiple algorithms must be comma-separated.
-Alternately if the specified list begins with a
+.Pp
+If the specified list begins with a
 .Sq +
 character, then the specified algorithms will be appended to the default set
 instead of replacing them.
@@ -1009,6 +1021,7 @@ If the specified list begins with a
 .Sq ^
 character, then the specified algorithms will be placed at the head of the
 default set.
+.Pp
 The supported algorithms are:
 .Pp
 .Bl -item -compact -offset indent
@@ -1050,7 +1063,7 @@ diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,
 diffie-hellman-group14-sha256
 .Ed
 .Pp
-The list of available key exchange algorithms may also be obtained using
+The list of supported key exchange algorithms may also be obtained using
 .Qq ssh -Q KexAlgorithms .
 .It Cm ListenAddress
 Specifies the local addresses
@@ -1118,7 +1131,8 @@ DEBUG and DEBUG1 are equivalent.
 DEBUG2 and DEBUG3 each specify higher levels of debugging output.
 Logging with a DEBUG level violates the privacy of users and is not recommended.
 .It Cm LogVerbose
-Specify one or more overrides to LogLevel.
+Specify one or more overrides to
+.Cm LogLevel .
 An override consists of a pattern lists that matches the source file, function
 and line number to force detailed logging for.
 For example, an override pattern of:
@@ -1293,6 +1307,7 @@ Available keywords are
 .Cm LogLevel ,
 .Cm MaxAuthTries ,
 .Cm MaxSessions ,
+.Cm PAMServiceName ,
 .Cm PasswordAuthentication ,
 .Cm PermitEmptyPasswords ,
 .Cm PermitListen ,
@@ -1359,10 +1374,17 @@ and
 key exchange methods.
 The default is
 .Pa /etc/moduli .
+.It Cm PAMServiceName
+Specifies the service name used for Pluggable Authentication Modules (PAM)
+authentication, authorisation and session controls when
+.Cm UsePAM
+is enabled.
+The default is
+.Cm sshd .
 .It Cm PasswordAuthentication
 Specifies whether password authentication is allowed.
 The default is
-.Cm yes .
+.Cm sshd .
 .It Cm PermitEmptyPasswords
 When password authentication is allowed, it specifies whether the
 server allows login to accounts with empty password strings.
@@ -1548,6 +1570,86 @@ Values for IPv4 and optionally IPv6 may be specified, separated by a colon.
 The default is
 .Cm 32:128 ,
 which means each address is considered individually.
+.It Cm PerSourcePenalties
+Controls penalties for various conditions that may represent attacks on
+.Xr sshd 8 .
+If a penalty is enforced against a client then its source address and any
+others in the same network, as defined by
+.Cm PerSourceNetBlockSize ,
+will be refused connection for a period.
+.Pp
+A penalty doesn't affect concurrent connections in progress, but multiple
+penalties from the same source from concurrent connections will accumulate
+up to a maximum.
+Conversely, penalties are not applied until a minimum threshold time has been
+accumulated.
+.Pp
+Penalties are enabled by default with the default settings listed below
+but may disabled using the
+.Cm no
+keyword.
+The defaults may be overridden by specifying one or more of the keywords below,
+separated by whitespace.
+All keywords accept arguments, e.g.\&
+.Qq crash:2m .
+.Bl -tag -width Ds
+.It Cm crash:duration
+Specifies how long to refuse clients that cause a crash of
+.Xr sshd 8 (default: 90s).
+.It Cm authfail:duration
+Specifies how long to refuse clients that disconnect after making one or more
+unsuccessful authentication attempts (default: 5s).
+.It Cm noauth:duration
+Specifies how long to refuse clients that disconnect without attempting
+authentication (default: 1s).
+This timeout should be used cautiously otherwise it may penalise legitimate
+scanning tools such as
+.Xr ssh-keyscan 1 .
+.It Cm grace-exceeded:duration
+Specifies how long to refuse clients that fail to authenticate after
+.Cm LoginGraceTime
+(default: 20s).
+.It Cm max:duration
+Specifies the maximum time a particular source address range will be refused
+access for (default: 10m).
+Repeated penalties will accumulate up to this maximum.
+.It Cm min:duration
+Specifies the minimum penalty that must accrue before enforcement begins
+(default: 15s).
+.It Cm max-sources4:number , max-sources6:number
+Specifies the maximum number of client IPv4 and IPv6 address ranges to
+track for penalties (default: 65536 for both).
+.It Cm overflow:mode
+Controls how the server behaves when
+.Cm max-sources4
+or
+.Cm max-sources6
+is exceeded.
+There are two operating modes:
+.Cm deny-all ,
+which denies all incoming connections other than those exempted via
+.Cm PerSourcePenaltyExemptList
+until a penalty expires, and
+.Cm permissive ,
+which allows new connections by removing existing penalties early
+(default: permissive).
+Note that client penalties below the
+.Cm min
+threshold count against the total number of tracked penalties.
+IPv4 and IPv6 addresses are tracked separately, so an overflow in one will
+not affect the other.
+.It Cm overflow6:mode
+Allows specifying a different overflow mode for IPv6 addresses.
+The default it to use the same overflow mode as was specified for IPv4.
+.El
+.It Cm PerSourcePenaltyExemptList
+Specifies a comma-separated list of addresses to exempt from penalties.
+This list may contain wildcards and CIDR address/masklen ranges.
+Note that the mask length provided must be consistent with the address -
+it is an error to specify a mask length that is too long for the address
+or one with bits set in this host portion of the address.
+For example, 192.0.2.0/33 and 192.0.2.0/8, respectively.
+The default is not to exempt any addresses.
 .It Cm PidFile
 Specifies the file that contains the process ID of the
 SSH daemon, or
@@ -1729,6 +1831,13 @@ via
 .Cm AcceptEnv
 or
 .Cm PermitUserEnvironment .
+.It Cm SshdSessionPath
+Overrides the default path to the
+.Cm sshd-session
+binary that is invoked to handle each connection.
+The default is
+.Pa /usr/libexec/sshd-session .
+This option is intended for use by tests.
 .It Cm StreamLocalBindMask
 Sets the octal file creation mode mask
 .Pq umask
@@ -1783,6 +1892,14 @@ implements an in-process SFTP server.
 This may simplify configurations using
 .Cm ChrootDirectory
 to force a different filesystem root on clients.
+It accepts the same command line arguments as
+.Cm sftp-server
+and even though it is in-process, settings such as
+.Cm LogLevel
+or
+.Cm SyslogFacility
+do not apply to it and must be set explicitly via
+command line arguments.
 .Pp
 By default no subsystems are defined.
 .It Cm SyslogFacility

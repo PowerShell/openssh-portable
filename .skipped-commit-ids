@@ -1,3 +1,4 @@
+509bb19bb9762a4b3b589af98bac2e730541b6d4	clean sshd random relinking kit
 5317f294d63a876bfc861e19773b1575f96f027d	remove libssh from makefiles
 a337e886a49f96701ccbc4832bed086a68abfa85	Makefile changes
 f2c9feb26963615c4fece921906cf72e248b61ee	more Makefile
@@ -27,6 +28,15 @@ cc12a9029833d222043aecd252d654965c351a69	moduli-gen Makefile
 f9a0726d957cf10692a231996a1f34e7f9cdfeb0	moduli update
 1e0a2692b7e20b126dda60bf04999d1d30d959d8	sshd relinking makefile changes
 e1dc11143f83082e3154d6094f9136d0dc2637ad	more relinking makefile tweaks
+5a636f6ca7f25bfe775df4952f7aac90a7fcbbee	moduli update
+ef9341d5a50f0d33e3a6fbe995e92964bc7ef2d3	Makefile relinking changes
+2fe8d707ae35ba23c7916adcb818bb5b66837ba0	ssh-agent relink kit
+866cfcc1955aef8f3fc32da0b70c353a1b859f2e	ssh-agent relink changes
+8b3820adb4da4e139c4b3cffbcc0bde9f08bf0c6	sshd-session relink kit
+6d2ded4cd91d4d727c2b26e099b91ea935bed504	relink kit
+fb39324748824cb0387e9d67c41d1bef945c54ea	Makefile change
+5f378c38ad8976d507786dc4db9283a879ec8cd0	Makefile change
+112aacedd3b61cc5c34b1fa6d9fb759214179172	Makefile change
 
 Old upstream tree:
 

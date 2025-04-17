@@ -27,7 +27,7 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($ssouser, $rights, "ContainerInherit,Objectinherit", "None", "Allow")
         $acl.SetAccessRule($accessRule)
         Set-Acl -Path $testDir -AclObject $acl
-        #skip on ps 2 becase non-interactive cmd require a ENTER before it returns on ps2
+        #skip on ps 2 because non-interactive cmd require a ENTER before it returns on ps2
         $skip = $IsWindows -and ($PSVersionTable.PSVersion.Major -le 2)
 
         <#$testData = @(
@@ -244,15 +244,41 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             $o | Should Be `$env:computername
         }
     }
+
+    Context "$tC - configure powershell as default shell with admin user" {
+        BeforeAll {
+            $tI=1
+            $shell_path = (Get-Command powershell.exe -ErrorAction SilentlyContinue).path
+            if ($shell_path -ne $null) {
+                ConfigureDefaultShell -default_shell_path $shell_path -default_shell_cmd_option_val "-c"
+            }
+            $password = $OpenSSHTestInfo['TestAccountPW']
+            Add-PasswordSetting -Pass $password
+        }
+        AfterAll {
+            $tC++
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
+            Remove-PasswordSetting
+        }
+
+        It "$tC.$tI - admin session can write to console" -skip:$skip {
+            $adminusername = $OpenSSHTestInfo['AdminUser']
+            $o = ssh $adminusername@test_target "Get-ComputerInfo"
+            $LASTEXITCODE | Should Be 0
+            $o | Select-String -Pattern "WindowsVersion" | Should Match "WindowsVersion"
+        }
+    }
+
     Context "$tC - configure cmd as default shell" {
         BeforeAll {
             $tI=1
             $shell_path = (Get-Command cmd.exe -ErrorAction SilentlyContinue).path
             if($shell_path -ne $null) {
                 ConfigureDefaultShell -default_shell_path $shell_path -default_shell_cmd_option_val "/c"
+            }
         }
-        }
-        AfterAll{
+        AfterAll {
             $tC++
             Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
             Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
@@ -347,6 +373,18 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             $o = ssh -6 -v -E $logFile test_target echo 1234
             $o | Should Be "1234"
             $logFile | Should Contain "[::1]"
+        }
+
+        It "$tC.$tI - tilde expand for path with forward slash" {
+            $o = ssh -v -i ~/test/key/path -E $logFile test_target echo 1234
+            $o | Should Be "1234"
+            $logFile | Should Not Contain "tilde_expand: No such user"
+        }
+
+        It "$tC.$tI - tilde expand for path with backslash" {
+            $o = ssh -v -i ~\test\key\path -E $logFile test_target echo 1234
+            $o | Should Be "1234"
+            $logFile | Should Not Contain "tilde_expand: No such user"
         }
 
         It "$tC.$tI - auto populate known hosts" {

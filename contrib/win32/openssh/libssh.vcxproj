@@ -450,6 +450,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-sk.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sshbuf-io.c" />
     <ClCompile Include="..\..\..\cipher-chachapoly-libcrypto.c" />
+    <ClCompile Include="..\..\..\kex-names.c" />
     <ClCompile Include="..\win32compat\spawn-ext.c" />
   </ItemGroup>
   <ItemGroup>

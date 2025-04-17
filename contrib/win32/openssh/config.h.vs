@@ -102,7 +102,7 @@
 
 /* Define if your platform needs to skip post auth
  file descriptor passing */
-/* #undef DISABLE_FD_PASSING */
+#define DISABLE_FD_PASSING
 
 /* Define if you don't want to use lastlog */
 /* #undef DISABLE_LASTLOG */
@@ -207,13 +207,13 @@
 /* #undef HAVE_ADDR_V6_IN_UTMPX */
 
 /* Define to 1 if you have the `arc4random' function. */
-#define HAVE_ARC4RANDOM 1
+/* #undef HAVE_ARC4RANDOM */
 
 /* Define to 1 if you have the `arc4random_buf' function. */
-#define HAVE_ARC4RANDOM_BUF 1
+/* #undef HAVE_ARC4RANDOM_BUF */
 
 /* Define to 1 if you have the `arc4random_uniform' function. */
-#define HAVE_ARC4RANDOM_UNIFORM 1
+/* #undef HAVE_ARC4RANDOM_UNIFORM */
 
 /* Define to 1 if you have the `asprintf' function. */
 /* #undef HAVE_ASPRINTF */
@@ -349,7 +349,7 @@
 /* #undef HAVE_DEV_PTS_AND_PTC */
 
 /* Define to 1 if you have the <dirent.h> header file. */
-/* #undef HAVE_DIRENT_H
+/* #undef HAVE_DIRENT_H */
 
 /* Define to 1 if you have the `dirfd' function. */
 /* #undef HAVE_DIRFD */

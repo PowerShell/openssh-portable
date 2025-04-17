@@ -1,4 +1,4 @@
-/* $OpenBSD: session.c,v 1.336 2023/08/10 23:05:48 djm Exp $ */
+/* $OpenBSD: session.c,v 1.338 2024/05/17 00:30:24 djm Exp $ */
 /*
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
  *                    All rights reserved
@@ -102,6 +102,17 @@
 
 #ifdef WITH_SELINUX
 #include <selinux/selinux.h>
+#endif
+
+/*
+ * Hack for systems that do not support FD passing: allocate PTYs directly
+ * without calling into the monitor. This requires either the post-auth
+ * privsep process retain root privileges (see the comment in
+ * sshd-session.c:privsep_postauth) or that PTY allocation doesn't require
+ * privileges to begin with (e.g. Cygwin).
+ */
+#ifdef DISABLE_FD_PASSING
+#define mm_pty_allocate pty_allocate
 #endif
 
 #define IS_INTERNAL_SFTP(c) \
@@ -712,13 +723,13 @@ do_exec(struct ssh *ssh, Session *s, const char *command)
 
 #ifdef SSH_AUDIT_EVENTS
 	if (command != NULL)
-		PRIVSEP(audit_run_command(command));
+		mm_audit_run_command(command);
 	else if (s->ttyfd == -1) {
 		char *shell = s->pw->pw_shell;
 
 		if (shell[0] == '\0')	/* empty shell means /bin/sh */
 			shell =_PATH_BSHELL;
-		PRIVSEP(audit_run_command(shell));
+		mm_audit_run_command(shell);
 	}
 #endif
 	if (s->ttyfd != -1)
@@ -744,8 +755,6 @@ do_login(struct ssh *ssh, Session *s, const char *command)
 {
 	socklen_t fromlen;
 	struct sockaddr_storage from;
-	struct passwd * pw = s->pw;
-	pid_t pid = getpid();
 
 	/*
 	 * Get IP address of client. If the connection is not a socket, let
@@ -760,26 +769,6 @@ do_login(struct ssh *ssh, Session *s, const char *command)
 			cleanup_exit(255);
 		}
 	}
-
-	/* Record that there was a login on that tty from the remote host. */
-	if (!use_privsep)
-		record_login(pid, s->tty, pw->pw_name, pw->pw_uid,
-		    session_get_remote_name_or_ip(ssh, utmp_len,
-		    options.use_dns),
-		    (struct sockaddr *)&from, fromlen);
-
-#ifdef USE_PAM
-	/*
-	 * If password change is needed, do it now.
-	 * This needs to occur before the ~/.hushlogin check.
-	 */
-	if (options.use_pam && !use_privsep && s->authctxt->force_pwchange) {
-		display_loginmsg();
-		do_pam_chauthtok();
-		s->authctxt->force_pwchange = 0;
-		/* XXX - signal [net] parent to enable forwardings */
-	}
-#endif
 
 	if (check_quietlogin(s, command))
 		return;
@@ -1342,7 +1331,7 @@ safely_chroot(const char *path, uid_t uid)
 			memcpy(component, path, cp - path);
 			component[cp - path] = '\0';
 		}
-	
+
 		debug3_f("checking '%s'", component);
 
 		if (stat(component, &st) != 0)
@@ -1422,7 +1411,7 @@ do_setusercontext(struct passwd *pw)
 			perror("unable to set user context (setuser)");
 			exit(1);
 		}
-		/* 
+		/*
 		 * FreeBSD's setusercontext() will not apply the user's
 		 * own umask setting unless running with the user's UID.
 		 */
@@ -1944,12 +1933,7 @@ session_pty_req(struct ssh *ssh, Session *s)
 
 	/* Allocate a pty and open it. */
 	debug("Allocating pty.");
-#ifdef WINDOWS	
-	if (!(pty_allocate(&s->ptyfd, &s->ttyfd, s->tty,
-#else
-	if (!PRIVSEP(pty_allocate(&s->ptyfd, &s->ttyfd, s->tty,
-#endif
-	    sizeof(s->tty)))) {
+	if (!mm_pty_allocate(&s->ptyfd, &s->ttyfd, s->tty, sizeof(s->tty))) {
 		free(s->term);
 		s->term = NULL;
 		s->ptyfd = -1;
@@ -1963,9 +1947,6 @@ session_pty_req(struct ssh *ssh, Session *s)
 
 	if ((r = sshpkt_get_end(ssh)) != 0)
 		sshpkt_fatal(ssh, r, "%s: parse packet", __func__);
-
-	if (!use_privsep)
-		pty_setowner(s->pw, s->tty);
 
 	/* Set window size from the packet. */
 	pty_change_window_size(s->ptyfd, s->row, s->col, s->xpixel, s->ypixel);
@@ -2184,7 +2165,7 @@ session_signal_req(struct ssh *ssh, Session *s)
 		    signame, s->forced ? "forced-command" : "subsystem");
 		goto out;
 	}
-	if (!use_privsep || mm_is_monitor()) {
+	if (mm_is_monitor()) {
 		error_f("session signalling requires privilege separation");
 		goto out;
 	}
@@ -2327,7 +2308,7 @@ session_pty_cleanup2(Session *s)
 void
 session_pty_cleanup(Session *s)
 {
-	PRIVSEP(session_pty_cleanup2(s));
+	mm_session_pty_cleanup2(s);
 }
 
 static char *
@@ -2736,7 +2717,7 @@ do_cleanup(struct ssh *ssh, Authctxt *authctxt)
 	 * Cleanup ptys/utmp only if privsep is disabled,
 	 * or if running in monitor.
 	 */
-	if (!use_privsep || mm_is_monitor())
+	if (mm_is_monitor())
 		session_destroy_all(ssh, session_pty_cleanup2);
 }
 
@@ -2765,7 +2746,7 @@ int get_in_chroot()
 
 /*
  * Since do_setup_env is static for now, create this function
- * to have unix code intact 
+ * to have unix code intact
 */
 char **
 do_setup_env_proxy(struct ssh *ssh, Session *s, const char *shell)

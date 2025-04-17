@@ -1,4 +1,4 @@
-#	$OpenBSD: test-exec.sh,v 1.105 2023/10/31 04:15:40 dtucker Exp $
+#	$OpenBSD: test-exec.sh,v 1.119 2024/06/20 08:18:34 dtucker Exp $
 #	Placed in the Public Domain.
 
 #SUDO=sudo
@@ -96,6 +96,11 @@ SSHKEYGEN=ssh-keygen
 SSHKEYSCAN=ssh-keyscan
 SFTP=sftp
 SFTPSERVER=/usr/libexec/openssh/sftp-server
+if [ "$os" == "windows" ]; then
+	SSHD_SESSION=sshd-session.exe
+else
+	SSHD_SESSION=/usr/libexec/sshd-session
+fi
 SCP=scp
 
 # Set by make_tmpdir() on demand (below).
@@ -110,6 +115,9 @@ DBCLIENT=/usr/local/bin/dbclient
 DROPBEARKEY=/usr/local/bin/dropbearkey
 DROPBEARCONVERT=/usr/local/bin/dropbearconvert
 
+# So we can override this in Portable.
+TEST_SHELL="${TEST_SHELL:-/bin/sh}"
+
 # Tools used by multiple tests
 NC=$OBJ/netcat
 # Always use the one configure tells us to, even if that's empty.
@@ -117,6 +125,9 @@ NC=$OBJ/netcat
 
 if [ "x$TEST_SSH_SSH" != "x" ]; then
 	SSH="${TEST_SSH_SSH}"
+fi
+if [ "x$TEST_SSH_SSHD_SESSION" != "x" ]; then
+	SSHD_SESSION="${TEST_SSH_SSHD_SESSION}"
 fi
 if [ "x$TEST_SSH_SSHD" != "x" ]; then
 	SSHD="${TEST_SSH_SSHD}"
@@ -306,7 +317,7 @@ fi
 SSHLOGWRAP=$OBJ/ssh-log-wrapper.sh
 # BALU todo - check if we need to pass -T flag
 if [ "$os" == "windows" ]; then
-# timestamp line messes up stderr-data.sh stderr-after-eof.sh 
+# timestamp line messes up stderr-data.sh stderr-after-eof.sh
 # seems to be used for debugging concurrency tests (a feature unsupported on Windows currently)
 cat >$SSHLOGWRAP <<EOD
 #!/bin/sh
@@ -367,7 +378,7 @@ ssh_logfile ()
 # [kbytes] to ensure the file is at least that large.
 DATANAME=data
 DATA=$OBJ/${DATANAME}
-cat ${SSHAGENT_BIN} >${DATA}
+cat ${SSH_BIN} >${DATA}
 chmod u+w ${DATA}
 COPY=$OBJ/copy
 rm -f ${COPY}
@@ -378,7 +389,7 @@ fi
 increase_datafile_size()
 {
 	while [ `du -k ${DATA} | cut -f1` -lt $1 ]; do
-		cat ${SSHAGENT_BIN} >>${DATA}
+		cat ${SSH_BIN} >>${DATA}
 	done
 }
 
@@ -419,10 +430,18 @@ have_prog()
 jot() {
 	awk "BEGIN { for (i = $2; i < $2 + $1; i++) { printf \"%d\n\", i } exit }"
 }
+
 if [ ! -x "`which rev`" ]; then
 rev()
 {
 	awk '{for (i=length; i>0; i--) printf "%s", substr($0, i, 1); print ""}'
+}
+fi
+
+if [ -x "/usr/xpg4/bin/id" ]; then
+id()
+{
+	/usr/xpg4/bin/id $@
 }
 fi
 
@@ -481,34 +500,33 @@ stop_sshd ()
 	# windows process can't be stopped using kill command so use stop-process
 	if [ "$os" == "windows" ]; then
 		powershell.exe /c "stop-process -Name sshd -Force" >/dev/null 2>&1
-	 else
-	 	if [ -f $PIDFILE ]; then
-			pid=`$SUDO cat $PIDFILE`
-			if [ "X$pid" = "X" ]; then
-				echo no sshd running
-			else
-				if [ $pid -lt 2 ]; then
-					echo bad pid for sshd: $pid
-				else
-					$SUDO kill $pid
-					trace "wait for sshd to exit"
-					i=0;
-					while [ -f $PIDFILE -a $i -lt 5 ]; do
-						i=`expr $i + 1`
-						sleep $i
-					done
-					if test -f $PIDFILE; then
-						if $SUDO kill -0 $pid; then
-							echo "sshd didn't exit " \
-								"port $PORT pid $pid"
-						else
-							echo "sshd died without cleanup"
-						fi
-						exit 1
-					fi
-				fi
-			fi
+	else
+		[ -z $PIDFILE ] && return
+		[ -f $PIDFILE ] || return
+		pid=`$SUDO cat $PIDFILE`
+		if [ "X$pid" = "X" ]; then
+			echo "no sshd running" 1>&2
+			return
+		elif [ $pid -lt 2 ]; then
+			echo "bad pid for sshd: $pid" 1>&2
+			return
 		fi
+		$SUDO kill $pid
+		trace "wait for sshd to exit"
+		i=0;
+		while [ -f $PIDFILE -a $i -lt 5 ]; do
+			i=`expr $i + 1`
+			sleep $i
+		done
+		if test -f $PIDFILE; then
+			if $SUDO kill -0 $pid; then
+				echo "sshd didn't exit port $PORT pid $pid" 1>&2
+			else
+				echo "sshd died without cleanup" 1>&2
+			fi
+			exit 1
+		fi
+		PIDFILE=""
 	fi
 }
 
@@ -656,6 +674,8 @@ cat << EOF > $OBJ/sshd_config
 	AcceptEnv		_XXX_TEST_*
 	AcceptEnv		_XXX_TEST
 	Subsystem	sftp	$SFTPSERVER
+	SshdSessionPath		$SSHD_SESSION
+	PerSourcePenalties	no
 EOF
 
 if [ "$os" != "windows" ]; then
@@ -843,7 +863,11 @@ case "$SCRIPT" in
 *)		REGRESS_INTEROP_PUTTY=no ;;
 esac
 
-if test "$REGRESS_INTEROP_PUTTY" = "yes" ; then
+puttysetup() {
+	if test "x$REGRESS_INTEROP_PUTTY" != "xyes" ; then
+		skip "putty interop tests not enabled"
+	fi
+
 	mkdir -p ${OBJ}/.putty
 
 	# Add a PuTTY key to authorized_keys
@@ -876,9 +900,25 @@ if test "$REGRESS_INTEROP_PUTTY" = "yes" ; then
 	echo "ProxyTelnetCommand=${OBJ}/sshd-log-wrapper.sh -i -f $OBJ/sshd_proxy" >> ${OBJ}/.putty/sessions/localhost_proxy
 	echo "ProxyLocalhost=1" >> ${OBJ}/.putty/sessions/localhost_proxy
 
+	PUTTYVER="`${PLINK} --version | awk '/plink: Release/{print $3}'`"
+	PUTTYMAJORVER="`echo ${PUTTYVER} | cut -f1 -d.`"
+	PUTTYMINORVER="`echo ${PUTTYVER} | cut -f2 -d.`"
+	verbose "plink version ${PUTTYVER} major ${PUTTYMAJORVER} minor ${PUTTYMINORVER}"
+
+	# Re-enable ssh-rsa on older PuTTY versions since they don't do newer
+	# key types.
+	if [ "$PUTTYMAJORVER" -eq "0" ] && [ "$PUTTYMINORVER" -lt "76" ]; then
+		echo "HostKeyAlgorithms +ssh-rsa" >> ${OBJ}/sshd_proxy
+		echo "PubkeyAcceptedKeyTypes +ssh-rsa" >> ${OBJ}/sshd_proxy
+	fi
+
+	if [ "$PUTTYMAJORVER" -eq "0" ] && [ "$PUTTYMINORVER" -le "64" ]; then
+		echo "KexAlgorithms +diffie-hellman-group14-sha1" \
+		    >>${OBJ}/sshd_proxy
+	fi
 	PUTTYDIR=${OBJ}/.putty
 	export PUTTYDIR
-fi
+}
 
 REGRESS_INTEROP_DROPBEAR=no
 if test -x "$DROPBEARKEY" -a -x "$DBCLIENT" -a -x "$DROPBEARCONVERT"; then
@@ -892,15 +932,25 @@ esac
 if test "$REGRESS_INTEROP_DROPBEAR" = "yes" ; then
 	trace Create dropbear keys and add to authorized_keys
 	mkdir -p $OBJ/.dropbear
-	for i in rsa ecdsa ed25519 dss; do
-		if [ ! -f "$OBJ/.dropbear/id_$i" ]; then
-			($DROPBEARKEY -t $i -f $OBJ/.dropbear/id_$i
-			$DROPBEARCONVERT dropbear openssh \
-			    $OBJ/.dropbear/id_$i $OBJ/.dropbear/ossh.id_$i
-			) > /dev/null 2>&1
+	kt="ed25519"
+	for i in dss rsa ecdsa; do
+		if $SSH -Q key-plain | grep "$i" >/dev/null; then
+			kt="$kt $i"
+		else
+			rm -f "$OBJ/.dropbear/id_$i"
 		fi
+	done
+	for i in $kt; do
+		if [ ! -f "$OBJ/.dropbear/id_$i" ]; then
+			verbose Create dropbear key type $i
+			$DROPBEARKEY -t $i -f $OBJ/.dropbear/id_$i \
+			    >/dev/null 2>&1
+		fi
+		$DROPBEARCONVERT dropbear openssh $OBJ/.dropbear/id_$i \
+		    $OBJ/.dropbear/ossh.id_$i >/dev/null 2>&1
 		$SSHKEYGEN -y -f $OBJ/.dropbear/ossh.id_$i \
 		   >>$OBJ/authorized_keys_$USER
+		rm -f $OBJ/.dropbear/id_$i.pub $OBJ/.dropbear/ossh.id_$i
 	done
 fi
 
@@ -927,6 +977,7 @@ chmod a+x $OBJ/ssh_proxy.sh
 
 start_sshd ()
 {
+	PIDFILE=$OBJ/pidfile
 	# start sshd
 	logfile="${TEST_SSH_LOGDIR}/sshd.`$OBJ/timestamp`.$$.log"
 	$SUDO ${SSHD} -f $OBJ/sshd_config "$@" -t || fatal "sshd_config broken"
@@ -946,6 +997,7 @@ start_sshd ()
 		i=`expr $i + 1`
 		sleep $i
 	done
+	ln -f -s ${logfile} $TEST_SSHD_LOGFILE
 
 	test -f $PIDFILE || fatal "no sshd running on port $PORT"
 }

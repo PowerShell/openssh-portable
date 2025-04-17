@@ -200,9 +200,9 @@ exit"
 
             $sshdlog | Should Contain "Accepted publickey for $nonadminusername"
             $sshdlog | Should Contain "KEX done \[preauth\]"
-            $sshdlog | Should Contain "debug2: subsystem request for sftp by user $nonadminusername"
+            $sshdlog | Should Contain "debug2: user: $nonadminusername`: subsystem request for sftp by user $nonadminusername"
             $sftplog | Should Contain "session opened for local user $nonadminusername"
-            $sftplog | Should Contain "debug3: request 3: opendir"
+            $sftplog | Should Contain "debug3: user: $nonadminusername`: request 3: opendir"
             $sftplog | Should Contain "session closed for local user $nonadminusername"
         }
 
@@ -216,9 +216,9 @@ exit"
   
             $sshdlog | Should Contain "Accepted publickey for $adminusername"
             $sshdlog | Should Contain "KEX done \[preauth\]"
-            $sshdlog | Should Contain "debug2: subsystem request for sftp by user $adminusername"
+            $sshdlog | Should Contain "debug2: user: $adminusername`: subsystem request for sftp by user $adminusername"
             $sftplog | Should Contain "session opened for local user $adminusername"
-            $sftplog | Should Contain "debug3: request 3: opendir"
+            $sftplog | Should Contain "debug3: user: $adminusername`: request 3: opendir"
             $sftplog | Should Contain "session closed for local user $adminusername"
         }
     }

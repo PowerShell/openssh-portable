@@ -1,4 +1,4 @@
-/* $OpenBSD: misc.h,v 1.106 2023/10/11 22:42:26 djm Exp $ */
+/* $OpenBSD: misc.h,v 1.109 2024/06/06 17:15:25 djm Exp $ */
 
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
@@ -21,6 +21,12 @@
 #include <stdio.h>
 #include <signal.h>
 
+/* special-case port number meaning allow any port */
+#define FWD_PERMIT_ANY_PORT	0
+
+/* special-case wildcard meaning allow any host */
+#define FWD_PERMIT_ANY_HOST	"*"
+
 /* Data structure for representing a forwarding request. */
 struct Forward {
 	char	 *listen_host;		/* Host (address) to listen on. */
@@ -34,6 +40,8 @@ struct Forward {
 };
 
 int forward_equals(const struct Forward *, const struct Forward *);
+int permitopen_port(const char *p);
+
 int daemonized(void);
 
 /* Common server and client forwarding options. */
@@ -213,6 +221,7 @@ void	opt_array_append(const char *file, const int line,
 void	opt_array_append2(const char *file, const int line,
 	    const char *directive, char ***array, int **iarray, u_int *lp,
 	    const char *s, int i);
+void	opt_array_free2(char **array, int **iarray, u_int l);
 
 struct timespec;
 void ptimeout_init(struct timespec *pt);
@@ -246,6 +255,7 @@ void	notify_complete(struct notifier_ctx *, const char *, ...)
 
 typedef void (*sshsig_t)(int);
 sshsig_t ssh_signal(int, sshsig_t);
+int signal_is_crash(int);
 
 /* On OpenBSD time_t is int64_t which is long long. */
 /* #define SSH_TIME_T_MAX LLONG_MAX */

@@ -33,8 +33,8 @@
 .\" (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 .\" THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 .\"
-.\" $OpenBSD: ssh_config.5,v 1.391 2023/10/12 02:18:18 djm Exp $
-.Dd $Mdocdate: October 12 2023 $
+.\" $OpenBSD: ssh_config.5,v 1.396 2024/06/17 08:30:29 djm Exp $
+.Dd $Mdocdate: June 17 2024 $
 .Dt SSH_CONFIG 5
 .Os
 .Sh NAME
@@ -144,7 +144,7 @@ The available criteria keywords are:
 .Cm localnetwork ,
 .Cm host ,
 .Cm originalhost ,
-.Cm Tag ,
+.Cm tagged ,
 .Cm user ,
 and
 .Cm localuser .
@@ -463,8 +463,10 @@ Timeouts are specified as one or more
 .Dq type=interval
 pairs separated by whitespace, where the
 .Dq type
-must be a channel type name (as described in the table below), optionally
-containing wildcard characters.
+must be the special keyword
+.Dq global
+or a channel type name from the list below, optionally containing
+wildcard characters.
 .Pp
 The timeout value
 .Dq interval
@@ -473,11 +475,19 @@ is specified in seconds or may use any of the units documented in the
 section.
 For example,
 .Dq session=5m
-would cause the interactive session to terminate after five minutes of
+would cause interactive sessions to terminate after five minutes of
 inactivity.
 Specifying a zero value disables the inactivity timeout.
 .Pp
-The available channel types include:
+The special timeout
+.Dq global
+applies to all active channels, taken together.
+Traffic on any active channel will reset the timeout, but when the timeout
+expires then all open channels will be closed.
+Note that this global timeout is not matched by wildcards and must be
+specified explicitly.
+.Pp
+The available channel type names include:
 .Bl -tag -width Ds
 .It Cm agent-connection
 Open connections to
@@ -1104,7 +1114,7 @@ section and environment variables as described in the
 .Sx ENVIRONMENT VARIABLES
 section.
 .It Cm IdentityFile
-Specifies a file from which the user's DSA, ECDSA, authenticator-hosted ECDSA,
+Specifies a file from which the user's ECDSA, authenticator-hosted ECDSA,
 Ed25519, authenticator-hosted Ed25519 or RSA authentication identity is read.
 You can also specify a public key file to use the corresponding
 private key that is loaded in
@@ -1114,10 +1124,9 @@ The default is
 .Pa ~/.ssh/id_rsa ,
 .Pa ~/.ssh/id_ecdsa ,
 .Pa ~/.ssh/id_ecdsa_sk ,
-.Pa ~/.ssh/id_ed25519 ,
-.Pa ~/.ssh/id_ed25519_sk
+.Pa ~/.ssh/id_ed25519
 and
-.Pa ~/.ssh/id_dsa .
+.Pa ~/.ssh/id_ed25519_sk .
 Additionally, any identities represented by the authentication agent
 will be used for authentication unless
 .Cm IdentitiesOnly
@@ -1251,8 +1260,12 @@ it may be zero or more of:
 and
 .Cm pam .
 .It Cm KexAlgorithms
-Specifies the available KEX (Key Exchange) algorithms.
+Specifies the permitted KEX (Key Exchange) algorithms that will be used and
+their preference order.
+The selected algorithm will the the first algorithm in this list that
+the server also supports.
 Multiple algorithms must be comma-separated.
+.Pp
 If the specified list begins with a
 .Sq +
 character, then the specified algorithms will be appended to the default set
@@ -1265,6 +1278,7 @@ If the specified list begins with a
 .Sq ^
 character, then the specified algorithms will be placed at the head of the
 default set.
+.Pp
 The default is:
 .Bd -literal -offset indent
 sntrup761x25519-sha512@openssh.com,
@@ -1276,7 +1290,7 @@ diffie-hellman-group18-sha512,
 diffie-hellman-group14-sha256
 .Ed
 .Pp
-The list of available key exchange algorithms may also be obtained using
+The list of supported key exchange algorithms may also be obtained using
 .Qq ssh -Q kex .
 .It Cm KnownHostsCommand
 Specifies a command to use to obtain a list of host keys, in addition to
