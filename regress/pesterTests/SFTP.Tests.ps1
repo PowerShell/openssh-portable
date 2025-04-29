@@ -5,6 +5,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
     BeforeAll {
          $serverDirectory = $null
          $clientDirectory = $null
+         $largeFilePath = $null
          if($OpenSSHTestInfo -eq $null)
          {
              Throw "`$OpenSSHTestInfo is null. Please run Set-OpenSSHTestEnvironment to set test environments."
@@ -219,7 +220,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
     AfterAll {
        if($serverDirectory) { Get-ChildItem $serverDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }
        if($clientDirectory) { Get-ChildItem $clientDirectory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }
-       if(Test-Path $largeFilePath) { Remove-Item $largeFilePath -Force -ErrorAction SilentlyContinue }
+       if($largeFilePath) { Remove-Item $largeFilePath -Force -ErrorAction SilentlyContinue }
     }
 
     BeforeEach {
@@ -390,7 +391,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
                   Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
                }
 
-               It "<Title> for $($shell.Name)" -TestCases:$testData1 -Skip:($shell.Path -eq $null) -SkipReason "Shell path not found" {
+               It "<Title> for $($shell.Name)" -TestCases:$testData1 -Skip:($shell.Path -eq $null) {
                   param([string]$Title, $Options, $Commands, $ExpectedOutput)
 
                   Set-Content $batchFilePath -Encoding UTF8 -value $Commands

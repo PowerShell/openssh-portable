@@ -232,10 +232,6 @@ Describe "Tests for scp command" -Tags "CI" {
         }
     }
 
-    BeforeAll {
-        $null = New-Item $DestinationDir -ItemType directory -Force -ErrorAction SilentlyContinue
-    }
-
     AfterEach {
         Get-ChildItem $DestinationDir -Recurse | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         Start-Sleep 1
