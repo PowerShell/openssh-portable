@@ -237,7 +237,6 @@ Describe "SFTP Test Cases" -Tags "CI" {
 
     It '<Title>' -TestCases:$testData1 {
        param([string]$Title, $Options, $Commands, $ExpectedOutput)
-
        Set-Content $batchFilePath -Encoding UTF8 -value $Commands
        $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) -b $batchFilePath test_target > $outputFilePath")
        iex $str
@@ -332,11 +331,14 @@ Describe "SFTP Test Cases" -Tags "CI" {
 
     It '<Title>' -TestCases:$testData3 {
       param([string]$Title, $Commands, $ExpectedOutput)
-
+      if (-not (Test-Path $largeFilePath)) {
+         write-host "creating large file because it did not exist"
+         fsutil file createNew $largeFilePath 1000000000
+      }
       Set-Content $batchFilePath -Encoding UTF8 -value $Commands
-      $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port -b $batchFilePath test_target > $outputFilePath")
+      $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -vvv -P $port -b $batchFilePath test_target 1>&2 $outputFilePath")
       iex $str
-
+      Write-Host "Last exit code: $LASTEXITCODE"
       #validate file content.
       Get-Content $outputFilePath | Write-Host 
       Test-Path $ExpectedOutput | Should be $true
@@ -396,7 +398,6 @@ Describe "SFTP Test Cases" -Tags "CI" {
                iex $str
 
                #validate file content.
-               Get-Content $outputFilePath | Write-Host 
                $ExpectedOutput = (join-path $serverdirectory $tempFileName)
                Test-Path $ExpectedOutput | Should be $true
             }
