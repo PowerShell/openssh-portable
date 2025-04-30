@@ -407,15 +407,16 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         }
 
         It "$tC.$tI - force pseudo-terminal allocation (-t)" {
-            ssh -t -E $logFile test_target whoami
+            $o = ssh -t test_target echo 1234
             $LASTEXITCODE | Should Be 0
-            $logFile | Should Contain $ssouser
+            $o.Length | Should Be 2
+            $o[0].Contains("1234") | Should Be $true
         }
 
         It "$tC.$tI - disable pseudo-terminal allocation (-T)" {
-            ssh -E $logFile test_target whoami
+            $o = ssh -T test_target whoami
             $LASTEXITCODE | Should Be 0
-            $logFile | Should Contain $ssouser
+            $o | Should Be "1234"
         }
     }
 }

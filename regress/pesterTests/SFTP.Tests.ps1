@@ -331,13 +331,14 @@ Describe "SFTP Test Cases" -Tags "CI" {
     }
 
     It '<Title>' -TestCases:$testData3 {
-      param([string]$Title, $Options, $Commands, $ExpectedOutput)
+      param([string]$Title, $Commands, $ExpectedOutput)
 
       Set-Content $batchFilePath -Encoding UTF8 -value $Commands
-      $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) -b $batchFilePath test_target > $outputFilePath")
+      $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port -b $batchFilePath test_target > $outputFilePath")
       iex $str
 
       #validate file content.
+      Get-Content $outputFilePath | Write-Host 
       Test-Path $ExpectedOutput | Should be $true
       $LASTEXITCODE | Should Be 0
     }
@@ -382,7 +383,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
         }
 
         It 'File copy: <Name> ' -TestCases:$shells {
-            param([string]$Name, $Path, $CmdOptions)
+            param([string]$Name, $Path, $CmdOption)
             if ($Path -eq $null) {
                throw "$Name not found, please install it to run this test"
             } 
@@ -391,10 +392,11 @@ Describe "SFTP Test Cases" -Tags "CI" {
                $Commands = "put $tempFilePath $serverDirectory
                              ls $serverDirectory"
                Set-Content $batchFilePath -Encoding UTF8 -value $Commands
-               $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) -b $batchFilePath test_target > $outputFilePath")
+               $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port -b $batchFilePath test_target > $outputFilePath")
                iex $str
 
                #validate file content.
+               Get-Content $outputFilePath | Write-Host 
                $ExpectedOutput = (join-path $serverdirectory $tempFileName)
                Test-Path $ExpectedOutput | Should be $true
             }

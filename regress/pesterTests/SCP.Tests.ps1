@@ -318,7 +318,7 @@ Describe "Tests for scp command" -Tags "CI" {
             $DestinationFilePath = Join-Path $DestinationDir $largeFileName
             CheckTarget -target $DestinationFilePath | Should Be $true
 
-            $equal = @(Compare-Object (Get-ChildItem -path $Source) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
+            $equal = @(Compare-Object (Get-ChildItem -path $largeFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
             $equal | Should Be $true
         }
     }
@@ -375,7 +375,7 @@ Describe "Tests for scp command" -Tags "CI" {
                 $DestinationFilePath = Join-Path $DestinationDir $fileName1
                 CheckTarget -target $DestinationFilePath | Should Be $true
 
-                $equal = @(Compare-Object (Get-ChildItem -path $Source) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
+                $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
                 $equal | Should Be $true
             }
         }
