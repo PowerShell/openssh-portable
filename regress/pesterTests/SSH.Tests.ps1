@@ -407,13 +407,15 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         }
 
         It "$tC.$tI - force pseudo-terminal allocation (-t)" {
-            $o = ssh -t test_target echo 1234
-            $o | Should Be "1234"
+            ssh -t -E $logFile test_target whoami
+            $LASTEXITCODE | Should Be 0
+            $logFile | Should Contain $ssouser
         }
 
         It "$tC.$tI - disable pseudo-terminal allocation (-T)" {
-            $o = ssh -T test_target echo 1234
-            $o | Should Be "1234"
+            ssh -E $logFile test_target whoami
+            $LASTEXITCODE | Should Be 0
+            $logFile | Should Contain $ssouser
         }
     }
 }

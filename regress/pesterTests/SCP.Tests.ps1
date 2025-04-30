@@ -325,66 +325,58 @@ Describe "Tests for scp command" -Tags "CI" {
 
     Context "Configure various default shell scenarios" {
         BeforeAll {
-           $dfltShellRegPath = "HKLM:\Software\OpenSSH"
-           $dfltShellRegKeyName = "DefaultShell"
-           $dfltShellCmdOptionRegKeyName = "DefaultShellCommandOption"
-           Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
-           Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
-        }
-
-        AfterAll {
-           Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
-           Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
-        }
-
-        $shells = @(
-           @{
-              Name = "Windows PowerShell"
-              Path = (Get-Command powershell.exe -ErrorAction SilentlyContinue).Path
-              CmdOption = "/c"
-           },
-           @{
-              Name = "PowerShell Core"
-              Path = (Get-Command pwsh -ErrorAction SilentlyContinue).Path
-              CmdOption = $null
-           },
-           @{
-              Name = "Bash"
-              Path = (Get-Command bash -ErrorAction SilentlyContinue).Path
-              CmdOption = $null
-           },
-           @{
-              Name = "Cygwin"
-              Path = (Get-Command sh -ErrorAction SilentlyContinue).Path
-              CmdOption = $null
-           }
-        )
-
-        foreach ($shell in $shells) {
-            if ($shell.Path -ne $null) {
-               Context "Configure default shell as $($shell.Name)" {
-                    BeforeAll {
-                       ConfigureDefaultShell -default_shell_path $shell.Path -default_shell_cmd_option_val $shell.CmdOption
-                    }
-                    AfterAll {
-                       Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
-                       Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
-                    }
-                    It 'File copy: <Title> ' -TestCases:$testData {
-                       param([string]$Title, $Source, $Destination, [string]$Options)
-                       iex  "scp $Options $Source $Destination"
-                       $LASTEXITCODE | Should Be 0
-                       #validate file content. DestPath is the path to the file.
-                       CheckTarget -target $DestinationFilePath | Should Be $true
-                       $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
-                       $equal | Should Be $true
-                       if($Options.contains("-p ") -and [environment]::OSVersion.Version.Major -ge 10)
-                       {
-                           $equal = @(Compare-Object (Get-ChildItem -path $SourceFilePath).LastWriteTime.DateTime (Get-ChildItem -path $DestinationFilePath).LastWriteTime.DateTime ).Length -eq 0
-                           $equal | Should Be $true
-                       }
-                    }
+            $dfltShellRegPath = $null
+            $dfltShellRegPath = "HKLM:\Software\OpenSSH"
+            $dfltShellRegKeyName = "DefaultShell"
+            $dfltShellCmdOptionRegKeyName = "DefaultShellCommandOption"
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
+            $shells = @(
+                @{
+                    Name = "Windows PowerShell"
+                    Path = (Get-Command powershell.exe -ErrorAction SilentlyContinue).Path
+                    CmdOption = "/c"
+                },
+                @{
+                    Name = "PowerShell Core"
+                    Path = (Get-Command pwsh -ErrorAction SilentlyContinue).Path
+                    CmdOption = $null
+                },
+                @{
+                    Name = "Bash"
+                    Path = (Get-Command bash -ErrorAction SilentlyContinue).Path
+                    CmdOption = $null
+                },
+                @{
+                    Name = "Cygwin"
+                    Path = (Get-Command sh -ErrorAction SilentlyContinue).Path
+                    CmdOption = $null
                 }
+            )
+        }
+
+        AfterEach {
+            if ($dfltShellRegPath) { 
+                Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
+                Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
+            }
+        }
+
+        It 'File copy: <Name> ' -TestCases:$shells {
+            param([string]$Name, $Path, $CmdOption)
+            if ($Path -eq $null) {
+                throw "$Name not found, please install it to run this test"
+            } 
+            else {
+                ConfigureDefaultShell -default_shell_path $Path -default_shell_cmd_option_val $CmdOption
+                iex  "scp test_target:$SourceFilePath $DestinationDir"
+                $LASTEXITCODE | Should Be 0
+                #validate file content. DestPath is the path to the file.
+                $DestinationFilePath = Join-Path $DestinationDir $fileName1
+                CheckTarget -target $DestinationFilePath | Should Be $true
+
+                $equal = @(Compare-Object (Get-ChildItem -path $Source) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
+                $equal | Should Be $true
             }
         }
     }

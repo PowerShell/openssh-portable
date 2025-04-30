@@ -342,67 +342,62 @@ Describe "SFTP Test Cases" -Tags "CI" {
       $LASTEXITCODE | Should Be 0
     }
 
-   Context "Configure various default shell scenarios" {
-      BeforeAll {
-         $dfltShellRegPath = "HKLM:\Software\OpenSSH"
-         $dfltShellRegKeyName = "DefaultShell"
-         $dfltShellCmdOptionRegKeyName = "DefaultShellCommandOption"
-         Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
-         Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
-      }
+    Context "Configure various default shell scenarios" {
+        BeforeAll {
+            $dfltShellRegPath = $null
+            $dfltShellRegPath = "HKLM:\Software\OpenSSH"
+            $dfltShellRegKeyName = "DefaultShell"
+            $dfltShellCmdOptionRegKeyName = "DefaultShellCommandOption"
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
+            $shells = @(
+                @{
+                    Name = "Windows PowerShell"
+                    Path = (Get-Command powershell.exe -ErrorAction SilentlyContinue).Path
+                    CmdOption = "/c"
+                },
+                @{
+                    Name = "PowerShell Core"
+                    Path = (Get-Command pwsh -ErrorAction SilentlyContinue).Path
+                    CmdOption = $null
+                },
+                @{
+                    Name = "Bash"
+                    Path = (Get-Command bash -ErrorAction SilentlyContinue).Path
+                    CmdOption = $null
+                },
+                @{
+                    Name = "Cygwin"
+                    Path = (Get-Command sh -ErrorAction SilentlyContinue).Path
+                    CmdOption = $null
+                }
+            )
+        }
 
-      AfterAll {
-         Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
-         Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
-      }
-
-      $shells = @(
-         @{
-            Name = "Windows PowerShell"
-            Path = (Get-Command powershell.exe -ErrorAction SilentlyContinue).Path
-            CmdOption = "/c"
-         },
-         @{
-            Name = "PowerShell Core"
-            Path = (Get-Command pwsh -ErrorAction SilentlyContinue).Path
-            CmdOption = $null
-         },
-         @{
-            Name = "Bash"
-            Path = (Get-Command bash -ErrorAction SilentlyContinue).Path
-            CmdOption = $null
-         },
-         @{
-            Name = "Cygwin"
-            Path = (Get-Command sh -ErrorAction SilentlyContinue).Path
-            CmdOption = $null
-         }
-      )
-
-      foreach ($shell in $shells) {
-         if ($shell.Path -ne $null) {
-            Context "Configure default shell as $($shell.Name)" {
-               BeforeAll {
-                  ConfigureDefaultShell -default_shell_path $shell.Path -default_shell_cmd_option_val $shell.CmdOption
-               }
-
-               AfterAll {
-                  Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
-                  Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
-               }
-
-               It "<Title> for $($shell.Name)" -TestCases:$testData1 -Skip:($shell.Path -eq $null) {
-                  param([string]$Title, $Options, $Commands, $ExpectedOutput)
-
-                  Set-Content $batchFilePath -Encoding UTF8 -value $Commands
-                  $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) -b $batchFilePath test_target > $outputFilePath")
-                  iex $str
-
-                  #validate file content.
-                  Test-Path $ExpectedOutput | Should be $true
-               }
+        AfterEach {
+            if ($dfltShellRegPath) { 
+                Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
+                Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
             }
-         }
-      }
-   }
+        }
+
+        It 'File copy: <Name> ' -TestCases:$shells {
+            param([string]$Name, $Path, $CmdOptions)
+            if ($Path -eq $null) {
+               throw "$Name not found, please install it to run this test"
+            } 
+            else {
+               ConfigureDefaultShell -default_shell_path $Path -default_shell_cmd_option_val $CmdOption
+               $Commands = "put $tempFilePath $serverDirectory
+                             ls $serverDirectory"
+               Set-Content $batchFilePath -Encoding UTF8 -value $Commands
+               $str = $ExecutionContext.InvokeCommand.ExpandString("sftp -P $port $($Options) -b $batchFilePath test_target > $outputFilePath")
+               iex $str
+
+               #validate file content.
+               $ExpectedOutput = (join-path $serverdirectory $tempFileName)
+               Test-Path $ExpectedOutput | Should be $true
+            }
+        }
+    }
 }
