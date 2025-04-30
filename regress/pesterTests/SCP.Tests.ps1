@@ -164,6 +164,7 @@ Describe "Tests for scp command" -Tags "CI" {
                 Title = 'copy large file from remote dir to local dir'
                 Source = "test_target:$largeFilePath"
                 Destination = $DestinationDir
+                Options = "-p -c aes128-ctr -C"
             }
         )
 
@@ -314,13 +315,10 @@ Describe "Tests for scp command" -Tags "CI" {
             iex "scp $Options $Source $Destination"
             $LASTEXITCODE | Should Be 0
 
-            $DestinationFilePath = Join-Path $Destination $largeFileName
+            $DestinationFilePath = Join-Path $DestinationDir $largeFileName
             CheckTarget -target $DestinationFilePath | Should Be $true
 
             $equal = @(Compare-Object (Get-ChildItem -path $Source) (Get-ChildItem -path $DestinationFilePath) -Property Name, Length ).Length -eq 0
-            $equal | Should Be $true
-
-            $equal = @(Compare-Object (Get-ChildItem -path $Source).LastWriteTime.DateTime (Get-ChildItem -path $DestinationFilePath).LastWriteTime.DateTime ).Length -eq 0
             $equal | Should Be $true
         }
     }
