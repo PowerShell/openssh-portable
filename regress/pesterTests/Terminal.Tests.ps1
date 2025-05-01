@@ -11,7 +11,7 @@ Describe "E2E scenarios for an interactive terminal" -Tags "CI" {
         {
             Throw "`$OpenSSHTestInfo is null. Please run Set-OpenSSHTestEnvironment to set test environments."
         }
-
+        $ssouser = $OpenSSHTestInfo["SSOUser"]
         $testDir = Join-Path $OpenSSHTestInfo["TestDataPath"] $suite
         if(-not (Test-Path $testDir))
         {
