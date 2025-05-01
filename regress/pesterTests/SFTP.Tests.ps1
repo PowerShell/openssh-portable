@@ -339,7 +339,6 @@ Describe "SFTP Test Cases" -Tags "CI" {
       iex $str
 
       #validate file content.
-      Get-Content $outputFilePath | Write-Host 
       Test-Path $ExpectedOutput | Should be $true
       $LASTEXITCODE | Should Be 0
     }
@@ -377,7 +376,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
         }
 
         AfterEach {
-            if ($dfltShellRegPath) { 
+            if ($dfltShellRegPath) {
                 Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
                 Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
             }
@@ -387,7 +386,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
             param([string]$Name, $Path, $CmdOption)
             if ($Path -eq $null) {
                throw "$Name not found, please install it to run this test"
-            } 
+            }
             else {
                ConfigureDefaultShell -default_shell_path $Path -default_shell_cmd_option_val $CmdOption
                $Commands = "put $tempFilePath $serverDirectory
