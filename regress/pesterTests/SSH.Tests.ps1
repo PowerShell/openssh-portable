@@ -408,8 +408,9 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
 
         It "$tC.$tI - force pseudo-terminal allocation (-t)" {
             $o = ssh -t test_target echo 1234
+            Write-Host "o: $o"
             $LASTEXITCODE | Should Be 0
-            $o[0].Contains("1234") | Should Be $true
+            $o | Should Be "1234"
         }
 
         It "$tC.$tI - disable pseudo-terminal allocation (-T)" {
