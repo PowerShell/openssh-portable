@@ -1,3 +1,8 @@
+param(
+  #skip if non-interactive session
+  [bool]$Skip=$true
+  )
+
 If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
 
@@ -22,8 +27,6 @@ Describe "E2E scenarios for an interactive terminal" -Tags "CI" {
         $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($ssouser, $rights, "ContainerInherit,Objectinherit", "None", "Allow")
         $acl.SetAccessRule($accessRule)
         Set-Acl -Path $testDir -AclObject $acl
-        #skip if non-interactive session
-        $skip = $Host.UI.RawUI -eq $null
     }
 
     AfterEach {$tI++;}
@@ -33,7 +36,7 @@ Describe "E2E scenarios for an interactive terminal" -Tags "CI" {
         BeforeAll {$tI=1}
         AfterAll{$tC++}
 
-        It "$tC.$tI - force pseudo-terminal allocation (-t)" -Skip:$skip {
+        It "$tC.$tI - force pseudo-terminal allocation (-t)" -Skip:$Skip {
             $o = ssh -t test_target echo 1234
             $LASTEXITCODE | Should Be 0
             $o[0].Contains("1234") | Should Be $true
