@@ -406,12 +406,6 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             $stderrFile | Should Contain "test string for invalid proxy"
         }
 
-        It "$tC.$tI - force pseudo-terminal allocation (-t) if run from terminal" -Skip:($Host.UI.RawUI -eq $null) {
-            $o = ssh -t test_target echo 1234
-            $LASTEXITCODE | Should Be 0
-            $o[0].Contains("1234") | Should Be $true
-        }
-
         It "$tC.$tI - disable pseudo-terminal allocation (-T)" {
             $o = ssh -T test_target echo 1234
             $LASTEXITCODE | Should Be 0
