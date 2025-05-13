@@ -54,7 +54,11 @@
 #include "match.h"
 
 static LogLevel log_level = SYSLOG_LEVEL_INFO;
+#ifdef WINDOWS
+int log_on_stderr = 1;
+#else
 static int log_on_stderr = 1;
+#endif /* WINDOWS */
 static int log_stderr_fd = STDERR_FILENO;
 static int log_facility = LOG_AUTH;
 static const char *argv0;

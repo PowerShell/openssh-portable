@@ -483,14 +483,14 @@ monitor_read_log(struct monitor *pmonitor)
 
 	/*log it*/
 	if (authctxt->authenticated == 0) 
-		sshlogdirect(level, forced, "%s [preauth]", msg);
+		sshlogdirect(level, forced, "user: %s: %s [preauth]", authctxt->user, msg);
 	else {
 		if (strcmp(pname, "sftp-server") == 0) {
 			log_init(pname, sftp_log_level, sftp_log_facility, sftp_log_stderr);
-			sshlogdirect(level, forced, "%s", msg);
+			sshlogdirect(level, forced, "user: %s: %s", authctxt->user, msg);
 			log_init("sshd", options.log_level, options.log_facility, log_stderr);
 		} else  
-			sshlogdirect(level, forced, "%s", msg);
+			sshlogdirect(level, forced, "user: %s: %s", authctxt->user, msg);
 	}
 #else
 	/*log it*/

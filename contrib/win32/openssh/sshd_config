@@ -12,7 +12,6 @@
 #ListenAddress ::
 
 #HostKey __PROGRAMDATA__/ssh/ssh_host_rsa_key
-#HostKey __PROGRAMDATA__/ssh/ssh_host_dsa_key
 #HostKey __PROGRAMDATA__/ssh/ssh_host_ecdsa_key
 #HostKey __PROGRAMDATA__/ssh/ssh_host_ed25519_key
 
@@ -61,12 +60,11 @@ AuthorizedKeysFile	.ssh/authorized_keys
 #PrintMotd yes
 #PrintLastLog yes
 #TCPKeepAlive yes
-#UseLogin no
 #PermitUserEnvironment no
+#Compression delayed
 #ClientAliveInterval 0
 #ClientAliveCountMax 3
 #UseDNS no
-#PidFile /var/run/sshd.pid
 #MaxStartups 10:30:100
 #PermitTunnel no
 #ChrootDirectory none

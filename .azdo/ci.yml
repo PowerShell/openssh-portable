@@ -126,6 +126,8 @@ stages:
     pool:
       vmImage: windows-latest
     displayName: Win32-OpenSSH On Windows
+    variables:
+      testFilesDrivePath: '**'
     steps:
     - powershell: |
         $powerShellPath = Join-Path -Path $env:AGENT_TEMPDIRECTORY -ChildPath 'powershell'
@@ -200,6 +202,17 @@ stages:
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
         Invoke-OpenSSHTests -OpenSSHBinPath "$env:SystemDrive/OpenSSH"
       displayName: Run tests
+
+    - pwsh: |
+        Write-Host "##vso[task.setvariable variable=testFilesDrivePath;]$env:SystemDrive"
+      displayName: Set variable
+
+    - task: PublishTestResults@2
+      inputs:
+        testResultsFormat: 'NUnit'
+        testResultsFiles: '$(testFilesDrivePath)/OpenSSHTests/*.xml'
+        failTaskOnFailedTests: true
+      condition: always()
 
     - pwsh: |
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force

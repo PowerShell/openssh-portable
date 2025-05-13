@@ -808,7 +808,7 @@ done:
 OM_uint32 
 gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t * context_handle,
 	_In_opt_ gss_cred_id_t acceptor_cred_handle, _In_ gss_buffer_t input_token_buffer, _In_opt_ gss_channel_bindings_t input_chan_bindings,
-	_Out_opt_ gss_name_t * src_name, _Out_opt_ gss_OID * mech_type, _Outptr_ gss_buffer_t output_token,
+	_Out_opt_ gss_name_t * src_name, _Out_opt_ gss_OID * mech_type, _Out_ gss_buffer_t output_token,
 	_Out_ OM_uint32 * ret_flags, _Out_opt_ OM_uint32 * time_rec, _Outptr_opt_ gss_cred_id_t * delegated_cred_handle)
 {
 	OM_uint32 ret = GSS_S_FAILURE;

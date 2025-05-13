@@ -677,9 +677,12 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 		goto done;
 	}
 
-	if (match_pattern_list(canonical_provider, allowed_providers, 0) != 1) {
+	to_lower_case(provider);
+	verbose("provider realpath: \"%.100s\"", provider);
+	verbose("allowed provider paths: \"%.100s\"", allowed_providers);
+	if (match_pattern_list(provider, allowed_providers, 1) != 1) {
 		verbose("refusing PKCS#11 add of \"%.100s\": "
-			"provider not allowed", canonical_provider);
+			"provider not allowed", provider);
 		goto done;
 	}
 
@@ -992,6 +995,7 @@ process_ext_session_bind(struct sshbuf* request, struct agent_connection* con)
 	/* record new key/sid */
 	if (con->nsession_ids >= AGENT_MAX_SESSION_IDS) {
 		error_f("too many session IDs recorded");
+		r = -1;
 		goto out;
 	}
 	con->session_ids = xrecallocarray(con->session_ids, con->nsession_ids,
