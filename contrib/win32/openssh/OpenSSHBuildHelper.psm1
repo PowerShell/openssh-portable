@@ -365,21 +365,12 @@ function Start-OpenSSHPackage
     }
 
     #copy libcrypto dll
-    $libreSSLPath = Join-Path $PSScriptRoot "vcpkg_installed"
+    $libreSSLPath = Join-Path $PSScriptRoot "vcpkg_installed" 
     if (-not $NoOpenSSL.IsPresent)
     {        
-        if($OneCore)
-        {
-            # TO-DO: update path - this may be the same as below or use another custom triplet?
-            Copy-Item -Path $(Join-Path $libreSSLPath "bin\onecore\$NativeHostArch\libcrypto.dll") -Destination $packageDir -Force -ErrorAction Stop
-            Copy-Item -Path $(Join-Path $libreSSLPath "bin\onecore\$NativeHostArch\libcrypto.pdb") -Destination $symbolsDir -Force -ErrorAction Stop
-        }
-        else
-        {
-            $subPath = $NativeHostArch + "-custom\" + $NativeHostArch + "-custom\bin\"
-            Copy-Item -Path $(Join-Path $libreSSLPath "$subPath\libcrypto.dll") -Destination $packageDir -Force -ErrorAction Stop
-            Copy-Item -Path $(Join-Path $libreSSLPath "$subPath\libcrypto.pdb") -Destination $symbolsDir -Force -ErrorAction Stop
-        }
+        $subPath = $NativeHostArch + "-custom\" + $NativeHostArch + "-custom\bin\"
+        Copy-Item -Path $(Join-Path $libreSSLPath "$subPath\libcrypto.dll") -Destination $packageDir -Force -ErrorAction Stop
+        Copy-Item -Path $(Join-Path $libreSSLPath "$subPath\libcrypto.pdb") -Destination $symbolsDir -Force -ErrorAction Stop
     }    
 
     if ($DestinationPath -ne "") {
