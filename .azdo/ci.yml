@@ -30,7 +30,7 @@ stages:
         Write-Host "sending " + $vstsCommandString
         Write-Host "##$vstsCommandString"
       displayName: Install PowerShell Core
-
+    
     - pwsh: |
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
         Invoke-AzDOBuild
@@ -133,12 +133,12 @@ stages:
 
     - pwsh: |
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
-        Install-OpenSSH -SourceDir "$(System.ArtifactsDirectory)/Win32-OpenSSH/x64/Release" -OpenSSHDir "$env:ProgramFiles/OpenSSH" -Verbose
+        Install-OpenSSH -SourceDir "$(System.ArtifactsDirectory)/Win32-OpenSSH/x64/Release" -OpenSSHDir "$env:SystemDrive/OpenSSH" -Verbose
       displayName: Install Win32-OpenSSH
 
     - pwsh: |
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
-        Install-UnitTests -SourceDir "$(System.ArtifactsDirectory)/UnitTests/x64/Release" -OpenSSHDir "$env:ProgramFiles/OpenSSH" -Verbose
+        Install-UnitTests -SourceDir "$(System.ArtifactsDirectory)/UnitTests/x64/Release" -OpenSSHDir "$env:SystemDrive/OpenSSH" -Verbose
       displayName: Install Unit Tests
 
     - pwsh: |
@@ -155,7 +155,7 @@ stages:
       displayName: Capture source repo directory for test
 
     - pwsh: |
-        $installedOpenSSHDir = "$env:ProgramFiles/OpenSSH"
+        $installedOpenSSHDir = "$env:SystemDrive/OpenSSH"
         Write-Verbose -Verbose -Message "Installed OpenSSH directory: $installedOpenSSHDir"
         Get-ChildItem -Path $installedOpenSSHDir -Recurse
       displayName: Capture installed OpenSSH directory
@@ -163,11 +163,11 @@ stages:
     - pwsh: |
         # Run OpenSSH tests
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
-        Invoke-OpenSSHTests -OpenSSHBinPath "$env:ProgramFiles/OpenSSH"
+        Invoke-OpenSSHTests -OpenSSHBinPath "$env:SystemDrive/OpenSSH"
       displayName: Run tests
 
     - pwsh: |
-        Write-Host "##vso[task.setvariable variable=testFilesDrivePath;]$env:ProgramFiles"
+        Write-Host "##vso[task.setvariable variable=testFilesDrivePath;]$env:SystemDrive"
       displayName: Set variable
 
     - task: PublishTestResults@2
