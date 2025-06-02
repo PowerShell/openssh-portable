@@ -547,12 +547,6 @@ function Start-OpenSSHBuild
         $xml.Project.PropertyGroup.AdditionalDependentLibs = 'onecore.lib;shlwapi.lib'
         $xml.Project.PropertyGroup.MinimalCoreWin = 'true'
         
-        #Use onecore libcrypto binaries
-        $xml.Project.PropertyGroup."LibreSSL-x86-Path" = '$(SolutionDir)\LibreSSL\bin\onecore\x86\'
-        $xml.Project.PropertyGroup."LibreSSL-x64-Path" = '$(SolutionDir)\LibreSSL\bin\onecore\x64\'
-        $xml.Project.PropertyGroup."LibreSSL-arm-Path" = '$(SolutionDir)\LibreSSL\bin\onecore\arm\'
-        $xml.Project.PropertyGroup."LibreSSL-arm64-Path" = '$(SolutionDir)\LibreSSL\bin\onecore\arm64\'
-        
         $xml.Save($PathTargets)
     }
     
