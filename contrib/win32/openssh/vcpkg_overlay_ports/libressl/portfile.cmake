@@ -15,8 +15,10 @@ vcpkg_extract_source_archive(
     ARCHIVE "${LIBRESSL_SOURCE_ARCHIVE}"
     PATCHES
         pkgconfig.diff
-        "modify-name-libcrypto.patch"
-        "modify-cmake-arm.patch"
+        add-resource-header-file.patch
+        add-version-file.patch
+        modify-cmakelists.patch
+        modify-crypto-cmakelists.patch
 )
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
@@ -24,16 +26,32 @@ vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
         "tools" LIBRESSL_APPS
 )
 
-vcpkg_cmake_configure(
-    SOURCE_PATH "${SOURCE_PATH}"
-    OPTIONS
-        ${FEATURE_OPTIONS}
-        -DLIBRESSL_INSTALL_CMAKEDIR=share/${PORT}
-        -DLIBRESSL_TESTS=OFF
-        -DBUILD_SHARED_LIBS=ON
-    OPTIONS_DEBUG
-        -DLIBRESSL_APPS=OFF
-)
+if(VCPKG_TARGET_ARCHITECTURE STREQUAL "arm")
+    vcpkg_cmake_configure(
+        SOURCE_PATH "${SOURCE_PATH}"
+        WINDOWS_USE_MSBUILD
+        OPTIONS
+            ${FEATURE_OPTIONS}
+            -DLIBRESSL_INSTALL_CMAKEDIR=share/${PORT}
+            -DLIBRESSL_TESTS=OFF
+            -DBUILD_SHARED_LIBS=ON
+            -DCMAKE_SYSTEM_VERSION="10.0.22621.0"
+        OPTIONS_DEBUG
+            -DLIBRESSL_APPS=OFF
+    )
+else()
+    vcpkg_cmake_configure(
+        SOURCE_PATH "${SOURCE_PATH}"
+        WINDOWS_USE_MSBUILD
+        OPTIONS
+            ${FEATURE_OPTIONS}
+            -DLIBRESSL_INSTALL_CMAKEDIR=share/${PORT}
+            -DLIBRESSL_TESTS=OFF
+            -DBUILD_SHARED_LIBS=ON
+        OPTIONS_DEBUG
+            -DLIBRESSL_APPS=OFF
+    )
+endif()
 
 vcpkg_cmake_install()
 vcpkg_copy_pdbs()
