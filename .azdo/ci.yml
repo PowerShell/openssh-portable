@@ -28,7 +28,7 @@ stages:
         $libresslVersionJson = $vcpkgObj | Select-Object -ExpandProperty overrides | Where-Object { $_.name -eq 'libressl' } | Select-Object -ExpandProperty version
 
         # resource file version needs to be trimmed (e.g. 4.0.0.0 to 4.0.0)
-        $patchContent = Get-Content "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_overlay_ports/libressl/add-resource-file.patch"
+        $patchContent = Get-Content "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_overlay_ports/libressl/add-version-file.patch"
         $libresslVersionPatch = ($patchContent -join "`n" | Select-String -Pattern '"FileVersion",\s*"(\d+\.\d+\.\d+\.\d+)"' -AllMatches).Matches | ForEach-Object { $_.Groups[1].Value }
         $libresslVersionPatchParts = $libresslVersionPatch -split '\.'
         $libresslVersionPatchShort = ($libresslVersionPatchParts[0..2] -join '.')
