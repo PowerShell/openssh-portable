@@ -243,6 +243,12 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             $LASTEXITCODE | Should Be 0
             $o | Should Be `$env:computername
         }
+        It "$tC.$tI - exiting ssh session exits sshd session child processes" -skip:$skip {
+            $sshdPidCountBefore = (Get-Process -Name sshd* | Select-Object -ExpandProperty Id).Count
+            ssh test_target "echo '`$env:computername'"
+            $sshdPidCountAfter = (Get-Process -Name sshd* | Select-Object -ExpandProperty Id).Count
+            $sshdPidCountAfter | Should Be $sshdPidCountBefore
+        }
     }
 
     Context "$tC - configure powershell as default shell with admin user" {
@@ -265,7 +271,7 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         It "$tC.$tI - admin session can write to console" -skip:$skip {
             $adminusername = $OpenSSHTestInfo['AdminUser']
             $o = ssh $adminusername@test_target "Get-ComputerInfo"
-            $LASTEXITCODE | Should Be 0 
+            $LASTEXITCODE | Should Be 0
             $o | Select-String -Pattern "WindowsVersion" | Should Match "WindowsVersion"
         }
     }
