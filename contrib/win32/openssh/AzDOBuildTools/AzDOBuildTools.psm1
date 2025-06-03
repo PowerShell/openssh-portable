@@ -37,8 +37,6 @@ function Invoke-AzDOBuild
 {
       Start-OpenSSHBuild -Configuration Release -NativeHostArch x64 -Verbose
       Start-OpenSSHBuild -Configuration Release -NativeHostArch x86 -Verbose
-      Start-OpenSSHBuild -Configuration Release -NativeHostArch arm64 -Verbose
-      Start-OpenSSHBuild -Configuration Release -NativeHostArch arm -Verbose
       Write-BuildMessage -Message "OpenSSH binaries build success!" -Category Information
 }
 
