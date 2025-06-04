@@ -39,7 +39,8 @@ Describe "E2E scenarios for sshd" -Tags "CI" {
 
         It "sshd child process ends when LoginGraceTime is exceeded" {
             # Get a count of any sshd processes before a connection in case there's another service running on the system
-            $sshdPidCountBefore = (Get-Process -Name sshd* | Select-Object -ExpandProperty Id).Count - 1
+            # should be at least 1 sshd process for the test service
+            $sshdPidCountBefore = (Get-Process -Name sshd* | Select-Object -ExpandProperty Id).Count
             # Start ssh process (do not authenticate)
             $sshProc = Start-Process -FilePath ssh -ArgumentList "-l $user test_target" -PassThru
             Start-Sleep -Seconds 2
@@ -52,8 +53,10 @@ Describe "E2E scenarios for sshd" -Tags "CI" {
                 $sshProc | Stop-Process -Force
             }
 
-            $sshdPidsCountWithConn | Should Be (3 + $sshdPidCountBefore)
-            $sshdPidsCountAfter | Should Be (2 + $sshdPidCountBefore)
+            # with a connection, there should be two additional session processes
+            $sshdPidsCountWithConn | Should Be (2 + $sshdPidCountBefore)
+            # after LoginGraceTime expires, one of the session processes should exit
+            $sshdPidsCountAfter | Should Be (1 + $sshdPidCountBefore)
         }
 
         It "sshd pre-auth process is spawned under runtime generated virtual account" {
