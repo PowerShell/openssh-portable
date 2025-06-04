@@ -246,6 +246,7 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         It "$tC.$tI - exiting ssh session exits sshd session child processes" -skip:$skip {
             $sshdPidCountBefore = (Get-Process -Name sshd* | Select-Object -ExpandProperty Id).Count
             ssh test_target "echo '`$env:computername'"
+            Start-Sleep -Seconds 2
             $sshdPidCountAfter = (Get-Process -Name sshd* | Select-Object -ExpandProperty Id).Count
             $sshdPidCountAfter | Should Be $sshdPidCountBefore
         }
