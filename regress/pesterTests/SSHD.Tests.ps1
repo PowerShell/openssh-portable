@@ -37,7 +37,7 @@ Describe "E2E scenarios for sshd" -Tags "CI" {
             Remove-Item $sshdconfig_temp -Force
         }
 
-        It "sshd child process ends when logingracetime is exceeded" {
+        It "sshd child process ends when LoginGraceTime is exceeded" {
             # Get a count of any sshd processes before a connection in case there's another service running on the system
             $sshdPidCountBefore = (Get-Process -Name sshd* | Select-Object -ExpandProperty Id).Count - 1
             # Start ssh process (do not authenticate)
