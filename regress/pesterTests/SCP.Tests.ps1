@@ -193,22 +193,6 @@ Describe "Tests for scp command" -Tags "CI" {
             }
             return $true
         }
-
-        function ConfigureDefaultShell {
-            param
-            (
-                  [string] $default_shell_path,
-                  [string] $default_shell_cmd_option_val = $null
-            )
-
-            if (!(Test-Path $dfltShellRegPath)) {
-                New-Item -Path $dfltShellRegPath -Force | Out-Null
-            }
-            New-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -Value $default_shell_path -PropertyType String -Force
-            if ($default_shell_cmd_option_val -ne $null) {
-                New-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -Value $default_shell_cmd_option_val -PropertyType String -Force
-            }
-        }
     }
     AfterAll {
 
@@ -356,7 +340,7 @@ Describe "Tests for scp command" -Tags "CI" {
         }
 
         AfterEach {
-            if ($dfltShellRegPath) { 
+            if ($dfltShellRegPath) {
                 Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
                 Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
             }
@@ -366,7 +350,7 @@ Describe "Tests for scp command" -Tags "CI" {
             param([string]$Name, $Path, $CmdOption)
             if ($Path -eq $null) {
                 throw "$Name not found, please install it to run this test"
-            } 
+            }
             else {
                 ConfigureDefaultShell -default_shell_path $Path -default_shell_cmd_option_val $CmdOption
                 iex  "scp test_target:$SourceFilePath $DestinationDir"

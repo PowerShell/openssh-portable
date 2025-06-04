@@ -199,22 +199,6 @@ Describe "SFTP Test Cases" -Tags "CI" {
                  Clear-Content "$env:ProgramData\ssh\logs\sftp-server.log" -Force -ErrorAction SilentlyContinue
              }
          }
-
-        function ConfigureDefaultShell {
-            param
-            (
-                  [string] $default_shell_path,
-                  [string] $default_shell_cmd_option_val = $null
-            )
-
-            if (!(Test-Path $dfltShellRegPath)) {
-               New-Item -Path $dfltShellRegPath -Force | Out-Null
-            }
-            New-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -Value $default_shell_path -PropertyType String -Force
-            if ($default_shell_cmd_option_val -ne $null) {
-               New-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -Value $default_shell_cmd_option_val -PropertyType String -Force
-            }
-         }
     }
 
     AfterAll {
