@@ -60,7 +60,7 @@ Describe "Tests for admin and non-admin event logs" -Tags "CI" {
             $tC++
         }
 
-        It "$tC.$tI-Nonadmin SSH Connection"  -skip:$skip {
+        It "$tC.$tI-Nonadmin SSH Connection" {
             $o = ssh -l $nonadminusername test_target echo 1234
             $o | Should Be 1234
             Start-Sleep $sshdDelay
@@ -70,7 +70,7 @@ Describe "Tests for admin and non-admin event logs" -Tags "CI" {
             $eventLogOperational | Should Not Be $null
         }
 
-        It "$tC.$tI-Admin SSH Connection"  -skip:$skip {
+        It "$tC.$tI-Admin SSH Connection" {
             $o = ssh -l $adminusername test_target echo 1234
             $o | Should Be 1234
             Start-Sleep $sshdDelay
@@ -154,7 +154,7 @@ exit"
             $tC++
         }
 
-        It "$tC.$tI-Nonadmin SFTP Connection"  -skip:$skip {
+        It "$tC.$tI-Nonadmin SFTP Connection" {
             sftp -i $NonadminKeyFilePath -b $batchFilePath -o User=$nonadminusername test_target
             Start-Sleep $sshdDelay
             $eventLogDebug = wevtutil qe "OpenSSH/Debug" /c:5 /f:text
@@ -163,7 +163,7 @@ exit"
             $eventLogOperational | Should Not Be $null
         }
 
-        It "$tC.$tI-Admin SFTP Connection"  -skip:$skip {
+        It "$tC.$tI-Admin SFTP Connection" {
             sftp -i $AdminKeyFilePath -b $batchFilePath -o User=$adminusername test_target
             Start-Sleep $sshdDelay
             $eventLogDebug = wevtutil qe "OpenSSH/Debug" /c:5 /f:text
