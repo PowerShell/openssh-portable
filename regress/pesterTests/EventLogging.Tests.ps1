@@ -145,7 +145,7 @@ exit"
             Remove-Item -path "$NonadminKeyFilePath*" -Force -ErrorAction SilentlyContinue
             Remove-Item -path "$AdminKeyFilePath*" -Force -ErrorAction SilentlyContinue
 
-            $authorized_key = Join-Path .ssh authorized_keys
+            $authorized_key = Join-Path '.ssh' authorized_keys
             $AdminAuthKeysPath = Join-Path $AdminUserProfile $authorized_key
             $NonAdminAuthKeysPath = Join-Path $NonAdminUserProfile $authorized_key
             Remove-Item -path "$AdminAuthKeysPath*" -Force -ErrorAction SilentlyContinue
