@@ -105,7 +105,7 @@ Describe "Tests for admin and non-admin event logs" -Tags "CI" {
                 {
                     ssh-keygen.exe -t ed25519 -f $KeyFilePath -P ""
                 }
-                Copy-Item "$keyFilePath.pub" $authorizedkeyPath -Force -ErrorAction SilentlyContinue
+                Copy-Item "$KeyFilePath.pub" $authorizedkeyPath -Force -ErrorAction SilentlyContinue
                 Repair-AuthorizedKeyPermission -Filepath $authorizedkeyPath -confirm:$false
             }
 
