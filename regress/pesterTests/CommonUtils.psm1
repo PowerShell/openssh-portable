@@ -150,7 +150,7 @@ function ConfigureDefaultShell {
           [string] $default_shell_path,
           [string] $dfltShellRegPath = "HKLM:\Software\OpenSSH",
           [string] $dfltShellRegKeyName = "DefaultShell",
-          [string] dfltShellCmdOptionRegKeyName = "DefaultShellCommandOption",
+          [string] $dfltShellCmdOptionRegKeyName = "DefaultShellCommandOption",
           [string] $default_shell_cmd_option_val = $null
     )
     if (!(Test-Path $dfltShellRegPath)) {
