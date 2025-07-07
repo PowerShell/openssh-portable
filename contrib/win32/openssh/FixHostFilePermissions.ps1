@@ -48,11 +48,11 @@ Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList"  
     if($properties)
     {
         $userProfilePath =  $properties.ProfileImagePath
-    }
-    $filePath = Join-Path $userProfilePath .ssh\authorized_keys
-    if(Test-Path $filePath -PathType Leaf)
-    {
-        Repair-AuthorizedKeyPermission -FilePath $filePath @psBoundParameters
+        $filePath = Join-Path $userProfilePath .ssh\authorized_keys
+        if(Test-Path $filePath -PathType Leaf)
+        {
+            Repair-AuthorizedKeyPermission -FilePath $filePath @psBoundParameters
+        }
     }
 }
 
