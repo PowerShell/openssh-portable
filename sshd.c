@@ -70,6 +70,8 @@
 #endif
 
 #ifdef WINDOWS
+#include <hvsocket.h>
+#include <rpc.h>
 #include "sshTelemetry.h"
 #endif
 
@@ -824,18 +826,41 @@ listen_on_addrs(struct listenaddr *la)
 	char ntop[NI_MAXHOST], strport[NI_MAXSERV];
 
 	for (ai = la->addrs; ai; ai = ai->ai_next) {
+#ifdef WINDOWS
+		if (ai->ai_family != AF_INET && ai->ai_family != AF_INET6 && ai->ai_family != AF_HYPERV)
+#else
 		if (ai->ai_family != AF_INET && ai->ai_family != AF_INET6)
+#endif /* WINDOWS */
 			continue;
 		if (num_listen_socks >= MAX_LISTEN_SOCKS)
 			fatal("Too many listen sockets. "
 			    "Enlarge MAX_LISTEN_SOCKS");
-		if ((ret = getnameinfo(ai->ai_addr, ai->ai_addrlen,
-		    ntop, sizeof(ntop), strport, sizeof(strport),
-		    NI_NUMERICHOST|NI_NUMERICSERV)) != 0) {
-			error("getnameinfo failed: %.100s",
-			    ssh_gai_strerror(ret));
-			continue;
+#ifdef WINDOWS
+		if (ai->ai_family != AF_HYPERV)
+		{
+#endif /* WINDOWS */
+			if ((ret = getnameinfo(ai->ai_addr, ai->ai_addrlen,
+				 ntop, sizeof(ntop), strport, sizeof(strport),
+				 NI_NUMERICHOST|NI_NUMERICSERV)) != 0) {
+				error("getnameinfo failed: %.100s",
+					 ssh_gai_strerror(ret));
+				continue;
+			}
+#ifdef WINDOWS
 		}
+		else
+		{
+			/* ai_family == AF_HYPERV */
+			PSOCKADDR_HV psa;
+			RPC_CSTR guid;
+
+			psa = (PSOCKADDR_HV)ai->ai_addr;
+			UuidToString(&psa->VmId, &guid);
+			sprintf_s(ntop, NI_MAXHOST, "%s", guid);
+			sprintf_s(strport, NI_MAXSERV, "%u", psa->ServiceId.Data1);
+			RpcStringFree(&guid);
+		}
+#endif /* WINDOWS */
 		/* Create socket for listening. */
 		listen_sock = socket(ai->ai_family, ai->ai_socktype,
 		    ai->ai_protocol);

@@ -14,6 +14,7 @@
 #ifdef WINDOWS
 #include <LM.h>
 #include <Sddl.h>
+#include <hvsocket.h>
 #endif // WINDOWS
 
 #include <sys/types.h>
@@ -840,6 +841,10 @@ add_one_listen_addr(ServerOptions *options, const char *addr,
 	char strport[NI_MAXSERV];
 	int gaierr;
 	u_int i;
+#ifdef WINDOWS
+	GUID guid;
+	HRESULT hr;
+#endif // WINDOWS
 
 	/* Find listen_addrs entry for this rdomain */
 	for (i = 0; i < options->num_listen_addrs; i++) {
@@ -863,19 +868,49 @@ add_one_listen_addr(ServerOptions *options, const char *addr,
 	}
 	/* options->listen_addrs[i] points to the addresses for this rdomain */
 
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = options->address_family;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = (addr == NULL) ? AI_PASSIVE : 0;
-	snprintf(strport, sizeof strport, "%d", port);
-	if ((gaierr = getaddrinfo(addr, strport, &hints, &aitop)) != 0)
-		fatal("bad addr or host: %s (%s)",
-		    addr ? addr : "<NULL>",
-		    ssh_gai_strerror(gaierr));
-	for (ai = aitop; ai->ai_next; ai = ai->ai_next)
-		;
-	ai->ai_next = options->listen_addrs[i].addrs;
-	options->listen_addrs[i].addrs = aitop;
+#ifdef WINDOWS
+	/* Check whether the address is a GUID or not (for Hyper-V addresses) */
+	hr = UuidFromStringA(addr, &guid);
+	if (hr == S_OK)
+	{
+		PSOCKADDR_HV psa;
+
+		ai = xmalloc(sizeof(ADDRINFOA));			// aitop;
+		memset(ai, 0, sizeof(ADDRINFOA));
+		ai->ai_family = AF_HYPERV;
+		ai->ai_protocol = HV_PROTOCOL_RAW;
+		ai->ai_socktype = SOCK_STREAM;
+		ai->ai_addrlen = sizeof(SOCKADDR_HV);
+
+		ai->ai_addr = xmalloc(ai->ai_addrlen);
+		memset(ai->ai_addr, 0, ai->ai_addrlen);
+		psa = (PSOCKADDR_HV)ai->ai_addr;
+
+		psa->Family = AF_HYPERV;
+		memcpy(&psa->VmId, &guid, sizeof(GUID));
+		hr = UuidFromStringA("00000000-facb-11e6-bd58-64006a7986d3", &psa->ServiceId);
+		psa->ServiceId.Data1 = port;
+
+		ai->ai_next = options->listen_addrs[i].addrs;
+		options->listen_addrs[i].addrs = ai;
+	} else {
+#endif // WINDOWS
+		memset(&hints, 0, sizeof(hints));
+		hints.ai_family = options->address_family;
+		hints.ai_socktype = SOCK_STREAM;
+		hints.ai_flags = (addr == NULL) ? AI_PASSIVE : 0;
+		snprintf(strport, sizeof strport, "%d", port);
+		if ((gaierr = getaddrinfo(addr, strport, &hints, &aitop)) != 0)
+			fatal("bad addr or host: %s (%s)",
+				addr ? addr : "<NULL>",
+				ssh_gai_strerror(gaierr));
+		for (ai = aitop; ai->ai_next; ai = ai->ai_next)
+			;
+		ai->ai_next = options->listen_addrs[i].addrs;
+		options->listen_addrs[i].addrs = aitop;
+#ifdef WINDOWS
+	}
+#endif // WINDOWS
 }
 
 /* Returns nonzero if the routing domain name is valid */
@@ -1284,6 +1319,9 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 	int ret = -1;
 	char **strs = NULL; /* string array arguments; freed implicitly */
 	u_int nstrs = 0;
+#ifdef WINDOWS
+	GUID guid;
+#endif // WINDOWS
 
 	/* Strip trailing whitespace. Allow \f (form feed) at EOL only */
 	if ((len = strlen(line)) == 0)
@@ -1396,6 +1434,12 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 		    && strchr(p+1, ':') != NULL) {
 			port = 0;
 			p = arg;
+#ifdef WINDOWS
+		/* Check whether the address is a GUID or not (for Hyper-V addresses) */
+		} else if (UuidFromStringA(arg, &guid) == S_OK) {
+			port = 0;
+			p = arg;
+#endif // WINDOWS
 		} else {
 			arg2 = NULL;
 			p = hpdelim(&arg);
