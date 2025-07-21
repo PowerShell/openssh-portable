@@ -47,11 +47,14 @@ Describe "Tests for admin and non-admin event logs" -Tags "CI" {
         }
 
         BeforeEach {
+            # disable the OpenSSH log channels
             wevtutil sl "OpenSSH/Debug" /e:false /q:true | Out-Null
-            wevtutil cl "OpenSSH/Debug" | Out-Null
-            wevtutil sl "OpenSSH/Debug" /e:true /q:true | Out-Null
             wevtutil sl "OpenSSH/Operational" /e:false /q:true | Out-Null
+            # clear any existing logs
+            wevtutil cl "OpenSSH/Debug" | Out-Null
             wevtutil cl "OpenSSH/Operational" | Out-Null
+            # enable the OpenSSH log channels
+            wevtutil sl "OpenSSH/Debug" /e:true /q:true | Out-Null
             wevtutil sl "OpenSSH/Operational" /e:true /q:true | Out-Null
         }
 
@@ -64,6 +67,7 @@ Describe "Tests for admin and non-admin event logs" -Tags "CI" {
             $o = ssh -l $nonadminusername test_target echo 1234
             $o | Should Be 1234
             Start-Sleep $sshdDelay
+            # query the OpenSSH log channels to make sure events were captured
             $eventLogDebug = wevtutil qe "OpenSSH/Debug" /c:5 /f:text
             $eventLogDebug | Should Not Be $null
             $eventLogOperational = wevtutil qe "OpenSSH/Operational" /c:5 /f:text
@@ -74,6 +78,7 @@ Describe "Tests for admin and non-admin event logs" -Tags "CI" {
             $o = ssh -l $adminusername test_target echo 1234
             $o | Should Be 1234
             Start-Sleep $sshdDelay
+            # query the OpenSSH log channels to make sure events were captured
             $eventLogDebug = wevtutil qe "OpenSSH/Debug" /c:5 /f:text
             $eventLogDebug | Should Not Be $null
             $eventLogOperational = wevtutil qe "OpenSSH/Operational" /c:5 /f:text
@@ -133,11 +138,14 @@ exit"
         }
 
         BeforeEach {
+            # disable the OpenSSH log channels
             wevtutil sl "OpenSSH/Debug" /e:false /q:true | Out-Null
-            wevtutil cl "OpenSSH/Debug" | Out-Null
-            wevtutil sl "OpenSSH/Debug" /e:true /q:true | Out-Null
             wevtutil sl "OpenSSH/Operational" /e:false /q:true | Out-Null
+            # clear any existing logs
+            wevtutil cl "OpenSSH/Debug" | Out-Null
             wevtutil cl "OpenSSH/Operational" | Out-Null
+            # enable the OpenSSH log channels
+            wevtutil sl "OpenSSH/Debug" /e:true /q:true | Out-Null
             wevtutil sl "OpenSSH/Operational" /e:true /q:true | Out-Null
         }
 
@@ -157,6 +165,7 @@ exit"
         It "$tC.$tI-Nonadmin SFTP Connection" {
             sftp -i $NonadminKeyFilePath -b $batchFilePath -o User=$nonadminusername test_target
             Start-Sleep $sshdDelay
+            # query the OpenSSH log channels to make sure events were captured
             $eventLogDebug = wevtutil qe "OpenSSH/Debug" /c:5 /f:text
             $eventLogDebug | Should Not Be $null
             $eventLogOperational = wevtutil qe "OpenSSH/Operational" /c:5 /f:text
@@ -166,6 +175,7 @@ exit"
         It "$tC.$tI-Admin SFTP Connection" {
             sftp -i $AdminKeyFilePath -b $batchFilePath -o User=$adminusername test_target
             Start-Sleep $sshdDelay
+            # query the OpenSSH log channels to make sure events were captured
             $eventLogDebug = wevtutil qe "OpenSSH/Debug" /c:5 /f:text
             $eventLogDebug | Should Not Be $null
             $eventLogOperational = wevtutil qe "OpenSSH/Operational" /c:5 /f:text
