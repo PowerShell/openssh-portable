@@ -3,132 +3,132 @@ Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
 $tI = 0
 Describe "SFTP Test Cases" -Tags "CI" {
     BeforeAll {
-         $serverDirectory = $null
-         $clientDirectory = $null
-         $largeFilePath = $null
-         if($OpenSSHTestInfo -eq $null)
-         {
-             Throw "`$OpenSSHTestInfo is null. Please run Set-OpenSSHTestEnvironment to set test environments."
-         }
-         $rootDirectory = "$($OpenSSHTestInfo["TestDataPath"])\SFTP"
-         $outputFileName = "output.txt"
-         $batchFileName = "sftp-batchcmds.txt"
-         $tempFileName = "tempFile.txt"
-         $tempFilePath = Join-Path $rootDirectory $tempFileName
-         $tempUnicodeFileName = "tempFile_язык.txt"
-         $tempUnicodeFilePath = Join-Path $rootDirectory $tempUnicodeFileName
-         $largeFileName = "largeFile.txt"
-         $largeFilePath = Join-Path $rootDirectory $largeFileName
-         fsutil file createNew $largeFilePath 1000000000
-         $clientDirectory = Join-Path $rootDirectory 'client_dir'
-         $serverDirectory = Join-Path $rootDirectory 'server_dir'
-         $null = New-Item $clientDirectory -ItemType directory -Force
-         $null = New-Item $serverDirectory -ItemType directory -Force
-         $null = New-Item $tempFilePath -ItemType file -Force -value "temp file data"
-         $null = New-Item $tempUnicodeFilePath -ItemType file -Force -value "temp file data"
-         $server = $OpenSSHTestInfo["Target"]
-         $port = $OpenSSHTestInfo["Port"]
-         $ssouser = $OpenSSHTestInfo["SSOUser"]
-         Remove-item (Join-Path $rootDirectory "*.$outputFileName") -Force -ErrorAction SilentlyContinue
-         Remove-item (Join-Path $rootDirectory "*.$batchFileName") -Force -ErrorAction SilentlyContinue
-         Remove-item (Join-Path $rootDirectory "*.log") -Force -ErrorAction SilentlyContinue
-         $skip = $IsWindows -and ($PSVersionTable.PSVersion.Major -le 2)
-         $testData1 = @(
-              @{
-                 title = "put, ls for non-unicode file names"
-                 options = ''
-                 commands = "put $tempFilePath $serverDirectory
-                             ls $serverDirectory"
-                 expectedoutput = (join-path $serverdirectory $tempFileName)
-              },
-              @{
-                 title = "get, ls for non-unicode file names"
-                 options = ''
-                 commands = "get $tempFilePath $clientDirectory
-                             ls $clientDirectory"
-                 expectedoutput = (join-path $clientDirectory $tempFileName)
-              },
-              @{
-                 title = "mput, ls for non-unicode file names"
-                 options = ''
-                 commands = "mput $tempFilePath $serverDirectory
-                             ls $serverDirectory"
-                 expectedoutput = (join-path $serverdirectory $tempFileName)
-              },
-              @{
-                 title = "mget, ls for non-unicode file names"
-                 options = ''
-                 commands = "mget $tempFilePath $clientDirectory
-                             ls $clientDirectory"
-                 expectedoutput = (join-path $clientDirectory $tempFileName)
-              },
-              @{
-                 title = "mkdir, cd, pwd for non-unicode directory names"
-                 options = ''
-                 commands = "cd $serverdirectory
-                             mkdir server_test_dir
-                             cd server_test_dir
-                             pwd"
-                 expectedoutput = (join-path $serverdirectory "server_test_dir")
-              },
-              @{
-                 Title = "lmkdir, lcd, lpwd for non-unicode directory names"
-                 Options = ''
-                 Commands = "lcd $clientDirectory
-                             lmkdir client_test_dir
-                             lcd client_test_dir
-                             lpwd"
-                 ExpectedOutput = (Join-Path $clientDirectory "client_test_dir")
-              },
-              @{
-                 title = "put, ls for unicode file names"
-                 options = ''
-                 commands = "put $tempUnicodeFilePath $serverDirectory
-                             ls $serverDirectory"
-                 expectedoutput = (join-path $serverdirectory $tempUnicodeFileName)
-              },
-              @{
-                 title = "get, ls for unicode file names"
-                 options = ''
-                 commands = "get $tempUnicodeFilePath $clientDirectory
-                             ls $clientDirectory"
-                 expectedoutput = (join-path $clientDirectory $tempUnicodeFileName)
-              },
-              @{
-                 title = "mput, ls for unicode file names"
-                 options = ''
-                 commands = "mput $tempUnicodeFilePath $serverDirectory
-                             ls $serverDirectory"
-                 expectedoutput = (join-path $serverdirectory $tempUnicodeFileName)
-              },
-              @{
-                 title = "mget, ls for unicode file names"
-                 options = ''
-                 commands = "mget $tempUnicodeFilePath $clientDirectory
-                             ls $clientDirectory"
-                 expectedoutput = (join-path $clientDirectory $tempUnicodeFileName)
-              },
-              @{
-                 title = "mkdir, cd, pwd for unicode directory names"
-                 options = ''
-                 commands = "cd $serverdirectory
-                             mkdir server_test_dir_язык
-                             cd server_test_dir_язык
-                             pwd"
-                 expectedoutput = (join-path $serverdirectory "server_test_dir_язык")
-              },
-              @{
-                 Title = "lmkdir, lcd, lpwd for unicode directory names"
-                 Options = ''
-                 Commands = "lcd $clientDirectory
-                             lmkdir client_test_dir_язык
-                             lcd client_test_dir_язык
-                             lpwd
-                             lls $clientDirectory"
-                 ExpectedOutput = (Join-Path $clientDirectory "client_test_dir_язык")
-              }
-         )
-         $testData2 = @(
+        $serverDirectory = $null
+        $clientDirectory = $null
+        $largeFilePath = $null
+        if($OpenSSHTestInfo -eq $null)
+        {
+            Throw "`$OpenSSHTestInfo is null. Please run Set-OpenSSHTestEnvironment to set test environments."
+        }
+        $rootDirectory = "$($OpenSSHTestInfo["TestDataPath"])\SFTP"
+        $outputFileName = "output.txt"
+        $batchFileName = "sftp-batchcmds.txt"
+        $tempFileName = "tempFile.txt"
+        $tempFilePath = Join-Path $rootDirectory $tempFileName
+        $tempUnicodeFileName = "tempFile_язык.txt"
+        $tempUnicodeFilePath = Join-Path $rootDirectory $tempUnicodeFileName
+        $largeFileName = "largeFile.txt"
+        $largeFilePath = Join-Path $rootDirectory $largeFileName
+        fsutil file createNew $largeFilePath 1000000000
+        $clientDirectory = Join-Path $rootDirectory 'client_dir'
+        $serverDirectory = Join-Path $rootDirectory 'server_dir'
+        $null = New-Item $clientDirectory -ItemType directory -Force
+        $null = New-Item $serverDirectory -ItemType directory -Force
+        $null = New-Item $tempFilePath -ItemType file -Force -value "temp file data"
+        $null = New-Item $tempUnicodeFilePath -ItemType file -Force -value "temp file data"
+        $server = $OpenSSHTestInfo["Target"]
+        $port = $OpenSSHTestInfo["Port"]
+        $ssouser = $OpenSSHTestInfo["SSOUser"]
+        Remove-item (Join-Path $rootDirectory "*.$outputFileName") -Force -ErrorAction SilentlyContinue
+        Remove-item (Join-Path $rootDirectory "*.$batchFileName") -Force -ErrorAction SilentlyContinue
+        Remove-item (Join-Path $rootDirectory "*.log") -Force -ErrorAction SilentlyContinue
+        $skip = $IsWindows -and ($PSVersionTable.PSVersion.Major -le 2)
+        $testData1 = @(
+             @{
+                title = "put, ls for non-unicode file names"
+                options = ''
+                commands = "put $tempFilePath $serverDirectory
+                            ls $serverDirectory"
+                expectedoutput = (join-path $serverdirectory $tempFileName)
+             },
+             @{
+                title = "get, ls for non-unicode file names"
+                options = ''
+                commands = "get $tempFilePath $clientDirectory
+                            ls $clientDirectory"
+                expectedoutput = (join-path $clientDirectory $tempFileName)
+             },
+             @{
+                title = "mput, ls for non-unicode file names"
+                options = ''
+                commands = "mput $tempFilePath $serverDirectory
+                            ls $serverDirectory"
+                expectedoutput = (join-path $serverdirectory $tempFileName)
+             },
+             @{
+                title = "mget, ls for non-unicode file names"
+                options = ''
+                commands = "mget $tempFilePath $clientDirectory
+                            ls $clientDirectory"
+                expectedoutput = (join-path $clientDirectory $tempFileName)
+             },
+             @{
+                title = "mkdir, cd, pwd for non-unicode directory names"
+                options = ''
+                commands = "cd $serverdirectory
+                            mkdir server_test_dir
+                            cd server_test_dir
+                            pwd"
+                expectedoutput = (join-path $serverdirectory "server_test_dir")
+             },
+             @{
+                Title = "lmkdir, lcd, lpwd for non-unicode directory names"
+                Options = ''
+                Commands = "lcd $clientDirectory
+                            lmkdir client_test_dir
+                            lcd client_test_dir
+                            lpwd"
+                ExpectedOutput = (Join-Path $clientDirectory "client_test_dir")
+             },
+             @{
+                title = "put, ls for unicode file names"
+                options = ''
+                commands = "put $tempUnicodeFilePath $serverDirectory
+                            ls $serverDirectory"
+                expectedoutput = (join-path $serverdirectory $tempUnicodeFileName)
+             },
+             @{
+                title = "get, ls for unicode file names"
+                options = ''
+                commands = "get $tempUnicodeFilePath $clientDirectory
+                            ls $clientDirectory"
+                expectedoutput = (join-path $clientDirectory $tempUnicodeFileName)
+             },
+             @{
+                title = "mput, ls for unicode file names"
+                options = ''
+                commands = "mput $tempUnicodeFilePath $serverDirectory
+                            ls $serverDirectory"
+                expectedoutput = (join-path $serverdirectory $tempUnicodeFileName)
+             },
+             @{
+                title = "mget, ls for unicode file names"
+                options = ''
+                commands = "mget $tempUnicodeFilePath $clientDirectory
+                            ls $clientDirectory"
+                expectedoutput = (join-path $clientDirectory $tempUnicodeFileName)
+             },
+             @{
+                title = "mkdir, cd, pwd for unicode directory names"
+                options = ''
+                commands = "cd $serverdirectory
+                            mkdir server_test_dir_язык
+                            cd server_test_dir_язык
+                            pwd"
+                expectedoutput = (join-path $serverdirectory "server_test_dir_язык")
+             },
+             @{
+                Title = "lmkdir, lcd, lpwd for unicode directory names"
+                Options = ''
+                Commands = "lcd $clientDirectory
+                            lmkdir client_test_dir_язык
+                            lcd client_test_dir_язык
+                            lpwd
+                            lls $clientDirectory"
+                ExpectedOutput = (Join-Path $clientDirectory "client_test_dir_язык")
+             }
+        )
+        $testData2 = @(
              @{
                  title = "rm, rmdir, rename for unicode file, directory"
                  options = '-b $batchFilePath'
@@ -154,7 +154,7 @@ Describe "SFTP Test Cases" -Tags "CI" {
                  tmpDirectoryPath2 = (join-path $serverDirectory "test_dir_2")
              }
          )
-         $testData3 = @(
+        $testData3 = @(
              @{
                 title = "put, ls for large file transfer"
                 commands = "put $largeFilePath $serverDirectory
@@ -179,26 +179,26 @@ Describe "SFTP Test Cases" -Tags "CI" {
                             ls $clientDirectory"
                 expectedoutput = (join-path $clientDirectory $largeFileName)
              }
-         )
-         # for the first time, delete the existing log files.
-         if ($OpenSSHTestInfo['DebugMode'])
-         {
-             Clear-Content "$env:ProgramData\ssh\logs\ssh-agent.log" -Force -ErrorAction SilentlyContinue
-             Clear-Content "$env:ProgramData\ssh\logs\sshd.log" -Force -ErrorAction SilentlyContinue
-             Clear-Content "$env:ProgramData\ssh\logs\sftp-server.log" -Force -ErrorAction SilentlyContinue
-         }
-         function CopyDebugLogs {
-             if($OpenSSHTestInfo["DebugMode"])
-             {
-                 Copy-Item "$env:ProgramData\ssh\logs\ssh-agent.log" "$rootDirectory\ssh-agent_$tI.log" -Force -ErrorAction SilentlyContinue
-                 Copy-Item "$env:ProgramData\ssh\logs\sshd.log" "$rootDirectory\sshd_$tI.log" -Force -ErrorAction SilentlyContinue
-                 Copy-Item "$env:ProgramData\ssh\logs\sftp-server.log" "$rootDirectory\sftp-server_$tI.log" -Force -ErrorAction SilentlyContinue
-                 # clear the ssh-agent, sshd logs so that next testcase will get fresh logs.
-                 Clear-Content "$env:ProgramData\ssh\logs\ssh-agent.log" -Force -ErrorAction SilentlyContinue
-                 Clear-Content "$env:ProgramData\ssh\logs\sshd.log" -Force -ErrorAction SilentlyContinue
-                 Clear-Content "$env:ProgramData\ssh\logs\sftp-server.log" -Force -ErrorAction SilentlyContinue
-             }
-         }
+        )
+        # for the first time, delete the existing log files.
+        if ($OpenSSHTestInfo['DebugMode'])
+        {
+            Clear-Content "$env:ProgramData\ssh\logs\ssh-agent.log" -Force -ErrorAction SilentlyContinue
+            Clear-Content "$env:ProgramData\ssh\logs\sshd.log" -Force -ErrorAction SilentlyContinue
+            Clear-Content "$env:ProgramData\ssh\logs\sftp-server.log" -Force -ErrorAction SilentlyContinue
+        }
+        function CopyDebugLogs {
+            if($OpenSSHTestInfo["DebugMode"])
+            {
+                Copy-Item "$env:ProgramData\ssh\logs\ssh-agent.log" "$rootDirectory\ssh-agent_$tI.log" -Force -ErrorAction SilentlyContinue
+                Copy-Item "$env:ProgramData\ssh\logs\sshd.log" "$rootDirectory\sshd_$tI.log" -Force -ErrorAction SilentlyContinue
+                Copy-Item "$env:ProgramData\ssh\logs\sftp-server.log" "$rootDirectory\sftp-server_$tI.log" -Force -ErrorAction SilentlyContinue
+                # clear the ssh-agent, sshd logs so that next testcase will get fresh logs.
+                Clear-Content "$env:ProgramData\ssh\logs\ssh-agent.log" -Force -ErrorAction SilentlyContinue
+                Clear-Content "$env:ProgramData\ssh\logs\sshd.log" -Force -ErrorAction SilentlyContinue
+                Clear-Content "$env:ProgramData\ssh\logs\sftp-server.log" -Force -ErrorAction SilentlyContinue
+            }
+        }
     }
 
     AfterAll {
