@@ -129,56 +129,56 @@ Describe "SFTP Test Cases" -Tags "CI" {
              }
         )
         $testData2 = @(
-             @{
-                 title = "rm, rmdir, rename for unicode file, directory"
-                 options = '-b $batchFilePath'
-                 tmpFileName1 = $tempUnicodeFileName
-                 tmpFilePath1 = $tempUnicodeFilePath
-                 tmpFileName2 = "tempfile_язык_2.txt"
-                 tmpFilePath2 = (join-path $serverDirectory "tempfile_язык_2.txt")
-                 tmpDirectoryName1 = "test_dir_язык_1"
-                 tmpDirectoryPath1 = (join-path $serverDirectory "test_dir_язык_1")
-                 tmpDirectoryName2 = "test_dir_язык_2"
-                 tmpDirectoryPath2 = (join-path $serverDirectory "test_dir_язык_2")
-             },
-             @{
-                 title = "rm, rmdir, rename for non-unicode file, directory"
-                 options = '-b $batchFilePath'
-                 tmpFileName1 = $tempFileName
-                 tmpFilePath1 = $tempFilePath
-                 tmpFileName2 = "tempfile_2.txt"
-                 tmpFilePath2 = (join-path $serverDirectory "tempfile_2.txt")
-                 tmpDirectoryName1 = "test_dir_1"
-                 tmpDirectoryPath1 = (join-path $serverDirectory "test_dir_1")
-                 tmpDirectoryName2 = "test_dir_2"
-                 tmpDirectoryPath2 = (join-path $serverDirectory "test_dir_2")
-             }
+            @{
+                title = "rm, rmdir, rename for unicode file, directory"
+                options = '-b $batchFilePath'
+                tmpFileName1 = $tempUnicodeFileName
+                tmpFilePath1 = $tempUnicodeFilePath
+                tmpFileName2 = "tempfile_язык_2.txt"
+                tmpFilePath2 = (join-path $serverDirectory "tempfile_язык_2.txt")
+                tmpDirectoryName1 = "test_dir_язык_1"
+                tmpDirectoryPath1 = (join-path $serverDirectory "test_dir_язык_1")
+                tmpDirectoryName2 = "test_dir_язык_2"
+                tmpDirectoryPath2 = (join-path $serverDirectory "test_dir_язык_2")
+            },
+            @{
+                title = "rm, rmdir, rename for non-unicode file, directory"
+                options = '-b $batchFilePath'
+                tmpFileName1 = $tempFileName
+                tmpFilePath1 = $tempFilePath
+                tmpFileName2 = "tempfile_2.txt"
+                tmpFilePath2 = (join-path $serverDirectory "tempfile_2.txt")
+                tmpDirectoryName1 = "test_dir_1"
+                tmpDirectoryPath1 = (join-path $serverDirectory "test_dir_1")
+                tmpDirectoryName2 = "test_dir_2"
+                tmpDirectoryPath2 = (join-path $serverDirectory "test_dir_2")
+            }
          )
         $testData3 = @(
-             @{
-                title = "put, ls for large file transfer"
-                commands = "put $largeFilePath $serverDirectory
-                            ls $serverDirectory"
-                expectedoutput = (join-path $serverdirectory $largeFileName)
-             },
-             @{
-                title = "get, ls for large file transfer"
-                commands = "get $largeFilePath $clientDirectory
-                            ls $clientDirectory"
-                expectedoutput = (join-path $clientDirectory $largeFileName)
-             },
-             @{
-                title = "mput, ls for large file transfer"
-                commands = "mput $largeFilePath $serverDirectory
-                            ls $serverDirectory"
-                expectedoutput = (join-path $serverdirectory $largeFileName)
-             },
-             @{
-                title = "mget, ls for large file transfer"
-                commands = "mget $largeFilePath $clientDirectory
-                            ls $clientDirectory"
-                expectedoutput = (join-path $clientDirectory $largeFileName)
-             }
+            @{
+               title = "put, ls for large file transfer"
+               commands = "put $largeFilePath $serverDirectory
+                           ls $serverDirectory"
+               expectedoutput = (join-path $serverdirectory $largeFileName)
+            },
+            @{
+               title = "get, ls for large file transfer"
+               commands = "get $largeFilePath $clientDirectory
+                           ls $clientDirectory"
+               expectedoutput = (join-path $clientDirectory $largeFileName)
+            },
+            @{
+               title = "mput, ls for large file transfer"
+               commands = "mput $largeFilePath $serverDirectory
+                           ls $serverDirectory"
+               expectedoutput = (join-path $serverdirectory $largeFileName)
+            },
+            @{
+               title = "mget, ls for large file transfer"
+               commands = "mget $largeFilePath $clientDirectory
+                           ls $clientDirectory"
+               expectedoutput = (join-path $clientDirectory $largeFileName)
+            }
         )
         # for the first time, delete the existing log files.
         if ($OpenSSHTestInfo['DebugMode'])
