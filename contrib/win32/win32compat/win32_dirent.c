@@ -277,7 +277,7 @@ basename(char *path)
 	while (endp > path && (*endp == '/' || *endp == '\\'))
 		endp--;
 
-	int path_len = endp - path + 1;
+	size_t path_len = endp - path + 1;
 	if (strncpy_s(bname, PATH_MAX, path, path_len + 1)) {
 		return NULL;
 	}

@@ -91,9 +91,10 @@ fd_table_initialize()
 	HANDLE wh;
 	char *stdio_mode_env;
 	int stdio_mode = NONSOCK_SYNC_FD;
+	size_t len = 0;
 
-	stdio_mode_env = getenv("OPENSSH_STDIO_MODE");
-	if (stdio_mode_env != NULL) {
+	_dupenv_s(&stdio_mode_env, &len, "OPENSSH_STDIO_MODE");
+	if (stdio_mode_env != NULL && len != 0) {
 		if (strcmp(stdio_mode_env, "sock") == 0)
 			stdio_mode = SOCK_FD;
 		else if (strcmp(stdio_mode_env, "nonsock") == 0)

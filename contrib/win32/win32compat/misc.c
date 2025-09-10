@@ -1262,7 +1262,7 @@ readpassphrase(const char *prompt, char *outBuf, size_t outBufLen, int flags)
 				fatal("character conversion failed");
 
 			/* append to output buffer if the characters fit */
-			if (current_index + utf8_read >= outBufLen - 1) break;
+			if (current_index + utf8_read >= (int)outBufLen - 1) break;
 			memcpy(&outBuf[current_index], utf8_char, utf8_read);
 			current_index += utf8_read;
 
