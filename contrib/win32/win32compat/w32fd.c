@@ -89,18 +89,19 @@ fd_table_initialize()
 {
 	struct w32_io *pio;
 	HANDLE wh;
-	char *stdio_mode_env;
+	char *stdio_mode_env = NULL;
 	int stdio_mode = NONSOCK_SYNC_FD;
 	size_t len = 0;
 
 	_dupenv_s(&stdio_mode_env, &len, "OPENSSH_STDIO_MODE");
-	if (stdio_mode_env != NULL && len != 0) {
+	if (stdio_mode_env != NULL) {
 		if (strcmp(stdio_mode_env, "sock") == 0)
 			stdio_mode = SOCK_FD;
 		else if (strcmp(stdio_mode_env, "nonsock") == 0)
 			stdio_mode = NONSOCK_FD;
 		else if (strcmp(stdio_mode_env, "nonsock_sync") == 0)
 			stdio_mode = NONSOCK_SYNC_FD;
+		free(stdio_mode_env);
 	}
 
 	/* table entries representing std in, out and error*/
