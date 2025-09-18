@@ -10,6 +10,9 @@
                 <File Name="ssh-shellhost.exe" KeyPath="yes" />
             </Component>
             <Component>
+                <File Name="sshd-session.exe" KeyPath="yes" />
+            </Component>
+            <Component>
                 <File Id="sshd.exe" Name="sshd.exe" KeyPath="yes" />
                 <RegistryKey Root="HKLM" Key="SOFTWARE\OpenSSH" ForceCreateOnInstall="yes">
                     <PermissionEx Sddl="O:BAG:SYD:P(A;OICI;KR;;;AU)(A;OICI;KA;;;SY)(A;OICI;KA;;;BA)" />

@@ -1,0 +1,30 @@
+diff --git a/crypto/CMakeLists.txt b/crypto/CMakeLists.txt
+index 5140a7a..d2cb88e 100644
+--- a/crypto/CMakeLists.txt
++++ b/crypto/CMakeLists.txt
+@@ -616,7 +616,7 @@ set(
+ 	x509/x_all.c
+ )
+ 
+-set(COMPAT_SRC empty.c)
++set(COMPAT_SRC empty.c version.rc)
+ 
+ if(UNIX)
+ 	set(CRYPTO_SRC ${CRYPTO_SRC} crypto_lock.c)
+@@ -840,12 +840,13 @@ add_library(crypto $<TARGET_OBJECTS:crypto_obj> $<TARGET_OBJECTS:compat_obj> emp
+ 
+ export_symbol(crypto ${CMAKE_CURRENT_BINARY_DIR}/crypto_p.sym)
+ target_link_libraries(crypto ${PLATFORM_LIBS})
++set_target_properties(crypto PROPERTIES LINK_FLAGS "/NODEFAULTLIB:kernel32.lib")
++set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /GUARD:CF /debug /debugtype:cv,fixup /opt:ref /opt:icf /incremental:no")
+ set_target_properties(crypto PROPERTIES
+-	OUTPUT_NAME crypto
+-	ARCHIVE_OUTPUT_NAME crypto
++	OUTPUT_NAME libcrypto
++	ARCHIVE_OUTPUT_NAME libcrypto
+ 	EXPORT_NAME Crypto
+ 	VERSION ${CRYPTO_VERSION}
+-	SOVERSION ${CRYPTO_MAJOR_VERSION}
+ )
+ if(NOT CMAKE_VERSION VERSION_LESS 3.27.0)
+ 	set_target_properties(crypto PROPERTIES DLL_NAME_WITH_SOVERSION TRUE)

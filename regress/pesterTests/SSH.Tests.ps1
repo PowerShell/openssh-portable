@@ -5,9 +5,9 @@ Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
 $tC = 1
 $tI = 0
 $suite = "sshclient"
-        
+
 Describe "E2E scenarios for ssh client" -Tags "CI" {
-    BeforeAll {        
+    BeforeAll {
         if($OpenSSHTestInfo -eq $null)
         {
             Throw "`$OpenSSHTestInfo is null. Please run Set-OpenSSHTestEnvironment to set test environments."
@@ -27,12 +27,12 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($ssouser, $rights, "ContainerInherit,Objectinherit", "None", "Allow")
         $acl.SetAccessRule($accessRule)
         Set-Acl -Path $testDir -AclObject $acl
-        #skip on ps 2 becase non-interactive cmd require a ENTER before it returns on ps2
+        #skip on ps 2 because non-interactive cmd require a ENTER before it returns on ps2
         $skip = $IsWindows -and ($PSVersionTable.PSVersion.Major -le 2)
 
         <#$testData = @(
             @{
-                Title = 'Simple logon no option';                
+                Title = 'Simple logon no option';
                 LogonStr = "$($server.localAdminUserName)@$($server.MachineName)"
                 Options = ""
             },
@@ -42,7 +42,7 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
                 Options = "-C -l $($server.localAdminUserName)"
             }
         )
-        
+
         $testData1 = @(
             @{
                 Title = "logon using -i -q option"
@@ -77,34 +77,18 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         $dfltShellCmdOptionRegKeyName = "DefaultShellCommandOption"
         Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
         Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
-
-        function ConfigureDefaultShell {
-            param
-            (
-                  [string] $default_shell_path,
-                  [string] $default_shell_cmd_option_val = $null
-            )
-            
-            if (!(Test-Path $dfltShellRegPath)) {
-                New-Item -Path $dfltShellRegPath -Force | Out-Null
-            }
-            New-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -Value $default_shell_path -PropertyType String -Force
-            if ($default_shell_cmd_option_val -ne $null) {
-                New-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -Value $default_shell_cmd_option_val -PropertyType String -Force
-            }
-        }
     }
 
     BeforeEach {
         $stderrFile=Join-Path $testDir "$tC.$tI.stderr.txt"
         $stdoutFile=Join-Path $testDir "$tC.$tI.stdout.txt"
         $logFile = Join-Path $testDir "$tC.$tI.log.txt"
-    }        
+    }
 
     AfterEach {$tI++;}
 
    Context "$tC - Basic Scenarios" {
-        
+
         BeforeAll {$tI=1}
         AfterAll{$tC++}
 
@@ -117,13 +101,13 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             iex "cmd /c `"ssh -? 2> $stderrFile`""
             $stderrFile | Should Contain "usage: ssh"
         }
-        
+
         It "$tC.$tI - remote echo command" {
             iex "$sshDefaultCmd echo 1234" | Should Be "1234"
         }
 
     }
-    
+
     Context "$tC - exit code (exit-status.sh)" {
         BeforeAll {$tI=1}
         AfterAll{$tC++}
@@ -132,12 +116,12 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             foreach ($i in (0,1,4,5,44)) {
                 ssh -p $port $ssouser@$server exit $i
                 $LASTEXITCODE | Should Be $i
-            }            
+            }
         }
     }
 
     Context "$tC - Redirection Scenarios" {
-        
+
         BeforeAll {$tI=1}
         AfterAll{$tC++}
 
@@ -192,7 +176,7 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
 
         }
     }
-    
+
     Context "$tC - configure powershell default shell Scenarios" {
         BeforeAll {
             $tI=1
@@ -205,13 +189,13 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             $tC++
             Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
             Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
-        }        
+        }
 
         It "$tC.$tI - basic powershell" -skip:$skip {
             $o = ssh test_target Write-Output 1234
             $o | Should Be "1234"
         }
-        
+
         It "$tC.$tI - basic in powershell cmdlet" -skip:$skip {
             $o = ssh test_target "cd `$env:ProgramFiles;pwd"
             $LASTEXITCODE | Should Be 0
@@ -240,26 +224,59 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         It "$tC.$tI - single quotes in powershell cmdlet" -skip:$skip {
             # actual command line ssh target echo '$env:computername'
             $o = ssh test_target "echo '`$env:computername'"
-            $LASTEXITCODE | Should Be 0            
+            $LASTEXITCODE | Should Be 0
             $o | Should Be `$env:computername
         }
+        It "$tC.$tI - exiting ssh session exits sshd session child processes" -skip:$skip {
+            $sshdPidCountBefore = (Get-Process -Name sshd* | Select-Object -ExpandProperty Id).Count
+            ssh test_target "echo '`$env:computername'"
+            Start-Sleep -Seconds 2
+            $sshdPidCountAfter = (Get-Process -Name sshd* | Select-Object -ExpandProperty Id).Count
+            $sshdPidCountAfter | Should Be $sshdPidCountBefore
+        }
     }
+
+    Context "$tC - configure powershell as default shell with admin user" {
+        BeforeAll {
+            $tI=1
+            $shell_path = (Get-Command powershell.exe -ErrorAction SilentlyContinue).path
+            if ($shell_path -ne $null) {
+                ConfigureDefaultShell -default_shell_path $shell_path -default_shell_cmd_option_val "-c"
+            }
+            $password = $OpenSSHTestInfo['TestAccountPW']
+            Add-PasswordSetting -Pass $password
+        }
+        AfterAll {
+            $tC++
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
+            Remove-PasswordSetting
+        }
+
+        It "$tC.$tI - admin session can write to console" -skip:$skip {
+            $adminusername = $OpenSSHTestInfo['AdminUser']
+            $o = ssh $adminusername@test_target "Get-ComputerInfo"
+            $LASTEXITCODE | Should Be 0
+            $o | Select-String -Pattern "WindowsVersion" | Should Match "WindowsVersion"
+        }
+    }
+
     Context "$tC - configure cmd as default shell" {
         BeforeAll {
             $tI=1
             $shell_path = (Get-Command cmd.exe -ErrorAction SilentlyContinue).path
             if($shell_path -ne $null) {
                 ConfigureDefaultShell -default_shell_path $shell_path -default_shell_cmd_option_val "/c"
+            }
         }
-        }
-        AfterAll{
+        AfterAll {
             $tC++
             Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -ErrorAction SilentlyContinue
             Remove-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -ErrorAction SilentlyContinue
         }
-        It "$tC.$tI - default shell as cmd" -skip:$skip {            
+        It "$tC.$tI - default shell as cmd" -skip:$skip {
             $o = ssh test_target where cmd
-            $o | Should Contain "cmd"            
+            $o | Should Contain "cmd"
         }
         It "$tC.$tI - cmd as default shell and double quotes in cmdline" {
             # actual command line ssh target echo "hello"
@@ -269,7 +286,7 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         It "$tC.$tI - single quotes in powershell cmdlet" -skip:$skip {
             # actual command line ssh target echo '$env:computername'
             $o = ssh test_target "echo 'hello'"
-            $LASTEXITCODE | Should Be 0            
+            $LASTEXITCODE | Should Be 0
             $o | Should Be "'hello'"
         }
     }
@@ -290,15 +307,15 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             $o | Should Be "`"hello`""
         }
     }
-    
-    Context "$tC - cmdline parameters" {        
+
+    Context "$tC - cmdline parameters" {
         BeforeAll {$tI=1}
         AfterAll{$tC++}
 
         It "$tC.$tI - verbose to file (-v -E)" {
             $o = ssh -v -E $logFile test_target echo 1234
             $o | Should Be "1234"
-            #TODO - checks below are very inefficient (time taking). 
+            #TODO - checks below are very inefficient (time taking).
             $logFile | Should Contain "OpenSSH_"
             $logFile | Should Contain "Exit Status 0"
         }
@@ -333,11 +350,11 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             "    Port $port" | Add-Content $goodConfigFile
             "    User $ssouser" | Add-Content $goodConfigFile
             $o = ssh -F $goodConfigFile myhost echo 1234
-            $o | Should Be "1234"          
+            $o | Should Be "1234"
         }
 
         It "$tC.$tI - IP options - (-4) (-6)" {
-            # TODO - this test assumes target is localhost. 
+            # TODO - this test assumes target is localhost.
             # make it work independent of target
             #-4
             $o = ssh -4 -v -E $logFile test_target echo 1234
@@ -346,11 +363,23 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
             #-4
             $o = ssh -6 -v -E $logFile test_target echo 1234
             $o | Should Be "1234"
-            $logFile | Should Contain "[::1]"            
+            $logFile | Should Contain "[::1]"
+        }
+
+        It "$tC.$tI - tilde expand for path with forward slash" {
+            $o = ssh -v -i ~/test/key/path -E $logFile test_target echo 1234
+            $o | Should Be "1234"
+            $logFile | Should Not Contain "tilde_expand: No such user"
+        }
+
+        It "$tC.$tI - tilde expand for path with backslash" {
+            $o = ssh -v -i ~\test\key\path -E $logFile test_target echo 1234
+            $o | Should Be "1234"
+            $logFile | Should Not Contain "tilde_expand: No such user"
         }
 
         It "$tC.$tI - auto populate known hosts" {
-            
+
             $kh = Join-Path $testDir "$tC.$tI.known_hosts"
             $nul | Set-Content $kh
             # doing via cmd to intercept and drain stderr output
@@ -366,6 +395,12 @@ Describe "E2E scenarios for ssh client" -Tags "CI" {
         It "$tC.$tI - ProxyCommand with absolute path to the file" {
             iex "cmd /c `"ssh -o ProxyCommand=`"`"$($env:ComSpec) /c echo test string for invalid proxy 1>&2`"`" abc 2>$stderrFile`""
             $stderrFile | Should Contain "test string for invalid proxy"
+        }
+
+        It "$tC.$tI - disable pseudo-terminal allocation (-T)" {
+            $o = ssh -T test_target echo 1234
+            $LASTEXITCODE | Should Be 0
+            $o | Should Be "1234"
         }
     }
 }

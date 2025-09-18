@@ -158,6 +158,14 @@
     <OutDir>$(OpenSSH-Lib-Path)$(Platform)\$(Configuration)\</OutDir>
     <IntDir>$(Platform)\$(Configuration)\$(TargetName)\</IntDir>
   </PropertyGroup>
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgTriplet Condition="'$(Platform)' == 'Win32'">x86-custom</VcpkgTriplet>
+    <VcpkgTriplet Condition="'$(Platform)' == 'x64'">x64-custom</VcpkgTriplet>
+    <VcpkgTriplet Condition="'$(Platform)' == 'ARM'">arm-custom</VcpkgTriplet>
+    <VcpkgTriplet Condition="'$(Platform)' == 'ARM64'">arm64-custom</VcpkgTriplet>
+    <VcpkgAdditionalInstallOptions>--overlay-triplets=$(SolutionDir)vcpkg_triplets --overlay-ports=$(SolutionDir)vcpkg_overlay_ports</VcpkgAdditionalInstallOptions>
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <Optimization>Disabled</Optimization>

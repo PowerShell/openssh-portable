@@ -1,4 +1,4 @@
-﻿If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
+If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
 $suite = "Setup"
 $tC = 1
@@ -8,12 +8,12 @@ Describe "Setup Tests" -Tags "Setup" {
         if($OpenSSHTestInfo -eq $null)
         {
             Throw "`$OpenSSHTestInfo is null. Please run Set-OpenSSHTestEnvironment to set test environments."
-        }     
-        
+        }
+
         $windowsInBox = $OpenSSHTestInfo["WindowsInBox"]
         $binPath = $OpenSSHTestInfo["OpenSSHBinPath"]
-        $dataPath = Join-path $env:ProgramData ssh        
-        
+        $dataPath = Join-path $env:ProgramData ssh
+
         $systemSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::LocalSystemSid)
         $adminsSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinAdministratorsSid)
         $usersSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinUsersSid)
@@ -34,24 +34,24 @@ Describe "Setup Tests" -Tags "Setup" {
                 ([System.UInt32] [System.Security.AccessControl.FileSystemRights]::Synchronize.value__)
 
         $RegReadKeyPerm = ([System.UInt32] [System.Security.AccessControl.RegistryRights]::ReadKey.value__)
-        $RegFullControlPerm = [System.UInt32] [System.Security.AccessControl.RegistryRights]::FullControl.value__        
+        $RegFullControlPerm = [System.UInt32] [System.Security.AccessControl.RegistryRights]::FullControl.value__
 
         #only validate owner and ACEs of the registry
         function ValidateRegistryACL {
             param([string]$RegPath, $Ownersid = $adminsSid, $IdAcls)
-            Test-Path -Path $RegPath | Should Be $true                      
+            Test-Path -Path $RegPath | Should Be $true
             $myACL = Get-ACL $RegPath
             $OwnerSid = Get-UserSid -User $myACL.Owner
             $OwnerSid.Equals($Ownersid) | Should Be $true
             $myACL.Access | Should Not Be $null
-            $CAPABILITY_SID = "S-1-15-3-1024-1065365936-1281604716-3511738428-1654721687-432734479-3232135806-4053264122-3456934681"            
+            $CAPABILITY_SID = "S-1-15-3-1024-1065365936-1281604716-3511738428-1654721687-432734479-3232135806-4053264122-3456934681"
             $nonPropagate = $myACL.Access | ? {($_.PropagationFlags -eq ([System.Security.AccessControl.PropagationFlags]::None)) -and ($_.IdentityReference -ine $CAPABILITY_SID)}
 
             foreach ($a in $nonPropagate) {
                 $findItem = $IdAcls | ? {
                     ($a.IdentityReference -eq (Get-UserAccount -UserSid ($_.Identity))) -and `
                     ($a.IsInherited -eq $_.IsInherited) -and `
-                    ($a.AccessControlType -eq ([System.Security.AccessControl.AccessControlType]::Allow)) -and  `                    
+                    ($a.AccessControlType -eq ([System.Security.AccessControl.AccessControlType]::Allow)) -and  `
                     (([System.Int32]$a.RegistryRights.value__) -eq ($_.RegistryRights))
                 }
                 $findItem | Should Not Be $null
@@ -60,11 +60,11 @@ Describe "Setup Tests" -Tags "Setup" {
             foreach ($expected in $IdAcls) {
                 $findItem = $nonPropagate | ? {
                     ((Get-UserAccount -UserSid ($expected.Identity)) -eq $_.IdentityReference) -and `
-                    ($expected.IsInherited -eq $_.IsInherited) -and `                    
+                    ($expected.IsInherited -eq $_.IsInherited) -and `
                     ($expected.RegistryRights -eq ([System.Int32]$_.RegistryRights.value__))
                 }
                 $findItem | Should Not Be $null
-            }            
+            }
         }
 
         #only validate owner and ACEs of the file
@@ -86,8 +86,8 @@ Describe "Setup Tests" -Tags "Setup" {
 
             $myACL = Get-ACL $FilePath
             $currentOwnerSid = Get-UserSid -User $myACL.Owner
-            if(-not $windowsInBox) {return}            
-            $currentOwnerSid.Equals($OwnerSid) | Should Be $true            
+            if(-not $windowsInBox) {return}
+            $currentOwnerSid.Equals($OwnerSid) | Should Be $true
             $myACL.Access | Should Not Be $null
             if($IsDirectory)
             {
@@ -111,7 +111,7 @@ Describe "Setup Tests" -Tags "Setup" {
                 if($id -eq $null)
                 {
                     $idRefShortValue = ($a.IdentityReference.Value).split('\')[-1]
-                    $id = Get-UserSID -User $idRefShortValue                                      
+                    $id = Get-UserSID -User $idRefShortValue
                 }
 
                 $identities -contains $id | Should be $true
@@ -127,12 +127,12 @@ Describe "Setup Tests" -Tags "Setup" {
                         else
                         {
                             ([System.UInt32]$a.FileSystemRights.value__) | Should Be $FSReadAndExecutePerm
-                        }                        
+                        }
                         break;
                     }
                     {@($usersSid, $allApplicationPackagesSid, $allRestrictedApplicationPackagesSid, $authenticatedUserSid) -contains $_}
-                    {                        
-                        ([System.UInt32]$a.FileSystemRights.value__) | Should Be $FSReadAndExecutePerm                     
+                    {
+                        ([System.UInt32]$a.FileSystemRights.value__) | Should Be $FSReadAndExecutePerm
                         break;
                     }
                     $trustedInstallerSid
@@ -141,7 +141,7 @@ Describe "Setup Tests" -Tags "Setup" {
                         break;
                     }
                 }
-            
+
                 $a.AccessControlType | Should Be ([System.Security.AccessControl.AccessControlType]::Allow)
                 if($IsDirectory)
                 {
@@ -154,8 +154,8 @@ Describe "Setup Tests" -Tags "Setup" {
                 }
                 $a.PropagationFlags | Should Be ([System.Security.AccessControl.PropagationFlags]::None)
             }
-        }        
-    }    
+        }
+    }
 
     Context "$tC - Validate Openssh binary files" {
 
@@ -164,6 +164,9 @@ Describe "Setup Tests" -Tags "Setup" {
             $binaries =  @(
                 @{
                     Name = 'sshd.exe'
+                },
+                @{
+                    Name = 'sshd-session.exe'
                 },
                 @{
                     Name = 'ssh.exe'
@@ -230,7 +233,7 @@ Describe "Setup Tests" -Tags "Setup" {
                 }
             )
         }
-        AfterAll{$tC++}        
+        AfterAll{$tC++}
         AfterEach { $tI++ }
 
         It "$tC.$tI - Validate Openssh binary files--<Name>" -TestCases:$binaries{
@@ -238,7 +241,7 @@ Describe "Setup Tests" -Tags "Setup" {
             ValidateFileSystem -FilePath (join-path $binPath $Name)
         }
         It "$tC.$tI - Validate Openssh script files--<Name>" -TestCases:$dataFile {
-            param([string]$Name, [boolean]$IsDirectory = $false)            
+            param([string]$Name, [boolean]$IsDirectory = $false)
             if(-not $WindowsInbox) { ValidateFileSystem -FilePath (join-path $binPath $Name) }
         }
 
@@ -248,17 +251,48 @@ Describe "Setup Tests" -Tags "Setup" {
             {
                 Start-Service sshd
             }
-            
+
             ValidateFileSystem -FilePath (join-path $dataPath $Name) -IsDirectory $IsDirectory -OwnerSid $adminsSid -IsDataFile
         }
-    } 
-    
+    }
+
+    Context "$tC - Validate OpenSSH version" {
+        BeforeAll {
+            $tI = 1
+            $sshExePath = Join-Path $binPath "ssh.exe"
+            if (-not (Test-Path -Path $sshExePath)) {
+                Throw "ssh.exe not found at $sshExePath"
+            }
+        }
+        AfterAll { $tC++ }
+        AfterEach { $tI++ }
+
+        It "$tC.$tI - Validate ssh -V output matches ssh.exe properties" {
+            $pattern = "\d+\.\dp\d" # i.e. 9.2p2
+
+            $sshVersionOutput = & $sshExePath -V 2>&1 | Select-String -Pattern "OpenSSH"
+            $match = $sshVersionOutput.Line -match $pattern
+            if (-not $match) {
+                throw "No matching version pattern found from ssh -V output"
+            }
+            $versionNumber = $Matches[0]
+
+            $fileVersionInfo = Get-Item $sshExePath | Select-Object -ExpandProperty VersionInfo
+            $fileVersion = $fileVersionInfo.ProductVersion
+            $match = $fileVersion -match $pattern
+            if (-not $match) {
+                throw "No matching version pattern found from ssh.exe properties"
+            }
+            $versionNumber | Should Match $Matches[0]
+        }
+    }
+
     Context "$tC - Validate Openssh registry entries" {
         BeforeAll {
             $tI=1
             $servicePath = "HKLM:\SYSTEM\ControlSet001\Services"
             $opensshRegPath = "HKLM:\SOFTWARE\OpenSSH"
-            
+
             $opensshACLs = @(
                 @{
                     Identity=$systemSid
@@ -271,7 +305,7 @@ Describe "Setup Tests" -Tags "Setup" {
                     IsInherited = $false
                     RegistryRights = $RegFullControlPerm
                     PropagationFlags = "None"
-                },                
+                },
                 @{
                     Identity=$authenticatedUserSid
                     IsInherited = $false
@@ -294,9 +328,9 @@ Describe "Setup Tests" -Tags "Setup" {
                     PropagationFlags = "None"
                 }
             )
-        }        
+        }
         AfterAll{$tC++}
-        AfterEach { $tI++ }               
+        AfterEach { $tI++ }
 
         It "$tC.$tI - Validate Registry key ssh-agent\Description" {
             $p = Get-ItemPropertyValue (Join-Path $servicePath "ssh-agent") -Name "Description"
@@ -317,10 +351,10 @@ Describe "Setup Tests" -Tags "Setup" {
         It "$tC.$tI - Validate Registry key ssh-agent\ObjectName" {
             $p = Get-ItemPropertyValue (Join-Path $servicePath "ssh-agent") -Name "ObjectName"
             $p | Should Be "LocalSystem"
-        }        
+        }
 
         It "$tC.$tI - Validate Registry key ssh-agent\Start" {
-            $p = Get-ItemPropertyValue (Join-Path $servicePath "ssh-agent") -Name "Start"  
+            $p = Get-ItemPropertyValue (Join-Path $servicePath "ssh-agent") -Name "Start"
             if($windowsInBox) {
                 $p | Should Be 4
             }
@@ -332,12 +366,12 @@ Describe "Setup Tests" -Tags "Setup" {
         It "$tC.$tI - Validate Registry key ssh-agent\Type" {
             $p = Get-ItemPropertyValue (Join-Path $servicePath "ssh-agent") -Name "Type"
             $p | Should Be 16
-        }        
+        }
 
-        It "$tC.$tI - Validate Registry key to ssh-agent\Security\Security" { 
+        It "$tC.$tI - Validate Registry key to ssh-agent\Security\Security" {
             $p = Get-ItemPropertyValue (Join-Path $servicePath "ssh-agent\Security") -Name Security
             $p.Gettype() | Should Be byte[]
-        }        
+        }
 
         It "$tC.$tI - Validate Registry key sshd\Description" {
             $p = Get-ItemPropertyValue (Join-Path $servicePath "sshd") -Name "Description"
@@ -356,17 +390,17 @@ Describe "Setup Tests" -Tags "Setup" {
         }
 
         It "$tC.$tI - Validate Registry key sshd\ObjectName" {
-            $p = Get-ItemPropertyValue (Join-Path $servicePath "sshd") -Name "ObjectName"            
+            $p = Get-ItemPropertyValue (Join-Path $servicePath "sshd") -Name "ObjectName"
             $p | Should Be "LocalSystem"
-        }        
+        }
 
         It "$tC.$tI - Validate Registry key sshd\Start" {
-            $p = Get-ItemPropertyValue (Join-Path $servicePath "sshd") -Name "Start"            
+            $p = Get-ItemPropertyValue (Join-Path $servicePath "sshd") -Name "Start"
             $p | Should Be 3
         }
 
         It "$tC.$tI - Validate Registry key sshd\Type" {
-            $p = Get-ItemPropertyValue (Join-Path $servicePath "sshd") -Name "Type"            
+            $p = Get-ItemPropertyValue (Join-Path $servicePath "sshd") -Name "Type"
             $p | Should Be 16
         }
 
@@ -383,18 +417,18 @@ Describe "Setup Tests" -Tags "Setup" {
             {
                 Start-Service ssh-agent
                 ValidateRegistryACL -RegPath $agentPath -IdAcls $opensshAgentACLs
-            }                            
+            }
         }
     }
 
     Context "$tC - Validate service settings" {
-        BeforeAll {            
+        BeforeAll {
             $tI=1
-        }        
+        }
         AfterAll{$tC++}
         AfterEach { $tI++ }
 
-        It "$tC.$tI - Validate properties of ssh-agent service" {            
+        It "$tC.$tI - Validate properties of ssh-agent service" {
             $sshdSvc = Get-service ssh-agent
             if($windowsInBox) {
                 $sshdSvc.StartType | Should Be ([System.ServiceProcess.ServiceStartMode]::Disabled)
@@ -411,7 +445,7 @@ Describe "Setup Tests" -Tags "Setup" {
             ($sshdSvc.RequiredServices).Count | Should Be 0
         }
 
-        It "$tC.$tI - Validate properties of sshd service" {            
+        It "$tC.$tI - Validate properties of sshd service" {
             $sshdSvc = Get-service sshd
             $sshdSvc.StartType | Should Be ([System.ServiceProcess.ServiceStartMode]::Manual)
             $sshdSvc.ServiceType | Should Be ([System.ServiceProcess.ServiceType]::Win32OwnProcess)
@@ -422,7 +456,7 @@ Describe "Setup Tests" -Tags "Setup" {
             ($sshdSvc.ServicesDependedOn).Count | Should Be 0
             ($sshdSvc.RequiredServices).Count | Should Be 0
         }
-        
+
         It "$tC.$tI - Validate RequiredPrivileges of ssh-agent" {
             $expected = @("SeAssignPrimaryTokenPrivilege", "SeTcbPrivilege", "SeBackupPrivilege", "SeRestorePrivilege", "SeImpersonatePrivilege")
             $a = sc.exe qprivs ssh-agent 256
@@ -449,7 +483,7 @@ Describe "Setup Tests" -Tags "Setup" {
             }
         }
 
-        It "$tC.$tI - Validate security access to ssh-agent service" {            
+        It "$tC.$tI - Validate security access to ssh-agent service" {
             $a = @(sc.exe sdshow ssh-agent)
             $b = $a[-1] -split "[D|S]:"
 
@@ -460,19 +494,19 @@ Describe "Setup Tests" -Tags "Setup" {
             $actual_dacl_aces = $dacl_aces | ? { -not [string]::IsNullOrWhiteSpace($_) }
 
             $expected_dacl_aces | % {
-                $actual_dacl_aces -contains $_ | Should be $true 
+                $actual_dacl_aces -contains $_ | Should be $true
             }
             $actual_dacl_aces | % {
                 $expected_dacl_aces -contains $_ | Should be $true
             }
 
             <# ignore sacl for now
-            if($c.Count -gt 1) {                
-                $c[1] | Should Be "(AU;FA;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)"            
+            if($c.Count -gt 1) {
+                $c[1] | Should Be "(AU;FA;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)"
             }#>
         }
 
-        It "$tC.$tI - Validate security access to sshd service" {            
+        It "$tC.$tI - Validate security access to sshd service" {
             $a = @(sc.exe sdshow sshd)
             $b = $a[-1] -split "[D|S]:"
 
@@ -490,8 +524,8 @@ Describe "Setup Tests" -Tags "Setup" {
             }
 
             <# ignore sacl for now
-            if($c.Count -gt 1) {                
-                $c[1] | Should Be "(AU;FA;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)"            
+            if($c.Count -gt 1) {
+                $c[1] | Should Be "(AU;FA;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;WD)"
             }#>
         }
     }
@@ -501,12 +535,12 @@ Describe "Setup Tests" -Tags "Setup" {
             $firwallRuleName = "OpenSSH-Server-In-TCP"
             $tI=1
         }
-        
+
         AfterAll{$tC++}
         AfterEach { $tI++ }
 
         It "$tC.$tI - Validate Firewall settings" -skip:(!$windowsInBox) {
-            $rule = Get-NetFirewallRule -Name $firwallRuleName            
+            $rule = Get-NetFirewallRule -Name $firwallRuleName
             $rule.Group | Should BeLike "OpenSSH*"
             $rule.Description | Should BeLike "*OpenSSH*"
             $rule.DisplayName | Should BeLike "OpenSSH*"
@@ -519,6 +553,57 @@ Describe "Setup Tests" -Tags "Setup" {
             $fwportFilter.Protocol | Should Be 'TCP'
             $fwportFilter.LocalPort | Should Be 22
             $fwportFilter.RemotePort | Should Be 'Any'
-        }        
+        }
+    }
+
+    Context "$tC - Validate SSHD service startup" {
+        BeforeAll {
+            $tI=1
+            $sshFolderPath = Join-Path $env:ProgramData "ssh"
+            $sshACL = $null
+            if (Test-Path -Path $sshFolderPath) {
+                $sshACL = Get-Acl $sshFolderPath
+            }
+            $logFolderPath = Join-Path $env:ProgramData "ssh" "logs"
+            $logACL = $null
+            if (Test-Path -Path $logFolderPath) {
+                $logACL = Get-Acl $logFolderPath
+            }
+            if ((Get-Service sshd).Status -eq 'Running') {
+                net stop sshd
+            }
+        }
+        AfterAll {
+            $tC++
+            if ($logACL -eq $null) {
+                Remove-Item -Path $logFolderPath -Recurse -Force
+            }
+            if ($sshACL -eq $null) {
+                Remove-Item -Path $sshFolderPath -Recurse -Force
+            }
+        }
+        AfterEach {
+            $tI++
+            net stop sshd
+            if ($sshACL -ne $null) {
+                Set-Acl -Path $sshFolderPath -AclObject $sshACL
+            }
+            if ($logACL -ne $null) {
+                Set-Acl -Path $logFolderPath -AclObject $logACL
+            }
+        }
+
+        It "$tC.$tI - SSHD starts up successfully when Authenticated Users have read control over log folder" {
+            if (-not (Test-Path -Path $logFolderPath)) {
+                New-Item -Path $logFolderPath -ItemType Directory -Force
+            }
+            # Set ACLs on the folder
+            $acl = Get-Acl $logFolderPath
+            $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($authenticatedUserSid, "ReadAndExecute", "Allow")
+            $acl.SetAccessRule($accessRule)
+            Set-Acl -Path $logFolderPath -AclObject $acl
+            net start sshd
+            $LASTEXITCODE | Should Be 0
+        }
     }
 }

@@ -442,14 +442,20 @@ file_in_chroot_jail(HANDLE handle) {
 		return 1;
 	}
 
+	return file_in_chroot_jail_helper(final_path);
+}
+
+/* returns 1 if true, 0 otherwise */
+int
+file_in_chroot_jail_helper(wchar_t* final_path) {
+	/* ensure final path is within chroot */
 	to_wlower_case(final_path);
 	if ((wcslen(final_path) < wcslen(chroot_pathw)) ||
-	    memcmp(final_path, chroot_pathw, 2 * wcslen(chroot_pathw)) != 0 ||
-	    final_path[wcslen(chroot_pathw)] != '\\') {
+		memcmp(final_path, chroot_pathw, 2 * wcslen(chroot_pathw)) != 0 ||
+		final_path[wcslen(chroot_pathw)] != '\\') {
 		debug3("access denied due to attempt to escape chroot jail");
 		return 0;
 	}
-
 	return 1;
 }
 
@@ -703,7 +709,7 @@ fileio_write_wrapper(struct w32_io* pio, const void* buf, size_t bytes_to_copy)
 	int bytes_copied = -1;
 	size_t chunk_size = 0;
 
-	for (int i = 0; i < bytes_to_copy; i += WRITE_BUFFER_SIZE, chunk_count++) {
+	for (size_t i = 0; i < bytes_to_copy; i += WRITE_BUFFER_SIZE, chunk_count++) {
 		chunk_buf = (BYTE*)buf + chunk_count * WRITE_BUFFER_SIZE;
 		chunk_size = ((bytes_to_copy - i) >= WRITE_BUFFER_SIZE) ? WRITE_BUFFER_SIZE : (bytes_to_copy - i);
 		bytes_written = fileio_write(pio, chunk_buf, chunk_size);
@@ -717,7 +723,6 @@ fileio_write_wrapper(struct w32_io* pio, const void* buf, size_t bytes_to_copy)
 		bytes_copied += bytes_written;
 	}
 	return bytes_copied;
-
 }
 
 /* write() implementation */
@@ -1275,6 +1280,7 @@ fileio_symlink(const char *target, const char *linkpath)
 	DWORD ret = -1;
 	char target_modified[PATH_MAX] = { 0 };
 	char *linkpath_resolved = NULL, *target_resolved = NULL;
+	wchar_t *linkpath_utf16 = NULL, *resolved_target_utf16 = NULL, *resolved_target_chroot = NULL;
 
 	if (target == NULL || linkpath == NULL) {
 		errno = EFAULT;
@@ -1308,10 +1314,18 @@ fileio_symlink(const char *target, const char *linkpath)
 		strcpy_s(target_modified, _countof(target_modified), target_resolved);
 	}
 
-	wchar_t *linkpath_utf16 = resolved_path_utf16(linkpath);
-	wchar_t *resolved_target_utf16 = utf8_to_utf16(target_modified);
-	if (resolved_target_utf16 == NULL || linkpath_utf16 == NULL) {
+	if ((linkpath_utf16 = resolved_path_utf16(linkpath)) == NULL || 
+		(resolved_target_utf16 = utf8_to_utf16(target_modified)) == NULL) {
 		errno = ENOMEM;
+		goto cleanup;
+	}
+
+	/* if chroot, get full path for target, similar to behavior in realpath() in misc.c 
+	   note: _wfullpath() is required to resolve paths containing unicode characters */
+	if (chroot_pathw != NULL &&
+		(resolved_target_chroot = _wfullpath(NULL, resolved_target_utf16, 0)) != NULL &&
+		file_in_chroot_jail_helper(resolved_target_chroot) != 1) {
+		errno = EPERM;
 		goto cleanup;
 	}
 
@@ -1345,14 +1359,17 @@ fileio_symlink(const char *target, const char *linkpath)
 	ret = 0;
 cleanup:
 
+	if (linkpath_resolved)
+		free(linkpath_resolved);
+
 	if (linkpath_utf16)
 		free(linkpath_utf16);
 
+	if (resolved_target_chroot)
+		free(resolved_target_chroot);
+
 	if (resolved_target_utf16)
 		free(resolved_target_utf16);
-
-	if (linkpath_resolved)
-		free(linkpath_resolved);
 
 	if (target_resolved)
 		free(target_resolved);

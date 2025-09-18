@@ -45,14 +45,14 @@ Get-ChildItem $env:ProgramData\ssh\ssh_host_*_key -ErrorAction SilentlyContinue 
 Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList"  -ErrorAction SilentlyContinue | % {
     $properties =  Get-ItemProperty $_.pspath  -ErrorAction SilentlyContinue
     $userProfilePath = ""
-    if($properties)
+    if($properties -and $properties.ProfileImagePath)
     {
         $userProfilePath =  $properties.ProfileImagePath
-    }
-    $filePath = Join-Path $userProfilePath .ssh\authorized_keys
-    if(Test-Path $filePath -PathType Leaf)
-    {
-        Repair-AuthorizedKeyPermission -FilePath $filePath @psBoundParameters
+        $filePath = Join-Path $userProfilePath .ssh\authorized_keys
+        if(Test-Path $filePath -PathType Leaf)
+        {
+            Repair-AuthorizedKeyPermission -FilePath $filePath @psBoundParameters
+        }
     }
 }
 

@@ -32,6 +32,7 @@
 #include "inc\sys\socket.h"
 #include "inc\sys\select.h"
 #include "inc\sys\uio.h"
+#include "inc\sys\time.h"
 #include "inc\sys\types.h"
 #include "inc\sys\stat.h"
 #include "inc\unistd.h"
@@ -88,6 +89,21 @@ fd_table_initialize()
 {
 	struct w32_io *pio;
 	HANDLE wh;
+	char *stdio_mode_env = NULL;
+	int stdio_mode = NONSOCK_SYNC_FD;
+	size_t len = 0;
+
+	_dupenv_s(&stdio_mode_env, &len, "OPENSSH_STDIO_MODE");
+	if (stdio_mode_env != NULL) {
+		if (strcmp(stdio_mode_env, "sock") == 0)
+			stdio_mode = SOCK_FD;
+		else if (strcmp(stdio_mode_env, "nonsock") == 0)
+			stdio_mode = NONSOCK_FD;
+		else if (strcmp(stdio_mode_env, "nonsock_sync") == 0)
+			stdio_mode = NONSOCK_SYNC_FD;
+		free(stdio_mode_env);
+	}
+
 	/* table entries representing std in, out and error*/
 	DWORD wh_index[] = { STD_INPUT_HANDLE , STD_OUTPUT_HANDLE , STD_ERROR_HANDLE };
 	int fd_num = 0;
@@ -104,7 +120,7 @@ fd_table_initialize()
 				return -1;
 			}
 			memset(pio, 0, sizeof(struct w32_io));
-			pio->type = NONSOCK_SYNC_FD;
+			pio->type = stdio_mode;
 			pio->handle = wh;
 			fd_table_set(pio, fd_num);
 		}
@@ -715,12 +731,11 @@ w32_fcntl(int fd, int cmd, ... /* arg */)
 int
 w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* exceptfds, const struct timeval *timeout)
 {
-	ULONGLONG ticks_start = GetTickCount64(), ticks_spent;
+	ULONGLONG ticks_start = GetTickCount64(), ticks_spent, timeout_ms = 0, time_rem = 0;
 	w32_fd_set read_ready_fds, write_ready_fds;
 	HANDLE events[SELECT_EVENT_LIMIT];
 	int num_events = 0;
 	int in_set_fds = 0, out_ready_fds = 0, i;
-	unsigned int timeout_ms = 0, time_rem = 0;
 
 	errno = 0;
 	/* TODO - the size of these can be reduced based on fds */
@@ -843,7 +858,7 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 			else
 				time_rem = INFINITE;
 
-			if (0 != wait_for_any_event(events, num_events, time_rem))
+			if (0 != wait_for_any_event(events, num_events, (DWORD)time_rem))
 				return -1;
 
 			/* check on fd status */
@@ -1071,7 +1086,7 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 	si.hStdError = err;
 	si.dwFlags = STARTF_USESTDHANDLES;
 	
-	if (strstr(cmd, "sshd.exe")) {
+	if (strstr(cmd, "sshd-session.exe")) {
 		flags |= DETACHED_PROCESS;
 	}
 

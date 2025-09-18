@@ -37,6 +37,9 @@
 
 #pragma warning(push, 3)
 
+/* Pattern-list of allowed PKCS#11/Security key paths */
+char* allowed_providers = NULL;
+
 int remote_add_provider;
 
 int scm_start_service(DWORD, LPWSTR*);
@@ -134,8 +137,25 @@ wmain(int argc, wchar_t **wargv)
 					fatal("Unknown -O option; only allow-remote-pkcs11 is supported");
 				}
 			}
+			else if (wcsncmp(wargv[i], L"-P", 2) == 0) {
+				if (allowed_providers != NULL)
+					fatal("-P option already specified");
+				if ((i + 1) < argc) {
+					i++;
+					if ((allowed_providers = utf16_to_utf8(wargv[i])) == NULL)
+						fatal("Invalid argument for -P option");
+				}
+				else {
+					fatal("Missing argument for -P option");
+				}
+			}
 		}
 	}
+
+	if (allowed_providers == NULL) {
+		agent_initialize_allow_list();
+	}
+
 	if (!StartServiceCtrlDispatcherW(dispatch_table)) {
 		if (GetLastError() == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT) {
 			/* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */

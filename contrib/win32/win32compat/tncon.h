@@ -37,6 +37,9 @@
 
 #include "console.h"
 
+#define TERM_IO_BUF_SIZE_UTF16 1024
+#define TERM_IO_BUF_SIZE (3 * TERM_IO_BUF_SIZE_UTF16)
+
 #define UP_ARROW                    "\x1b[A"
 #define DOWN_ARROW                  "\x1b[B"
 #define RIGHT_ARROW                 "\x1b[C"

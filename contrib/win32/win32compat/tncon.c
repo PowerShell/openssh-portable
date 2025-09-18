@@ -124,11 +124,84 @@ GetModifierKey(DWORD dwControlKeyState)
 	return modKey;
 }
 
+// ReadConsoleForTermEmul() but for ENABLE_VIRTUAL_TERMINAL_INPUT.
+static int
+ReadConsoleForTermEmulModern(HANDLE hInput, char *destin, int destinlen)
+{
+	// If the previous input ended on a lead (high) surrogate,
+	// we stash it here to combine it with the next input.
+	static wchar_t s_previous_lead;
+
+	INPUT_RECORD records[TERM_IO_BUF_SIZE_UTF16];
+	DWORD records_cap = ARRAYSIZE(records);
+	DWORD records_len = 0;
+	wchar_t text[TERM_IO_BUF_SIZE_UTF16];
+	int text_len = 0;
+
+	// If we'll restore the previous lead surrogate, we can only read
+	// ARRAYSIZE(records)-1 records before the storage overflows.
+	if (s_previous_lead) {
+		records_cap--;
+	}
+
+	// As this application heavily relies on APCs, it's important that we call
+	// DataAvailable(), because it calls WaitForSingleObjectEx with bAlertable=TRUE.
+	if (!DataAvailable(hInput) ||
+		!ReadConsoleInputW(hInput, records, records_cap, &records_len) ||
+		records_len == 0)
+		return 0;
+
+	// Restore the previous lead surrogate if we have one.
+	if (s_previous_lead) {
+		text[text_len++] = s_previous_lead;
+		s_previous_lead = 0;
+	}
+
+	// Accumulate the UTF-16 text.
+	for (DWORD i = 0; i < records_len; i++) {
+		switch (records[i].EventType) {
+		case WINDOW_BUFFER_SIZE_EVENT:
+			queue_terminal_window_change_event();
+			break;
+		case KEY_EVENT: {
+			const KEY_EVENT_RECORD* k = &records[i].Event.KeyEvent;
+			if (
+				// The old Windows console added support for Unicode by encoding the characters in the
+				// current code page as usual, while stuffing a UCS2 value into a trailing VK_MENU event.
+				// Modern terminals on Windows stopped doing this and the Windows console may as well at some point.
+				(k->bKeyDown || k->wVirtualKeyCode == VK_MENU) &&
+				// Current versions of ConPTY suffer from a bug where pressing modifier keys enqueues
+				// a KEY_EVENT with UnicodeChar=0 despite ENABLE_VIRTUAL_TERMINAL_INPUT being enabled.
+				// They can be identified by the fact that their UnicodeChar value is zero,
+				// but they still have a non-zero wVirtualScanCode.
+				(k->uChar.UnicodeChar != L'\0' || k->wVirtualScanCode == 0))
+				text[text_len++] = k->uChar.UnicodeChar;
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	// Pop any lone lead surrogate from the input for later.
+	const wchar_t last_char = text[text_len - 1];
+	if (IS_HIGH_SURROGATE(last_char)) {
+		s_previous_lead = last_char;
+		text_len--;
+	}
+
+	// ...and finally convert everything to UTF-8.
+	// It'll always fit, because we sized TERM_IO_BUF_SIZE to be large enough.
+	return WideCharToMultiByte(CP_UTF8, 0, text, text_len, destin, destinlen, NULL, NULL);
+}
+
 int
 ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 {
-	HANDLE hHandle[] = { hInput, NULL };
-	DWORD nHandle = 1;
+	if (isConsoleVTSeqAvailable) {
+		return ReadConsoleForTermEmulModern(hInput, destin, destinlen);
+	}
+
 	DWORD dwInput = 0;
 	DWORD rc = 0;
 	unsigned char octets[20];
@@ -187,23 +260,7 @@ ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen)
 						break;
 					}
 
-					if (isConsoleVTSeqAvailable) {
-						if (inputRecord.Event.KeyEvent.uChar.UnicodeChar != L'\0' || inputRecord.Event.KeyEvent.wVirtualScanCode == 0) {
-							n = WideCharToMultiByte(
-								CP_UTF8,
-								0,
-								&(inputRecord.Event.KeyEvent.uChar.UnicodeChar),
-								1,
-								(LPSTR)octets,
-								20,
-								NULL,
-								NULL);
-
-							WriteToBuffer((char *)octets, n);
-						}
-					} else {
-						GetVTSeqFromKeyStroke(inputRecord);
-					}
+					GetVTSeqFromKeyStroke(inputRecord);
 				}
 				break;
 			}

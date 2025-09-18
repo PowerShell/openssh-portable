@@ -341,8 +341,12 @@ sigaction(int signum, const struct sigaction * act, struct sigaction * oldact)
 		return r;
 	}
 
-	if (act)
-		oldact->sa_handler = w32_signal(signum, act->sa_handler);
+	if (act) {
+		sighandler_t old_handler = w32_signal(signum, act->sa_handler);
+		if (oldact) {
+			oldact->sa_handler = old_handler;
+		}
+	}
 	else if (oldact)
 		oldact->sa_handler = sig_handlers[signum];
 

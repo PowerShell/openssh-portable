@@ -67,7 +67,11 @@
 #include "sk-api.h" /* XXX for SSH_SK_USER_PRESENCE_REQD; remove */
 #include "cipher.h"
 
+#ifdef WINDOWS
+#define DEFAULT_KEY_TYPE_NAME "ecdsa"
+#else
 #define DEFAULT_KEY_TYPE_NAME "ed25519"
+#endif /* WINDOWS */
 
 /*
  * Default number of bits in the RSA, DSA and ECDSA keys.  These value can be
@@ -82,7 +86,11 @@
  */
 #define DEFAULT_BITS		3072
 #define DEFAULT_BITS_DSA	1024
+#ifdef WINDOWS
+#define DEFAULT_BITS_ECDSA	384
+#else
 #define DEFAULT_BITS_ECDSA	256
+#endif /* WINDOWS */
 
 static int quiet = 0;
 
@@ -259,7 +267,11 @@ ask_filename(struct passwd *pw, const char *prompt)
 	char *name = NULL;
 
 	if (key_type_name == NULL)
+#ifdef WINDOWS
+		name = _PATH_SSH_CLIENT_ID_ECDSA;
+#else
 		name = _PATH_SSH_CLIENT_ID_ED25519;
+#endif /* WINDOWS */
 	else {
 		switch (sshkey_type_from_name(key_type_name)) {
 #ifdef WITH_DSA

@@ -10,7 +10,7 @@ Add-Type -TypeDefinition @"
 "@
 
 function Set-FilePermission
-{    
+{
     param(
         [parameter(Mandatory=$true)]
         [string]$FilePath,
@@ -20,7 +20,7 @@ function Set-FilePermission
         [System.Security.AccessControl.AccessControlType] $AccessType = "Allow",
         [ValidateSet("Add", "Delete")]
         [string]$Action = "Add"
-    )    
+    )
 
     $myACL = Get-ACL $FilePath
     $account = Get-UserAccount -UserSid $UserSid
@@ -30,9 +30,9 @@ function Set-FilePermission
         Enable-Privilege SeRestorePrivilege | out-null
         Set-Acl -Path $FilePath -AclObject $myACL
         $myACL = Get-ACL $FilePath
-        
-        if($myACL.Access) 
-        {        
+
+        if($myACL.Access)
+        {
             $myACL.Access | % {
                 if($_.IdentityReference.Equals($account))
                 {
@@ -43,18 +43,18 @@ function Set-FilePermission
                         Set-Acl -Path $FilePath -AclObject $myACL
                         $myACL = Get-ACL $FilePath
                     }
-                    
+
                     if(-not ($myACL.RemoveAccessRule($_)))
                     {
                         throw "failed to remove access of $($_.IdentityReference) rule in setup "
                     }
                 }
             }
-        } 
+        }
     }
     elseif($Perms)
     {
-        $Perms | % { 
+        $Perms | % {
             $userACE = New-Object System.Security.AccessControl.FileSystemAccessRule `
                 ($UserSid, $_, "None", "None", $AccessType)
             $myACL.AddAccessRule($userACE)
@@ -64,7 +64,7 @@ function Set-FilePermission
     Set-Acl -Path $FilePath -AclObject $myACL -confirm:$false
 }
 
-function Add-PasswordSetting 
+function Add-PasswordSetting
 {
     param([string] $pass)
     if ($IsWindows) {
@@ -86,17 +86,17 @@ function Remove-PasswordSetting
 
 $Taskfolder = "\OpenSSHTestTasks\"
 $Taskname = "StartTestDaemon"
-        
+
 function Start-SSHDTestDaemon
 {
     param(
     [string] $Arguments,
     [string] $Workdir,
-    [string] $Port)    
+    [string] $Port)
 
     $Arguments += " -p $Port"
     $ac = New-ScheduledTaskAction -Execute (join-path $workdir "sshd") -WorkingDirectory $workdir -Argument $Arguments
-    $task = Register-ScheduledTask -TaskName $Taskname -User system -Action $ac -TaskPath $Taskfolder -Force    
+    $task = Register-ScheduledTask -TaskName $Taskname -User system -Action $ac -TaskPath $Taskfolder -Force
     Start-ScheduledTask -TaskPath $Taskfolder -TaskName $Taskname
     #sleep for 1 seconds for process to ready to listener
     $num = 0
@@ -111,7 +111,7 @@ function Start-SSHDTestDaemon
 function Stop-SSHDTestDaemon
 {
     param(
-    [string] $Port) 
+    [string] $Port)
 
     $task = Get-ScheduledTask -TaskPath $Taskfolder -TaskName $Taskname -ErrorAction SilentlyContinue
     if($task)
@@ -119,17 +119,17 @@ function Stop-SSHDTestDaemon
         if($task.State -eq "Running")
         {
             Stop-ScheduledTask -TaskPath $Taskfolder -TaskName $Taskname
-        }        
+        }
         Unregister-ScheduledTask -TaskPath $Taskfolder -TaskName $Taskname -Confirm:$false
     }
 
     #kill process listening on $Port
     $p = netstat -anop TCP | select-string -Pattern "0.0.0.0:$Port"
-    if (-not($p -eq $null)) 
+    if (-not($p -eq $null))
     {
         foreach ($ps in $p) {
-            $pss =$ps.ToString() -split "\s+"; 
-            $processid = $pss[$pss.length -1] 
+            $pss =$ps.ToString() -split "\s+";
+            $processid = $pss[$pss.length -1]
             Stop-Process -Id $processid -Force -ErrorAction SilentlyContinue
         }
         #if still running, wait a little while for task to complete
@@ -142,4 +142,22 @@ function Stop-SSHDTestDaemon
         }
     }
 
+}
+
+function ConfigureDefaultShell {
+    param
+    (
+          [string] $default_shell_path,
+          [string] $dfltShellRegPath = "HKLM:\Software\OpenSSH",
+          [string] $dfltShellRegKeyName = "DefaultShell",
+          [string] $dfltShellCmdOptionRegKeyName = "DefaultShellCommandOption",
+          [string] $default_shell_cmd_option_val = $null
+    )
+    if (!(Test-Path $dfltShellRegPath)) {
+        New-Item -Path $dfltShellRegPath -Force | Out-Null
+    }
+    New-ItemProperty -Path $dfltShellRegPath -Name $dfltShellRegKeyName -Value $default_shell_path -PropertyType String -Force
+    if ($default_shell_cmd_option_val -ne $null) {
+        New-ItemProperty -Path $dfltShellRegPath -Name $dfltShellCmdOptionRegKeyName -Value $default_shell_cmd_option_val -PropertyType String -Force
+    }
 }
