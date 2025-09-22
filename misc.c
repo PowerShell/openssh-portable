@@ -2006,8 +2006,7 @@ unix_listener(const char *path, int backlog, int unlink_first)
 		return -1;
 	}
 
-	sock = socket(PF_UNIX, SOCK_STREAM, 0);
-	if (sock == -1) {
+	if ((sock = w32_afunix_socket(&sunaddr)) == -1) {
 		saved_errno = errno;
 		error_f("socket: %.100s", strerror(errno));
 		errno = saved_errno;

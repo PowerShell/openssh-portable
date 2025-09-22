@@ -2294,7 +2294,7 @@ muxclient(const char *path)
 		fatal("ControlPath too long ('%s' >= %u bytes)", path,
 		    (unsigned int)sizeof(addr.sun_path));
 
-	if ((sock = socket(PF_UNIX, SOCK_STREAM, 0)) == -1)
+	if ((sock = w32_afunix_socket(&addr)) == -1)
 		fatal_f("socket(): %s", strerror(errno));
 
 	if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) == -1) {

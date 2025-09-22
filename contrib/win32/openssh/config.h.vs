@@ -1526,6 +1526,12 @@
 /* Use PIPES instead of a socketpair() */
 #define USE_PIPES 1
 
+/* Define name for the ssh-agent Windows named pipe */
+#define AGENT_PIPE_ID L"\\\\.\\pipe\\openssh-ssh-agent"
+
+/* define 1 if afunix.h is available */
+#define HAVE_AFUNIX_H 1
+
 /* Define if you want to sanitize fds */
 /* #undef USE_SANITISE_STDFD */
 
