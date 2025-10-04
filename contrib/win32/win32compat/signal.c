@@ -230,7 +230,7 @@ sw_process_pending_signals()
 				w32_raise(exp[i]);
 				/* dont error EINTR for SIG_ALRM, */
 				/* sftp client is not expecting it */
-				if (exp[i] != W32_SIGALRM)
+				if (exp[i] != W32_SIGALRM && exp[i] != W32_SIGWINCH)
 					sig_int = TRUE;
 			} else if (exp[i] == W32_SIGCHLD) /*if SIGCHLD is SIG_IGN, reap zombies*/
 				sw_cleanup_child_zombies();
