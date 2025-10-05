@@ -228,8 +228,8 @@ sw_process_pending_signals()
 		if (sigismember(&pending_tmp, exp[i])) {
 			if (sig_handlers[exp[i]] != W32_SIG_IGN) {
 				w32_raise(exp[i]);
-				/* dont error EINTR for SIG_ALRM, */
-				/* sftp client is not expecting it */
+				/* don't set errno=EINTR on SIGALRM, sftp client is not expecting it */
+				/* don't set errno=EINTR on SIGWINCH in order to avoid breaking the sequence of waiting for completion of IO operations. */
 				if (exp[i] != W32_SIGALRM && exp[i] != W32_SIGWINCH)
 					sig_int = TRUE;
 			} else if (exp[i] == W32_SIGCHLD) /*if SIGCHLD is SIG_IGN, reap zombies*/
