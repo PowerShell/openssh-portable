@@ -1,5 +1,10 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
     <Fragment>
+        <!-- Registry search to check if key for RedirectionGuard exists -->
+        <Property Id="AGENTREGKEYEXISTS">
+            <RegistrySearch Id="SearchAgentRegKey" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\ssh-agent.exe" Name="MitigationOptions" Type="raw" />
+        </Property>
+
         <!-- KeyPath is necessary for multi-file components to identify the key file - preferrably versioned. -->
         <ComponentGroup Id="Shared" Directory="INSTALLFOLDER">
             <Component>
@@ -67,6 +72,13 @@
                     Start="install"
                     Stop="both"
                     Remove="uninstall" />
+            </Component>
+            <!-- Permanent registry component - will persist through uninstall -->
+            <Component Id="AgentInstallFlagComponent" Guid="*" Permanent="yes">
+                <Condition><![CDATA[NOT AGENTREGKEYEXISTS]]></Condition>
+                    <RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\ssh-agent.exe" ForceCreateOnInstall="yes">
+                        <RegistryValue Name="MitigationOptions" Type="binary" Value="00000000000000000000000000000000000010" KeyPath="yes" />
+                    </RegistryKey>
             </Component>
         </ComponentGroup>
 

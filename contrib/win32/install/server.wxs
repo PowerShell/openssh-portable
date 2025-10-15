@@ -1,5 +1,10 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:firewall="http://schemas.microsoft.com/wix/FirewallExtension" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
     <Fragment>
+        <!-- Registry search to check if key for RedirectionGuard exists -->
+        <Property Id="SSHDREGKEYEXISTS">
+            <RegistrySearch Id="SearchSSHDRegKey" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\sshd.exe" Name="MitigationOptions" Type="raw" />
+        </Property>
+
         <!-- KeyPath is necessary for multi-file components to identify the key file - preferrably versioned. -->
         <ComponentGroup Id="Server" Directory="INSTALLFOLDER">
             <ComponentGroupRef Id="Shared" />
@@ -61,6 +66,13 @@
                 <File Name="sshd_config_default">
                     <PermissionEx Sddl="O:BAG:SYD:PAI(A;;FA;;;SY)(A;;FA;;;BA)" />
                 </File>
+            </Component>
+            <!-- Permanent registry component - will persist through uninstall -->
+            <Component Id="SSHDInstallFlagComponent" Guid="*" Permanent="yes">
+                <Condition><![CDATA[NOT SSHDREGKEYEXISTS]]></Condition>
+                    <RegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\sshd.exe" ForceCreateOnInstall="yes">
+                        <RegistryValue Name="MitigationOptions" Type="binary" Value="00000000000000000000000000000000000010" KeyPath="yes" />
+                    </RegistryKey>
             </Component>
         </ComponentGroup>
 
