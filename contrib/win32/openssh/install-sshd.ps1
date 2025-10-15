@@ -89,6 +89,38 @@ if (Test-Path $sshAgentRegPath)
     Set-Acl $sshAgentRegPath  $sshAgentAcl
 }
 
+# Create MitigationOptions registry key if it doesn't exist for RedirectionGuard
+$sshdMitigationRegPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\sshd.exe"
+if (-not (Test-Path $sshdMitigationRegPath)) {
+    New-Item -Path $sshdMitigationRegPath -Force | Out-Null
+    Write-Host "Created registry key: $sshdMitigationRegPath"
+}
+
+# Check if MitigationOptions value exists
+$mitigationValue = Get-ItemProperty -Path $sshdMitigationRegPath -Name "MitigationOptions" -ErrorAction SilentlyContinue
+if (-not $mitigationValue) {
+    # Create binary value: 19 bytes with 0x10 at the end (RedirectionGuard mitigation)
+    $binaryData = [byte[]](0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10)
+    New-ItemProperty -Path $sshdMitigationRegPath -Name "MitigationOptions" -PropertyType Binary -Value $binaryData -Force | Out-Null
+    Write-Host "Created registry value for sshd.exe to enable RedirectionGuard"
+}
+
+# Create MitigationOptions registry key if it doesn't exist for RedirectionGuard
+$agentMitigationRegPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\ssh-agent.exe"
+if (-not (Test-Path $agentMitigationRegPath)) {
+    New-Item -Path $agentMitigationRegPath -Force | Out-Null
+    Write-Host "Created registry key: $agentMitigationRegPath"
+}
+
+# Check if MitigationOptions value exists
+$mitigationValue = Get-ItemProperty -Path $agentMitigationRegPath -Name "MitigationOptions" -ErrorAction SilentlyContinue
+if (-not $mitigationValue) {
+    # Create binary value: 19 bytes with 0x10 at the end (RedirectionGuard mitigation)
+    $binaryData = [byte[]](0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10)
+    New-ItemProperty -Path $agentMitigationRegPath -Name "MitigationOptions" -PropertyType Binary -Value $binaryData -Force | Out-Null
+    Write-Host "Created registry value for ssh-agent.exe to enable RedirectionGuard"
+}
+
 #Fix permissions for moduli file
 $moduliPath = Join-Path $PSScriptRoot "moduli"
 if (Test-Path $moduliPath -PathType Leaf)
