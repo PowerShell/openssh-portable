@@ -1,17 +1,17 @@
 diff --git a/crypto/CMakeLists.txt b/crypto/CMakeLists.txt
-index 5140a7a..d2cb88e 100644
+index 137cf70..689122b 100644
 --- a/crypto/CMakeLists.txt
 +++ b/crypto/CMakeLists.txt
-@@ -616,7 +616,7 @@ set(
+@@ -596,7 +596,7 @@ set(
  	x509/x_all.c
  )
  
 -set(COMPAT_SRC empty.c)
 +set(COMPAT_SRC empty.c version.rc)
  
- if(UNIX)
- 	set(CRYPTO_SRC ${CRYPTO_SRC} crypto_lock.c)
-@@ -840,12 +840,13 @@ add_library(crypto $<TARGET_OBJECTS:crypto_obj> $<TARGET_OBJECTS:compat_obj> emp
+ set(CRYPTO_UNEXPORT ${CRYPTO_UNEXPORT} BIO_s_log)
+ 
+@@ -848,12 +848,13 @@ add_library(crypto $<TARGET_OBJECTS:crypto_obj> $<TARGET_OBJECTS:compat_obj> emp
  
  export_symbol(crypto ${CMAKE_CURRENT_BINARY_DIR}/crypto_p.sym)
  target_link_libraries(crypto ${PLATFORM_LIBS})
