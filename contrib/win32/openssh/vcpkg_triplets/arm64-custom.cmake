@@ -1,7 +1,7 @@
 set(VCPKG_TARGET_ARCHITECTURE arm64)
 set(VCPKG_ENV_PASSTHROUGH __VCVARSALL_SPECTRE)
-set(VCPKG_CXX_FLAGS "/Qspectre")
-set(VCPKG_C_FLAGS "/Qspectre")
+set(VCPKG_CXX_FLAGS "/Qspectre /W3")
+set(VCPKG_C_FLAGS "/Qspectre /W3")
 set(VCPKG_LINKER_FLAGS "/guard:cf /DYNAMICBASE")
 
 if(${PORT} MATCHES "libressl")
