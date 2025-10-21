@@ -30,7 +30,8 @@ index a9a3dca..357c755 100644
 +			# do not disable "C4146" # unary minus operator applied to unsigned type,
  			        # result still unsigned
  			"C4206" # nonstandard extension used : translation unit is empty
- 			"C4244" # 'argument' : conversion from 'type1' to 'type2',
+- 			"C4244" # 'argument' : conversion from 'type1' to 'type2',
++			# do not disable "C4244" # 'argument' : conversion from 'type1' to 'type2',
  			        # possible loss of data
  			"C4245" # 'conversion' : conversion from 'type1' to 'type2',
  			        # signed/unsigned mismatch
