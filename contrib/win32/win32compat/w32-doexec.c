@@ -139,6 +139,8 @@ get_registry_key_value(HKEY hKey, LPCWSTR lpSubKey, LPCWSTR lpValue, DWORD* requ
 static void
 setup_session_user_vars(wchar_t* pw_dir_w)
 {
+	/* HOMEDRIVE and HOMEPATH are set by shell32!RegenerateUserEnvironment
+	   which is called on explorer.exe initialization in the user context. */
 	if (getenv("HOMEPATH") == NULL) {
 		if (pw_dir_w[0] && pw_dir_w[1] == L':') {
 			SetEnvironmentVariableW(L"HOMEPATH", pw_dir_w + 2);
