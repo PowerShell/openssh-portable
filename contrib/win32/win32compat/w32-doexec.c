@@ -99,161 +99,86 @@ get_registry_operation_error_message(const LONG error_code)
 	return message;
 }
 
-/* TODO  - built env var set and pass it along with CreateProcess */
-/* Set environment variables with values from the registry */
-/* Ensure that environment of new connections reflect the current state of the machine */
-static void
-setup_session_user_vars(wchar_t* profile_path)
+wchar_t*
+get_registry_key_value(HKEY hKey, LPCWSTR lpSubKey, LPCWSTR lpValue, DWORD* required)
 {
-	/* retrieve and set env variables. */
-	HKEY reg_key = 0;
-	wchar_t name[256];
-	wchar_t path[PATH_MAX + 1] = { 0, };
-	wchar_t *data = NULL, *data_expanded = NULL, *path_value = NULL, *to_apply;
-	DWORD type, name_chars = 256, data_chars = 0, data_expanded_chars = 0, required, i = 0;
-	LONG ret;
-	char *error_message;
+	wchar_t* data = NULL;
+	LSTATUS ret = RegGetValueW(hKey, lpSubKey, lpValue, RRF_RT_REG_SZ, NULL, NULL, required); /* RRF_RT_REG_SZ: automatically converts REG_EXPAND_SZ to REG_SZ. */
+	if (ret == ERROR_SUCCESS) {
+		data = malloc(*required);
+		if (data) {
+			ret = RegGetValueW(hKey, lpSubKey, lpValue, RRF_RT_REG_SZ, NULL, (LPBYTE)data, required);
+		}
+	}
+	if (ret != ERROR_SUCCESS) {
+		char* error_message = get_registry_operation_error_message(ret);
+		char* subkey = utf16_to_utf8(lpSubKey);
+		char* value = utf16_to_utf8(lpValue);
+		if (error_message && subkey && value) {
+			error("Failed to get the value for registry key %s\\%s. %s", subkey, value, error_message);
+			free(error_message);
+		}
+		else {
+			error("Failed to get the registry key value.");
+		}
+		if (subkey)
+			free(subkey);
+		if (value)
+			free(value);
+		if (data) { /* Reset data on errors. */
+			free(data);
+			data = NULL;
+		}
+	}
+	return data;
+}
 
-	/*These whitelisted environment variables should not be overwritten with the value from the registry*/
-	wchar_t* whitelist[] = { L"PROCESSOR_ARCHITECTURE", L"USERNAME" };
-
-	SetEnvironmentVariableW(L"USERPROFILE", profile_path);
-
-	if (profile_path[0] && profile_path[1] == L':') {
-		SetEnvironmentVariableW(L"HOMEPATH", profile_path + 2);
-		wchar_t wc = profile_path[2];
-		profile_path[2] = L'\0';
-		SetEnvironmentVariableW(L"HOMEDRIVE", profile_path);
-		profile_path[2] = wc;
+/* Build the user environment block. */
+/* Set the HOMEPATH variable (and optionally HOMEDRIVE) using the specified pw_dir_w profile path. */
+/* Set the PATH environment variable with values from the registry. */
+static void
+setup_session_user_vars(wchar_t* pw_dir_w)
+{
+	if (pw_dir_w[0] && pw_dir_w[1] == L':') {
+		SetEnvironmentVariableW(L"HOMEPATH", pw_dir_w + 2);
+		wchar_t wc = pw_dir_w[2];
+		pw_dir_w[2] = L'\0';
+		SetEnvironmentVariableW(L"HOMEDRIVE", pw_dir_w);
+		pw_dir_w[2] = wc;
 	}
 	else
-		SetEnvironmentVariableW(L"HOMEPATH", profile_path);
+		SetEnvironmentVariableW(L"HOMEPATH", pw_dir_w);
 
-	swprintf_s(path, _countof(path), L"%s\\AppData\\Local", profile_path);
-	SetEnvironmentVariableW(L"LOCALAPPDATA", path);
-	swprintf_s(path, _countof(path), L"%s\\AppData\\Roaming", profile_path);
-	SetEnvironmentVariableW(L"APPDATA", path);
-	
-	for (int j = 0; j < 2; j++)
-	{
-		/* First update the environment variables with the value from the System Environment, and then User. */
-		/* User variables overwrite the value of system variables with the same name (Except Path) */
-		if (j == 0)
-			ret = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", 0, KEY_QUERY_VALUE, &reg_key);
-		else
-			ret = RegOpenKeyExW(HKEY_CURRENT_USER, L"Environment", 0, KEY_QUERY_VALUE, &reg_key);
-
-		if (ret != ERROR_SUCCESS) {
-			error_message = get_registry_operation_error_message(ret);
-			if (error_message)
-			{
-				error("Unable to open Registry Key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"), error_message);
-				free(error_message);
-			}
-			else
-				error("Unable to open Registry Key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"));
-			continue;
+	/* PATH is a special case. The System Path value is preppended to the User Path value */
+	DWORD hklm_path_sz = 0;
+	DWORD hkcu_path_sz = 0;
+	wchar_t* user_path = NULL;
+	wchar_t* hklm_path = get_registry_key_value(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", L"PATH", &hklm_path_sz);
+	wchar_t* hkcu_path = get_registry_key_value(HKEY_CURRENT_USER, L"Environment", L"PATH", &hkcu_path_sz);
+	DWORD user_path_sz = hklm_path_sz + hkcu_path_sz;
+	if (hklm_path && hkcu_path) {
+		user_path = malloc(user_path_sz);
+		if (user_path) {
+			memcpy_s(user_path, user_path_sz, hklm_path, hklm_path_sz);
+			user_path[hklm_path_sz / sizeof(wchar_t) - 1] = L';'; /* Replace trailing null with ';'. */
+			memcpy_s(user_path + hklm_path_sz / sizeof(wchar_t), user_path_sz - hklm_path_sz, hkcu_path, hkcu_path_sz);
+			SetEnvironmentVariableW(L"PATH", user_path);
 		}
-		
-		while (1) {
-			to_apply = NULL;
-			required = data_chars * sizeof(wchar_t);
-			name_chars = 256;
-			ret = RegEnumValueW(reg_key, i++, name, &name_chars, 0, &type, (LPBYTE)data, &required);
-			if (ret == ERROR_NO_MORE_ITEMS)
-				break;
-			else if (ret == ERROR_MORE_DATA || required > data_chars * 2) {
-				if (data != NULL)
-					free(data);
-				data = xmalloc(required);
-				data_chars = required / 2;
-				i--;
-				continue;
-			}
-			else if (ret != ERROR_SUCCESS) {
-				error_message = get_registry_operation_error_message(ret);
-				if (error_message)
-				{
-					error("Failed to enumerate the value for registry key %s. %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"), error_message);
-					free(error_message);
-				}
-				else
-					error("Failed to enumerate the value for registry key %s", (j == 0 ? "HKEY_LOCAL_MACHINE" : "HKEY_CURRENT_USER"));
-				break;
-			}
-
-			if (type == REG_SZ)
-				to_apply = data;
-			else if (type == REG_EXPAND_SZ) {
-				required = ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
-				if (required > data_expanded_chars) {
-					if (data_expanded)
-						free(data_expanded);
-					data_expanded = xmalloc(required * 2);
-					data_expanded_chars = required;
-					ExpandEnvironmentStringsW(data, data_expanded, data_expanded_chars);
-				}
-				to_apply = data_expanded;
-			}
-
-			/* Ensure that variables in the whitelist are not being overwritten with the value from the registry */
-			for (int k = 0; k < ARRAYSIZE(whitelist); k++) {
-				if (_wcsicmp(name, whitelist[k]) == 0)
-				{
-					to_apply = NULL;
-				}
-			}
-
-			/* Path is a special case. The System Path value is preppended to the User Path value */
-			if (_wcsicmp(name, L"PATH") == 0 && j == 1) {
-				if ((required = GetEnvironmentVariableW(L"PATH", NULL, 0)) != 0) {
-					size_t user_path_size = wcslen(to_apply) + 1;
-					path_value = xmalloc((required + user_path_size) * 2);
-					GetEnvironmentVariableW(L"PATH", path_value, required);
-					path_value[required - 1] = L';';
-					GOTO_CLEANUP_ON_ERR(memcpy_s(path_value + required, user_path_size * 2, to_apply, user_path_size * 2));
-					to_apply = path_value;
-				}
-			}
-
-			if (to_apply)
-				SetEnvironmentVariableW(name, to_apply);
-				
-		}
-	cleanup:
-		if (reg_key)
-			RegCloseKey(reg_key);
-		if (data)
-			free(data);
-		if (data_expanded)
-			free(data_expanded);
-		if (path_value)
-			free(path_value);
-		i = 0;
-		data = NULL; 
-		data_expanded = NULL; 
-		path_value = NULL;
-		name_chars = 256; 
-		data_chars = 0; 
-		data_expanded_chars = 0;
-		reg_key = 0;
+		free(user_path);
 	}
+	if (hklm_path)
+		free(hklm_path);
+	if (hkcu_path)
+		free(hkcu_path);
 }
 
 static int
 setup_session_env(struct ssh *ssh, Session* s)
 {
 	int i = 0, ret = -1;
-	char *env_name = NULL, *env_value = NULL, *t = NULL, **env = NULL, *path_env_val = NULL;
+	char *env_name = NULL, *env_value = NULL, *t = NULL, **env = NULL;
 	char buf[1024] = { 0 };
 	wchar_t *env_name_w = NULL, *env_value_w = NULL, *pw_dir_w = NULL, *tmp = NULL, wbuf[1024] = { 0, };
-	char *c;
-
-	UTF8_TO_UTF16_WITH_CLEANUP(pw_dir_w, s->pw->pw_dir);
-	/* skip domain part (if present) while setting USERNAME */
-	c = strchr(s->pw->pw_name, '\\');
-	UTF8_TO_UTF16_WITH_CLEANUP(tmp, c ? c + 1 : s->pw->pw_name);
-	SetEnvironmentVariableW(L"USERNAME", tmp);
 
 	if (!s->is_subsystem) {
 		_snprintf(buf, ARRAYSIZE(buf), "%s@%s", s->pw->pw_name, getenv("COMPUTERNAME"));
@@ -268,6 +193,7 @@ setup_session_env(struct ssh *ssh, Session* s)
 		SetEnvironmentVariableW(L"PROMPT", wbuf);
 	}
 
+	UTF8_TO_UTF16_WITH_CLEANUP(pw_dir_w, s->pw->pw_dir);
 	setup_session_user_vars(pw_dir_w); /* setup user specific env variables */
 
 	env = do_setup_env_proxy(ssh, s, s->pw->pw_shell);
