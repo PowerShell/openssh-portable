@@ -134,20 +134,23 @@ get_registry_key_value(HKEY hKey, LPCWSTR lpSubKey, LPCWSTR lpValue, DWORD* requ
 }
 
 /* Build the user environment block. */
-/* Set the HOMEPATH variable (and optionally HOMEDRIVE) using the specified pw_dir_w profile path. */
+/* Set the HOMEPATH variable (and optionally HOMEDRIVE) using the specified pw_dir_w profile path if they are not assigned. */
 /* Set the PATH environment variable with values from the registry. */
 static void
 setup_session_user_vars(wchar_t* pw_dir_w)
 {
-	if (pw_dir_w[0] && pw_dir_w[1] == L':') {
-		SetEnvironmentVariableW(L"HOMEPATH", pw_dir_w + 2);
-		wchar_t wc = pw_dir_w[2];
-		pw_dir_w[2] = L'\0';
-		SetEnvironmentVariableW(L"HOMEDRIVE", pw_dir_w);
-		pw_dir_w[2] = wc;
+	if (getenv("HOMEPATH") == NULL) {
+		if (pw_dir_w[0] && pw_dir_w[1] == L':') {
+			SetEnvironmentVariableW(L"HOMEPATH", pw_dir_w + 2);
+			wchar_t wc = pw_dir_w[2];
+			pw_dir_w[2] = L'\0';
+			SetEnvironmentVariableW(L"HOMEDRIVE", pw_dir_w);
+			pw_dir_w[2] = wc;
+		}
+		else {
+			SetEnvironmentVariableW(L"HOMEPATH", pw_dir_w);
+		}
 	}
-	else
-		SetEnvironmentVariableW(L"HOMEPATH", pw_dir_w);
 
 	/* PATH is a special case. The System Path value is preppended to the User Path value */
 	DWORD hklm_path_sz = 0;
