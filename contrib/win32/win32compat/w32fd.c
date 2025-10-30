@@ -1056,21 +1056,6 @@ int fork()
 char * build_commandline_string(const char* cmd, char *const argv[], BOOLEAN prepend_module_path);
 
 wchar_t*
-get_username_from_environment()
-{
-	wchar_t* username = NULL;
-	DWORD name_length = GetEnvironmentVariableW(L"USERNAME", 0, 0); /* Figure out the length of the name. */
-	if (name_length) {
-		username = malloc(name_length * sizeof(wchar_t));
-		if (username) {
-			memset(username, 0, name_length);
-			GetEnvironmentVariableW(L"USERNAME", username, name_length);
-		}
-	}
-	return username;
-}
-
-wchar_t*
 get_username_from_token(HANDLE as_user)
 {
 	wchar_t* username = NULL;
@@ -1159,26 +1144,18 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 		if (as_user) {
 			debug3("spawning %ls as user", t);
 			LPVOID lpEnvironment = NULL;
-			BOOL foreign_user = FALSE; /* By default, we assume that the user environment block does not need to be loaded. */
 			wchar_t* as_user_name = get_username_from_token(as_user);
 			if (as_user_name) {
-				if (wcsncmp(L"sshd", as_user_name, sizeof("sshd") - 1) != 0) { /* Ignore any names starting with `sshd` (this is the service name). */
-					wchar_t* current_name = get_username_from_environment();
-					if (current_name) {
-						foreign_user = wcscmp(as_user_name, current_name) != 0;
-						free(current_name);
-					}
+				if (wcsncmp(L"sshd", as_user_name, sizeof("sshd") - 1) != 0) { /* Ignore any names that begin with the service name `sshd`. */
+					b = CreateEnvironmentBlock(&lpEnvironment, as_user, TRUE); /* Load the user environment block inheriting the current context. */
 				}
 				free(as_user_name);
 			}
-			if (foreign_user) { /* Load user's environment block over current context if the current context is different. */
-				b = CreateEnvironmentBlock(&lpEnvironment, as_user, TRUE);
-			}
-			if (lpEnvironment) { /* Apply user's environment block for the new process. */
+			if (lpEnvironment) { /* Pass the user environment block to the new process. */
 				b = CreateProcessAsUserW(as_user, NULL, t, NULL, NULL, TRUE, flags | CREATE_UNICODE_ENVIRONMENT, lpEnvironment, NULL, &si, &pi);
 				DestroyEnvironmentBlock(lpEnvironment);
 			}
-			else { /* Copy the current context's environment block to the new process. */
+			else { /* Pass the current context's environment block to the new process. */
 				b = CreateProcessAsUserW(as_user, NULL, t, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
 			}
 		}
