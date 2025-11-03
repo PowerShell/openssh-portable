@@ -155,7 +155,7 @@ setup_session_user_vars(wchar_t* pw_dir_w)
 		}
 	}
 
-	/* PATH is a special case. The System Path value is preppended to the User Path value */
+	/* PATH is a special case. The System Path value is prepended to the User Path value */
 	DWORD hklm_path_sz = 0;
 	DWORD hkcu_path_sz = 0;
 	wchar_t* user_path = NULL;
