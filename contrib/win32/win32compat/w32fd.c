@@ -1058,7 +1058,7 @@ char * build_commandline_string(const char* cmd, char *const argv[], BOOLEAN pre
 wchar_t*
 get_username_from_token(HANDLE as_user)
 {
-	wchar_t* username = NULL;
+	wchar_t* user_name = NULL;
 	SID_NAME_USE usage;
 	DWORD count = 0;
 	GetTokenInformation(as_user, TokenUser, NULL, 0, &count);
@@ -1071,16 +1071,18 @@ get_username_from_token(HANDLE as_user)
 				DWORD domain_length = 0;
 				LookupAccountSidW(NULL, owner->User.Sid, NULL, &name_length, NULL, &domain_length, &usage); /* Figure out the length of the name. */
 				if (name_length) {
-					username = malloc(name_length * sizeof(wchar_t));
 					wchar_t* domain_name = malloc(domain_length * sizeof(wchar_t));
-					if (username) {
-						memset(username, 0, name_length);
-						memset(domain_name, 0, domain_length);
-						BOOL success = LookupAccountSidW(NULL, owner->User.Sid, username, &name_length, domain_name, &domain_length, &usage);
-						if (!success) /* Silently return an empty string if unsuccessful. */
-						{
-							free(username);
-							username = NULL;
+					if (domain_name) {
+						user_name = malloc(name_length * sizeof(wchar_t));
+						if (user_name) {
+							memset(user_name, 0, name_length);
+							memset(domain_name, 0, domain_length);
+							BOOL success = LookupAccountSidW(NULL, owner->User.Sid, user_name, &name_length, domain_name, &domain_length, &usage);
+							if (!success) /* Silently return an empty string if unsuccessful. */
+							{
+								free(user_name);
+								user_name = NULL;
+							}
 						}
 						free(domain_name);
 					}
@@ -1089,7 +1091,7 @@ get_username_from_token(HANDLE as_user)
 			free(buffer);
 		}
 	}
-	return username;
+	return user_name;
 }
 
 /*
