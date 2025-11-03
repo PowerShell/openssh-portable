@@ -1075,8 +1075,8 @@ get_username_from_token(HANDLE as_user)
 					if (domain_name) {
 						user_name = malloc(name_length * sizeof(wchar_t));
 						if (user_name) {
-							memset(user_name, 0, name_length);
-							memset(domain_name, 0, domain_length);
+							memset(user_name, 0, name_length * sizeof(wchar_t));
+							memset(domain_name, 0, domain_length * sizeof(wchar_t));
 							BOOL success = LookupAccountSidW(NULL, owner->User.Sid, user_name, &name_length, domain_name, &domain_length, &usage);
 							if (!success) /* Silently return an empty string if unsuccessful. */
 							{
