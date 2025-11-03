@@ -169,8 +169,8 @@ setup_session_user_vars(wchar_t* pw_dir_w)
 			user_path[hklm_path_sz / sizeof(wchar_t) - 1] = L';'; /* Replace trailing null with ';'. */
 			memcpy_s(user_path + hklm_path_sz / sizeof(wchar_t), user_path_sz - hklm_path_sz, hkcu_path, hkcu_path_sz);
 			SetEnvironmentVariableW(L"PATH", user_path);
+			free(user_path);
 		}
-		free(user_path);
 	}
 	if (hklm_path)
 		free(hklm_path);
