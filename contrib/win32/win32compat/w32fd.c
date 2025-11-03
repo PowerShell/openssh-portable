@@ -1148,10 +1148,7 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 			LPVOID lpEnvironment = NULL;
 			wchar_t* as_user_name = get_username_from_token(as_user);
 			if (as_user_name) {
-				if (wcsncmp(L"sshd", as_user_name, wcslen(L"sshd")) == 0) { /* Ignore any names that begin with the service name `sshd`. */
-					/* Do not create environment block for 'sshd' users. */
-				}
-				else {
+				if (wcsncmp(L"sshd", as_user_name, sizeof("sshd") - 1) != 0) { /* Ignore any names that begin with the service name `sshd`. */
 					b = CreateEnvironmentBlock(&lpEnvironment, as_user, TRUE); /* Load a user environment block inheriting the current context, thereby passing session state. */
 				}
 				free(as_user_name);
