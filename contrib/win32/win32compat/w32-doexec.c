@@ -116,7 +116,6 @@ get_registry_key_value(HKEY hKey, LPCWSTR lpSubKey, LPCWSTR lpValue, DWORD* requ
 		char* value = utf16_to_utf8(lpValue);
 		if (error_message && subkey && value) {
 			error("Failed to get the value for registry key %s\\%s. %s", subkey, value, error_message);
-			free(error_message);
 		}
 		else {
 			error("Failed to get the registry key value.");
