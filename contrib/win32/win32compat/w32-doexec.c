@@ -172,6 +172,10 @@ setup_session_user_vars(wchar_t* pw_dir_w)
 			free(user_path);
 		}
 	}
+	else if (hklm_path || hkcu_path) {
+		user_path = hklm_path ? hklm_path : hkcu_path;
+		SetEnvironmentVariableW(L"PATH", user_path);
+	}
 	if (hklm_path)
 		free(hklm_path);
 	if (hkcu_path)
