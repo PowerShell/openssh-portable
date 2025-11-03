@@ -121,6 +121,8 @@ get_registry_key_value(HKEY hKey, LPCWSTR lpSubKey, LPCWSTR lpValue, DWORD* requ
 		else {
 			error("Failed to get the registry key value.");
 		}
+		if (error_message)
+			free(error_message);
 		if (subkey)
 			free(subkey);
 		if (value)
