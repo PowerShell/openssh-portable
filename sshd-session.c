@@ -335,7 +335,7 @@ pack_config(struct sshbuf* conf)
 static void
 send_config_state(int fd, struct sshbuf* conf)
 {
-	/* copied from send_rexec_state() in sshd.c 
+	/* copied from send_rexec_state() in sshd.c
 	   On Windows, uses pack_hostkeys_for_child() and pack_config() */
 	struct sshbuf* keys;
 	u_int mlen;
@@ -542,7 +542,15 @@ privsep_child_cmdline()
 static void
 grace_alarm_handler(int sig)
 {
-#ifndef WINDOWS
+#ifdef WINDOWS
+	/*
+	 * continue to use explicit kill on the child process ID
+	 * Windows does not currently support authorized keys
+	 * command helpers, so this is sufficient
+	 */
+	if (pmonitor != NULL && pmonitor->m_pid > 0)
+		kill(pmonitor->m_pid, SIGALRM);
+#else
 	/*
 	 * Try to kill any processes that we have spawned, E.g. authorized
 	 * keys command helpers or privsep children.

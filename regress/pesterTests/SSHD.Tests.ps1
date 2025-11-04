@@ -55,8 +55,8 @@ Describe "E2E scenarios for sshd" -Tags "CI" {
 
             # with a connection, there should be two additional session processes
             $sshdPidsCountWithConn | Should Be (2 + $sshdPidCountBefore)
-            # after LoginGraceTime expires, one of the session processes should exit
-            $sshdPidsCountAfter | Should Be (1 + $sshdPidCountBefore)
+            # after LoginGraceTime expires, both session processes should exit
+            $sshdPidsCountAfter | Should Be $sshdPidCountBefore
         }
 
         It "sshd pre-auth process is spawned under runtime generated virtual account" {
