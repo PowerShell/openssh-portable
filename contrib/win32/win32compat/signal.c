@@ -313,7 +313,7 @@ wait_for_any_event(HANDLE* events, int num_events, DWORD milli_seconds)
 void
 terminate_all_child_processes()
 {
-	if (children.num_children > 0 && children.num_children <= MAX_CHILDREN && children.num_children >= children.num_zombies) {
+	if (children.num_children > 0 && children.num_children <= MAX_CHILDREN && children.num_children > children.num_zombies) {
 		if (children.num_zombies >= 0) {
 			DWORD live_children = children.num_children - children.num_zombies;
 			while (live_children--) {
