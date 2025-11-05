@@ -1,7 +1,4 @@
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingConvertToSecureStringWithPlainText", "", Justification='this file is for testing')]
-param()
-
-If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
+﻿If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
 $tC = 1
 $tI = 0
@@ -56,7 +53,7 @@ Match User matchuser
 
         function Add-LocalUser
         {
-            param([string] $UserName, [SecureString] $Password)
+            param([string] $UserName, [string] $Password)
             $user = [System.DirectoryServices.AccountManagement.UserPrincipal]::FindByIdentity($PrincipalContext, $IdentityType, $UserName)
             if($user -eq $null)
             {
@@ -88,7 +85,7 @@ Match User matchuser
 
         function Add-UserToLocalGroup
         {
-            param([string]$UserName, [SecureString]$Password, [string]$GroupName)
+            param([string]$UserName, [string]$Password, [string]$GroupName)
             Add-LocalGroup -groupName $GroupName
             Add-LocalUser -UserName $UserName -Password $Password
             $group = [System.DirectoryServices.AccountManagement.GroupPrincipal]::FindByIdentity($PrincipalContext, $IdentityType, $GroupName)    
@@ -186,8 +183,7 @@ Match User matchuser
 #>
      Context "Tests of AllowGroups, AllowUsers, DenyUsers, DenyGroups" {
         BeforeAll {            
-            $randomString = -join ((48..57) + (65..90) + (97..122) | Get-SecureRandom -Count 14 | ForEach-Object {[char]$_})
-            $password = ConvertTo-SecureString -String $randomString -AsPlainText -Force
+            $password = "Bull_dog123456"
 
             $allowUser1 = "allowuser1"
             $allowUser2 = "allowuser2"
@@ -211,7 +207,7 @@ Match User matchuser
             $denyGroup3 = "denygroup3"
             $sshdConfigPath = $sshdconfig_custom
             #add wrong password so ssh does not prompt password if failed with authorized keys
-            Add-PasswordSetting -Pass $randomString            
+            Add-PasswordSetting -Pass $password            
             $tI=1
         }
         
