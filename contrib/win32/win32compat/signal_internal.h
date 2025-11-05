@@ -26,6 +26,7 @@ int register_child(HANDLE child, DWORD pid);
 int sw_remove_child_at_index(DWORD index);
 int sw_child_to_zombie(DWORD index);
 void sw_cleanup_child_zombies();
+void terminate_all_child_processes();
 
 struct _timer_info {
 	HANDLE timer;
