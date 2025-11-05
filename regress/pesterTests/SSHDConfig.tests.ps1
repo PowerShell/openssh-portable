@@ -1,4 +1,7 @@
-﻿If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingConvertToSecureStringWithPlainText", "", Justification='this file is for testing')]
+param()
+
+ If ($PSVersiontable.PSVersion.Major -le 2) {$PSScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path}
 Import-Module $PSScriptRoot\CommonUtils.psm1 -Force
 $tC = 1
 $tI = 0
@@ -184,7 +187,6 @@ Match User matchuser
      Context "Tests of AllowGroups, AllowUsers, DenyUsers, DenyGroups" {
         BeforeAll {            
             $randomString = -join ((48..57) + (65..90) + (97..122) | Get-SecureRandom -Count 14 | ForEach-Object {[char]$_})
-            [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', 'script is only used for testing')]
             $password = ConvertTo-SecureString -String $randomString -AsPlainText -Force
 
             $allowUser1 = "allowuser1"
@@ -209,7 +211,7 @@ Match User matchuser
             $denyGroup3 = "denygroup3"
             $sshdConfigPath = $sshdconfig_custom
             #add wrong password so ssh does not prompt password if failed with authorized keys
-            Add-PasswordSetting -Pass $password            
+            Add-PasswordSetting -Pass $randomString            
             $tI=1
         }
         
