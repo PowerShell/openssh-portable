@@ -53,7 +53,7 @@ Match User matchuser
 
         function Add-LocalUser
         {
-            param([string] $UserName, [string] $Password)
+            param([string] $UserName, [SecureString] $Password)
             $user = [System.DirectoryServices.AccountManagement.UserPrincipal]::FindByIdentity($PrincipalContext, $IdentityType, $UserName)
             if($user -eq $null)
             {
@@ -85,7 +85,7 @@ Match User matchuser
 
         function Add-UserToLocalGroup
         {
-            param([string]$UserName, [string]$Password, [string]$GroupName)
+            param([string]$UserName, [SecureString]$Password, [string]$GroupName)
             Add-LocalGroup -groupName $GroupName
             Add-LocalUser -UserName $UserName -Password $Password
             $group = [System.DirectoryServices.AccountManagement.GroupPrincipal]::FindByIdentity($PrincipalContext, $IdentityType, $GroupName)    
@@ -183,7 +183,9 @@ Match User matchuser
 #>
      Context "Tests of AllowGroups, AllowUsers, DenyUsers, DenyGroups" {
         BeforeAll {            
-            $password = "Bull_dog123456"
+            $randomString = -join ((48..57) + (65..90) + (97..122) | Get-SecureRandom -Count 14 | ForEach-Object {[char]$_})
+            [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingConvertToSecureStringWithPlainText', 'script is only used for testing')]
+            $password = ConvertTo-SecureString -String $randomString -AsPlainText -Force
 
             $allowUser1 = "allowuser1"
             $allowUser2 = "allowuser2"
