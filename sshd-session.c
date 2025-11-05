@@ -542,7 +542,10 @@ privsep_child_cmdline()
 static void
 grace_alarm_handler(int sig)
 {
-#ifndef WINDOWS
+#ifdef WINDOWS
+	/* We don't have to be signal-safe on Windows. Different native event mechanisms (APC). */
+	exit(EXIT_LOGIN_GRACE); /* Perform full C library cleanup and call atexit() registered functions. */
+#else
 	/*
 	 * Try to kill any processes that we have spawned, E.g. authorized
 	 * keys command helpers or privsep children.
@@ -560,8 +563,8 @@ grace_alarm_handler(int sig)
 		(void)sigaction(SIGTERM, &sa, NULL);
 		kill(0, SIGTERM);
 	}
+	_exit(EXIT_LOGIN_GRACE); /* We have to be signal-safe. */
 #endif /* WINDOWS */
-	exit(EXIT_LOGIN_GRACE); /* Perform full C library cleanup and call atexit() registered functions. */
 }
 
 /* Destroy the host and server keys.  They will no longer be needed. */
