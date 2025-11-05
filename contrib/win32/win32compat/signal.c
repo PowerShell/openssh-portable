@@ -310,11 +310,29 @@ wait_for_any_event(HANDLE* events, int num_events, DWORD milli_seconds)
 	return 0;
 }
 
+void
+terminate_all_child_processes()
+{
+	if (children.num_children > 0 && children.num_children <= MAX_CHILDREN && children.num_children >= children.num_zombies) {
+		if (children.num_zombies >= 0) {
+			DWORD live_children = children.num_children - children.num_zombies;
+			while (live_children--) {
+				DWORD pid = children.process_id[live_children];
+				HANDLE handle = children.handles[live_children];
+				TerminateProcess(handle, 0);
+				CloseHandle(handle);
+				debug4("Terminate child process %p pid %d", handle, pid);
+				++children.num_zombies;
+			}
+		}
+	}
+}
 
 int
 sw_initialize()
 {
 	memset(&children, 0, sizeof(children));
+	atexit(terminate_all_child_processes);
 	sw_init_signal_handler_table();
 	if (sw_init_timer() != 0)
 		return -1;

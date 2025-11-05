@@ -561,7 +561,7 @@ grace_alarm_handler(int sig)
 		kill(0, SIGTERM);
 	}
 #endif /* WINDOWS */
-	_exit(EXIT_LOGIN_GRACE);
+	exit(EXIT_LOGIN_GRACE); /* Perform full C library cleanup and call atexit() registered functions. */
 }
 
 /* Destroy the host and server keys.  They will no longer be needed. */
