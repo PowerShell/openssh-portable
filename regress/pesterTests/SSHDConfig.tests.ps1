@@ -53,11 +53,13 @@ Match User matchuser
 
         function Add-LocalUser
         {
-            param([string] $UserName, [string] $Password)
+            param([string] $UserName)
             $user = [System.DirectoryServices.AccountManagement.UserPrincipal]::FindByIdentity($PrincipalContext, $IdentityType, $UserName)
             if($user -eq $null)
             {
                 try {
+					# key is used for auth, so this can be anything
+					$Password = -join ((48..57) + (65..90) + (97..122) | Get-SecureRandom -Count 14 | ForEach-Object {[char]$_})
                     $user = new-object -TypeName System.DirectoryServices.AccountManagement.UserPrincipal -ArgumentList @($PrincipalContext,$UserName,$Password, $true)
                     $user.Save()
                 }
@@ -85,9 +87,9 @@ Match User matchuser
 
         function Add-UserToLocalGroup
         {
-            param([string]$UserName, [string]$Password, [string]$GroupName)
+            param([string]$UserName, [string]$GroupName)
             Add-LocalGroup -groupName $GroupName
-            Add-LocalUser -UserName $UserName -Password $Password
+            Add-LocalUser -UserName $UserName
             $group = [System.DirectoryServices.AccountManagement.GroupPrincipal]::FindByIdentity($PrincipalContext, $IdentityType, $GroupName)    
             $user = [System.DirectoryServices.AccountManagement.UserPrincipal]::FindByIdentity($PrincipalContext, $IdentityType, $UserName)
     
@@ -113,21 +115,6 @@ Match User matchuser
                 try {
                     $group.Members.Remove($user)
                     $group.save()
-                }
-                finally {
-                    $group.Dispose()
-                }
-            }
-        }
-
-        function Clenaup-LocalGroup
-        {
-            param([string]$GroupName)
-            $group = [System.DirectoryServices.AccountManagement.GroupPrincipal]::FindByIdentity($PrincipalContext, $IdentityType, $GroupName)
-            if($group -ne $null)
-            {
-                try {
-                    $group.Delete()
                 }
                 finally {
                     $group.Dispose()
@@ -183,8 +170,6 @@ Match User matchuser
 #>
      Context "Tests of AllowGroups, AllowUsers, DenyUsers, DenyGroups" {
         BeforeAll {            
-            $password = "Bull_dog123456"
-
             $allowUser1 = "allowuser1"
             $allowUser2 = "allowuser2"
             $allowUser3 = "allowuser3"
@@ -207,6 +192,7 @@ Match User matchuser
             $denyGroup3 = "denygroup3"
             $sshdConfigPath = $sshdconfig_custom
             #add wrong password so ssh does not prompt password if failed with authorized keys
+			$password = -join ((48..57) + (65..90) + (97..122) | Get-SecureRandom -Count 14 | ForEach-Object {[char]$_})
             Add-PasswordSetting -Pass $password            
             $tI=1
         }
@@ -229,7 +215,7 @@ Match User matchuser
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port
 
-           Add-UserToLocalGroup -UserName $allowUser1 -Password $password -GroupName $allowGroup1
+           Add-UserToLocalGroup -UserName $allowUser1 -GroupName $allowGroup1
 
            $o = ssh  -p $port $allowUser1@$server echo 1234
            Stop-SSHDTestDaemon   -Port $port
@@ -243,7 +229,7 @@ Match User matchuser
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
 
-           Add-UserToLocalGroup -UserName $allowUser2 -Password $password -GroupName $allowGroup1
+           Add-UserToLocalGroup -UserName $allowUser2 -GroupName $allowGroup1
            
            $o = ssh  -p $port $allowUser2@$server echo 1234
            Stop-SSHDTestDaemon   -Port $port
@@ -256,7 +242,7 @@ Match User matchuser
         It "$tC.$tI-User with ? wildcard"  -skip:$skip {
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
-           Add-UserToLocalGroup -UserName $allowUser3 -Password $password -GroupName $allowGroup1
+           Add-UserToLocalGroup -UserName $allowUser3 -GroupName $allowGroup1
            
            $o = ssh  -p $port $allowUser3@$server echo 1234
            Stop-SSHDTestDaemon   -Port $port
@@ -270,7 +256,7 @@ Match User matchuser
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
 
-           Add-UserToLocalGroup -UserName $denyUser1 -Password $password -GroupName $allowGroup1
+           Add-UserToLocalGroup -UserName $denyUser1 -GroupName $allowGroup1
 
            ssh -p $port -E $sshlog $denyUser1@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
@@ -286,7 +272,7 @@ Match User matchuser
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
 
-           Add-UserToLocalGroup -UserName $denyUser2 -Password $password -GroupName $allowGroup1
+           Add-UserToLocalGroup -UserName $denyUser2 -GroupName $allowGroup1
 
            ssh -p $port -E $sshlog $denyUser2@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
@@ -302,7 +288,7 @@ Match User matchuser
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
 
-           Add-UserToLocalGroup -UserName $denyUser3 -Password $password -GroupName $allowGroup1
+           Add-UserToLocalGroup -UserName $denyUser3 -GroupName $allowGroup1
 
            ssh -p $port -E $sshlog $denyUser3@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
@@ -318,8 +304,8 @@ Match User matchuser
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
 
-           Add-UserToLocalGroup -UserName $localuser1 -Password $password -GroupName $allowGroup1
-           Add-UserToLocalGroup -UserName $localuser1 -Password $password -GroupName $denyGroup1
+           Add-UserToLocalGroup -UserName $localuser1 -GroupName $allowGroup1
+           Add-UserToLocalGroup -UserName $localuser1 -GroupName $denyGroup1
            
            ssh -p $port -E $sshlog $localuser1@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
@@ -336,7 +322,7 @@ Match User matchuser
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
 
-           Add-UserToLocalGroup -UserName $localuser2 -Password $password -GroupName $denyGroup2
+           Add-UserToLocalGroup -UserName $localuser2 -GroupName $denyGroup2
            
            ssh -p $port -E $sshlog $localuser2@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
@@ -352,7 +338,7 @@ Match User matchuser
            #Run
            Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
 
-           Add-UserToLocalGroup -UserName $localuser3 -Password $password -GroupName $denyGroup3
+           Add-UserToLocalGroup -UserName $localuser3 -GroupName $denyGroup3
            
            ssh -p $port -E $sshlog $localuser3@$server echo 1234
            $LASTEXITCODE | Should Not Be 0
@@ -367,7 +353,7 @@ Match User matchuser
         It "$tC.$tI - Match User block with ForceCommand" -skip:$skip  {
             Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdConfigPath -E $sshdlog" -Port $port 
             $matchuser = "matchuser"
-            Add-UserToLocalGroup -UserName $matchuser -Password $password -GroupName $allowGroup1
+            Add-UserToLocalGroup -UserName $matchuser -GroupName $allowGroup1
 
             $o = ssh  -p $port -T $matchuser@$server randomcommand
             # Match block's ForceCommand returns output of "whoami & set SSH_ORIGINAL_COMMAND"
