@@ -58,8 +58,8 @@ Match User matchuser
             if($user -eq $null)
             {
                 try {
-					# key is used for auth, so this can be anything
-					$Password = -join ((48..57) + (65..90) + (97..122) | Get-SecureRandom -Count 14 | ForEach-Object {[char]$_})
+                    # key is used for auth, so this can be anything
+                    $Password = -join ((48..57) + (65..90) + (97..122) | Get-SecureRandom -Count 14 | ForEach-Object {[char]$_})
                     $user = new-object -TypeName System.DirectoryServices.AccountManagement.UserPrincipal -ArgumentList @($PrincipalContext,$UserName,$Password, $true)
                     $user.Save()
                 }
