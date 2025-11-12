@@ -35,10 +35,12 @@
 .EXAMPLE
     .\Summarize-AsaResults.ps1 -IncludeInformationalEvent
 
-    Includes informational events along with WARNING and ERROR events in the analysis..NOTES
+    Includes informational events along with WARNING and ERROR events in the analysis.
+
+.NOTES
     Author: GitHub Copilot
     Version: 1.0
-    Created for PowerShell ASA Analysis
+    Created for PowerShell ASA Analysis.
 #>
 
 [CmdletBinding()]
@@ -119,7 +121,7 @@ function Get-AsaSummary {
                 }
 
                 $summary.AnalysisLevels[$analysisLevel]++
-            }            # If we reach here, the item passed the filter
+            } # If we reach here, the item passed the filter
             $summary.Categories[$categoryName].Count++
             $summary.TotalFindings++
 

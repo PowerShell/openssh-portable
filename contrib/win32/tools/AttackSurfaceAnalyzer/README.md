@@ -1,14 +1,14 @@
 # Attack Surface Analyzer Testing
 
-This directory contains tools for running Attack Surface Analyzer (ASA) tests on OpenSSH MSI installations on a Windows VM with PowerShell 7 and .NET 9 SDK installed.
+This directory contains tools for running Attack Surface Analyzer (ASA) tests on OpenSSH MSI installations directly on Windows with PowerShell 7 and .NET 9 SDK installed.
 
 ## Overview
 
-Attack Surface Analyzer is a Microsoft tool that helps analyze changes to a system's attack surface. These scripts allow you to run ASA tests locally in a clean Windows container to analyze what changes when OpenSSH is installed.
+Attack Surface Analyzer is a Microsoft tool that helps analyze changes to a system's attack surface. These scripts allow you to run ASA tests directly on Windows to analyze what changes when OpenSSH is installed.
 
 ## Files
 
-- **Run-AttackSurfaceAnalyzer-VM.ps1** - PowerShell script to run ASA tests with official MSIs
+- **Run-AttackSurfaceAnalyzer.ps1** - PowerShell script to run ASA tests with official MSIs
 - **Summarize-AsaResults.ps1** - PowerShell script to analyze and summarize ASA results
 - **README.md** - This documentation file
 
@@ -53,7 +53,7 @@ The script requires an official signed OpenSSH MSI file:
 The script will:
 
 1. **Verify MSI signature** - Ensures the MSI is officially signed by Microsoft Corporation
-1. Create a temporary work directory
+1. Install the Attack Surface Analyzer
 1. Start the Attack Surface Analyzer
 1. Take a baseline snapshot
 1. Install the OpenSSH MSI
@@ -137,19 +137,22 @@ If you get signature verification errors:
 The `Run-AttackSurfaceAnalyzer.ps1` script supports these parameters:
 
 - **`-MsiPath`** (Required) - Path to the official signed OpenSSH MSI file
-- **`-OutputPath`** (Optional) - Directory for results (defaults to `./asa-results`)
-- **`-KeepWorkDirectory`** (Optional) - Keep temp directory for debugging
+- **`-WorkingDirectory`** (Optional) - Directory for MSI, if not provided (defaults to current directory)
+- **`-OutputDirectory`** (Optional) - Directory for results (defaults to `./asa-results`)
+- **`-AsaVersion`** (Optional) - ASA Tool Version (defaults to "2.3.328")
+- **`-SkipAsaInstall** (Optional) - Switch to skip ASA Tool install (defaults to false)
+- **`-KeepInstallation** (Optional) - Switch to skip MSI uninstall, recommended for debugging only (defaults to false)
 
 ### Debugging
 
-To debug issues, keep the work directory and examine the files:
+To debug issues, keep the MSI install and examine the files:
 
 ```powershell
-.contrib\win32\tools\AttackSurfaceAnalyzer\Run-AttackSurfaceAnalyzer.ps1 -KeepWorkDirectory
+.contrib\win32\tools\AttackSurfaceAnalyzer\Run-AttackSurfaceAnalyzer.ps1 -KeepInstallation
 
 # The script will print the work directory path
 # You can then examine:
-# - run-asa.ps1 - The script that runs in the container
+# - C:\Program Files\OpenSSH - install directory
 # - install.log - MSI installation log
 # - Any other generated files
 ```

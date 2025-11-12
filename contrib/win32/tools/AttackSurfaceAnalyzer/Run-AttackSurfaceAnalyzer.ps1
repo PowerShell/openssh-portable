@@ -80,6 +80,64 @@ function Write-ErrorSection {
     Write-Host "=========================================" -ForegroundColor Red
 }
 
+function Test-MsiSignature {
+    param(
+        [Parameter(Mandatory)]
+        [string]$MsiPath
+    )
+
+    Write-Host "Verifying MSI signature..." -ForegroundColor Green
+
+    try {
+        # Get the digital signature information
+        $signature = Get-AuthenticodeSignature -FilePath $MsiPath
+
+        if ($signature.Status -ne 'Valid') {
+            Write-Host "MSI signature is not valid. Status: $($signature.Status)" -ForegroundColor Red
+            return $false
+        }
+
+        # Check if signed by Microsoft Corporation
+        $signerCertificate = $signature.SignerCertificate
+        if (-not $signerCertificate) {
+            Write-Host "No signer certificate found" -ForegroundColor Red
+            return $false
+        }
+
+        $subject = $signerCertificate.Subject
+        Write-Host "Certificate subject: $subject" -ForegroundColor Green
+
+        # Check for Microsoft Corporation in the subject
+        if ($subject -notmatch "Microsoft Corporation" -and $subject -notmatch "CN=Microsoft Corporation") {
+            Write-Host "MSI is not signed by Microsoft Corporation" -ForegroundColor Red
+            Write-Host "Expected: Microsoft Corporation" -ForegroundColor Red
+            Write-Host "Found: $subject" -ForegroundColor Red
+            return $false
+        }
+
+        # Check certificate validity
+        $validFrom = $signerCertificate.NotBefore
+        $validTo = $signerCertificate.NotAfter
+        $now = Get-Date
+
+        if ($now -lt $validFrom -or $now -gt $validTo) {
+            Write-Host "Certificate is not valid for current date" -ForegroundColor Red
+            Write-Host "Valid from: $validFrom to: $validTo" -ForegroundColor Red
+            return $false
+        }
+
+        Write-Host "MSI signature verification passed" -ForegroundColor Green
+        Write-Host "Signed by: $($signerCertificate.Subject)" -ForegroundColor Green
+        Write-Host "Valid from: $validFrom to: $validTo" -ForegroundColor Green
+
+        return $true
+    }
+    catch {
+        Write-Host "Error verifying MSI signature: $_" -ForegroundColor Red
+        return $false
+    }
+}
+
 try {
     # Validate running as Administrator
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -111,6 +169,13 @@ try {
     }
     $MsiPath = Resolve-Path $MsiPath
     Write-Host "Using MSI: $MsiPath" -ForegroundColor Cyan
+
+    # Verify MSI signature
+    if (-not (Test-MsiSignature -MsiPath $MsiPath)) {
+        Write-Host "MSI signature verification failed. Only official signed PowerShell MSIs are supported." -ForegroundColor Red
+        Write-Host "Please download an official PowerShell MSI from: https://github.com/PowerShell/PowerShell/releases" -ForegroundColor Red
+        exit 1
+    }
 
     # Create output directory
     if (-not (Test-Path $OutputDirectory)) {
