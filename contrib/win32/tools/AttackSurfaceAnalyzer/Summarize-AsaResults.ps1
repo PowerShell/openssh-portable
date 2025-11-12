@@ -38,7 +38,7 @@
     Includes informational events along with WARNING and ERROR events in the analysis..NOTES
     Author: GitHub Copilot
     Version: 1.0
-    Created for PowerShell ASA Analysis Initially
+    Created for PowerShell ASA Analysis
 #>
 
 [CmdletBinding()]

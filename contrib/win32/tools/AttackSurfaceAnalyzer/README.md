@@ -1,6 +1,6 @@
 # Attack Surface Analyzer Testing
 
-This directory contains tools for running Attack Surface Analyzer (ASA) tests on OpenSSH MSI installations using Docker.
+This directory contains tools for running Attack Surface Analyzer (ASA) tests on OpenSSH MSI installations on a Windows VM with PowerShell 7 and .NET 9 SDK installed.
 
 ## Overview
 
@@ -8,44 +8,15 @@ Attack Surface Analyzer is a Microsoft tool that helps analyze changes to a syst
 
 ## Files
 
-- **Run-AttackSurfaceAnalyzer.ps1** - PowerShell script to run ASA tests with official MSIs
+- **Run-AttackSurfaceAnalyzer-VM.ps1** - PowerShell script to run ASA tests with official MSIs
 - **Summarize-AsaResults.ps1** - PowerShell script to analyze and summarize ASA results
-- **docker/Dockerfile** - Multi-stage Dockerfile for building a container image with ASA pre-installed
 - **README.md** - This documentation file
-
-## Docker Architecture
-
-The Docker implementation uses a multi-stage build to optimize the testing and result extraction process:
-
-### Multi-Stage Build Stages
-
-1. **asa-runner**: Main execution environment
-   - Base: `mcr.microsoft.com/dotnet/sdk:9.0-windowsservercore-ltsc2022`
-   - Contains Attack Surface Analyzer CLI tools
-   - Runs the complete test workflow
-   - Generates reports in both `C:\work` and `C:\reports` directories
-
-1. **asa-reports**: Minimal results layer
-   - Base: `mcr.microsoft.com/windows/nanoserver:ltsc2022`
-   - Contains only the test reports from the runner stage
-   - Enables clean extraction of results without container internals
-
-1. **final**: Default stage (inherits from asa-runner)
-   - Provides backward compatibility
-   - Used when no specific build target is specified
-
-### Benefits
-
-- **Clean Result Extraction**: Reports are isolated in a dedicated layer
-- **Efficient Transfer**: Only test results are copied, not the entire container filesystem
-- **Fallback Support**: Script includes fallback to volume-based extraction if needed
-- **Minimal Footprint**: Final results layer contains only the necessary output files
 
 ## Prerequisites
 
 - Windows 10/11 or Windows Server
-- Docker Desktop with Windows containers enabled
-- PowerShell 5.1 or later
+- PowerShell 7
+- .NET 9 SDK
 - **An official signed OpenSSH MSI file** from a released build
 
 ### MSI Requirements
@@ -70,10 +41,10 @@ The script requires an official signed OpenSSH MSI file:
 
 ```powershell
 # Run ASA test with official MSI (MsiPath is required)
-.\tools\AttackSurfaceAnalyzer\Run-AttackSurfaceAnalyzer.ps1 -MsiPath "C:\path\to\OpenSSH-Win64-v10.0.0.0.msi"
+.contrib\win32\tools\AttackSurfaceAnalyzer\Run-AttackSurfaceAnalyzer.ps1 -MsiPath "C:\path\to\OpenSSH-Win64-v10.0.0.0.msi"
 
 # Specify custom output directory for results
-.\tools\AttackSurfaceAnalyzer\Run-AttackSurfaceAnalyzer.ps1 -MsiPath ".\OpenSSH-Win64-v10.0.0.0.msi" -OutputPath "C:\asa-results"
+.contrib\win32\tools\AttackSurfaceAnalyzer\Run-AttackSurfaceAnalyzer.ps1 -MsiPath ".\OpenSSH-Win64-v10.0.0.0.msi" -OutputPath "C:\asa-results"
 
 # Keep the temporary work directory for debugging
 .\tools\AttackSurfaceAnalyzer\Run-AttackSurfaceAnalyzer.ps1 -MsiPath ".\OpenSSH-Win64-v10.0.0.0.msi" -KeepWorkDirectory
@@ -83,8 +54,7 @@ The script will:
 
 1. **Verify MSI signature** - Ensures the MSI is officially signed by Microsoft Corporation
 1. Create a temporary work directory
-1. Build a custom Docker container from the static Dockerfile
-1. Start the Windows container with Attack Surface Analyzer
+1. Start the Attack Surface Analyzer
 1. Take a baseline snapshot
 1. Install the OpenSSH MSI
 1. Take a post-installation snapshot
@@ -92,20 +62,6 @@ The script will:
 1. Copy results back to your specified output directory
 
 **Security Note:** The script will reject any MSI that is not digitally signed by Microsoft Corporation to ensure analysis is performed only on official releases.
-
-### Option 2: Using the Dockerfile
-
-If you prefer to build and use the container image directly:
-
-```powershell
-# Build the Docker image (Dockerfile is in docker subfolder with clean context)
-docker build -f contrib\win32\tools\AttackSurfaceAnalyzer\docker\Dockerfile -t openssh-asa-test contrib\win32\tools\AttackSurfaceAnalyzer\docker\
-
-# Run the container with your MSI (script is built into the container)
-docker run --rm --isolation process `
-  -v "C:\path\to\msi\directory:C:\work" `
-  openssh-asa-test
-```
 
 ## Output Files
 
@@ -159,39 +115,12 @@ $results.Results.FILE_CREATED.Count  # Number of files created
 
 ## Troubleshooting
 
-### Docker Not Available
-
-The script automatically handles Docker Desktop installation and startup:
-
-**If Docker Desktop is installed but not running:**
-
-- The script will automatically start Docker Desktop for you
-- It waits up to 60 seconds for Docker to become available
-- You'll be prompted for confirmation (supports `-Confirm` and `-WhatIf`)
-
-**If Docker Desktop is not installed:**
-
-- The script will prompt you to install it automatically using winget
-- After installation completes, start Docker Desktop and run the script again
-
-**Manual Installation:**
-
-1. Install Docker Desktop from https://www.docker.com/products/docker-desktop
-1. Ensure Docker is running
-1. Switch to Windows containers (right-click Docker tray icon → "Switch to Windows containers")
-
-### Container Fails to Start
-
-- Ensure you have enough disk space (containers can be large)
-- Check that Windows containers are enabled in Docker settings
-- Try pulling the base image manually: `docker pull mcr.microsoft.com/dotnet/sdk:9.0-windowsservercore-ltsc2022`
-
 ### MSI Signature Verification Fails
 
 If you get signature verification errors:
 
 - **Ensure you're using an official MSI** from [OpenSSH Releases](https://github.com/PowerShell/Win32-OpenSSH/releases)
-- **Do not use local builds** - only signed release MSIs are supported  
+- **Do not use local builds** - only signed release MSIs are supported
 - **Check certificate validity** - very old MSIs may have expired certificates
 - **Verify file integrity** - redownload the MSI if it may be corrupted
 
@@ -209,16 +138,7 @@ The `Run-AttackSurfaceAnalyzer.ps1` script supports these parameters:
 
 - **`-MsiPath`** (Required) - Path to the official signed OpenSSH MSI file
 - **`-OutputPath`** (Optional) - Directory for results (defaults to `./asa-results`)
-- **`-ContainerImage`** (Optional) - Custom container base image
 - **`-KeepWorkDirectory`** (Optional) - Keep temp directory for debugging
-
-Example with custom container image:
-
-```powershell
-.contrib\win32\tools\AttackSurfaceAnalyzer\Run-AttackSurfaceAnalyzer.ps1 `
-  -MsiPath ".\OpenSSH-Win64-v10.0.0.0.msi" `
-  -ContainerImage "mcr.microsoft.com/dotnet/sdk:8.0-windowsservercore-ltsc2022"
-```
 
 ### Debugging
 
@@ -236,14 +156,9 @@ To debug issues, keep the work directory and examine the files:
 
 ## Integration with CI/CD
 
-These tools were extracted from the GitHub Actions workflow to allow local testing. If you need to integrate ASA testing back into a CI/CD pipeline, you can:
-
-1. Use the PowerShell script directly in your pipeline
-1. Build and push the Docker image to a registry
-1. Use the Dockerfile as a base for custom testing scenarios
+These tools were extracted from the GitHub Actions workflow to allow local testing. If you need to integrate ASA testing back into a CI/CD pipeline, you can use the PowerShell script directly in your pipeline
 
 ## More Information
 
 - [Attack Surface Analyzer on GitHub](https://github.com/microsoft/AttackSurfaceAnalyzer)
-- [Docker for Windows Documentation](https://docs.docker.com/desktop/windows/)
 - [SARIF Documentation](https://sarifweb.azurewebsites.net/)
