@@ -829,7 +829,7 @@ function Enable-Privilege {
     $type[0]::EnablePrivilege($Privilege, $Disable)
 }
 
-Function Add-MachinePath {
+function Add-MachinePath {
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
     param
     (
@@ -843,12 +843,12 @@ Function Add-MachinePath {
         $pathType  = $regKey.GetValueKind('PATH')
 
         # Normalize for comparison only (expand variables and trim trailing backslash)
-        $normalizedFilePath = $FilePath.TrimEnd('\')
-        $normalizedEntries  = $pathValue -split ';' | ForEach-Object {
-            [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\')
-        }
+        $normalizedFilePath = [Environment]::ExpandEnvironmentVariables($FilePath).TrimEnd('\')
+        $normalizedEntries = $pathValue -split ';' |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { [Environment]::ExpandEnvironmentVariables($_.Trim()).TrimEnd('\') }
 
-        if ($normalizedEntries -notcontains $normalizedFilePath) {
+        if ($normalizedEntries.Where({ $_ -ieq $normalizedFilePath }, 'First').Count -eq 0) {
             $newPath = $FilePath + ';' + $pathValue
 
             $message     = "Need to add the path to the Machine PATH environment variable."
