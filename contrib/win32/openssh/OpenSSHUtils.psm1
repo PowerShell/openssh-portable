@@ -838,13 +838,30 @@ Function Add-MachinePath {
     )
 
     if (Test-Path $FilePath) {
-        $machinePath = (Get-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH).Path
-        if (-not ($machinePath.ToLower().Contains("$FilePath;".ToLower()) -or $machinePath.ToLower().Contains("$FilePath\;".ToLower())))
-        {
-            $newPath = $FilePath + ';' + $machinePath 
-            Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH -Value $newPath
-            if ((Get-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH).Path -eq $newPath) {
-                Write-Host "Updated Machine PATH to include OpenSSH directory, restart/re-login required to take effect globally" -ForegroundColor Yellow
+        $regKey    = Get-Item -Path 'HKLM:\System\CurrentControlSet\Control\Session Manager\Environment'
+        $pathValue = $regKey.GetValue('PATH', '', 'DoNotExpandEnvironmentNames')
+        $pathType  = $regKey.GetValueKind('PATH')
+
+        # Normalize for comparison only (expand variables and trim trailing backslash)
+        $normalizedFilePath = $FilePath.TrimEnd('\')
+        $normalizedEntries  = $pathValue -split ';' | ForEach-Object {
+            [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\')
+        }
+
+        if ($normalizedEntries -notcontains $normalizedFilePath) {
+            $newPath = $FilePath + ';' + $pathValue
+
+            $message     = "Need to add the path to the Machine PATH environment variable."
+            $prompt      = "Shall I add '$FilePath' to Machine PATH?"
+            $description = "Add '$FilePath' to Machine PATH."
+
+            if ($PSCmdlet.ShouldProcess($description, $prompt, $message)) {
+                Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH -Value $newPath -Type $pathType
+
+                $verifyValue = (Get-Item -Path 'HKLM:\System\CurrentControlSet\Control\Session Manager\Environment').GetValue('PATH', '', 'DoNotExpandEnvironmentNames')
+                if ($verifyValue -eq $newPath) {
+                    Write-Host "Updated Machine PATH to include OpenSSH directory, restart/re-login required to take effect globally" -ForegroundColor Yellow
+                }
             }
         }
     }
