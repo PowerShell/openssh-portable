@@ -841,8 +841,8 @@ Function Add-MachinePath {
         $machinePath = (Get-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH).Path
         if (-not ($machinePath.ToLower().Contains("$FilePath;".ToLower()) -or $machinePath.ToLower().Contains("$FilePath\;".ToLower())))
         {
-            $newPath = $FilePath + ’;’ + $machinePath 
-            Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH –Value $newPath
+            $newPath = $FilePath + ';' + $machinePath 
+            Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH -Value $newPath
             if ((Get-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Session Manager\Environment' -Name PATH).Path -eq $newPath) {
                 Write-Host "Updated Machine PATH to include OpenSSH directory, restart/re-login required to take effect globally" -ForegroundColor Yellow
             }
