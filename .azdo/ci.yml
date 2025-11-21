@@ -21,7 +21,7 @@ stages:
       demands:
       - ImageOverride -equals PSMMS2022-OpenSSH-Secure
     steps:
-    - template: .azdo/templates/build-win32-openssh-job.yml
+    - template: ./templates/build-win32-openssh-job.yml
       parameters:
         nativeHostArch: x64
         buildOutputDir: x64
@@ -35,7 +35,7 @@ stages:
       demands:
       - ImageOverride -equals PSMMS2022-OpenSSH-Secure
     steps:
-    - template: .azdo/templates/build-win32-openssh-job.yml
+    - template: ./templates/build-win32-openssh-job.yml
       parameters:
         nativeHostArch: x86
         buildOutputDir: Win32
