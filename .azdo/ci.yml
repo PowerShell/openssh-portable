@@ -20,105 +20,13 @@ stages:
       name: PS-PowerShell-x64
       demands:
       - ImageOverride -equals PSMMS2022-OpenSSH-Secure
-
     steps:
-    - pwsh: |
-        # Compare LibreSSL versions in vcpkg.json and add-resource-file.patch
-        $vcpkgObj = Get-Content "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg.json" | ConvertFrom-Json
-        $libresslVersionJson = $vcpkgObj | Select-Object -ExpandProperty overrides | Where-Object { $_.name -eq 'libressl' } | Select-Object -ExpandProperty version
-
-        # resource file version needs to be trimmed (e.g. 4.0.0.0 to 4.0.0)
-        $patchContent = Get-Content "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_overlay_ports/libressl/add-version-file.patch"
-        $libresslVersionPatch = ($patchContent -join "`n" | Select-String -Pattern '"FileVersion",\s*"(\d+\.\d+\.\d+\.\d+)"' -AllMatches).Matches | ForEach-Object { $_.Groups[1].Value }
-        $libresslVersionPatchParts = $libresslVersionPatch -split '\.'
-        $libresslVersionPatchShort = ($libresslVersionPatchParts[0..2] -join '.')
-
-        if ($libresslVersionJson -ne $libresslVersionPatchShort) {
-          Write-Error "LibreSSL version mismatch: vcpkg.json has $libresslVersionJson, patch file has $libresslVersionPatch"
-          exit 1
-        } else {
-          Write-Verbose -Verbose "LibreSSL versions match: $libresslVersionJson"
-        }
-      displayName: 'Verify version info'
-
-    - pwsh: |-
-        git clone https://github.com/microsoft/vcpkg
-        cd vcpkg
-        & ./bootstrap-vcpkg.bat
-        & ./vcpkg.exe integrate install
-      displayName: Install vcpkg
-
-    - pwsh: |
-        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
-        Invoke-AzDOBuild -NativeHostArch x64
-      displayName: Build Win32-OpenSSH (x64)
-
-    - pwsh: |
-        $BuildOutPath = "$(Build.SourcesDirectory)/bin"
-        $BuildOutx64Path = Join-Path -Path $BuildOutPath -ChildPath 'x64/Release'
-        Get-ChildItem -Path $BuildOutx64Path
-      displayName: Capture build results (x64)
-
-    - pwsh: |
-        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
-        #
-        # Copy build artifacts
-        $BuildDestPath = "$(Build.SourcesDirectory)/Win32-OpenSSH-x64"
-        if (Test-Path -Path $BuildDestPath) {
-          Remove-Item -Path $BuildDestPath -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        $null = New-Item -ItemType Directory -Path $BuildDestPath -Force
-        $BuildDestX64Path = Join-Path -Path $BuildDestPath -ChildPath 'x64/Release'
-        Copy-BuildResults -BuildResultsPath $BuildDestX64Path -NativeHostArch x64 -Configuration Release
-        #
-        # Upload build artifacts
-        Write-Verbose -Verbose -Message "Uploading build artifacts"
-        $artifactName = 'Win32-OpenSSH-x64'
-        Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$BuildDestPath"
-        #
-        # Copy unit tests
-        $BuildOutPath = "$(Build.SourcesDirectory)/bin"
-        $UnitTestDestPath = "$(Build.SourcesDirectory)/UnitTests-x64"
-        if (Test-Path -Path $UnitTestDestPath) {
-          Remove-Item -Path $UnitTestDestPath -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        $null = New-Item -ItemType Directory -Path $UnitTestDestPath -Force
-        Copy-UnitTests -UnitTestsSrcDir $BuildOutPath -UnitTestsDestDir $UnitTestDestPath -NativeHostArch x64 -Configuration Release
-        #
-        # Upload unit test artifacts
-        Write-Verbose -Verbose -Message "Uploading unit test artifacts"
-        $artifactName = 'UnitTests-x64'
-        Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$UnitTestDestPath"
-        #
-        # Upload bash tests config.h file
-        Write-Verbose -Verbose -Message "Uploading config.h file for bash tests"
-        $artifactName = 'ConfigFile-x64'
-        $configFilePath = "$(Build.SourcesDirectory)/config.h"
-        Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$configFilePath"
-      displayName: Upload Win32-OpenSSH build artifacts (x64)
-
-    - pwsh: |
-        $logFileNames = @("OpenSSHReleasex64.log")
-        $uniqueLines = [System.Collections.Generic.HashSet[string]]::new()
-        forEach ($logFile in $logFileNames) {
-          $logFilePath = "$(Build.SourcesDirectory)/contrib/win32/openssh/$logFile"
-          $logLines = Get-Content $logFilePath
-          $buildSucceededIndex = $logLines.IndexOf("Build succeeded.")
-          if ($buildSucceededIndex -lt 0) {
-            continue
-          }
-          $linesToCheck = $logLines[($buildSucceededIndex + 1)..$logLines.Length]
-          forEach ($line in $linesToCheck) {
-            if ($line -match "warning C") {
-              $uniqueLines.Add($line) | Out-Null
-            }
-          }
-        }
-        forEach ($uniqueLine in $uniqueLines) {
-          Write-Output $uniqueLine
-          Write-Host "##vso[task.logissue type=warning]$uniqueLine"
-        }
-      displayName: Surface warnings from build logs (x64)
+    - template: .azdo/templates/build-win32-openssh-job.yml
+      parameters:
+        nativeHostArch: x64
+        buildOutputDir: x64
+        artifactSuffix: x64
+        includeConfig: true
 
   - job: BuildPkg_x86
     displayName: Build Package (x86)
@@ -126,99 +34,12 @@ stages:
       name: PS-PowerShell-x64
       demands:
       - ImageOverride -equals PSMMS2022-OpenSSH-Secure
-
     steps:
-    - pwsh: |
-        # Compare LibreSSL versions in vcpkg.json and add-resource-file.patch
-        $vcpkgObj = Get-Content "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg.json" | ConvertFrom-Json
-        $libresslVersionJson = $vcpkgObj | Select-Object -ExpandProperty overrides | Where-Object { $_.name -eq 'libressl' } | Select-Object -ExpandProperty version
-
-        # resource file version needs to be trimmed (e.g. 4.0.0.0 to 4.0.0)
-        $patchContent = Get-Content "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_overlay_ports/libressl/add-version-file.patch"
-        $libresslVersionPatch = ($patchContent -join "`n" | Select-String -Pattern '"FileVersion",\s*"(\d+\.\d+\.\d+\.\d+)"' -AllMatches).Matches | ForEach-Object { $_.Groups[1].Value }
-        $libresslVersionPatchParts = $libresslVersionPatch -split '\.'
-        $libresslVersionPatchShort = ($libresslVersionPatchParts[0..2] -join '.')
-
-        if ($libresslVersionJson -ne $libresslVersionPatchShort) {
-          Write-Error "LibreSSL version mismatch: vcpkg.json has $libresslVersionJson, patch file has $libresslVersionPatch"
-          exit 1
-        } else {
-          Write-Verbose -Verbose "LibreSSL versions match: $libresslVersionJson"
-        }
-      displayName: 'Verify version info'
-
-    - pwsh: |-
-        git clone https://github.com/microsoft/vcpkg
-        cd vcpkg
-        & ./bootstrap-vcpkg.bat
-        & ./vcpkg.exe integrate install
-      displayName: Install vcpkg
-
-    - pwsh: |
-        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
-        Invoke-AzDOBuild -NativeHostArch x86
-      displayName: Build Win32-OpenSSH (x86)
-
-    - pwsh: |
-        $BuildOutPath = "$(Build.SourcesDirectory)/bin"
-        $BuildOutx86Path = Join-Path -Path $BuildOutPath -ChildPath 'Win32/Release'
-        Get-ChildItem -Path $BuildOutx86Path
-      displayName: Capture build results (x86)
-
-    - pwsh: |
-        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
-        #
-        # Copy build artifacts
-        $BuildDestPath = "$(Build.SourcesDirectory)/Win32-OpenSSH-x86"
-        if (Test-Path -Path $BuildDestPath) {
-          Remove-Item -Path $BuildDestPath -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        $null = New-Item -ItemType Directory -Path $BuildDestPath -Force
-        $BuildDestx86Path = Join-Path -Path $BuildDestPath -ChildPath 'x86/Release'
-        Copy-BuildResults -BuildResultsPath $BuildDestx86Path -NativeHostArch x86 -Configuration Release
-        #
-        # Upload build artifacts
-        Write-Verbose -Verbose -Message "Uploading build artifacts"
-        $artifactName = 'Win32-OpenSSH-x86'
-        Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$BuildDestPath"
-        #
-        # Copy unit tests
-        $BuildOutPath = "$(Build.SourcesDirectory)/bin"
-        $UnitTestDestPath = "$(Build.SourcesDirectory)/UnitTests-x86"
-        if (Test-Path -Path $UnitTestDestPath) {
-          Remove-Item -Path $UnitTestDestPath -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        $null = New-Item -ItemType Directory -Path $UnitTestDestPath -Force
-        Copy-UnitTests -UnitTestsSrcDir $BuildOutPath -UnitTestsDestDir $UnitTestDestPath -NativeHostArch x86 -Configuration Release
-        #
-        # Upload unit test artifacts
-        Write-Verbose -Verbose -Message "Uploading unit test artifacts"
-        $artifactName = 'UnitTests-x86'
-        Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$UnitTestDestPath"
-      displayName: Upload Win32-OpenSSH build artifacts (x86)
-
-    - pwsh: |
-        $logFileNames = @("OpenSSHReleasex86.log")
-        $uniqueLines = [System.Collections.Generic.HashSet[string]]::new()
-        forEach ($logFile in $logFileNames) {
-          $logFilePath = "$(Build.SourcesDirectory)/contrib/win32/openssh/$logFile"
-          $logLines = Get-Content $logFilePath
-          $buildSucceededIndex = $logLines.IndexOf("Build succeeded.")
-          if ($buildSucceededIndex -lt 0) {
-            continue
-          }
-          $linesToCheck = $logLines[($buildSucceededIndex + 1)..$logLines.Length]
-          forEach ($line in $linesToCheck) {
-            if ($line -match "warning C") {
-              $uniqueLines.Add($line) | Out-Null
-            }
-          }
-        }
-        forEach ($uniqueLine in $uniqueLines) {
-          Write-Output $uniqueLine
-          Write-Host "##vso[task.logissue type=warning]$uniqueLine"
-        }
-      displayName: Surface warnings from build logs (x86)
+    - template: .azdo/templates/build-win32-openssh-job.yml
+      parameters:
+        nativeHostArch: x86
+        buildOutputDir: Win32
+        artifactSuffix: x86
 
 - stage: Test
   displayName: Test Win32-OpenSSH

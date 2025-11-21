@@ -1,0 +1,118 @@
+parameters:
+- name: nativeHostArch
+  type: string
+- name: buildOutputDir
+  type: string
+- name: artifactSuffix
+  type: string
+- name: includeConfig
+  type: boolean
+  default: false
+
+steps:
+- pwsh: |
+    # Compare LibreSSL versions in vcpkg.json and add-resource-file.patch
+    $vcpkgObj = Get-Content "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg.json" | ConvertFrom-Json
+    $libresslVersionJson = $vcpkgObj | Select-Object -ExpandProperty overrides | Where-Object { $_.name -eq 'libressl' } | Select-Object -ExpandProperty version
+
+    # resource file version needs to be trimmed (e.g. 4.0.0.0 to 4.0.0)
+    $patchContent = Get-Content "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_overlay_ports/libressl/add-version-file.patch"
+    $libresslVersionPatch = ($patchContent -join "`n" | Select-String -Pattern '"FileVersion",\s*"(\d+\.\d+\.\d+\.\d+)"' -AllMatches).Matches | ForEach-Object { $_.Groups[1].Value }
+    $libresslVersionPatchParts = $libresslVersionPatch -split '\.'
+    $libresslVersionPatchShort = ($libresslVersionPatchParts[0..2] -join '.')
+
+    if ($libresslVersionJson -ne $libresslVersionPatchShort) {
+      Write-Error "LibreSSL version mismatch: vcpkg.json has $libresslVersionJson, patch file has $libresslVersionPatch"
+      exit 1
+    } else {
+      Write-Verbose -Verbose "LibreSSL versions match: $libresslVersionJson"
+    }
+  displayName: 'Verify version info'
+
+- pwsh: |-
+    git clone https://github.com/microsoft/vcpkg
+    cd vcpkg
+    & ./bootstrap-vcpkg.bat
+    & ./vcpkg.exe integrate install
+  displayName: Install vcpkg
+
+- pwsh: |
+    $nativeArch = '${{ parameters.nativeHostArch }}'
+    Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+    Invoke-AzDOBuild -NativeHostArch $nativeArch
+  displayName: Build Win32-OpenSSH (${{ parameters.nativeHostArch }})
+
+- pwsh: |
+    $buildOutPath = "$(Build.SourcesDirectory)/bin"
+    $buildOutputDir = '${{ parameters.buildOutputDir }}'
+    $fullPath = Join-Path -Path $buildOutPath -ChildPath $buildOutputDir
+    $releasePath = Join-Path -Path $fullPath -ChildPath 'Release'
+    Get-ChildItem -Path $releasePath
+  displayName: Capture build results (${{ parameters.artifactSuffix }})
+
+- pwsh: |
+    $nativeArch = '${{ parameters.nativeHostArch }}'
+    $artifactSuffix = '${{ parameters.artifactSuffix }}'
+    $includeConfig = [System.Convert]::ToBoolean('${{ parameters.includeConfig }}')
+
+    Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+    #
+    # Copy build artifacts
+    $buildDestPath = "$(Build.SourcesDirectory)/Win32-OpenSSH-$artifactSuffix"
+    if (Test-Path -Path $buildDestPath) {
+      Remove-Item -Path $buildDestPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    $null = New-Item -ItemType Directory -Path $buildDestPath -Force
+    $buildDestArchPath = Join-Path -Path $buildDestPath -ChildPath "$nativeArch/Release"
+    Copy-BuildResults -BuildResultsPath $buildDestArchPath -NativeHostArch $nativeArch -Configuration Release
+    #
+    # Upload build artifacts
+    Write-Verbose -Verbose -Message "Uploading build artifacts"
+    $artifactName = "Win32-OpenSSH-$artifactSuffix"
+    Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$buildDestPath"
+    #
+    # Copy unit tests
+    $buildOutPath = "$(Build.SourcesDirectory)/bin"
+    $unitTestDestPath = "$(Build.SourcesDirectory)/UnitTests-$artifactSuffix"
+    if (Test-Path -Path $unitTestDestPath) {
+      Remove-Item -Path $unitTestDestPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    $null = New-Item -ItemType Directory -Path $unitTestDestPath -Force
+    Copy-UnitTests -UnitTestsSrcDir $buildOutPath -UnitTestsDestDir $unitTestDestPath -NativeHostArch $nativeArch -Configuration Release
+    #
+    # Upload unit test artifacts
+    Write-Verbose -Verbose -Message "Uploading unit test artifacts"
+    $unitTestArtifactName = "UnitTests-$artifactSuffix"
+    Write-Host "##vso[artifact.upload containerfolder=$unitTestArtifactName;artifactname=$unitTestArtifactName;]$unitTestDestPath"
+    #
+    # Optionally upload bash tests config.h file
+    if ($includeConfig) {
+      Write-Verbose -Verbose -Message "Uploading config.h file for bash tests"
+      $configArtifactName = "ConfigFile-$artifactSuffix"
+      $configFilePath = "$(Build.SourcesDirectory)/config.h"
+      Write-Host "##vso[artifact.upload containerfolder=$configArtifactName;artifactname=$configArtifactName;]$configFilePath"
+    }
+  displayName: Upload Win32-OpenSSH build artifacts (${{ parameters.artifactSuffix }})
+
+- pwsh: |
+    $artifactSuffix = '${{ parameters.artifactSuffix }}'
+    $logFileName = "OpenSSHRelease$artifactSuffix.log"
+    $uniqueLines = [System.Collections.Generic.HashSet[string]]::new()
+    $logFilePath = "$(Build.SourcesDirectory)/contrib/win32/openssh/$logFileName"
+    if (Test-Path -Path $logFilePath) {
+      $logLines = Get-Content $logFilePath
+      $buildSucceededIndex = $logLines.IndexOf("Build succeeded.")
+      if ($buildSucceededIndex -ge 0) {
+        $linesToCheck = $logLines[($buildSucceededIndex + 1)..$logLines.Length]
+        foreach ($line in $linesToCheck) {
+          if ($line -match "warning C") {
+            $uniqueLines.Add($line) | Out-Null
+          }
+        }
+      }
+    }
+    foreach ($uniqueLine in $uniqueLines) {
+      Write-Output $uniqueLine
+      Write-Host "##vso[task.logissue type=warning]$uniqueLine"
+    }
+  displayName: Surface warnings from build logs (${{ parameters.artifactSuffix }})
