@@ -35,9 +35,19 @@ function Write-BuildMessage
 #>
 function Invoke-AzDOBuild
 {
-      Start-OpenSSHBuild -Configuration Release -NativeHostArch x64 -Verbose
-      Start-OpenSSHBuild -Configuration Release -NativeHostArch x86 -Verbose
-      Write-BuildMessage -Message "OpenSSH binaries build success!" -Category Information
+    [CmdletBinding()]
+    param (
+        [Parameter()]
+        [ValidateSet('x64', 'x86')]
+        [string[]] $NativeHostArch = @('x64', 'x86')
+    )
+
+    foreach ($arch in $NativeHostArch)
+    {
+        Start-OpenSSHBuild -Configuration Release -NativeHostArch $arch -Verbose
+    }
+
+    Write-BuildMessage -Message "OpenSSH binaries build success!" -Category Information
 }
 
 <#
