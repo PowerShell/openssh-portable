@@ -12,6 +12,14 @@ parameters:
   default: false
 
 steps:
+- pwsh: |
+    $ErrorActionPreference = 'Stop'
+    git clone https://github.com/microsoft/vcpkg
+    cd vcpkg
+    & ./bootstrap-vcpkg.bat
+    & ./vcpkg.exe integrate install
+  displayName: Install and bootstrap vcpkg
+  
 - task: DownloadPipelineArtifact@2
   displayName: 'Download vcpkg dependencies (${{ parameters.dependenciesArtifactName }})'
   inputs:
