@@ -21,7 +21,7 @@ stages:
       demands:
       - ImageOverride -equals PSMMS2022-OpenSSH-Secure
     steps:
-    - template: .azdo/templates/install-vcpkg-dependencies.yml
+    - template: ./templates/install-vcpkg-dependencies.yml
       parameters:
         triplet: x64-custom
         artifactSuffix: x64
@@ -33,7 +33,7 @@ stages:
       demands:
       - ImageOverride -equals PSMMS2022-OpenSSH-Secure
     steps:
-    - template: .azdo/templates/install-vcpkg-dependencies.yml
+    - template: ./templates/install-vcpkg-dependencies.yml
       parameters:
         triplet: x86-custom
         artifactSuffix: x86

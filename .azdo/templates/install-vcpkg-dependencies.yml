@@ -24,7 +24,8 @@ steps:
     }
   displayName: 'Verify version info'
 
-- pwsh: |-
+- pwsh: |
+    $ErrorActionPreference = 'Stop'
     git clone https://github.com/microsoft/vcpkg
     cd vcpkg
     & ./bootstrap-vcpkg.bat
