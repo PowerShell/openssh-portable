@@ -11,8 +11,36 @@ pr:
     - latestw_all
 
 stages:
+- stage: BuildDependencies
+  displayName: Build Dependencies
+  jobs:
+  - job: InstallDeps_x64
+    displayName: Install vcpkg Dependencies (x64)
+    pool:
+      name: PS-PowerShell-x64
+      demands:
+      - ImageOverride -equals PSMMS2022-OpenSSH-Secure
+    steps:
+    - template: .azdo/templates/install-vcpkg-dependencies.yml
+      parameters:
+        triplet: x64-custom
+        artifactSuffix: x64
+
+  - job: InstallDeps_x86
+    displayName: Install vcpkg Dependencies (x86)
+    pool:
+      name: PS-PowerShell-x64
+      demands:
+      - ImageOverride -equals PSMMS2022-OpenSSH-Secure
+    steps:
+    - template: .azdo/templates/install-vcpkg-dependencies.yml
+      parameters:
+        triplet: x86-custom
+        artifactSuffix: x86
+
 - stage: Build
   displayName: Build Win32-OpenSSH
+  dependsOn: BuildDependencies
   jobs:
   - job: BuildPkg_x64
     displayName: Build Package (x64)
@@ -26,6 +54,7 @@ stages:
         nativeHostArch: x64
         buildOutputDir: x64
         artifactSuffix: x64
+        dependenciesArtifactName: vcpkg-dependencies-x64
         includeConfig: true
 
   - job: BuildPkg_x86
@@ -40,6 +69,7 @@ stages:
         nativeHostArch: x86
         buildOutputDir: Win32
         artifactSuffix: x86
+        dependenciesArtifactName: vcpkg-dependencies-x86
 
 - stage: Test
   displayName: Test Win32-OpenSSH
