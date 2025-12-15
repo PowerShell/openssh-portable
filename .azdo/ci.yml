@@ -17,9 +17,7 @@ stages:
   - job: InstallDeps_x64
     displayName: Install vcpkg Dependencies (x64)
     pool:
-      name: PS-PowerShell-x64
-      demands:
-      - ImageOverride -equals PSMMS2022-OpenSSH-Secure
+      vmImage: windows-latest
     steps:
     - template: ./templates/install-vcpkg-dependencies.yml
       parameters:
@@ -29,9 +27,7 @@ stages:
   - job: InstallDeps_x86
     displayName: Install vcpkg Dependencies (x86)
     pool:
-      name: PS-PowerShell-x64
-      demands:
-      - ImageOverride -equals PSMMS2022-OpenSSH-Secure
+      vmImage: windows-latest
     steps:
     - template: ./templates/install-vcpkg-dependencies.yml
       parameters:
@@ -45,9 +41,7 @@ stages:
   - job: BuildPkg_x64
     displayName: Build Package (x64)
     pool:
-      name: PS-PowerShell-x64
-      demands:
-      - ImageOverride -equals PSMMS2022-OpenSSH-Secure
+      vmImage: windows-latest
     steps:
     - template: ./templates/build-win32-openssh-job.yml
       parameters:
@@ -60,9 +54,7 @@ stages:
   - job: BuildPkg_x86
     displayName: Build Package (x86)
     pool:
-      name: PS-PowerShell-x64
-      demands:
-      - ImageOverride -equals PSMMS2022-OpenSSH-Secure
+      vmImage: windows-latest
     steps:
     - template: ./templates/build-win32-openssh-job.yml
       parameters:
