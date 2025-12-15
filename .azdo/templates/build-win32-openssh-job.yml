@@ -10,10 +10,13 @@ parameters:
 - name: includeConfig
   type: boolean
   default: false
+- name: vcpkgCacheDir
+  type: string
 
 steps:
 - pwsh: |
     $ErrorActionPreference = 'Stop'
+    mkdir "${{ parameters.vcpkgCacheDir }}"
     git clone https://github.com/microsoft/vcpkg
     cd vcpkg
     & ./bootstrap-vcpkg.bat
@@ -25,21 +28,15 @@ steps:
   inputs:
     buildType: current
     artifactName: ${{ parameters.dependenciesArtifactName }}
-    targetPath: '$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_installed'
-
-- pwsh: |
-    $folder = '${{ parameters.nativeHostArch }}' + '-custom'
-    $source = "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_installed/$folder"
-    $nested = "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_installed/$folder/$folder"
-    New-Item -ItemType Directory -Path $nested -Force
-    Get-ChildItem -Path $source | Where-Object { $_.name -ne $folder } | Move-Item -Destination $nested
-  displayName: Move vcpkg dependencies to expected location
+    targetPath: '${{ parameters.vcpkgCacheDir }}'
 
 - pwsh: |
     $nativeArch = '${{ parameters.nativeHostArch }}'
     Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
     Invoke-AzDOBuild -NativeHostArch $nativeArch
   displayName: Build Win32-OpenSSH (${{ parameters.nativeHostArch }})
+  env:
+    VCPKG_BINARY_SOURCES: "clear;files,${{ parameters.vcpkgCacheDir }},readwrite"
 
 - pwsh: |
     $buildOutPath = "$(Build.SourcesDirectory)/bin"

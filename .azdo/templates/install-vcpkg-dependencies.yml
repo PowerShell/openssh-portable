@@ -3,6 +3,8 @@ parameters:
   type: string
 - name: artifactSuffix
   type: string
+- name: vcpkgCacheDir
+  type: string
 
 steps:
 - pwsh: |
@@ -26,6 +28,7 @@ steps:
 
 - pwsh: |
     $ErrorActionPreference = 'Stop'
+    mkdir "$(vcpkgCacheDir)"
     git clone https://github.com/microsoft/vcpkg
     cd vcpkg
     & ./bootstrap-vcpkg.bat
@@ -49,7 +52,7 @@ steps:
 
 - pwsh: |
     $artifactSuffix = '${{ parameters.artifactSuffix }}'
-    $vcpkgInstalledPath = "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_installed"
+    $vcpkgInstalledPath = "$(vcpkgCacheDir)"
     
     if (Test-Path -Path $vcpkgInstalledPath) {
       Write-Verbose -Verbose "vcpkg_installed directory contents:"
