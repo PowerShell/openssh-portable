@@ -28,7 +28,7 @@ steps:
 
 - pwsh: |
     $ErrorActionPreference = 'Stop'
-    mkdir "$(vcpkgCacheDir)"
+    mkdir "${{ parameters.vcpkgCacheDir }}"
     git clone https://github.com/microsoft/vcpkg
     cd vcpkg
     & ./bootstrap-vcpkg.bat
