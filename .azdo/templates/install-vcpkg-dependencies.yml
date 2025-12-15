@@ -49,6 +49,8 @@ steps:
       Pop-Location
     }
   displayName: Install vcpkg dependencies (${{ parameters.triplet }})
+  env:
+    VCPKG_BINARY_SOURCES: "clear;files,${{ parameters.vcpkgCacheDir }},readwrite"
 
 - pwsh: |
     $artifactSuffix = '${{ parameters.artifactSuffix }}'
