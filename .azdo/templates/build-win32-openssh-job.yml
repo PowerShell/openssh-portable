@@ -28,7 +28,7 @@ steps:
     targetPath: '$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_installed'
 
 - pwsh: |
-    $folder = $${{ parameters.nativeHostArch }}-custom
+    $folder = "$${{ parameters.nativeHostArch }}-custom"
     $source = "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_installed/$folder"
     $nested = "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_installed/$folder/$folder"
     New-Item -ItemType Directory -Path $nested -Force
