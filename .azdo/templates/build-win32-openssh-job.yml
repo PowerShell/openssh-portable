@@ -28,6 +28,14 @@ steps:
     targetPath: '$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_installed'
 
 - pwsh: |
+    $folder = $${{ parameters.nativeHostArch }}-custom
+    $source = "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_installed/$folder"
+    $nested = "$(Build.SourcesDirectory)/contrib/win32/openssh/vcpkg_installed/$folder/$folder"
+    New-Item -ItemType Directory -Path $nested -Force
+    Get-ChildItem -Path $source | Where-Object { $_.name -ne $folder } | Move-Item -Destination $nested
+  displayName: Move vcpkg dependencies to expected location
+
+- pwsh: |
     $nativeArch = '${{ parameters.nativeHostArch }}'
     Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
     Invoke-AzDOBuild -NativeHostArch $nativeArch
