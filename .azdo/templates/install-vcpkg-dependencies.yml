@@ -52,7 +52,7 @@ steps:
 
 - pwsh: |
     $artifactSuffix = '${{ parameters.artifactSuffix }}'
-    $vcpkgInstalledPath = "$(vcpkgCacheDir)"
+    $vcpkgInstalledPath = "${{ parameters.vcpkgCacheDir }}"
     
     if (Test-Path -Path $vcpkgInstalledPath) {
       Write-Verbose -Verbose "vcpkg_installed directory contents:"
