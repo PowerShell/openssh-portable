@@ -3210,7 +3210,7 @@ sk_suffix(const char *application, const uint8_t *user, size_t userlen)
 	else
 		ret = xstrdup(application);
 
-#ifdef WINDOWS 
+#ifdef WINDOWS
 	/* replace any additional colons with underscores so filename is valid */
 	while ((cp = strchr(ret, ':')) != NULL)
 		*cp = '_';
