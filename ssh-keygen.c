@@ -3210,6 +3210,12 @@ sk_suffix(const char *application, const uint8_t *user, size_t userlen)
 	else
 		ret = xstrdup(application);
 
+#ifdef WINDOWS 
+	/* replace any additional colons with underscores so filename is valid */
+	while ((cp = strchr(ret, ':')) != NULL)
+		*cp = '_';
+#endif
+
 	/* Count trailing zeros in user */
 	for (i = 0; i < userlen; i++) {
 		if (user[userlen - i - 1] != 0)
