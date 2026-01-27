@@ -1738,10 +1738,12 @@ main(int ac, char **av)
 
 	rdomain = ssh_packet_rdomain_in(ssh);
 
+#ifdef WINDOWS
 	if (privsep_auth_child) {
 		recv_idexch_state(ssh, PRIVSEP_MONITOR_FD);
 		goto idexch_done;
 	}
+#endif /* WINDOWS */
 
 	/* Log the connection. */
 	laddr = get_local_ipaddr(sock_in);

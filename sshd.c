@@ -1359,7 +1359,7 @@ main(int ac, char **av)
 	struct sshkey *pubkey;
 	struct connection_info connection_info;
 #ifndef WINDOWS
-	struct utsname utsname
+	struct utsname utsname;
 #endif /* !WINDOWS */
 	sigset_t sigmask;
 
