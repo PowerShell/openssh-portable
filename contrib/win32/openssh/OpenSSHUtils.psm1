@@ -5,7 +5,7 @@
     Get-UserSID
 #>
 function Get-UserSID
-{       
+{
     [CmdletBinding(DefaultParameterSetName='User')]
     param
         (   [parameter(Mandatory=$true, ParameterSetName="User")]
@@ -16,7 +16,7 @@ function Get-UserSID
             [System.Security.Principal.WellKnownSidType]$WellKnownSidType
         )
     try
-    {   
+    {
         if($PSBoundParameters.ContainsKey("User"))
         {
             $sid = $User.Translate([System.Security.Principal.SecurityIdentifier])
@@ -25,7 +25,7 @@ function Get-UserSID
         {
             $sid = New-Object System.Security.Principal.SecurityIdentifier($WellKnownSidType, $null)
         }
-        $sid        
+        $sid
     }
     catch {
         return $null
@@ -41,6 +41,9 @@ $adminsSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnown
 # get the everyone
 $everyoneSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::WorldSid)
 
+# get the BUILTIN\Users group
+$usersSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::BuiltinUsersSid)
+
 $currentUserSid = Get-UserSID -User "$($env:USERDOMAIN)\$($env:USERNAME)"
 
 $authenticatedUserSid = Get-UserSID -WellKnownSidType ([System.Security.Principal.WellKnownSidType]::AuthenticatedUserSid)
@@ -49,7 +52,7 @@ $authenticatedUserSid = Get-UserSID -WellKnownSidType ([System.Security.Principa
  $definition = @'
 using System;
 using System.Runtime.InteropServices;
-  
+
 public class AdjPriv
 {
     [DllImport("advapi32.dll", ExactSpelling = true, SetLastError = true)]
@@ -68,7 +71,7 @@ public class AdjPriv
         public long Luid;
         public int Attr;
     }
-  
+
     internal const int SE_PRIVILEGE_ENABLED = 0x00000002;
     internal const int SE_PRIVILEGE_DISABLED = 0x00000000;
     internal const int TOKEN_QUERY = 0x00000008;
@@ -96,7 +99,7 @@ public class AdjPriv
     }
 }
 '@
- 
+
 try
 {
     $type = Add-Type $definition -PassThru -ErrorAction SilentlyContinue
@@ -117,7 +120,7 @@ function Repair-SshdConfigPermission
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
     param (
         [parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]        
+        [ValidateNotNullOrEmpty()]
         [string]$FilePath)
 
         Repair-FilePermission -Owners $systemSid,$adminsSid -FullAccessNeeded $systemSid @psBoundParameters
@@ -136,14 +139,14 @@ function Repair-SshdHostKeyPermission
         [parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [string]$FilePath)
-        
+
         if($PSBoundParameters["FilePath"].EndsWith(".pub"))
         {
             $PSBoundParameters["FilePath"] = $PSBoundParameters["FilePath"].Replace(".pub", "")
         }
 
         Repair-FilePermission -Owners $systemSid,$adminsSid @psBoundParameters
-        
+
         $PSBoundParameters["FilePath"] += ".pub"
         Repair-FilePermission -Owners $systemSid,$adminsSid -ReadAccessOK $everyoneSid @psBoundParameters
 }
@@ -158,8 +161,8 @@ function Repair-AuthorizedKeyPermission
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
     param (
         [parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]        
-        [string]$FilePath)        
+        [ValidateNotNullOrEmpty()]
+        [string]$FilePath)
 
         if(-not (Test-Path $FilePath -PathType Leaf))
         {
@@ -182,9 +185,9 @@ function Repair-AuthorizedKeyPermission
         }
         if($profileItem)
         {
-            $userSid = $profileItem.PSChildName            
+            $userSid = $profileItem.PSChildName
             Repair-FilePermission -Owners $userSid,$adminsSid,$systemSid -AnyAccessOK $userSid -FullAccessNeeded $systemSid @psBoundParameters
-            
+
         }
         else
         {
@@ -203,17 +206,17 @@ function Repair-AdministratorsAuthorizedKeysPermission
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
     param (
         [parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]        
-        [string]$FilePath) 
+        [ValidateNotNullOrEmpty()]
+        [string]$FilePath)
 
-        Repair-FilePermission -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid -ReadAccessOK $everyoneSid @psBoundParameters        
+        Repair-FilePermission -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid -ReadAccessOK $everyoneSid @psBoundParameters
 
 }
 
 <#
     .Synopsis
     Repair-ModuliFilePermission
-    Repair the file owner and Permission of moduli file 
+    Repair the file owner and Permission of moduli file
 #>
 
 function Repair-ModuliFilePermission
@@ -221,10 +224,28 @@ function Repair-ModuliFilePermission
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
     param (
         [parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]        
-        [string]$FilePath) 
+        [ValidateNotNullOrEmpty()]
+        [string]$FilePath)
 
-        Repair-FilePermission -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid -ReadAccessOK $everyoneSid @psBoundParameters        
+        Repair-FilePermission -Owners $adminsSid -FullAccessNeeded $adminsSid,$systemSid -ReadAccessOK $everyoneSid @psBoundParameters
+
+}
+
+<#
+    .Synopsis
+    Repair-ApplicationFilePermission
+    Repair the file owner and Permission of executables and DLLs in the application folder
+    -FilePath: The path of the executable or DLL
+#>
+function Repair-ApplicationFilePermission
+{
+    [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
+    param (
+        [parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$FilePath)
+
+        Repair-FilePermission -Owners $adminsSid,$systemSid -FullAccessNeeded $adminsSid,$systemSid -ReadAndExecuteAccessOK $authenticatedUserSid, $usersSid @psBoundParameters
 
 }
 
@@ -240,7 +261,7 @@ function Repair-UserKeyPermission
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
     param (
         [parameter(Mandatory=$true, Position = 0)]
-        [ValidateNotNullOrEmpty()]        
+        [ValidateNotNullOrEmpty()]
         [string]$FilePath,
         [System.Security.Principal.SecurityIdentifier] $UserSid = $currentUserSid)
 
@@ -249,7 +270,7 @@ function Repair-UserKeyPermission
             $PSBoundParameters["FilePath"] = $PSBoundParameters["FilePath"].Replace(".pub", "")
         }
         Repair-FilePermission -Owners $UserSid, $adminsSid,$systemSid -AnyAccessOK $UserSid @psBoundParameters
-        
+
         $PSBoundParameters["FilePath"] += ".pub"
         Repair-FilePermission -Owners $UserSid, $adminsSid,$systemSid -AnyAccessOK $UserSid -ReadAccessOK $everyoneSid @psBoundParameters
 }
@@ -264,7 +285,7 @@ function Repair-UserSshConfigPermission
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
     param (
         [parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]        
+        [ValidateNotNullOrEmpty()]
         [string]$FilePath,
         [System.Security.Principal.SecurityIdentifier] $UserSid = $currentUserSid)
         Repair-FilePermission -Owners $UserSid,$adminsSid,$systemSid -AnyAccessOK $UserSid @psBoundParameters
@@ -280,7 +301,7 @@ function Repair-SSHFolderPermission
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
     param (
         [parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]        
+        [ValidateNotNullOrEmpty()]
         [string]$FilePath)
 
     Repair-FilePermission -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid,$systemSid -ReadAndExecuteAccessOK $authenticatedUserSid @psBoundParameters
@@ -296,7 +317,7 @@ function Repair-SSHFolderFilePermission
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
     param (
         [parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]        
+        [ValidateNotNullOrEmpty()]
         [string]$FilePath)
 
     Repair-FilePermission -Owners $adminsSid, $systemSid -FullAccessNeeded $adminsSid, $systemSid -ReadAndExecuteAccessOK $authenticatedUserSid @psBoundParameters
@@ -312,7 +333,7 @@ function Repair-SSHFolderPrivateKeyPermission
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
     param (
         [parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]        
+        [ValidateNotNullOrEmpty()]
         [string]$FilePath)
 
     Repair-FilePermission -Owners $adminsSid, $systemSid -FullAccessNeeded $systemSid, $adminsSid @psBoundParameters
@@ -326,9 +347,9 @@ function Repair-SSHFolderPrivateKeyPermission
 function Repair-FilePermission
 {
     [CmdletBinding(SupportsShouldProcess=$true, ConfirmImpact="High")]
-    param (        
+    param (
         [parameter(Mandatory=$true, Position = 0)]
-        [ValidateNotNullOrEmpty()]        
+        [ValidateNotNullOrEmpty()]
         [string]$FilePath,
         [ValidateNotNull()]
         [System.Security.Principal.SecurityIdentifier[]] $Owners = $currentUserSid,
@@ -344,11 +365,11 @@ function Repair-FilePermission
         Write-host "$FilePath not found" -ForegroundColor Yellow
         return
     }
-    
+
     Write-host "  [*] $FilePath"
     $return = Repair-FilePermissionInternal @PSBoundParameters
 
-    if($return -contains $true) 
+    if($return -contains $true)
     {
         #Write-host "Re-check the health of file $FilePath"
         Repair-FilePermissionInternal @PSBoundParameters
@@ -379,7 +400,7 @@ function Repair-FilePermissionInternal {
     $health = $true
     $paras = @{}
     $PSBoundParameters.GetEnumerator() | % { if((-not $_.key.Contains("Owners")) -and (-not $_.key.Contains("Access"))) { $paras.Add($_.key,$_.Value) } }
-        
+
     $currentOwnerSid = Get-UserSid -User $acl.owner
     if($owners -notcontains $currentOwnerSid)
     {
@@ -414,15 +435,15 @@ function Repair-FilePermissionInternal {
     {
         $realAnyAccessOKList += $AnyAccessOK
     }
-    
+
     $realFullAccessNeeded = $FullAccessNeeded
     $realReadAccessNeeded = $ReadAccessNeeded
     if($realFullAccessNeeded -contains $everyoneSid)
     {
         $realFullAccessNeeded = @($everyoneSid)
         $realReadAccessNeeded = $null
-    }    
-    
+    }
+
     if($realReadAccessNeeded -contains $everyoneSid)
     {
         $realReadAccessNeeded = @($everyoneSid)
@@ -431,19 +452,19 @@ function Repair-FilePermissionInternal {
     if($realReadAccessNeeded)
     {
         $realReadAccessNeeded = $realReadAccessNeeded | ? { ($_ -ne $null) -and ($realFullAccessNeeded -notcontains $_) }
-    }    
-    
+    }
+
     #if accounts in the ReadAccessNeeded or $realFullAccessNeeded already part of dacl, they are okay;
     #need to make sure they have read access only
     $realReadAcessOKList = $ReadAccessOK + $realReadAccessNeeded
 
     foreach($a in $acl.Access)
     {
-        if ($a.IdentityReference -is [System.Security.Principal.SecurityIdentifier]) 
+        if ($a.IdentityReference -is [System.Security.Principal.SecurityIdentifier])
         {
             $IdentityReferenceSid = $a.IdentityReference
         }
-        Else 
+        Else
         {
             $IdentityReferenceSid = Get-UserSid -User $a.IdentityReference
         }
@@ -451,13 +472,13 @@ function Repair-FilePermissionInternal {
         {
             $idRefShortValue = ($a.IdentityReference.Value).split('\')[-1]
             $IdentityReferenceSid = Get-UserSID -User $idRefShortValue
-            if($IdentityReferenceSid -eq $null)            
+            if($IdentityReferenceSid -eq $null)
             {
                 Write-Warning "Can't translate '$idRefShortValue'. "
                 continue
-            }                    
+            }
         }
-        
+
         if($realFullAccessNeeded -contains ($IdentityReferenceSid))
         {
             $realFullAccessNeeded = $realFullAccessNeeded | ? { ($_ -ne $null) -and (-not $_.Equals($IdentityReferenceSid)) }
@@ -467,18 +488,18 @@ function Repair-FilePermissionInternal {
             }
             if (($a.AccessControlType.Equals([System.Security.AccessControl.AccessControlType]::Allow)) -and `
             ((([System.UInt32]$a.FileSystemRights.value__) -band $FullControlPerm) -eq $FullControlPerm))
-            {   
+            {
                 continue;
             }
             #update the account to full control
             if($a.IsInherited)
             {
-                if($needChange)    
+                if($needChange)
                 {
                     Enable-Privilege SeRestorePrivilege | out-null
                     Set-Acl -Path $FilePath -AclObject $acl -Confirm:$false
                 }
-                
+
                 return Remove-RuleProtection @paras
             }
             $caption = "'$($a.IdentityReference)' has the following access to '$FilePath': '$($a.AccessControlType)'-'$($a.FileSystemRights)'."
@@ -490,7 +511,7 @@ function Repair-FilePermissionInternal {
                 $needChange = $true
                 $ace = New-Object System.Security.AccessControl.FileSystemAccessRule `
                         ($IdentityReferenceSid, "FullControl", "None", "None", "Allow")
-                                
+
                 $acl.SetAccessRule($ace)
                 Write-Host "'$($a.IdentityReference)' now has FullControl access to '$FilePath'. " -ForegroundColor Green
             }
@@ -502,7 +523,7 @@ function Repair-FilePermissionInternal {
                     Write-Host "'$($a.IdentityReference)' still has these access to '$FilePath': '$($a.AccessControlType)'-'$($a.FileSystemRights)'." -ForegroundColor Yellow
                 }
             }
-        } 
+        }
         elseif(($realAnyAccessOKList -contains $everyoneSid) -or ($realAnyAccessOKList -contains $IdentityReferenceSid))
         {
             #ignore those accounts listed in the AnyAccessOK list.
@@ -517,15 +538,15 @@ function Repair-FilePermissionInternal {
             {
                 continue;
             }
-            
+
             if($a.IsInherited)
             {
-                if($needChange)    
+                if($needChange)
                 {
                     Enable-Privilege SeRestorePrivilege | out-null
                     Set-Acl -Path $FilePath -AclObject $acl -Confirm:$false
                 }
-                
+
                 return Remove-RuleProtection @paras
             }
             $caption = "'$($a.IdentityReference)' has the following access to '$FilePath': '$($a.FileSystemRights)'."
@@ -537,7 +558,7 @@ function Repair-FilePermissionInternal {
                 $needChange = $true
                 $ace = New-Object System.Security.AccessControl.FileSystemAccessRule `
                     ($IdentityReferenceSid, "ReadAndExecute, Synchronize", "None", "None", "Allow")
-                          
+
                 $acl.SetAccessRule($ace)
                 Write-Host "'$($a.IdentityReference)' now has ReadAndExecute, Synchronize access to '$FilePath'. " -ForegroundColor Green
             }
@@ -568,15 +589,15 @@ function Repair-FilePermissionInternal {
             {
                 continue;
             }
-            
+
             if($a.IsInherited)
             {
-                if($needChange)    
+                if($needChange)
                 {
                     Enable-Privilege SeRestorePrivilege | out-null
                     Set-Acl -Path $FilePath -AclObject $acl -Confirm:$false
                 }
-                
+
                 return Remove-RuleProtection @paras
             }
             $caption = "'$($a.IdentityReference)' has the following access to '$FilePath': '$($a.FileSystemRights)'."
@@ -588,7 +609,7 @@ function Repair-FilePermissionInternal {
                 $needChange = $true
                 $ace = New-Object System.Security.AccessControl.FileSystemAccessRule `
                     ($IdentityReferenceSid, "Read", "None", "None", "Allow")
-                          
+
                 $acl.SetAccessRule($ace)
                 Write-Host "'$($a.IdentityReference)' now has Read access to '$FilePath'. " -ForegroundColor Green
             }
@@ -603,24 +624,24 @@ function Repair-FilePermissionInternal {
         }
         #other than AnyAccessOK and ReadAccessOK list, if any other account is allowed, they should be removed from the dacl
         elseif($a.AccessControlType.Equals([System.Security.AccessControl.AccessControlType]::Allow))
-        {            
-            $caption = "'$($a.IdentityReference)' should not have access to '$FilePath'." 
+        {
+            $caption = "'$($a.IdentityReference)' should not have access to '$FilePath'."
             if($a.IsInherited)
             {
-                if($needChange)    
+                if($needChange)
                 {
                     Enable-Privilege SeRestorePrivilege | out-null
                     Set-Acl -Path $FilePath -AclObject $acl -Confirm:$false
                 }
                 return Remove-RuleProtection @paras
             }
-            
+
             $prompt = "Shall I remove this access?"
             $description = "Remove access rule of '$($a.IdentityReference)' from '$FilePath'."
 
             if($pscmdlet.ShouldProcess($description, $prompt, "$caption."))
-            {  
-                $needChange = $true                
+            {
+                $needChange = $true
                 $ace = New-Object System.Security.AccessControl.FileSystemAccessRule `
                             ($IdentityReferenceSid, $a.FileSystemRights, $a.InheritanceFlags, $a.PropagationFlags, $a.AccessControlType)
 
@@ -638,12 +659,12 @@ function Repair-FilePermissionInternal {
                 $health = $false
                 if(-not $PSBoundParameters.ContainsKey("WhatIf"))
                 {
-                    Write-Host "'$($a.IdentityReference)' still has access to '$FilePath'." -ForegroundColor Yellow                
-                }        
+                    Write-Host "'$($a.IdentityReference)' still has access to '$FilePath'." -ForegroundColor Yellow
+                }
             }
         }
     }
-    
+
     if($realFullAccessNeeded)
     {
         $realFullAccessNeeded | % {
@@ -713,14 +734,14 @@ function Repair-FilePermissionInternal {
         }
     }
 
-    if($needChange)    
+    if($needChange)
     {
         Enable-Privilege SeRestorePrivilege | out-null
         Set-Acl -Path $FilePath -AclObject $acl -Confirm:$false
     }
     if($health)
     {
-        if ($needChange) 
+        if ($needChange)
         {
             Write-Host "      Repaired permissions" -ForegroundColor Yellow
         }
@@ -757,12 +778,12 @@ function Remove-RuleProtection
         {
             Write-Warning "Remove-RuleProtection failed with error: $($e[0].ToString())."
         }
-              
+
         Write-Host "Inheritance is removed from '$FilePath'."  -ForegroundColor Green
         return $true
     }
     elseif(-not $PSBoundParameters.ContainsKey("WhatIf"))
-    {        
+    {
         Write-Host "inheritance is not removed from '$FilePath'. Skip Checking FilePath."  -ForegroundColor Yellow
         return $false
     }
@@ -786,7 +807,7 @@ function Get-UserAccount
     try
     {
         if($PSBoundParameters.ContainsKey("UserSid"))
-        {            
+        {
             $objUser = $UserSid.Translate([System.Security.Principal.NTAccount])
         }
         elseif($PSBoundParameters.ContainsKey("WellKnownSidType"))
@@ -867,4 +888,4 @@ function Add-MachinePath {
     }
 }
 
-Export-ModuleMember -Function Repair-FilePermission, Repair-SshdConfigPermission, Repair-SshdHostKeyPermission, Repair-AuthorizedKeyPermission, Repair-UserKeyPermission, Repair-UserSshConfigPermission, Enable-Privilege, Get-UserAccount, Get-UserSID, Repair-AdministratorsAuthorizedKeysPermission, Repair-ModuliFilePermission, Repair-SSHFolderPermission, Repair-SSHFolderFilePermission, Repair-SSHFolderPrivateKeyPermission, Add-MachinePath
+Export-ModuleMember -Function Repair-FilePermission, Repair-SshdConfigPermission, Repair-SshdHostKeyPermission, Repair-AuthorizedKeyPermission, Repair-UserKeyPermission, Repair-UserSshConfigPermission, Enable-Privilege, Get-UserAccount, Get-UserSID, Repair-AdministratorsAuthorizedKeysPermission, Repair-ModuliFilePermission, Repair-ApplicationFilePermission, Repair-SSHFolderPermission, Repair-SSHFolderFilePermission, Repair-SSHFolderPrivateKeyPermission, Add-MachinePath
