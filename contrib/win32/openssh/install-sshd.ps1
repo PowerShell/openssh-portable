@@ -121,16 +121,17 @@ if (-not $mitigationValue) {
     Write-Host "Created registry value for ssh-agent.exe to enable RedirectionGuard"
 }
 
+# if user calls .\install-sshd.ps1 with -confirm, use that
+# otherwise, need to preserve legacy behavior
+if (-not $PSBoundParameters.ContainsKey('confirm'))
+{
+    $PSBoundParameters.add('confirm', $false)
+}
+    
 #Fix permissions for moduli file
 $moduliPath = Join-Path $PSScriptRoot "moduli"
 if (Test-Path $moduliPath -PathType Leaf)
 {
-    # if user calls .\install-sshd.ps1 with -confirm, use that
-    # otherwise, need to preserve legacy behavior
-    if (-not $PSBoundParameters.ContainsKey('confirm'))
-    {
-        $PSBoundParameters.add('confirm', $false)
-    }
     Repair-ModuliFilePermission -FilePath $moduliPath @psBoundParameters
 }
 
