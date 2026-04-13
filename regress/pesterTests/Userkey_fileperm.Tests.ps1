@@ -134,5 +134,38 @@ Describe "Tests for user Key file permission" -Tags "CI" {
 
             $logPath | Should Contain "UNPROTECTED PRIVATE KEY FILE!"
         }
+
+        It "$tC.$tI-ssh with private key file -- negative(other account has ChangePermissions on private key file)" {
+            #setup clean ACL then grant ssouser ChangePermissions (WRITE_DAC)
+            Repair-FilePermission -FilePath $keyFilePath -Owners $currentUserSid -FullAccessNeeded $adminsSid,$systemSid,$currentUserSid -confirm:$false
+            Set-FilePermission -FilePath $keyFilePath -UserSid $objUserSid -Perm "ChangePermissions"
+
+            $o = ssh -p $port -i $keyFilePath -E $logPath $pubKeyUser@$server echo 1234
+            $LASTEXITCODE | Should Not Be 0
+
+            $logPath | Should Contain "UNPROTECTED PRIVATE KEY FILE!"
+        }
+
+        It "$tC.$tI-ssh with private key file -- negative(other account has TakeOwnership on private key file)" {
+            #setup clean ACL then grant ssouser TakeOwnership (WRITE_OWNER)
+            Repair-FilePermission -FilePath $keyFilePath -Owners $currentUserSid -FullAccessNeeded $adminsSid,$systemSid,$currentUserSid -confirm:$false
+            Set-FilePermission -FilePath $keyFilePath -UserSid $objUserSid -Perm "TakeOwnership"
+
+            $o = ssh -p $port -i $keyFilePath -E $logPath $pubKeyUser@$server echo 1234
+            $LASTEXITCODE | Should Not Be 0
+
+            $logPath | Should Contain "UNPROTECTED PRIVATE KEY FILE!"
+        }
+
+        It "$tC.$tI-ssh with private key file -- negative(other account has Delete on private key file)" {
+            #setup clean ACL then grant ssouser Delete (DELETE)
+            Repair-FilePermission -FilePath $keyFilePath -Owners $currentUserSid -FullAccessNeeded $adminsSid,$systemSid,$currentUserSid -confirm:$false
+            Set-FilePermission -FilePath $keyFilePath -UserSid $objUserSid -Perm "Delete"
+
+            $o = ssh -p $port -i $keyFilePath -E $logPath $pubKeyUser@$server echo 1234
+            $LASTEXITCODE | Should Not Be 0
+
+            $logPath | Should Contain "UNPROTECTED PRIVATE KEY FILE!"
+        }
     }
 }

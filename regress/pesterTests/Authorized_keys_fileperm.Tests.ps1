@@ -192,6 +192,54 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             $sshdlog | Should Contain "Authentication refused."
         }
 
+        It "$tC.$tI-authorized_keys-negative(other account has ChangePermissions on authorized_keys file)"  -skip:$skip {
+            #setup clean ACL then grant PwdUser ChangePermissions (WRITE_DAC)
+            Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objUserSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
+            $objPwdUserSid = Get-UserSid -User $PwdUser
+            Set-FilePermission -FilePath $authorizedkeyPath -User $objPwdUserSid -Perm "ChangePermissions"
+
+            #Run
+            Start-SSHDTestDaemon -workDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
+            ssh -p $port -E $sshlog $ssouser@$server echo 1234
+            $LASTEXITCODE | Should Not Be 0
+            Stop-SSHDTestDaemon -Port $port
+            sleep $sshdDelay
+            $sshlog | Should Contain "Permission denied"
+            $sshdlog | Should Contain "Authentication refused."
+        }
+
+        It "$tC.$tI-authorized_keys-negative(other account has TakeOwnership on authorized_keys file)"  -skip:$skip {
+            #setup clean ACL then grant PwdUser TakeOwnership (WRITE_OWNER)
+            Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objUserSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
+            $objPwdUserSid = Get-UserSid -User $PwdUser
+            Set-FilePermission -FilePath $authorizedkeyPath -User $objPwdUserSid -Perm "TakeOwnership"
+
+            #Run
+            Start-SSHDTestDaemon -workDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
+            ssh -p $port -E $sshlog $ssouser@$server echo 1234
+            $LASTEXITCODE | Should Not Be 0
+            Stop-SSHDTestDaemon -Port $port
+            sleep $sshdDelay
+            $sshlog | Should Contain "Permission denied"
+            $sshdlog | Should Contain "Authentication refused."
+        }
+
+        It "$tC.$tI-authorized_keys-negative(other account has Delete on authorized_keys file)"  -skip:$skip {
+            #setup clean ACL then grant PwdUser Delete (DELETE)
+            Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objUserSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
+            $objPwdUserSid = Get-UserSid -User $PwdUser
+            Set-FilePermission -FilePath $authorizedkeyPath -User $objPwdUserSid -Perm "Delete"
+
+            #Run
+            Start-SSHDTestDaemon -workDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
+            ssh -p $port -E $sshlog $ssouser@$server echo 1234
+            $LASTEXITCODE | Should Not Be 0
+            Stop-SSHDTestDaemon -Port $port
+            sleep $sshdDelay
+            $sshlog | Should Contain "Permission denied"
+            $sshdlog | Should Contain "Authentication refused."
+        }
+
         It "$tC.$tI-authorized_keys-negative(authorized_keys is owned by other non-admin user)"  -skip:$skip {
             #setup to have PwdUser as owner and grant it full control            
             $objPwdUserSid = Get-UserSid -User $PwdUser

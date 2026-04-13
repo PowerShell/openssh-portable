@@ -148,5 +148,47 @@ Describe "Tests for host keys file permission" -Tags "CI" {
             $logPath | Should Contain "bad permissions"
         }
 
+        It "$tC.$tI-Host keys-negative (other account has ChangePermissions on private key file)" {
+            #setup clean ACL then grant ssouser ChangePermissions (WRITE_DAC)
+            Repair-FilePermission -Filepath $hostKeyFilePath -Owners $adminsSid -FullAccessNeeded $systemSid,$adminsSid -confirm:$false
+            Repair-FilePermission -Filepath "$hostKeyFilePath.pub" -Owners $adminsSid -FullAccessNeeded $systemSid,$adminsSid -ReadAccessNeeded $everyOneSid -confirm:$false
+            Set-FilePermission -FilePath $hostKeyFilePath -UserSid $objUserSid -Perm "ChangePermissions"
+
+            #Run
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-h $hostKeyFilePath", "-E $logPath") -NoNewWindow
+            WaitForValidation -LogPath $logPath -Length 1100
+
+            #validate file content contains bad permissions info.
+            $logPath | Should Contain "bad permissions"
+        }
+
+        It "$tC.$tI-Host keys-negative (other account has TakeOwnership on private key file)" {
+            #setup clean ACL then grant ssouser TakeOwnership (WRITE_OWNER)
+            Repair-FilePermission -Filepath $hostKeyFilePath -Owners $adminsSid -FullAccessNeeded $systemSid,$adminsSid -confirm:$false
+            Repair-FilePermission -Filepath "$hostKeyFilePath.pub" -Owners $adminsSid -FullAccessNeeded $systemSid,$adminsSid -ReadAccessNeeded $everyOneSid -confirm:$false
+            Set-FilePermission -FilePath $hostKeyFilePath -UserSid $objUserSid -Perm "TakeOwnership"
+
+            #Run
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-h $hostKeyFilePath", "-E $logPath") -NoNewWindow
+            WaitForValidation -LogPath $logPath -Length 1100
+
+            #validate file content contains bad permissions info.
+            $logPath | Should Contain "bad permissions"
+        }
+
+        It "$tC.$tI-Host keys-negative (other account has Delete on private key file)" {
+            #setup clean ACL then grant ssouser Delete (DELETE)
+            Repair-FilePermission -Filepath $hostKeyFilePath -Owners $adminsSid -FullAccessNeeded $systemSid,$adminsSid -confirm:$false
+            Repair-FilePermission -Filepath "$hostKeyFilePath.pub" -Owners $adminsSid -FullAccessNeeded $systemSid,$adminsSid -ReadAccessNeeded $everyOneSid -confirm:$false
+            Set-FilePermission -FilePath $hostKeyFilePath -UserSid $objUserSid -Perm "Delete"
+
+            #Run
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-h $hostKeyFilePath", "-E $logPath") -NoNewWindow
+            WaitForValidation -LogPath $logPath -Length 1100
+
+            #validate file content contains bad permissions info.
+            $logPath | Should Contain "bad permissions"
+        }
+
     }
 }

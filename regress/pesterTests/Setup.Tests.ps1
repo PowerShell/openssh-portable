@@ -606,4 +606,85 @@ Describe "Setup Tests" -Tags "Setup" {
             $LASTEXITCODE | Should Be 0
         }
     }
+
+    Context "$tC - Validate folder permission warnings for ChangePermissions, TakeOwnership, and Delete" {
+        BeforeAll {
+            $tI = 1
+            $sshFolderPath = Join-Path $env:ProgramData "ssh"
+            $sshACL = $null
+            if (Test-Path -Path $sshFolderPath) {
+                $sshACL = Get-Acl $sshFolderPath
+            }
+            if ((Get-Service sshd).Status -eq 'Running') {
+                net stop sshd
+            }
+            # Register ETW manifest to capture OpenSSH events in the event log
+            $etwman = Join-Path $binPath "openssh-events.man"
+            if (Test-Path $etwman -PathType Leaf) {
+                wevtutil im "$etwman" 2>&1 | Out-Null
+            }
+        }
+        BeforeEach {
+            # Clear and enable the Operational event log channel before each test
+            wevtutil sl "OpenSSH/Operational" /e:false /q:true | Out-Null
+            wevtutil cl "OpenSSH/Operational" | Out-Null
+            wevtutil sl "OpenSSH/Operational" /e:true /q:true | Out-Null
+        }
+        AfterEach {
+            $tI++
+            net stop sshd
+            if ($sshACL -ne $null) {
+                Set-Acl -Path $sshFolderPath -AclObject $sshACL
+            }
+        }
+        AfterAll {
+            $tC++
+            $etwman = Join-Path $binPath "openssh-events.man"
+            if (Test-Path $etwman -PathType Leaf) {
+                wevtutil um "$etwman" 2>&1 | Out-Null
+            }
+        }
+
+        It "$tC.$tI - SSHD starts successfully and logs warning when other account has ChangePermissions on ssh folder" {
+            # Grant ChangePermissions (WRITE_DAC) to Authenticated Users - advisory warning, does not block startup
+            $acl = Get-Acl $sshFolderPath
+            $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($authenticatedUserSid, "ChangePermissions", "Allow")
+            $acl.AddAccessRule($accessRule)
+            Set-Acl -Path $sshFolderPath -AclObject $acl
+
+            net start sshd
+            $LASTEXITCODE | Should Be 0
+
+            $events = wevtutil qe "OpenSSH/Operational" /f:text
+            ($events | Out-String) | Should Match "write access is granted"
+        }
+
+        It "$tC.$tI - SSHD starts successfully and logs warning when other account has TakeOwnership on ssh folder" {
+            # Grant TakeOwnership (WRITE_OWNER) to Authenticated Users - advisory warning, does not block startup
+            $acl = Get-Acl $sshFolderPath
+            $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($authenticatedUserSid, "TakeOwnership", "Allow")
+            $acl.AddAccessRule($accessRule)
+            Set-Acl -Path $sshFolderPath -AclObject $acl
+
+            net start sshd
+            $LASTEXITCODE | Should Be 0
+
+            $events = wevtutil qe "OpenSSH/Operational" /f:text
+            ($events | Out-String) | Should Match "write access is granted"
+        }
+
+        It "$tC.$tI - SSHD starts successfully and logs warning when other account has Delete on ssh folder" {
+            # Grant Delete to Authenticated Users - advisory warning, does not block startup
+            $acl = Get-Acl $sshFolderPath
+            $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($authenticatedUserSid, "Delete", "Allow")
+            $acl.AddAccessRule($accessRule)
+            Set-Acl -Path $sshFolderPath -AclObject $acl
+
+            net start sshd
+            $LASTEXITCODE | Should Be 0
+
+            $events = wevtutil qe "OpenSSH/Operational" /f:text
+            ($events | Out-String) | Should Match "write access is granted"
+        }
+    }
 }
