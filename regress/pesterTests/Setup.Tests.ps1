@@ -633,7 +633,7 @@ Describe "Setup Tests" -Tags "Setup" {
 
             net start sshd
             $LASTEXITCODE | Should Be 0
-
+            Start-Sleep -Seconds 1 # ensure event is logged before querying 
             $events = wevtutil qe "OpenSSH/Operational" /f:text
             ($events | Out-String) | Should Match "write access is granted"
         }
@@ -650,7 +650,7 @@ Describe "Setup Tests" -Tags "Setup" {
 
             net start sshd
             $LASTEXITCODE | Should Be 0
-
+            Start-Sleep -Seconds 1 # ensure event is logged before querying 
             $events = wevtutil qe "OpenSSH/Operational" /f:text
             ($events | Out-String) | Should Match "write access is granted"
         }
@@ -662,18 +662,13 @@ Describe "Setup Tests" -Tags "Setup" {
             # Grant Delete to Authenticated Users using explicit inheritance flags to match the
             # existing ReadAndExecute ACE, avoiding OS merging ambiguity. Advisory warning, does not block startup.
             $acl = Get-Acl $sshFolderPath
-            $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-                $authenticatedUserSid,
-                [System.Security.AccessControl.FileSystemRights]::ReadAndExecute -bor [System.Security.AccessControl.FileSystemRights]::Delete,
-                [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit,
-                [System.Security.AccessControl.PropagationFlags]::None,
-                [System.Security.AccessControl.AccessControlType]::Allow)
-            $acl.SetAccessRule($accessRule)
+            $accessRule = New-Object System.Security.AccessControl.FileSystemAccessRule($authenticatedUserSid, "Delete", "Allow")
+            $acl.AddAccessRule($accessRule)
             Set-Acl -Path $sshFolderPath -AclObject $acl
 
             net start sshd
             $LASTEXITCODE | Should Be 0
-
+            Start-Sleep -Seconds 1 # ensure event is logged before querying 
             $events = wevtutil qe "OpenSSH/Operational" /f:text
             ($events | Out-String) | Should Match "write access is granted"
         }
