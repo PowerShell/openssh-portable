@@ -712,7 +712,7 @@ function Invoke-OpenSSHBashTests
     } else {
         # Install cygwin
         Write-Host "Installing cygwin using chocolatey to $env:SystemDrive\cygwin folder"
-        choco install cygwin -y --params "/InstallDir:$env:SystemDrive\cygwin\ /NoStartMenu"
+        choco install cygwin --version 3.6.6 -y --params "/InstallDir:$env:SystemDrive\cygwin\ /NoStartMenu"
 
         if (Test-Path $env:SystemDrive\cygwin\bin\sh.exe) {
             $bashPath = "$env:SystemDrive\cygwin\bin\sh.exe"
