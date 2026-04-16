@@ -171,7 +171,8 @@ function Invoke-OpenSSHTests
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
-        [string] $OpenSSHBinPath
+        [string] $OpenSSHBinPath,
+        [switch] $SkipBashTests
     )
 
     Set-BasicTestInfo -OpenSSHBinPath $OpenSSHBinPath -Confirm:$false
@@ -280,31 +281,34 @@ function Invoke-OpenSSHTests
             }
         }
 
-        # Bash tests.
-        Write-Verbose -Verbose -Message "Running Bash Tests..."
+        if (-not $SkipBashTests)
+        {
+            # Bash tests.
+            Write-Verbose -Verbose -Message "Running Bash Tests..."
 
-        # Run UNIX bash tests.
-        Write-Verbose -Verbose -Message "Starting Bash Tests..."
-        Invoke-OpenSSHBashTests
-        if (-not $Global:bash_tests_summary)
-        {
-            $errorMessage = "Failed to start OpenSSH bash tests"
-            Write-BuildMessage -Message $errorMessage -Category Error
-            $AllTestsPassed = $false
-        }
-        else
-        {
-            if ($Global:bash_tests_summary["TotalBashTestsFailed"] -ne 0)
+            # Run UNIX bash tests.
+            Write-Verbose -Verbose -Message "Starting Bash Tests..."
+            Invoke-OpenSSHBashTests
+            if (-not $Global:bash_tests_summary)
             {
-                $total_bash_failed_tests = $Global:bash_tests_summary["TotalBashTestsFailed"]
-                $total_bash_tests = $Global:bash_tests_summary["TotalBashTests"]
-                $errorMessage = "At least one of the bash tests failed. [$total_bash_failed_tests of $total_bash_tests]"
+                $errorMessage = "Failed to start OpenSSH bash tests"
                 Write-BuildMessage -Message $errorMessage -Category Error
                 $AllTestsPassed = $false
             }
+            else
+            {
+                if ($Global:bash_tests_summary["TotalBashTestsFailed"] -ne 0)
+                {
+                    $total_bash_failed_tests = $Global:bash_tests_summary["TotalBashTestsFailed"]
+                    $total_bash_tests = $Global:bash_tests_summary["TotalBashTests"]
+                    $errorMessage = "At least one of the bash tests failed. [$total_bash_failed_tests of $total_bash_tests]"
+                    Write-BuildMessage -Message $errorMessage -Category Error
+                    $AllTestsPassed = $false
+                }
 
-            $OpenSSHTestInfo["BashTestSummaryFile"] = $Global:bash_tests_summary["BashTestSummaryFile"]
-            $OpenSSHTestInfo["BashTestLogFile"] = $Global:bash_tests_summary["BashTestLogFile"]
+                $OpenSSHTestInfo["BashTestSummaryFile"] = $Global:bash_tests_summary["BashTestSummaryFile"]
+                $OpenSSHTestInfo["BashTestLogFile"] = $Global:bash_tests_summary["BashTestLogFile"]
+            }
         }
     }
 
@@ -343,6 +347,79 @@ function Invoke-OpenSSHTests
     {
         Write-BuildMessage -Message "Some OpenSSH validation tests have failed." -Category Error
         throw "OpenSSH validation tests failed!"
+    }
+}
+
+<#
+    .Synopsis
+    Runs OpenSSH bash tests only.
+#>
+function Invoke-OpenSSHBashTestsOnly
+{
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [string] $OpenSSHBinPath
+    )
+
+    Set-BasicTestInfo -OpenSSHBinPath $OpenSSHBinPath -Confirm:$false
+
+    $AllTestsPassed = $true
+
+    Write-Verbose -Verbose -Message "Running Bash-only OpenSSH test flow..."
+    Set-OpenSSHTestEnvironment -Confirm:$false
+
+    $cygwinInstallLocation = "$env:SystemDrive/cygwin"
+    if (! (Test-Path -Path "$cygwinInstallLocation/bin/sh.exe"))
+    {
+        Write-Verbose -Verbose -Message "CygWin not found"
+        Install-CygWin -InstallLocation $cygwinInstallLocation
+
+        $expectedCygWinPath = "$env:SystemDrive/cygwin/bin/sh.exe"
+        if (! (Test-Path -Path $expectedCygWinPath))
+        {
+            Write-Verbose -Verbose -Message "CygWin did not install correctly, missing expected path: ${expectedCygWinPath}"
+            Write-BuildMessage -Message "All bash tests failed because CygWin install failed" -Category Error
+            $AllTestsPassed = $false
+        }
+    }
+
+    if ($AllTestsPassed)
+    {
+        Write-Verbose -Verbose -Message "Starting Bash Tests..."
+        Invoke-OpenSSHBashTests
+        if (-not $Global:bash_tests_summary)
+        {
+            $errorMessage = "Failed to start OpenSSH bash tests"
+            Write-BuildMessage -Message $errorMessage -Category Error
+            $AllTestsPassed = $false
+        }
+        else
+        {
+            if ($Global:bash_tests_summary["TotalBashTestsFailed"] -ne 0)
+            {
+                $total_bash_failed_tests = $Global:bash_tests_summary["TotalBashTestsFailed"]
+                $total_bash_tests = $Global:bash_tests_summary["TotalBashTests"]
+                $errorMessage = "At least one of the bash tests failed. [$total_bash_failed_tests of $total_bash_tests]"
+                Write-BuildMessage -Message $errorMessage -Category Error
+                $AllTestsPassed = $false
+            }
+
+            $OpenSSHTestInfo["BashTestSummaryFile"] = $Global:bash_tests_summary["BashTestSummaryFile"]
+            $OpenSSHTestInfo["BashTestLogFile"] = $Global:bash_tests_summary["BashTestLogFile"]
+        }
+    }
+
+    $OpenSSHTestInfo | Export-Clixml -Path "$repoRoot/OpenSSHTestInfo.xml" -Depth 10
+
+    if ($AllTestsPassed)
+    {
+        Write-BuildMessage -Message "All OpenSSH bash validation tests have passed!" -Category Information
+    }
+    else
+    {
+        Write-BuildMessage -Message "Some OpenSSH bash validation tests have failed." -Category Error
+        throw "OpenSSH bash validation tests failed!"
     }
 }
 

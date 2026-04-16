@@ -74,10 +74,10 @@ stages:
   displayName: Test Win32-OpenSSH
   dependsOn: Build
   jobs:
-  - job: TestPkgWin32OpenSSH
+  - job: TestPkgWin32OpenSSHCore
     pool:
       vmImage: windows-latest
-    displayName: Win32-OpenSSH On Windows
+    displayName: Win32-OpenSSH Core Tests On Windows
     variables:
       testFilesDrivePath: '**'
     steps:
@@ -97,14 +97,6 @@ stages:
         artifactName: UnitTests-x64
         downloadPath: '$(System.ArtifactsDirectory)'
 
-    - task: DownloadBuildArtifacts@0
-      displayName: 'Download bash test config file artifact'
-      inputs:
-        buildType: current
-        downloadType: single
-        artifactName: ConfigFile-x64
-        downloadPath: '$(System.ArtifactsDirectory)'
-
     - pwsh: |
         $artifactDir = "$(System.ArtifactsDirectory)"
         Write-Verbose -Verbose -Message "Artifacts directory: $artifactDir"
@@ -122,13 +114,6 @@ stages:
       displayName: Install Unit Tests
 
     - pwsh: |
-        $configFileSrc = "$(System.ArtifactsDirectory)/ConfigFile-x64/config.h"
-        $configFileDest = "$(Build.SourcesDirectory)"
-        Write-Verbose -Verbose -Message "Copying config file from: ${configFileSrc} to: ${configFileDest}"
-        Copy-Item -Path $configFileSrc -Dest $configFileDest -Force
-      displayName: Copy config file artifact for bash tests
-
-    - pwsh: |
         $sourceDir = "$(Build.SourcesDirectory)"
         Write-Verbose -Verbose -Message "Source repo directory: $sourceDir"
         Get-ChildItem -Path $sourceDir
@@ -143,8 +128,8 @@ stages:
     - pwsh: |
         # Run OpenSSH tests
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
-        Invoke-OpenSSHTests -OpenSSHBinPath "$env:SystemDrive/OpenSSH"
-      displayName: Run tests
+        Invoke-OpenSSHTests -OpenSSHBinPath "$env:SystemDrive/OpenSSH" -SkipBashTests
+      displayName: Run core tests
 
     - pwsh: |
         Write-Host "##vso[task.setvariable variable=testFilesDrivePath;]$env:SystemDrive"
@@ -167,7 +152,99 @@ stages:
         # Upload test results artifact
         if (Test-Path -Path $ResultsDirectory)
         {
-          $artifactName = 'Win32-OpenSSH-TestResults'
+          $artifactName = 'Win32-OpenSSH-TestResults-Core'
+          Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$ResultsDirectory"
+        }
+      displayName: Upload test results
+      condition: always()
+
+    - pwsh: |
+        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+        Clear-TestEnvironmentSetup
+      displayName: Clean up OpenSSH test environment
+      condition: always()
+
+  - job: TestPkgWin32OpenSSHBash
+    pool:
+      vmImage: windows-latest
+    displayName: Win32-OpenSSH Bash Tests On Windows
+    variables:
+      testFilesDrivePath: '**'
+    steps:
+    - task: DownloadBuildArtifacts@0
+      displayName: 'Download build artifacts'
+      inputs:
+        buildType: current
+        downloadType: single
+        artifactName: Win32-OpenSSH-x64
+        downloadPath: '$(System.ArtifactsDirectory)'
+
+    - task: DownloadBuildArtifacts@0
+      displayName: 'Download bash test config file artifact'
+      inputs:
+        buildType: current
+        downloadType: single
+        artifactName: ConfigFile-x64
+        downloadPath: '$(System.ArtifactsDirectory)'
+
+    - pwsh: |
+        $artifactDir = "$(System.ArtifactsDirectory)"
+        Write-Verbose -Verbose -Message "Artifacts directory: $artifactDir"
+        Get-ChildItem -Path $artifactDir -Recurse
+      displayName: Capture downloaded artifact directory
+
+    - pwsh: |
+        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+        Install-OpenSSH -SourceDir "$(System.ArtifactsDirectory)/Win32-OpenSSH-x64/x64/Release" -OpenSSHDir "$env:SystemDrive/OpenSSH" -Verbose
+      displayName: Install Win32-OpenSSH
+
+    - pwsh: |
+        $configFileSrc = "$(System.ArtifactsDirectory)/ConfigFile-x64/config.h"
+        $configFileDest = "$(Build.SourcesDirectory)"
+        Write-Verbose -Verbose -Message "Copying config file from: ${configFileSrc} to: ${configFileDest}"
+        Copy-Item -Path $configFileSrc -Dest $configFileDest -Force
+      displayName: Copy config file artifact for bash tests
+
+    - pwsh: |
+        $sourceDir = "$(Build.SourcesDirectory)"
+        Write-Verbose -Verbose -Message "Source repo directory: $sourceDir"
+        Get-ChildItem -Path $sourceDir
+      displayName: Capture source repo directory for test
+
+    - pwsh: |
+        $installedOpenSSHDir = "$env:SystemDrive/OpenSSH"
+        Write-Verbose -Verbose -Message "Installed OpenSSH directory: $installedOpenSSHDir"
+        Get-ChildItem -Path $installedOpenSSHDir -Recurse
+      displayName: Capture installed OpenSSH directory
+
+    - pwsh: |
+        # Run OpenSSH bash tests
+        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+        Invoke-OpenSSHBashTestsOnly -OpenSSHBinPath "$env:SystemDrive/OpenSSH"
+      displayName: Run bash tests
+
+    - pwsh: |
+        Write-Host "##vso[task.setvariable variable=testFilesDrivePath;]$env:SystemDrive"
+      displayName: Set variable
+
+    - task: PublishTestResults@2
+      inputs:
+        testResultsFormat: 'NUnit'
+        testResultsFiles: '$(testFilesDrivePath)/OpenSSHTests/*.xml'
+        failTaskOnFailedTests: true
+      condition: always()
+
+    - pwsh: |
+        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+        #
+        # Copy test results to results directory
+        $ResultsDirectory = "$(Build.SourcesDirectory)/Win32OpenSSHTestResults"
+        Copy-OpenSSHTestResults -ResultsPath $ResultsDirectory
+        #
+        # Upload test results artifact
+        if (Test-Path -Path $ResultsDirectory)
+        {
+          $artifactName = 'Win32-OpenSSH-TestResults-Bash'
           Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$ResultsDirectory"
         }
       displayName: Upload test results
