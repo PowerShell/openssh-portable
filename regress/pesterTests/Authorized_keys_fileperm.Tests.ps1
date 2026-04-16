@@ -166,7 +166,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
 
             #Run
             Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
-            ssh -p $port -E $sshlog $ssouser@$server echo 1234
+            ssh -p $port -E $sshlog -o "PasswordAuthentication=no" $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
             Stop-SSHDTestDaemon -Port $port                  
             sleep $sshdDelay                  
@@ -184,7 +184,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
 
             #Run
             Start-SSHDTestDaemon -workDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
-            ssh -p $port -E $sshlog $ssouser@$server echo 1234
+            ssh -p $port -E $sshlog -o "PasswordAuthentication=no" $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0            
             Stop-SSHDTestDaemon -Port $port
             sleep $sshdDelay
@@ -193,12 +193,12 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
         }
 
         It "$tC.$tI-authorized_keys-negative(other account has ChangePermissions on authorized_keys file)"  -skip:$skip {
-            Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objUserSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
+            Repair-AuthorizedKeyPermission -Filepath $authorizedkeyPath -confirm:$false
             $objPwdUserSid = Get-UserSid -User $PwdUser
             Set-FilePermission -FilePath $authorizedkeyPath -User $objPwdUserSid -Perm "ChangePermissions"
 
             Start-SSHDTestDaemon -workDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
-            ssh -p $port -E $sshlog $ssouser@$server echo 1234
+            ssh -p $port -E $sshlog -o "PasswordAuthentication=no" $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
             Stop-SSHDTestDaemon -Port $port
             sleep $sshdDelay
@@ -207,12 +207,12 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
         }
 
         It "$tC.$tI-authorized_keys-negative(other account has TakeOwnership on authorized_keys file)"  -skip:$skip {
-            Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objUserSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
+            Repair-AuthorizedKeyPermission -Filepath $authorizedkeyPath -confirm:$false
             $objPwdUserSid = Get-UserSid -User $PwdUser
             Set-FilePermission -FilePath $authorizedkeyPath -User $objPwdUserSid -Perm "TakeOwnership"
 
             Start-SSHDTestDaemon -workDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
-            ssh -p $port -E $sshlog $ssouser@$server echo 1234
+            ssh -p $port -E $sshlog -o "PasswordAuthentication=no" $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
             Stop-SSHDTestDaemon -Port $port
             sleep $sshdDelay
@@ -221,12 +221,12 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
         }
 
         It "$tC.$tI-authorized_keys-negative(other account has Delete on authorized_keys file)"  -skip:$skip {
-            Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objUserSid -FullAccessNeeded $adminsSid,$systemSid,$objUserSid -confirm:$false
+            Repair-AuthorizedKeyPermission -Filepath $authorizedkeyPath -confirm:$false
             $objPwdUserSid = Get-UserSid -User $PwdUser
             Set-FilePermission -FilePath $authorizedkeyPath -User $objPwdUserSid -Perm "Delete"
 
             Start-SSHDTestDaemon -workDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
-            ssh -p $port -E $sshlog $ssouser@$server echo 1234
+            ssh -p $port -E $sshlog -o "PasswordAuthentication=no" $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
             Stop-SSHDTestDaemon -Port $port
             sleep $sshdDelay
@@ -240,7 +240,7 @@ Describe "Tests for authorized_keys file permission" -Tags "CI" {
             Repair-FilePermission -Filepath $authorizedkeyPath -Owner $objPwdUserSid -FullAccessNeeded $adminsSid,$systemSid,$objPwdUser -confirm:$false
 
             Start-SSHDTestDaemon -WorkDir $opensshbinpath -Arguments "-d -f $sshdconfig -o `"AuthorizedKeysFile .testssh/authorized_keys`" -E $sshdlog" -Port $port
-            ssh -p $port -E $sshlog $ssouser@$server echo 1234
+            ssh -p $port -E $sshlog -o "PasswordAuthentication=no" $ssouser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
             Stop-SSHDTestDaemon -Port $port
             sleep $sshdDelay
