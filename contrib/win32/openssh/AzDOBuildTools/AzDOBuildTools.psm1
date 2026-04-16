@@ -162,6 +162,42 @@ function Install-CygWin
     choco install cygwin -y --force --params "/InstallDir:${InstallLocation} /NoStartMenu"
 }
 
+function Ensure-CygWinInstalled
+{
+    [CmdletBinding()]
+    param (
+        [string] $InstallLocation = "$env:SystemDrive/cygwin",
+        [Parameter(Mandatory=$true)]
+        [string] $FailureMessage
+    )
+
+    if (Test-Path -Path "$InstallLocation/bin/sh.exe")
+    {
+        return $true
+    }
+
+    Write-Verbose -Verbose -Message "CygWin not found"
+    Install-CygWin -InstallLocation $InstallLocation
+
+    $expectedCygWinPath = "$InstallLocation/bin/sh.exe"
+    if (Test-Path -Path $expectedCygWinPath)
+    {
+        return $true
+    }
+
+    Write-Verbose -Verbose -Message "CygWin did not install correctly, missing expected path: ${expectedCygWinPath}"
+
+    $cygWinDirs = Get-Item -Path "$env:SystemDrive/cygwin*" -ErrorAction SilentlyContinue
+    if ($cygWinDirs.Count -gt 1)
+    {
+        Write-Verbose -Verbose -Message "CygWin install failed with mangled folder locations: ${cygWinDirs}"
+        Write-Verbose -Verbose -Message 'TODO: Add hack to fix up CygWin folder.'
+    }
+
+    Write-BuildMessage -Message $FailureMessage -Category Error
+    return $false
+}
+
 <#
       .Synopsis
       Runs the tests for this repo
@@ -171,8 +207,7 @@ function Invoke-OpenSSHTests
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
-        [string] $OpenSSHBinPath,
-        [switch] $SkipBashTests
+        [string] $OpenSSHBinPath
     )
 
     Set-BasicTestInfo -OpenSSHBinPath $OpenSSHBinPath -Confirm:$false
@@ -230,34 +265,7 @@ function Invoke-OpenSSHTests
     Write-Verbose -Verbose -Message "Running E2E Tests..."
     Set-OpenSSHTestEnvironment -Confirm:$false
 
-    # Ensure CygWin is installed, and install from Chocolatey if needed.
-    # used for bash tests and default shell pester tests
-    $cygwinInstalled = $true
-    $cygwinInstallLocation = "$env:SystemDrive/cygwin"
-    if (! (Test-Path -Path "$cygwinInstallLocation/bin/sh.exe"))
-    {
-        Write-Verbose -Verbose -Message "CygWin not found"
-        Install-CygWin -InstallLocation $cygwinInstallLocation
-
-        # Hack to fix up mangled CygWin directory, if needed.
-        $expectedCygWinPath = "$env:SystemDrive/cygwin/bin/sh.exe"
-        if (! (Test-Path -Path $expectedCygWinPath))
-        {
-            Write-Verbose -Verbose -Message "CygWin did not install correctly, missing expected path: ${expectedCygWinPath}"
-
-            $cygWinDirs = Get-Item -Path "$env:SystemDrive/cygwin*"
-            if ($cygWinDirs.Count -gt 1)
-            {
-                Write-Verbose -Verbose -Message "CygWin install failed with mangled folder locations: ${cygWinDirs}"
-                Write-Verbose -Verbose -Message 'TODO: Add hack to fix up CygWin folder.'
-            }
-
-            Write-BuildMessage -Message "All bash tests failed because CygWin install failed" -Category Error
-            $AllTestsPassed = $false
-            $cygwinInstalled = $false
-        }
-    }
-
+    $cygwinInstalled = Ensure-CygWinInstalled -FailureMessage "All E2E tests failed because CygWin install failed"
     if ($cygwinInstalled)
     {
         Invoke-OpenSSHE2ETest
@@ -280,36 +288,10 @@ function Invoke-OpenSSHTests
                 Write-BuildMessage -Message "All E2E tests passed!" -Category Information
             }
         }
-
-        if (-not $SkipBashTests)
-        {
-            # Bash tests.
-            Write-Verbose -Verbose -Message "Running Bash Tests..."
-
-            # Run UNIX bash tests.
-            Write-Verbose -Verbose -Message "Starting Bash Tests..."
-            Invoke-OpenSSHBashTests
-            if (-not $Global:bash_tests_summary)
-            {
-                $errorMessage = "Failed to start OpenSSH bash tests"
-                Write-BuildMessage -Message $errorMessage -Category Error
-                $AllTestsPassed = $false
-            }
-            else
-            {
-                if ($Global:bash_tests_summary["TotalBashTestsFailed"] -ne 0)
-                {
-                    $total_bash_failed_tests = $Global:bash_tests_summary["TotalBashTestsFailed"]
-                    $total_bash_tests = $Global:bash_tests_summary["TotalBashTests"]
-                    $errorMessage = "At least one of the bash tests failed. [$total_bash_failed_tests of $total_bash_tests]"
-                    Write-BuildMessage -Message $errorMessage -Category Error
-                    $AllTestsPassed = $false
-                }
-
-                $OpenSSHTestInfo["BashTestSummaryFile"] = $Global:bash_tests_summary["BashTestSummaryFile"]
-                $OpenSSHTestInfo["BashTestLogFile"] = $Global:bash_tests_summary["BashTestLogFile"]
-            }
-        }
+    }
+    else
+    {
+        $AllTestsPassed = $false
     }
 
     # OpenSSH Uninstall Tests
@@ -369,19 +351,10 @@ function Invoke-OpenSSHBashTestsOnly
     Write-Verbose -Verbose -Message "Running Bash-only OpenSSH test flow..."
     Set-OpenSSHTestEnvironment -Confirm:$false
 
-    $cygwinInstallLocation = "$env:SystemDrive/cygwin"
-    if (! (Test-Path -Path "$cygwinInstallLocation/bin/sh.exe"))
+    $cygwinInstalled = Ensure-CygWinInstalled -FailureMessage "All bash tests failed because CygWin install failed"
+    if (-not $cygwinInstalled)
     {
-        Write-Verbose -Verbose -Message "CygWin not found"
-        Install-CygWin -InstallLocation $cygwinInstallLocation
-
-        $expectedCygWinPath = "$env:SystemDrive/cygwin/bin/sh.exe"
-        if (! (Test-Path -Path $expectedCygWinPath))
-        {
-            Write-Verbose -Verbose -Message "CygWin did not install correctly, missing expected path: ${expectedCygWinPath}"
-            Write-BuildMessage -Message "All bash tests failed because CygWin install failed" -Category Error
-            $AllTestsPassed = $false
-        }
+        $AllTestsPassed = $false
     }
 
     if ($AllTestsPassed)
