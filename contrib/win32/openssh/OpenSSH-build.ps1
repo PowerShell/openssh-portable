@@ -2,7 +2,7 @@
 # PowerShell Script to clone, build and package PowerShell from specified fork and branch
 param (    
     [string] $repolocation = "$PSScriptRoot\..\..\..",
-    [string] $destination = "$env:WORKSPACE",
+    [string] $destination = $(if ($env:WORKSPACE) { $env:WORKSPACE } else { "$PSScriptRoot\..\..\.." }),
     [ValidateSet('x86', 'x64', 'arm64', 'arm')]
     [String]$NativeHostArch = 'x64',        
     [ValidateSet('Debug', 'Release')]

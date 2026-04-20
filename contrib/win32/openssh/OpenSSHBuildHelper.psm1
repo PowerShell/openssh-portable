@@ -559,6 +559,11 @@ function Start-OpenSSHBuild
     $VisualStudioPath = Get-VisualStudioPath -NativeHostArch $NativeHostArch
     if ($null -ne $VisualStudioPath) {
         $msbuildCmd = Get-MSBuildPath -VSInstallPath $VisualStudioPath
+        # Pin vcpkg's CMake to the same VS install / toolset (v143) as the
+        # OpenSSH vcxproj files, so manifest-mode auto-install doesn't pick a
+        # newer VS (e.g. VS 2026) whose v14x toolset is unsupported here.
+        $env:VCPKG_VISUAL_STUDIO_PATH = $VisualStudioPath
+        $env:VCPKG_PLATFORM_TOOLSET = "v143"
     }
     else {
         $msbuildCmd = Get-VS2015BuildToolPath
@@ -614,7 +619,10 @@ function Get-VisualStudioPath {
         $VSPaths = (& $vsWherePath -products * -requires $requiredVCtools -property installationPath)
         # for some reason, VSWhere does not seem to find MSBuild so check manually
         if ($null -ne $VSPaths) {
-            foreach ($VSPath in $VSPaths) {
+            # Prefer supported versions (2022/2019/2017) over newer unsupported ones (e.g., 2026)
+            $preferred = @($VSPaths | Where-Object { $_ -match '\\(2022|2019|2017)\\' })
+            $ordered = $preferred + @($VSPaths | Where-Object { $_ -notmatch '\\(2022|2019|2017)\\' })
+            foreach ($VSPath in $ordered) {
                 if (Get-MSBuildPath -VSInstallPath $VSPath) {
                     return $VSPath
                 }
