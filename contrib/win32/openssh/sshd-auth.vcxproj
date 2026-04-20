@@ -1,6 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="paths.targets" />
+  <!-- sshd-auth is a privsep helper spawned by sshd as a different user and has
+       no desktop/window-station access. user32's DllMain binds to the process
+       window station and fails with STATUS_DLL_INIT_FAILED in restricted
+       environments (e.g. WinPE). Two mitigations: (1) add delayimp.lib and
+       delay-load user32 so its DLL is only loaded when a user32 API is
+       actually called, and (2) keep user32.lib (needed for the delay-load
+       thunks). sshd-auth only transitively references ShowWindow /
+       GetWindowPlacement from console.c's ConRestoreViewRect_NoPtyHack
+       helper, which sshd-auth does not execute, so in practice user32 is
+       never loaded. The ItemDefinitionGroup with /DELAYLOAD is placed after
+       Microsoft.Cpp.props (where the Link item type becomes defined). -->
+  <PropertyGroup>
+    <AdditionalDependentLibs>bcrypt.lib;Userenv.lib;Crypt32.lib;Ws2_32.lib;Secur32.lib;Shlwapi.lib;kernel32.lib;user32.lib;delayimp.lib;advapi32.lib;Netapi32.lib;Rpcrt4.lib;ntdll.lib</AdditionalDependentLibs>
+  </PropertyGroup>
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|ARM">
       <Configuration>Debug</Configuration>
@@ -112,6 +126,11 @@
     <VcpkgEnableManifest>true</VcpkgEnableManifest>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ItemDefinitionGroup>
+    <Link>
+      <AdditionalOptions>/DELAYLOAD:user32.dll %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+  </ItemDefinitionGroup>
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
   <ImportGroup Label="Shared">
