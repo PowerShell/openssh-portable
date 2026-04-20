@@ -432,7 +432,7 @@ load_user_profile(HANDLE user_token, char* user)
 	EnablePrivilege("SeBackupPrivilege", 1);
 	EnablePrivilege("SeRestorePrivilege", 1);
 	if (LoadUserProfileW(user_token, &profileInfo) == FALSE) {
-		debug3("%s: LoadUserProfileW() failed for user %S with error %d.", __FUNCTION__, GetLastError());
+		debug3("%s: LoadUserProfileW() failed for user %S with error %d.", __FUNCTION__, user_name, GetLastError());
 	}
 	EnablePrivilege("SeBackupPrivilege", 0);
 	EnablePrivilege("SeRestorePrivilege", 0);
