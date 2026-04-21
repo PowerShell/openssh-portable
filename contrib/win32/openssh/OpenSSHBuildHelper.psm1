@@ -619,9 +619,11 @@ function Get-VisualStudioPath {
         $VSPaths = (& $vsWherePath -products * -requires $requiredVCtools -property installationPath)
         # for some reason, VSWhere does not seem to find MSBuild so check manually
         if ($null -ne $VSPaths) {
-            # Prefer supported versions (2022/2019/2017) over newer unsupported ones (e.g., 2026)
-            $preferred = @($VSPaths | Where-Object { $_ -match '\\(2022|2019|2017)\\' })
-            $ordered = $preferred + @($VSPaths | Where-Object { $_ -notmatch '\\(2022|2019|2017)\\' })
+            # Prefer VS 2022 — the .vcxproj files pin <PlatformToolset>v143</PlatformToolset>,
+            # which ships with VS 2022. Older VS (2017=v141, 2019=v142) would need v143 build tools
+            # sideloaded; newer VS (e.g. 2026) defaults to v145 which isn't supported here.
+            $preferred = @($VSPaths | Where-Object { $_ -match '\\2022\\' })
+            $ordered = $preferred + @($VSPaths | Where-Object { $_ -notmatch '\\2022\\' })
             foreach ($VSPath in $ordered) {
                 if (Get-MSBuildPath -VSInstallPath $VSPath) {
                     return $VSPath
