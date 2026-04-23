@@ -70,6 +70,7 @@
 # include <sys/time.h>
 #endif
 #include <sys/socket.h>
+#include <sys/wait.h>
 
 #include <ctype.h>
 #include <errno.h>
