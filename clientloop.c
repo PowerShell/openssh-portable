@@ -70,7 +70,6 @@
 # include <sys/time.h>
 #endif
 #include <sys/socket.h>
-#include <sys/wait.h>
 
 #include <ctype.h>
 #include <errno.h>
@@ -416,7 +415,6 @@ client_x11_get_proto(struct ssh *ssh, const char *display,
 			}
 #ifdef WINDOWS
 			{
-				int status;
 				pid_t pid;
 				arglist args;
 
@@ -433,8 +431,8 @@ client_x11_get_proto(struct ssh *ssh, const char *display,
 					addargs(&args, "%u", x11_timeout_real);
 				}
 				pid = client_x11_run_xauth_for_windows(cmd, &args, NULL);
-				if (pid != 0 && waitpid(pid, &status, 0) == pid &&
-				    WIFEXITED(status) && WEXITSTATUS(status) == 0)
+				if (pid != 0 &&
+				    exited_cleanly(pid, "xauth", cmd, 1) == 0)
 					generated = 1;
 				freeargs(&args);
 			}
@@ -464,7 +462,6 @@ client_x11_get_proto(struct ssh *ssh, const char *display,
 			debug2("x11_get_proto: %s", cmd);
 #ifdef WINDOWS
 			{
-				int status;
 				pid_t pid;
 				arglist args;
 
@@ -484,7 +481,7 @@ client_x11_get_proto(struct ssh *ssh, const char *display,
 				if (f != NULL)
 					fclose(f);
 				if (pid != 0)
-					(void)waitpid(pid, &status, 0);
+					(void)exited_cleanly(pid, "xauth", cmd, 1);
 				freeargs(&args);
 			}
 #else
