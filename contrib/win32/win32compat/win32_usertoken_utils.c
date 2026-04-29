@@ -94,10 +94,10 @@ done:
 	return;
 }
 
-BOOL
-is_domain_joined_machine(void){
-    BOOL result = FALSE;
-
+static BOOL
+is_domain_joined_machine(void)
+{
+	BOOL result = FALSE;
 	LPWSTR name = NULL;
 	NETSETUP_JOIN_STATUS s = NetSetupUnknownStatus;
 	DWORD api_res = NetGetJoinInformation(NULL, &name, &s);
@@ -105,8 +105,7 @@ is_domain_joined_machine(void){
 		result = s == NetSetupDomainName;
 		NetApiBufferFree(name);
 		name = NULL;
-	}
-	else{
+	} else {
 		debug("%s: NetGetJoinInformation() failed. Error %d.", __FUNCTION__, api_res);
 	}
 	debug("%s: NetGetJoinInformation(). Join result %d", __FUNCTION__, result);
