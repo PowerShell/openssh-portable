@@ -108,7 +108,7 @@
     <VcpkgTriplet Condition="'$(Platform)' == 'x64'">x64-custom</VcpkgTriplet>
     <VcpkgTriplet Condition="'$(Platform)' == 'ARM'">arm-custom</VcpkgTriplet>
     <VcpkgTriplet Condition="'$(Platform)' == 'ARM64'">arm64-custom</VcpkgTriplet>
-    <VcpkgAdditionalInstallOptions>--overlay-triplets=$(SolutionDir)vcpkg_triplets --overlay-ports=$(SolutionDir)vcpkg_overlay_ports</VcpkgAdditionalInstallOptions>
+    <VcpkgAdditionalInstallOptions>$(VcpkgAdditionalInstallOptions) --overlay-triplets=$(SolutionDir)vcpkg_triplets --overlay-ports=$(SolutionDir)vcpkg_overlay_ports</VcpkgAdditionalInstallOptions>
     <VcpkgEnableManifest>true</VcpkgEnableManifest>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
