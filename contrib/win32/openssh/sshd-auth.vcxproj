@@ -13,7 +13,7 @@
        never loaded. The ItemDefinitionGroup with /DELAYLOAD is placed after
        Microsoft.Cpp.props (where the Link item type becomes defined). -->
   <PropertyGroup>
-    <AdditionalDependentLibs>bcrypt.lib;Userenv.lib;Crypt32.lib;Ws2_32.lib;Secur32.lib;Shlwapi.lib;kernel32.lib;user32.lib;delayimp.lib;advapi32.lib;Netapi32.lib;Rpcrt4.lib;ntdll.lib</AdditionalDependentLibs>
+    <AdditionalDependentLibs>$(AdditionalDependentLibs);delayimp.lib</AdditionalDependentLibs>
   </PropertyGroup>
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|ARM">
