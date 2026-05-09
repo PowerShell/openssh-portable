@@ -647,9 +647,12 @@ function Get-MSBuildPath {
         [string]$VSInstallPath
     )
     $searchPath = "MSBuild\**\Bin\"
-    if($env:PROCESSOR_ARCHITECTURE -ieq "AMD64")
-    {
+    $systemType = (Get-CimInstance Win32_ComputerSystem).SystemType
+    if ($systemType -ieq "x64-based PC") {
         $searchPath += "\amd64"
+    }
+    elseif ($systemType -ieq "ARM64-based PC") {
+        $searchPath += "\arm64"
     }
     $fullSearchPath = Join-Path $VSInstallPath $searchPath
     $toolAvailable = Get-ChildItem -path $fullSearchPath\* -Filter "MSBuild.exe" -ErrorAction SilentlyContinue
