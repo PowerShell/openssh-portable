@@ -48,7 +48,7 @@
 	errno = 0; \
 	if (pio->internal.subtype == SOCKET_SUBTYPE_NAMEDPIPE) { \
 		errno = ENOTSUP; \
-		verbose("Named pipes are not supported"); \
+		debug(__FILE__ ":%d: Named pipes are not supported", __LINE__); \
 		return retv; \
 	} \
 } while (0)
@@ -131,11 +131,31 @@ static void
 socketio_fixup_sun_addr(const struct sockaddr_un* orig, struct sockaddr_un* out)
 {
 	memcpy(out, orig, sizeof(struct sockaddr_un));
+	char* resolved;
+	size_t resolved_len;
 	if (strncmp(orig->sun_path, "/nt:", 4) == 0) {
-		// this is a Windows path used in forward spec
-		// strip this prefix
+		/* this is a special windows path used in forward spec
+		   strip this prefix */
 		memcpy(out->sun_path, orig->sun_path + 4, sizeof(out->sun_path) - 4);
 		memset(out->sun_path + sizeof(out->sun_path) - 4, 0, 4);
+	} else if (strncmp(orig->sun_path, "\\\\?\\", 4 ) == 0 ||
+		strncmp(orig->sun_path, "\\\\.\\", 4) == 0) {
+		/* if it starts with \\.\ or \\?\,
+		   leave it as-is (default agent NamedPipe path) */
+		return;
+	} else {
+		/* resolve the path */
+		resolved = resolved_path_utf8(orig->sun_path);
+		if (resolved)
+		{
+			resolved_len = strlen(resolved);
+			if (resolved_len < sizeof(out->sun_path))
+			{
+				/* replace out->sun_path */
+				strcpy_s(out->sun_path, sizeof(out->sun_path), resolved);
+			}
+			free(resolved);
+		}
 	}
 }
 
@@ -715,7 +735,8 @@ socketio_send(struct w32_io* pio, const void *buf, size_t len, int flags)
 int
 socketio_shutdown(struct w32_io* pio, int how)
 {
-	CHECK_NAMEDPIPE(pio, -1);
+	if (pio->internal.subtype == SOCKET_SUBTYPE_NAMEDPIPE)
+		return 0; /* named pipe does not support it */
 	SET_ERRNO_ON_ERROR(shutdown(pio->sock, how));
 }
 

@@ -955,6 +955,8 @@ realpath(const char *inputpath, char * resolved)
 {
 	wchar_t* temppath_utf16 = NULL;
 	wchar_t* resolved_utf16 = NULL;
+	DWORD temppath_len = 0;
+	char* temppath_utf8 = NULL;
 	char path[PATH_MAX] = { 0, }, tempPath[PATH_MAX] = { 0, }, *ret = NULL;
 	int is_win_path = 1;
 
@@ -971,6 +973,25 @@ realpath(const char *inputpath, char * resolved)
 
 	if (is_bash_test_env() && bash_to_win_path(inputpath, path, _countof(path)))
 		is_win_path = 0;
+
+	if (_strnicmp(inputpath, TMP_DIR, strlen(TMP_DIR)) == 0) {
+		/* if input path is TMP_DIR, replace TMP_DIR with GetTempPath() */
+		temppath_utf16 = malloc(sizeof(wchar_t) * MAX_PATH + 1);
+		temppath_len = GetTempPathW(MAX_PATH, temppath_utf16);
+		if (temppath_len > 0 && temppath_len < MAX_PATH)
+		{
+			temppath_utf8 = utf16_to_utf8(temppath_utf16);
+			if (temppath_utf8 != NULL)
+			{
+				strcpy_s(path, PATH_MAX, temppath_utf8);
+				strcat_s(path, PATH_MAX, &inputpath[strlen(TMP_DIR)]);
+				is_win_path = 0;
+				free(temppath_utf8);
+			}
+		}
+		free(temppath_utf16);
+		temppath_utf16 = NULL;
+	}
 
 	if (is_win_path) {
 		if (_strnicmp(inputpath, PROGRAM_DATA, strlen(PROGRAM_DATA)) == 0) {
