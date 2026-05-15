@@ -65,10 +65,18 @@ enum w32_io_sock_state {
 	SOCK_READY = 3		/*recv and send can be done*/
 };
 
+enum w32_io_sock_subtype {
+	SOCKET_SUBTYPE_UNKNOWN = 0,
+	SOCKET_SUBTYPE_GENERIC = 1,
+	SOCKET_SUBTYPE_NAMEDPIPE = 2,
+	SOCKET_SUBTYPE_ASSUAN = 3
+};
+
 /*
 * This structure encapsulates the I/O state info needed to map a File Descriptor
 * to Win32 Handle
 */
+struct w32_io;
 struct w32_io {
 	OVERLAPPED read_overlapped;
 	OVERLAPPED write_overlapped;
@@ -118,6 +126,11 @@ struct w32_io {
 	struct {
 		enum w32_io_sock_state state;
 		void* context;
+
+		enum w32_io_sock_subtype subtype;
+		struct w32_io* proxy_io;
+		char assuan_nonce[16];
+		int assuan_nonce_sent;
 	}internal;
 };
 
@@ -168,3 +181,4 @@ FILE* fileio_fdopen(struct w32_io* pio, const char *mode);
 ssize_t fileio_readlink(const char *path, char *buf, size_t bufsiz);
 int fileio_symlink(const char *target, const char *linkpath);
 int fileio_link(const char *oldpath, const char *newpath);
+int fileio_is_afunix_socket(const char* name, int* detail);

@@ -34,6 +34,7 @@
 #include <errno.h>
 #include <VersionHelpers.h>
 #include <stddef.h>
+#include <afunix.h>
 #include "w32fd.h"
 #include "inc\utf.h"
 #include "misc_internal.h"
@@ -42,6 +43,17 @@
 #define INTERNAL_SEND_BUFFER_SIZE 70*1024 //70KB
 #define INTERNAL_RECV_BUFFER_SIZE 70*1024 //70KB
 #define errno_from_WSALastError() errno_from_WSAError(WSAGetLastError())
+
+#define CHECK_NAMEDPIPE(pio, retv) do {  \
+	errno = 0; \
+	if (pio->internal.subtype == SOCKET_SUBTYPE_NAMEDPIPE) { \
+		errno = ENOTSUP; \
+		verbose("Named pipes are not supported"); \
+		return retv; \
+	} \
+} while (0)
+
+void lxss_set_perm(wchar_t* path, int reparse, ULONG uid, ULONG gid, ULONG mode);
 
 /* state info that needs to be persisted for an inprocess acceptEx call*/
 struct acceptEx_context {
@@ -83,6 +95,50 @@ errno_from_WSAError(int wsaerrno)
 	}
 }
 
+static int
+socketio_parse_assuan(const char* path, struct sockaddr_in* addr, char* nonce)
+{
+	int port;
+	FILE* fp = fopen(path, "rb");
+	if (fp == NULL) {
+		errno = EINVAL;
+		error("connect: assuan - ERROR: fopen failed:%d", errno);
+		return -1;
+	}
+	fscanf(fp, "%d", &port);
+	fgetc(fp); // skip \n
+	if (fread(nonce, 1, 16, fp) != 16) {
+		errno = EINVAL;
+		error("connect: assuan - ERROR: invalid nonce");
+		fclose(fp);
+		return -1;
+	}
+	fclose(fp);
+	addr->sin_family = AF_INET;
+	addr->sin_port = htons(port);
+	addr->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	debug("connect: assuan - parsed: port:%d, nonce:%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+		port, (unsigned char)nonce[0], (unsigned char)nonce[1], (unsigned char)nonce[2],
+		(unsigned char)nonce[3], (unsigned char)nonce[4], (unsigned char)nonce[5],
+		(unsigned char)nonce[6], (unsigned char)nonce[7], (unsigned char)nonce[8],
+		(unsigned char)nonce[9], (unsigned char)nonce[10], (unsigned char)nonce[11],
+		(unsigned char)nonce[12], (unsigned char)nonce[13], (unsigned char)nonce[14],
+		(unsigned char)nonce[15]);
+	return 0;
+}
+
+static void
+socketio_fixup_sun_addr(const struct sockaddr_un* orig, struct sockaddr_un* out)
+{
+	memcpy(out, orig, sizeof(struct sockaddr_un));
+	if (strncmp(orig->sun_path, "/nt:", 4) == 0) {
+		// this is a Windows path used in forward spec
+		// strip this prefix
+		memcpy(out->sun_path, orig->sun_path + 4, sizeof(out->sun_path) - 4);
+		memset(out->sun_path + sizeof(out->sun_path) - 4, 0, 4);
+	}
+}
+
 /* called before any other calls to socketio_ functions */
 int
 socketio_initialize()
@@ -118,7 +174,7 @@ socketio_acceptEx(struct w32_io* pio)
 	}
 
 	/* create accepting socket */
-	context->accept_socket = socket(addr.ss_family, SOCK_STREAM, IPPROTO_TCP);
+	context->accept_socket = socket(addr.ss_family, SOCK_STREAM, addr.ss_family == AF_UNIX ? 0 : IPPROTO_TCP);
 	if (context->accept_socket == INVALID_SOCKET) {
 		errno = errno_from_WSALastError();
 		debug3("acceptEx - socket() ERROR:%d, io:%p", WSAGetLastError(), pio);
@@ -257,6 +313,7 @@ socketio_socket(int domain, int type, int protocol)
 int
 socketio_setsockopt(struct w32_io* pio, int level, int optname, const char* optval, int optlen)
 {
+	CHECK_NAMEDPIPE(pio, -1);
 	if ((optname == SO_KEEPALIVE) || (optname == SO_REUSEADDR) ||
 	    (optname == TCP_NODELAY) || (optname == IPV6_V6ONLY))
 		SET_ERRNO_ON_ERROR(setsockopt(pio->sock, level, optname, optval, optlen));
@@ -271,6 +328,7 @@ socketio_setsockopt(struct w32_io* pio, int level, int optname, const char* optv
 int
 socketio_getsockopt(struct w32_io* pio, int level, int optname, char* optval, int* optlen)
 {
+	CHECK_NAMEDPIPE(pio, -1);
 	SET_ERRNO_ON_ERROR(getsockopt(pio->sock, level, optname, optval, optlen));
 }
 
@@ -278,6 +336,7 @@ socketio_getsockopt(struct w32_io* pio, int level, int optname, char* optval, in
 int
 socketio_getsockname(struct w32_io* pio, struct sockaddr* name, int* namelen)
 {
+	CHECK_NAMEDPIPE(pio, -1);
 	SET_ERRNO_ON_ERROR(getsockname(pio->sock, name, namelen));
 }
 
@@ -285,6 +344,7 @@ socketio_getsockname(struct w32_io* pio, struct sockaddr* name, int* namelen)
 int
 socketio_getpeername(struct w32_io* pio, struct sockaddr* name, int* namelen)
 {
+	CHECK_NAMEDPIPE(pio, -1);
 	SET_ERRNO_ON_ERROR(getpeername(pio->sock, name, namelen));
 }
 
@@ -293,6 +353,10 @@ int
 socketio_listen(struct w32_io* pio, int backlog)
 {
 	struct acceptEx_context* context;
+
+	if (pio->internal.subtype == SOCKET_SUBTYPE_UNKNOWN)
+		pio->internal.subtype = SOCKET_SUBTYPE_GENERIC;
+	CHECK_NAMEDPIPE(pio, -1);
 
 	if (SOCKET_ERROR == listen(pio->sock, backlog)) {
 		errno = errno_from_WSALastError();
@@ -355,6 +419,26 @@ socketio_listen(struct w32_io* pio, int backlog)
 int
 socketio_bind(struct w32_io* pio, const struct sockaddr *name, int namelen)
 {
+	struct sockaddr_un sun_addr;
+	wchar_t *w_path;
+	if (pio->internal.subtype == SOCKET_SUBTYPE_UNKNOWN)
+		pio->internal.subtype = SOCKET_SUBTYPE_GENERIC;
+	CHECK_NAMEDPIPE(pio, -1);
+
+	if (name->sa_family == AF_UNIX) {
+		socketio_fixup_sun_addr((const struct sockaddr_un*)name, &sun_addr);
+		name = (struct sockaddr*)&sun_addr;
+		namelen = sizeof(struct sockaddr_un);
+
+		w_path = utf8_to_utf16(sun_addr.sun_path);
+		if (w_path) {
+			// set Lxss Permission Info
+			// uid(1000), gid(1000), mode(0700)
+			lxss_set_perm(w_path, TRUE, 1000, 1000, 0700);
+			free(w_path);
+		}
+	}
+
 	SET_ERRNO_ON_ERROR(bind(pio->sock, name, namelen));
 }
 
@@ -376,6 +460,10 @@ socketio_recv(struct w32_io* pio, void *buf, size_t len, int flags)
 		errno = ENOTSUP;
 		debug3("recv - ERROR: flags are not currently supported, io:%p", pio);
 		return -1;
+	}
+
+	if (pio->internal.subtype == SOCKET_SUBTYPE_NAMEDPIPE) {
+		return fileio_read(pio->internal.proxy_io, buf, len);
 	}
 
 	/* TODO - ensure socket is in accepted or connected state */
@@ -533,6 +621,10 @@ socketio_send(struct w32_io* pio, const void *buf, size_t len, int flags)
 		return -1;
 	}
 
+	if (pio->internal.subtype == SOCKET_SUBTYPE_NAMEDPIPE) {
+		return fileio_write_wrapper(pio->internal.proxy_io, buf, len);
+	}
+
 	/* TODO - ensure socket is in accepted or connected state */
 	/* if io is already pending */
 	if (pio->write_details.pending) {
@@ -623,6 +715,7 @@ socketio_send(struct w32_io* pio, const void *buf, size_t len, int flags)
 int
 socketio_shutdown(struct w32_io* pio, int how)
 {
+	CHECK_NAMEDPIPE(pio, -1);
 	SET_ERRNO_ON_ERROR(shutdown(pio->sock, how));
 }
 
@@ -631,6 +724,9 @@ int
 socketio_close(struct w32_io* pio)
 {
 	debug4("close - io:%p", pio);
+	if (pio->internal.subtype == SOCKET_SUBTYPE_NAMEDPIPE) {
+		fileio_close(pio->internal.proxy_io);
+	}
 	closesocket(pio->sock);
 	/* wait for pending io to abort */
 	SleepEx(0, TRUE);
@@ -674,6 +770,8 @@ socketio_accept(struct w32_io* pio, struct sockaddr* addr, int* addrlen)
 	struct sockaddr *local_address, *remote_address;
 	int local_address_len, remote_address_len;
 	errno_t r = 0;
+
+	CHECK_NAMEDPIPE(pio, NULL);
 
 	debug5("accept - io:%p", pio);
 	/* start io if not already started */
@@ -759,6 +857,7 @@ socketio_connectex(struct w32_io* pio, const struct sockaddr* name, int namelen)
 
 	struct sockaddr_in tmp_addr4;
 	struct sockaddr_in6 tmp_addr6;
+	struct sockaddr_un tmp_un;
 	SOCKADDR* tmp_addr;
 	size_t tmp_addr_len;
 	DWORD tmp_bytes;
@@ -778,6 +877,11 @@ socketio_connectex(struct w32_io* pio, const struct sockaddr* name, int namelen)
 		tmp_addr4.sin_port = 0;
 		tmp_addr = (SOCKADDR*)&tmp_addr4;
 		tmp_addr_len = sizeof(tmp_addr4);
+	} else if (name->sa_family == AF_UNIX) {
+		ZeroMemory(&tmp_un, sizeof(tmp_un));
+		tmp_un.sun_family = AF_UNIX;
+		tmp_addr = (SOCKADDR*)&tmp_un;
+		tmp_addr_len = sizeof(tmp_un);
 	} else {
 		errno = ENOTSUP;
 		debug3("connectex - ERROR: unsuppored address family:%d, io:%p", name->sa_family, pio);
@@ -832,10 +936,71 @@ socketio_connectex(struct w32_io* pio, const struct sockaddr* name, int namelen)
 	return 0;
 }
 
+
 /* connect implementation */
 int
 socketio_connect(struct w32_io* pio, const struct sockaddr* name, int namelen)
 {
+	int detail = 0;
+	struct sockaddr_in synth_addr;
+	struct sockaddr_un sun_addr;
+
+	if (pio->internal.subtype == SOCKET_SUBTYPE_UNKNOWN)
+	{
+		if (name->sa_family == AF_UNIX)
+		{
+			if (namelen < sizeof(struct sockaddr_un))
+			{
+				errno = EINVAL;
+				debug("connect - ERROR: invalid sockaddr_un, io:%p", pio);
+				return -1;
+			}
+
+			const struct sockaddr_un* sun = (const struct sockaddr_un*)name;
+			socketio_fixup_sun_addr(sun, &sun_addr);
+			name = (const struct sockaddr*)&sun_addr;
+			namelen = sizeof(sun_addr);
+			sun = (const struct sockaddr_un*)&sun_addr;
+
+			if (fileio_is_afunix_socket(sun->sun_path, &detail)) {
+				pio->internal.subtype = SOCKET_SUBTYPE_GENERIC;
+				debug("connect - AF_UNIX socket, path:%s", sun->sun_path);
+			} else {
+				if (detail == 3) {
+					// parse assuan file
+					debug("connect - AF_UNIX assuan file, path:%s", sun->sun_path);
+					if (-1 == socketio_parse_assuan(sun->sun_path, &synth_addr, pio->internal.assuan_nonce)) {
+						errno = EINVAL;
+						debug("connect: assuan - ERROR: parse assuan file failed:%d, io:%p", errno, pio);
+						return -1;
+					}
+					pio->internal.subtype = SOCKET_SUBTYPE_ASSUAN;
+					// replace socket
+					closesocket(pio->sock);
+					pio->sock = socket(AF_INET, SOCK_STREAM, 0);
+					if (pio->sock == INVALID_SOCKET) {
+						errno = WSAGetLastError();
+						debug("connect - ERROR: socket failed:%d, io:%p", WSAGetLastError(), pio);
+						return -1;
+					}
+					name = (const struct sockaddr*)&synth_addr;
+					namelen = sizeof(synth_addr);
+				} else {
+					debug("connect - AF_UNIX named pipe, path:%s", sun->sun_path);
+					pio->internal.subtype = SOCKET_SUBTYPE_NAMEDPIPE;
+					pio->internal.proxy_io = fileio_afunix_socket();
+					if (pio->internal.proxy_io == NULL) {
+						errno = ENOMEM;
+						debug("connect - ERROR: out of memory for named pipe, io:%p", pio);
+						return -1;
+					}
+					return fileio_connect(pio->internal.proxy_io, sun->sun_path);
+				}
+			}
+		} else {
+			pio->internal.subtype = SOCKET_SUBTYPE_GENERIC;
+		}
+	}
 
 	debug5("connect - io:%p", pio);
 	if (pio->write_details.pending == FALSE) {
@@ -892,6 +1057,19 @@ done:
 		ZeroMemory(&pio->write_details, sizeof(pio->write_details));
 
 	pio->internal.state = SOCK_READY;
+
+	if (!wsa_error) {
+		// connected
+		if (pio->internal.subtype == SOCKET_SUBTYPE_ASSUAN) {
+			// send assuan nonce
+			if (-1 == socketio_send(pio, pio->internal.assuan_nonce, sizeof(pio->internal.assuan_nonce), 0)) {
+				wsa_error = WSAGetLastError();
+				debug3("finish_connect - ERROR: send assuan nonce failed:%d, io:%p", wsa_error, pio);
+				goto done;
+			}
+		}
+	}
+
 	return (wsa_error? -1 : 0);
 }
 
@@ -899,6 +1077,10 @@ done:
 BOOL
 socketio_is_io_available(struct w32_io* pio, BOOL rd)
 {
+	if (pio->internal.subtype == SOCKET_SUBTYPE_NAMEDPIPE && pio->internal.proxy_io) {
+		return fileio_is_io_available(pio->internal.proxy_io, rd);
+	}
+
 	if ((pio->internal.state == SOCK_LISTENING) ||
 	    (pio->internal.state == SOCK_CONNECTING)) {
 		DWORD numBytes = 0;
@@ -943,6 +1125,12 @@ void
 socketio_on_select(struct w32_io* pio, BOOL rd)
 {
 	enum w32_io_sock_state sock_state = pio->internal.state;
+
+	if (pio->internal.subtype == SOCKET_SUBTYPE_NAMEDPIPE) {
+		fileio_on_select(pio->internal.proxy_io, rd);
+		return;
+	}
+
 	debug4("on_select - io:%p type:%d rd:%d", pio, pio->type, rd);
 
 	/* nothing to do for writes (that includes connect) */
