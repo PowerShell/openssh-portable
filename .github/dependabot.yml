@@ -1,7 +1,0 @@
-version: 2
-updates:
-  - package-ecosystem: "vcpkg"
-    directory: "/contrib/win32/openssh"
-    schedule:
-      interval: "weekly"
-    target-branch: "latestw_all"
