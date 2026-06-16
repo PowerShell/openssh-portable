@@ -106,7 +106,7 @@ is_domain_joined_machine(void)
 		NetApiBufferFree(name);
 		name = NULL;
 	} else {
-		debug("%s: NetGetJoinInformation() failed. Error %d.", __FUNCTION__, api_res);
+		debug3("%s: NetGetJoinInformation() failed. Error %d.", __FUNCTION__, api_res);
 	}
 	debug("%s: NetGetJoinInformation(). Join result %d", __FUNCTION__, result);
 	return result;
