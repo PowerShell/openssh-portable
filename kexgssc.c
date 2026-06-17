@@ -246,7 +246,8 @@ kexgss_client(struct ssh *ssh)
 		r = kex_dh_dec(kex, server_blob, &shared_secret);
 		break;
 	case KEX_GSS_C25519_SHA256:
-		if (sshbuf_ptr(server_blob)[sshbuf_len(server_blob)] & 0x80)
+		if (sshbuf_len(server_blob) &&
+		    (sshbuf_ptr(server_blob)[sshbuf_len(server_blob) - 1] & 0x80))
 			fatal("The received key has MSB of last octet set!");
 		r = kex_c25519_dec(kex, server_blob, &shared_secret);
 		break;
