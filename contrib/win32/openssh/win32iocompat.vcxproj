@@ -328,6 +328,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\signal_wait.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\win32_pty.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\gss-sspi.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\getifaddrs.c" />
     <ClCompile Include="sshTelemetry.c" />
   </ItemGroup>
   <ItemGroup>
@@ -341,6 +342,7 @@
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\sys\wait.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\unistd.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\poll.h" />
+    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\ifaddrs.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\sys\statvfs.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\dlfcn.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\inc\syslog.h" />

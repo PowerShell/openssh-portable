@@ -561,6 +561,12 @@
 /* Define if you have ut_id in utmpx.h */
 /* #undef HAVE_ID_IN_UTMPX */
 
+/* Define to 1 if you have the `getifaddrs' function. */
+#define HAVE_GETIFADDRS 1
+
+/* Define to 1 if you have the <ifaddrs.h> header file. */
+#define HAVE_IFADDRS_H 1
+
 /* Define to 1 if you have the `inet_aton' function. */
 /* #undef HAVE_INET_ATON */
 
