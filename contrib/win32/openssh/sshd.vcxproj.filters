@@ -24,12 +24,6 @@
     <ClCompile Include="$(OpenSSH-Src-Path)audit.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="$(OpenSSH-Src-Path)gss-serv-krb5.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="$(OpenSSH-Src-Path)gss-serv.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)loginrec.c">
       <Filter>Source Files</Filter>
     </ClCompile>

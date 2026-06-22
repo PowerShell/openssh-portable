@@ -401,6 +401,7 @@ ssh_gssapi_getclient(Gssctxt *ctx, ssh_gssapi_client *client)
 void
 ssh_gssapi_cleanup_creds(void)
 {
+#ifdef KRB5
 	krb5_ccache ccache = NULL;
 	krb5_error_code problem;
 
@@ -416,6 +417,7 @@ ssh_gssapi_cleanup_creds(void)
 			gssapi_client.store.data = NULL;
 		}
 	}
+#endif /* KRB5 */
 }
 
 /* As user */

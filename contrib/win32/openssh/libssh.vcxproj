@@ -404,6 +404,9 @@
     <ClCompile Include="$(OpenSSH-Src-Path)kexgexc.c">
       <ExcludedFromBuild Condition="$(UseOpenSSL)==false">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="$(OpenSSH-Src-Path)kexgssc.c">
+      <ExcludedFromBuild Condition="$(UseOpenSSL)==false">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)kexgen.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)kexsntrup761x25519.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)krl.c" />
@@ -433,6 +436,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-rsa.c">
       <ExcludedFromBuild Condition="$(UseOpenSSL)==false">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="$(OpenSSH-Src-Path)ssh-null.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sshbuf-getput-basic.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sshbuf-getput-crypto.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sshbuf-misc.c" />
