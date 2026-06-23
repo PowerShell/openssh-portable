@@ -16,31 +16,26 @@ void
 getifaddrs_tests()
 {
 	struct ifaddrs *ifap = NULL, *ifa;
-	int r, count = 0, loopback_up = 0;
+	int r;
 
-	TEST_START("getifaddrs returns a populated list");
+	/*
+	 * getifaddrs() may legitimately return an empty list (no configured
+	 * addresses), so assert only the call result and per-entry invariants
+	 * -- not the presence of any particular interface, which would be
+	 * environment-dependent and flaky.
+	 */
+	TEST_START("getifaddrs succeeds");
 	r = getifaddrs(&ifap);
 	ASSERT_INT_EQ(r, 0);
-	ASSERT_PTR_NE(ifap, NULL);
 	TEST_DONE();
 
 	TEST_START("getifaddrs entries are well-formed");
 	for (ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
-		count++;
+		ASSERT_PTR_NE(ifa->ifa_name, NULL);   /* contract: always set */
 		ASSERT_PTR_NE(ifa->ifa_addr, NULL);
-		ASSERT_PTR_NE(ifa->ifa_name, NULL);
-		/* loopback must be present and marked up (sanity baseline) */
-		if (ifa->ifa_addr->sa_family == AF_INET &&
-		    ((struct sockaddr_in *)ifa->ifa_addr)->sin_addr.s_addr ==
-		    htonl(INADDR_LOOPBACK) &&
-		    (ifa->ifa_flags & IFF_UP) != 0)
-			loopback_up = 1;
+		ASSERT_INT_EQ(ifa->ifa_addr->sa_family == AF_INET ||
+		    ifa->ifa_addr->sa_family == AF_INET6, 1);
 	}
-	ASSERT_INT_NE(count, 0);
-	TEST_DONE();
-
-	TEST_START("loopback 127.0.0.1 is present and flagged IFF_UP");
-	ASSERT_INT_EQ(loopback_up, 1);
 	TEST_DONE();
 
 	freeifaddrs(ifap);

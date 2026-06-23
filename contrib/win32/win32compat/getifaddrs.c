@@ -174,6 +174,15 @@ getifaddrs(struct ifaddrs **ifap)
 		/* Fall back to the (ANSI) adapter GUID name. */
 		if (name == NULL && aa->AdapterName != NULL)
 			name = _strdup(aa->AdapterName);
+		/*
+		 * getifaddrs(3) guarantees ifa_name is set, and the consumers
+		 * (readconf.c, sshconnect.c) skip entries with a NULL name --
+		 * never emit one. AdapterName is otherwise always present, so a
+		 * NULL here means allocation failure: fail the call rather than
+		 * silently drop the adapter's addresses.
+		 */
+		if (name == NULL)
+			goto nomem;
 
 		for (ua = aa->FirstUnicastAddress; ua != NULL; ua = ua->Next) {
 			SOCKET_ADDRESS *sa = &ua->Address;
@@ -199,8 +208,7 @@ getifaddrs(struct ifaddrs **ifap)
 			/* Best-effort; consumers only require ifa_addr. */
 			cur->ifa_netmask = prefix_to_netmask(family,
 			    ua->OnLinkPrefixLength);
-			if (name != NULL &&
-			    (cur->ifa_name = _strdup(name)) == NULL) {
+			if ((cur->ifa_name = _strdup(name)) == NULL) {
 				free(cur->ifa_addr);
 				free(cur->ifa_netmask);
 				free(cur);
