@@ -131,15 +131,26 @@ ssh_gss_time_to_lifetime(TimeStamp expiry, OM_uint32 *time_rec)
 {
 	SYSTEMTIME current_time_system;
 	FILETIME current_time;
+	LONGLONG lifetime;
 
+	*time_rec = 0;
 	GetSystemTime(&current_time_system);
 	if (SystemTimeToFileTime(&current_time_system, &current_time) == 0) {
 		error("SystemTimeToFileTime failed with %d", GetLastError());
 		return 0;
 	}
 
-	*time_rec = (OM_uint32)(expiry.QuadPart -
-	    ((PLARGE_INTEGER)&current_time)->QuadPart) / 10000;
+	if (expiry.QuadPart <= ((PLARGE_INTEGER)&current_time)->QuadPart)
+		return 1;
+
+	lifetime = (expiry.QuadPart - ((PLARGE_INTEGER)&current_time)->QuadPart) /
+	    10000000;
+	if (lifetime > GSS_C_INDEFINITE) {
+		*time_rec = GSS_C_INDEFINITE;
+		return 1;
+	}
+
+	*time_rec = (OM_uint32)lifetime;
 	return 1;
 }
 
