@@ -337,6 +337,8 @@ server_loop2(struct ssh *ssh, Authctxt *authctxt)
 
 	for (;;) {
 		process_buffered_input_packets(ssh);
+		if (ssh_packet_have_data_to_write(ssh))
+			process_output(ssh, connection_out);
 
 		if (!ssh_packet_is_rekeying(ssh) &&
 		    ssh_packet_not_very_much_data_to_write(ssh))

@@ -1023,12 +1023,22 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s,
 				if (children[i].config != NULL ||
 				    children[i].keys != NULL)
 					pfd[npfd].events |= POLLOUT;
+				debug3("startup child poll slot %d pollfd %d "
+				    "fd %d events 0x%x config_len %zu "
+				    "keys_len %zu", i, npfd, children[i].pipefd,
+				    (u_int)pfd[npfd].events,
+				    children[i].config == NULL ? 0 :
+				    sshbuf_len(children[i].config),
+				    children[i].keys == NULL ? 0 :
+				    sshbuf_len(children[i].keys));
 				startup_pollfd[i] = npfd++;
 			}
 		}
 
 		/* Wait until a connection arrives or a child exits. */
 		ret = ppoll(pfd, npfd, NULL, &osigset);
+		debug3("startup child ppoll ret %d npfd %d errno %d",
+		    ret, npfd, ret == -1 ? errno : 0);
 		if (ret == -1 && errno != EINTR) {
 			error("ppoll: %.100s", strerror(errno));
 			if (errno == EINVAL)
@@ -1053,7 +1063,16 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s,
 			}
 			ptr = sshbuf_ptr(buf);
 			len = sshbuf_len(buf);
+			debug3("startup child pipe write slot %d pollfd %d "
+			    "fd %d revents 0x%x kind %s len %zd", i,
+			    startup_pollfd[i], children[i].pipefd,
+			    (u_int)pfd[startup_pollfd[i]].revents,
+			    children[i].config == buf ? "config" : "keys",
+			    len);
 			ret = write(children[i].pipefd, ptr, len);
+			debug3("startup child pipe write slot %d fd %d "
+			    "ret %d errno %d", i, children[i].pipefd, ret,
+			    ret == -1 ? errno : 0);
 			if (ret == -1 && (errno == EINTR || errno == EAGAIN))
 				continue;
 			if (ret <= 0) {
@@ -1070,9 +1089,17 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s,
 					/* sent config, now send keys */
 					children[i].config = NULL;
 					children[i].keys = pack_hostkeys();
+					debug3("startup child pipe queued "
+					    "hostkeys slot %d fd %d len %zu",
+					    i, children[i].pipefd,
+					    children[i].keys == NULL ? 0 :
+					    sshbuf_len(children[i].keys));
 				} else if (children[i].keys == buf) {
 					/* sent both config and keys */
 					children[i].keys = NULL;
+					debug3("startup child pipe finished "
+					    "hostkeys slot %d fd %d", i,
+					    children[i].pipefd);
 				} else {
 					fatal("config buf not set");
 				}
@@ -1209,10 +1236,21 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s,
 					error("posix_spawn initialization failed");
 				else {
 					child = child_register(config_s[0], *newsock);
-				 	if (posix_spawn(&child->pid, rexec_argv[0], &actions, &attributes, rexec_argv, NULL) != 0)
-				 		error("%s, posix_spawn failed", __func__);
-				 	posix_spawn_file_actions_destroy(&actions);
-				 	posix_spawnattr_destroy(&attributes);
+					debug3("posix_spawn reexec child "
+					    "registered pipefd %d sockfd %d "
+					    "config_len %zu", child->pipefd,
+					    *newsock,
+					    child->config == NULL ? 0 :
+					    sshbuf_len(child->config));
+					if (posix_spawn(&child->pid, rexec_argv[0],
+					    &actions, &attributes, rexec_argv,
+					    NULL) != 0)
+						error("%s, posix_spawn failed", __func__);
+					else
+						debug("Spawned child %ld.",
+						    (long)child->pid);
+					posix_spawn_file_actions_destroy(&actions);
+					posix_spawnattr_destroy(&attributes);
 				}
 			}
 #else
