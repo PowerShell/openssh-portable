@@ -2245,7 +2245,7 @@ ssh_session2_setup(struct ssh *ssh, int id, int success, void *arg)
 		term = getenv("TERM");
 	client_session2_setup(ssh, id, tty_flag,
 	    options.session_type == SESSION_TYPE_SUBSYSTEM, term,
-	    NULL, fileno(stdin), command, environ);
+	    NULL, fileno(stdin), command, environ, NULL);
 }
 
 /* open new channel for a session */

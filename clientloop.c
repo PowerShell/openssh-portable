@@ -2687,7 +2687,7 @@ client_send_env(struct ssh *ssh, int id, const char *name, const char *val)
 void
 client_session2_setup(struct ssh *ssh, int id, int want_tty, int want_subsystem,
     const char *term, struct termios *tiop, int in_fd, struct sshbuf *cmd,
-    char **env)
+    char **env, const struct winsize *wsp)
 {
 	size_t i, j, len;
 	int matched, r;
@@ -2706,7 +2706,9 @@ client_session2_setup(struct ssh *ssh, int id, int want_tty, int want_subsystem,
 		struct winsize ws;
 
 		/* Store window size in the packet. */
-		if (ioctl(in_fd, TIOCGWINSZ, &ws) == -1)
+		if (wsp != NULL)
+			ws = *wsp;
+		else if (ioctl(in_fd, TIOCGWINSZ, &ws) == -1)
 			memset(&ws, 0, sizeof(ws));
 
 		channel_request_start(ssh, id, "pty-req", 1);
