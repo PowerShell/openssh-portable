@@ -81,6 +81,7 @@ struct createFile_flags {
 int syncio_initiate_read(struct w32_io* pio);
 int syncio_initiate_write(struct w32_io* pio, DWORD num_bytes);
 int syncio_close(struct w32_io* pio);
+static wchar_t *afunix_pipe_name(const char *sun_path);
 
 /* maps Win32 error to errno */
 int
@@ -133,11 +134,11 @@ fileio_connect(struct w32_io* pio, char* name)
 		goto cleanup;
 	}
 
-	if ((name_w = utf8_to_utf16(name)) == NULL) {
+	if ((name_w = afunix_pipe_name(name)) == NULL) {
 		errno = ENOMEM;
 		return -1;
 	}
-	
+
 	do {
 		h = CreateFileW(name_w, GENERIC_READ | GENERIC_WRITE, 0,
 			NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, NULL);
@@ -176,6 +177,279 @@ cleanup:
 	if (h != INVALID_HANDLE_VALUE)
 		CloseHandle(h);
 	return ret;
+}
+
+/*
+ * AF_UNIX stream sockets are emulated over named pipes.
+ * A path that is not already a pipe name (\\.\pipe\...) is mapped onto
+ * one deterministically so that server (bind) and client (connect)
+ * arrive at the same pipe name from the same sun_path.
+ */
+#define AFUNIX_PIPE_PREFIX L"\\\\.\\pipe\\"
+#define AFUNIX_PIPE_PREFIX_LEN 9
+/* pipe name component (after \\.\pipe\) is limited to 256 chars */
+#define AFUNIX_PIPE_NAME_MAX 256
+
+/* per-listener state, hangs off pio->internal.context */
+struct afunix_listener_state {
+	wchar_t *pipe_name;
+	PSECURITY_DESCRIPTOR sd;	/* owner + SYSTEM only */
+	BOOL connect_pending;		/* overlapped ConnectNamedPipe outstanding */
+	BOOL client_connected;		/* connection completed, awaiting accept() */
+};
+
+static wchar_t *
+afunix_pipe_name(const char *sun_path)
+{
+	wchar_t *path_w = NULL, *ret = NULL, *p;
+	size_t len;
+
+	if ((path_w = utf8_to_utf16(sun_path)) == NULL) {
+		errno = ENOMEM;
+		return NULL;
+	}
+
+	for (p = path_w; *p; p++)
+		if (*p == L'/')
+			*p = L'\\';
+
+	if (_wcsnicmp(path_w, AFUNIX_PIPE_PREFIX, AFUNIX_PIPE_PREFIX_LEN) == 0)
+		return path_w;
+
+	/* map filesystem-style path to \\.\pipe\openssh-uds-<mangled path> */
+	for (p = path_w; *p; p++)
+		if (*p == L'\\' || *p == L':')
+			*p = L'-';
+
+	if (wcslen(path_w) > AFUNIX_PIPE_NAME_MAX - wcslen(L"openssh-uds-")) {
+		free(path_w);
+		errno = ENAMETOOLONG;
+		return NULL;
+	}
+
+	len = AFUNIX_PIPE_PREFIX_LEN + wcslen(L"openssh-uds-") + wcslen(path_w) + 1;
+	if ((ret = malloc(len * sizeof(wchar_t))) == NULL) {
+		free(path_w);
+		errno = ENOMEM;
+		return NULL;
+	}
+	swprintf_s(ret, len, L"%s%s%s", AFUNIX_PIPE_PREFIX, L"openssh-uds-", path_w);
+	free(path_w);
+	return ret;
+}
+
+/* issue an overlapped ConnectNamedPipe on the current listener instance */
+static int
+afunix_listener_arm(struct w32_io* pio)
+{
+	struct afunix_listener_state* state = (struct afunix_listener_state*)pio->internal.context;
+
+	ResetEvent(pio->read_overlapped.hEvent);
+	if (ConnectNamedPipe(WINHANDLE(pio), &pio->read_overlapped)) {
+		state->client_connected = TRUE;
+		SetEvent(pio->read_overlapped.hEvent);
+		return 0;
+	}
+	switch (GetLastError()) {
+	case ERROR_IO_PENDING:
+		state->connect_pending = TRUE;
+		return 0;
+	case ERROR_PIPE_CONNECTED:
+		state->client_connected = TRUE;
+		SetEvent(pio->read_overlapped.hEvent);
+		return 0;
+	default:
+		errno = errno_from_Win32LastError();
+		debug3("afunix listener - ConnectNamedPipe() ERROR:%d, io:%p", GetLastError(), pio);
+		return -1;
+	}
+}
+
+static HANDLE
+afunix_create_instance(struct afunix_listener_state* state, BOOL first)
+{
+	SECURITY_ATTRIBUTES sa;
+	HANDLE h;
+	DWORD open_mode = PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED;
+
+	if (first)
+		open_mode |= FILE_FLAG_FIRST_PIPE_INSTANCE;
+
+	memset(&sa, 0, sizeof(sa));
+	sa.nLength = sizeof(sa);
+	sa.lpSecurityDescriptor = state->sd;
+	sa.bInheritHandle = FALSE;
+
+	h = CreateNamedPipeW(state->pipe_name, open_mode,
+		PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_REJECT_REMOTE_CLIENTS | PIPE_WAIT,
+		PIPE_UNLIMITED_INSTANCES, 4096, 4096, 0, &sa);
+
+	if (h == INVALID_HANDLE_VALUE) {
+		DWORD win32_error = GetLastError();
+		debug3("afunix - CreateNamedPipe(%ls) ERROR:%d", state->pipe_name, win32_error);
+		/* pipe already owned by another process */
+		if (win32_error == ERROR_ACCESS_DENIED || win32_error == ERROR_PIPE_BUSY)
+			errno = EADDRINUSE;
+		else
+			errno = errno_from_Win32Error(win32_error);
+	}
+	return h;
+}
+
+/* bind() on an AF_UNIX socket - creates the first pipe instance */
+int
+fileio_afunix_bind(struct w32_io* pio, const char* sun_path)
+{
+	struct afunix_listener_state* state = NULL;
+	wchar_t *sid_utf16 = NULL, sddl[SDDL_LENGTH];
+	PSID user_sid = NULL;
+	HANDLE h = INVALID_HANDLE_VALUE;
+	int ret = -1;
+
+	if (WINHANDLE(pio) != 0 && WINHANDLE(pio) != INVALID_HANDLE_VALUE) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	if ((state = calloc(1, sizeof(*state))) == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+
+	if ((state->pipe_name = afunix_pipe_name(sun_path)) == NULL)
+		goto cleanup;
+
+	/* restrict the control pipe to SYSTEM and the current user */
+	if ((user_sid = get_sid(NULL)) == NULL ||
+	    ConvertSidToStringSidW(user_sid, &sid_utf16) == FALSE) {
+		debug3("afunix bind - cannot retrieve current user's SID");
+		errno = EOTHER;
+		goto cleanup;
+	}
+	swprintf_s(sddl, SDDL_LENGTH, L"D:P(A;;GA;;;SY)(A;;GA;;;%s)", sid_utf16);
+	if (ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl,
+	    SDDL_REVISION_1, &state->sd, NULL) == FALSE) {
+		debug3("afunix bind - cannot convert sddl ERROR:%d", GetLastError());
+		errno = EOTHER;
+		goto cleanup;
+	}
+
+	if ((h = afunix_create_instance(state, TRUE)) == INVALID_HANDLE_VALUE)
+		goto cleanup;
+
+	pio->handle = h;
+	pio->internal.context = state;
+	ret = 0;
+
+cleanup:
+	if (user_sid)
+		free(user_sid);
+	if (sid_utf16)
+		LocalFree(sid_utf16);
+	if (ret != 0 && state) {
+		if (state->pipe_name)
+			free(state->pipe_name);
+		if (state->sd)
+			LocalFree(state->sd);
+		free(state);
+	}
+	return ret;
+}
+
+/* listen() on a bound AF_UNIX socket - starts accepting connections */
+int
+fileio_afunix_listen(struct w32_io* pio, int backlog)
+{
+	struct afunix_listener_state* state = (struct afunix_listener_state*)pio->internal.context;
+
+	if (state == NULL || WINHANDLE(pio) == 0 || WINHANDLE(pio) == INVALID_HANDLE_VALUE) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	if ((pio->read_overlapped.hEvent = CreateEventW(NULL, TRUE, FALSE, NULL)) == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+
+	if (afunix_listener_arm(pio) != 0) {
+		CloseHandle(pio->read_overlapped.hEvent);
+		pio->read_overlapped.hEvent = NULL;
+		return -1;
+	}
+
+	pio->internal.state = SOCK_LISTENING;
+	return 0;
+}
+
+/* select() readiness check for a listening AF_UNIX socket */
+BOOL
+fileio_afunix_listener_ready(struct w32_io* pio)
+{
+	struct afunix_listener_state* state = (struct afunix_listener_state*)pio->internal.context;
+	DWORD bytes;
+
+	if (state == NULL)
+		return FALSE;
+	if (state->client_connected)
+		return TRUE;
+	if (!state->connect_pending)
+		return FALSE;
+
+	if (GetOverlappedResult(WINHANDLE(pio), &pio->read_overlapped, &bytes, FALSE)) {
+		state->connect_pending = FALSE;
+		state->client_connected = TRUE;
+		return TRUE;
+	}
+	if (GetLastError() == ERROR_IO_INCOMPLETE)
+		return FALSE;
+
+	/*
+	 * connection attempt failed (client vanished). Report ready anyway;
+	 * accept() hands out the dead pipe and reads on it return EOF, matching
+	 * socket semantics for a connection that was closed right after accept.
+	 */
+	state->connect_pending = FALSE;
+	state->client_connected = TRUE;
+	return TRUE;
+}
+
+/* accept() on a listening AF_UNIX socket. Caller ensures a client is connected */
+struct w32_io*
+fileio_afunix_accept(struct w32_io* pio)
+{
+	struct afunix_listener_state* state = (struct afunix_listener_state*)pio->internal.context;
+	struct w32_io* accepted = NULL;
+	HANDLE connected, next;
+
+	if (state == NULL || !fileio_afunix_listener_ready(pio)) {
+		errno = EAGAIN;
+		return NULL;
+	}
+
+	if ((accepted = malloc(sizeof(struct w32_io))) == NULL) {
+		errno = ENOMEM;
+		return NULL;
+	}
+	memset(accepted, 0, sizeof(struct w32_io));
+
+	connected = WINHANDLE(pio);
+	state->client_connected = FALSE;
+
+	/* stand up the next instance before handing out the connected one */
+	if ((next = afunix_create_instance(state, FALSE)) == INVALID_HANDLE_VALUE) {
+		/* listener is degraded; subsequent accepts will fail */
+		error("afunix accept - failed to create next pipe instance, errno:%d", errno);
+		pio->handle = 0;
+	} else {
+		pio->handle = next;
+		if (afunix_listener_arm(pio) != 0)
+			error("afunix accept - failed to arm next pipe instance");
+	}
+
+	accepted->handle = connected;
+	accepted->type = NONSOCK_FD;
+	return accepted;
 }
 
 /* used to name named pipes used to implement pipe() */
@@ -1082,6 +1356,25 @@ int
 fileio_close(struct w32_io* pio)
 {
 	debug4("fileclose - pio:%p", pio);
+
+	/* bound/listening AF_UNIX socket emulated over named pipes */
+	if (pio->internal.context) {
+		struct afunix_listener_state* state =
+		    (struct afunix_listener_state*)pio->internal.context;
+		if (WINHANDLE(pio) != 0 && WINHANDLE(pio) != INVALID_HANDLE_VALUE) {
+			CancelIo(WINHANDLE(pio));
+			CloseHandle(WINHANDLE(pio));
+		}
+		if (pio->read_overlapped.hEvent)
+			CloseHandle(pio->read_overlapped.hEvent);
+		if (state->pipe_name)
+			free(state->pipe_name);
+		if (state->sd)
+			LocalFree(state->sd);
+		free(state);
+		free(pio);
+		return 0;
+	}
 
 	if (pio->type == NONSOCK_SYNC_FD || FILETYPE(pio) == FILE_TYPE_CHAR)
 		return syncio_close(pio);

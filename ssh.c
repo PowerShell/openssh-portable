@@ -1393,6 +1393,13 @@ main(int ac, char **av)
 	    strcmp(options.proxy_command, "-") == 0 &&
 	    options.proxy_use_fdpass)
 		fatal("ProxyCommand=- and ProxyUseFDPass are incompatible");
+#ifdef WINDOWS
+	/* ControlPersist requires fork(); the mux master must stay in foreground */
+	if (options.control_persist) {
+		verbose("ControlPersist is not supported on Windows; disabling");
+		options.control_persist = 0;
+	}
+#endif
 	if (options.update_hostkeys == SSH_UPDATE_HOSTKEYS_ASK) {
 		if (options.control_persist && options.control_path != NULL) {
 			debug("UpdateHostKeys=ask is incompatible with "

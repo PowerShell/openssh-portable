@@ -447,8 +447,13 @@ mux_master_process_new_session(struct ssh *ssh, u_int rid,
 	}
 
 	/* Try to pick up ttymodes from client before it goes raw */
+#ifdef WINDOWS
+	/* no tcgetattr; tty sessions get default modes */
+	memset(&cctx->tio, 0, sizeof(cctx->tio));
+#else
 	if (cctx->want_tty && tcgetattr(new_fd[0], &cctx->tio) == -1)
 		error_f("tcgetattr: %s", strerror(errno));
+#endif
 
 	window = CHAN_SES_WINDOW_DEFAULT;
 	packetmax = CHAN_SES_PACKET_DEFAULT;
@@ -1270,10 +1275,12 @@ mux_tty_alloc_failed(struct ssh *ssh, Channel *c)
 void
 muxserver_listen(struct ssh *ssh)
 {
+#ifndef WINDOWS
 	mode_t old_umask;
 	char *orig_control_path = options.control_path;
 	char rbuf[16+1];
 	u_int i, r;
+#endif
 	int oerrno;
 
 	if (options.control_path == NULL ||
@@ -1282,6 +1289,28 @@ muxserver_listen(struct ssh *ssh)
 
 	debug("setting up multiplex master socket");
 
+#ifdef WINDOWS
+	/*
+	 * ControlPath maps to a named pipe: there is no filesystem entry, so
+	 * the umask/temp-path/link tricks below do not apply. Pipe name
+	 * creation is atomic (FILE_FLAG_FIRST_PIPE_INSTANCE) and reports
+	 * EADDRINUSE if the name is owned by another process.
+	 */
+	muxserver_sock = unix_listener(options.control_path, 64, 0);
+	if (muxserver_sock < 0) {
+		oerrno = errno;
+		if (oerrno == EINVAL || oerrno == EADDRINUSE) {
+			error("ControlSocket %s already exists, "
+			    "disabling multiplexing", options.control_path);
+			free(options.control_path);
+			options.control_path = NULL;
+			options.control_master = SSHCTL_MASTER_NO;
+			return;
+		}
+		/* unix_listener() logs the error */
+		cleanup_exit(255);
+	}
+#else /* !WINDOWS */
 	/*
 	 * Use a temporary path before listen so we can pseudo-atomically
 	 * establish the listening socket in its final location to avoid
@@ -1338,6 +1367,7 @@ muxserver_listen(struct ssh *ssh)
 	unlink(options.control_path);
 	free(options.control_path);
 	options.control_path = orig_control_path;
+#endif /* !WINDOWS */
 
 	set_nonblock(muxserver_sock);
 
@@ -2273,6 +2303,19 @@ muxclient(const char *path)
 		else
 			muxclient_command = SSHMUX_COMMAND_OPEN;
 	}
+
+#ifdef WINDOWS
+	/*
+	 * tty sessions require the mux master to drive the client's console
+	 * (raw mode, VT input translation, resize events), which is not
+	 * implemented yet. Fall back to a separate connection.
+	 */
+	if (muxclient_command == SSHMUX_COMMAND_OPEN && tty_flag) {
+		debug("tty sessions are not yet supported over multiplexed "
+		    "connections on Windows; opening a separate connection");
+		return -1;
+	}
+#endif
 
 	switch (options.control_master) {
 	case SSHCTL_MASTER_AUTO:
