@@ -55,6 +55,7 @@
 #include "inc\sys\types.h"
 #include "inc\sys\ioctl.h"
 #include "inc\fcntl.h"
+#include "inc\pwd.h"
 #include "inc\utf.h"
 #include "debug.h"
 #include "w32fd.h"
@@ -2046,12 +2047,39 @@ bash_to_win_path(const char *in, char *out, const size_t out_len)
 	return retVal;
 }
 
+/*
+ * getpeereid() emulation for AF_UNIX sockets emulated over named pipes.
+ * There are no numeric uids on Windows; the contract provided is: succeed
+ * with euid == geteuid() iff the pipe peer process runs as the same Windows
+ * user, so that callers comparing against getuid()/geteuid() get the right
+ * answer. Note that the pipe's DACL (owner + SYSTEM) enforces this too.
+ */
 int
 getpeereid(int s, uid_t *euid, gid_t *egid)
 {
-	verbose("%s is not supported", __func__);
-	errno = ENOTSUP;
-	return -1;
+	HANDLE h;
+	DWORD peer_pid = 0;
+
+	if ((h = w32_fd_to_handle(s)) == NULL || h == INVALID_HANDLE_VALUE) {
+		errno = EBADF;
+		return -1;
+	}
+
+	if (!GetNamedPipeClientProcessId(h, &peer_pid) &&
+	    !GetNamedPipeServerProcessId(h, &peer_pid)) {
+		debug3("%s - cannot determine pipe peer, error: %d", __func__, GetLastError());
+		errno = ENOTSUP;
+		return -1;
+	}
+
+	if (peer_pid != GetCurrentProcessId() && !w32_is_pid_same_user(peer_pid)) {
+		errno = EPERM;
+		return -1;
+	}
+
+	*euid = geteuid();
+	*egid = getegid();
+	return 0;
 }
 
 int
