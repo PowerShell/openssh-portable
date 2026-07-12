@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/ioctl.h>
 
 #include <errno.h>
 #include <poll.h>
@@ -97,10 +98,18 @@ static volatile sig_atomic_t muxclient_terminate = 0;
 /* PID of multiplex server */
 static u_int muxserver_pid = 0;
 
+#ifdef WINDOWS
+/* master advertised MUX_EXT_TTY_RELAY in its hello */
+static int muxclient_tty_relay = 0;
+#endif
+
 static Channel *mux_listener_channel = NULL;
 
 struct mux_master_state {
 	int hello_rcvd;
+	/* last window size received from the mux client (MUX_C_WINSIZE) */
+	struct winsize ws;
+	int ws_valid;
 };
 
 /* mux protocol messages */
@@ -112,6 +121,7 @@ struct mux_master_state {
 #define MUX_C_CLOSE_FWD		0x10000007
 #define MUX_C_NEW_STDIO_FWD	0x10000008
 #define MUX_C_STOP_LISTENING	0x10000009
+#define MUX_C_WINSIZE		0x1000000e
 #define MUX_C_PROXY		0x1000000f
 #define MUX_C_EXT_INFO		0x20000001
 #define MUX_S_OK		0x80000001
@@ -124,6 +134,14 @@ struct mux_master_state {
 #define MUX_S_TTY_ALLOC_FAIL	0x80000008
 #define MUX_S_PROXY		0x8000000f
 #define MUX_S_EXT_INFO		0x90000001
+
+/*
+ * Windows: hello extension advertised by masters that support tty sessions
+ * over multiplexed connections (client-side console relay + MUX_C_WINSIZE).
+ * Name is provisional pending maintainer review; the empty value is reserved
+ * for future versioning.
+ */
+#define MUX_EXT_TTY_RELAY	"tty-relay@win32.openssh.com"
 
 /* type codes for MUX_C_OPEN_FWD and MUX_C_CLOSE_FWD */
 #define MUX_FWD_LOCAL   1
@@ -158,6 +176,10 @@ static int mux_master_process_proxy(struct ssh *, u_int,
 	    Channel *, struct sshbuf *, struct sshbuf *);
 static int mux_master_process_ext_info(struct ssh *, u_int,
 	    Channel *, struct sshbuf *, struct sshbuf *);
+#ifdef WINDOWS
+static int mux_master_process_winsize(struct ssh *, u_int,
+	    Channel *, struct sshbuf *, struct sshbuf *);
+#endif
 
 static const struct {
 	u_int type;
@@ -174,6 +196,9 @@ static const struct {
 	{ MUX_C_STOP_LISTENING, mux_master_process_stop_listening },
 	{ MUX_C_PROXY, mux_master_process_proxy },
 	{ MUX_C_EXT_INFO, mux_master_process_ext_info },
+#ifdef WINDOWS
+	{ MUX_C_WINSIZE, mux_master_process_winsize },
+#endif
 	{ 0, NULL }
 };
 
@@ -541,6 +566,56 @@ mux_master_process_ext_info(struct ssh *ssh, u_int rid,
 
 	return 0;
 }
+
+#ifdef WINDOWS
+/*
+ * MUX_C_WINSIZE: the mux client reports its terminal size. Windows masters
+ * cannot query the client's console themselves (console handles are not
+ * usable across processes), so the client sends the size explicitly: once
+ * before MUX_C_NEW_SESSION (the control channel is ordered, so this seeds
+ * the pty-req dimensions) and again on every local resize. No reply is sent.
+ */
+static int
+mux_master_process_winsize(struct ssh *ssh, u_int rid,
+    Channel *c, struct sshbuf *m, struct sshbuf *reply)
+{
+	struct mux_master_state *state = (struct mux_master_state *)c->mux_ctx;
+	Channel *sc;
+	u_int col, row, xpix, ypix;
+	int r;
+
+	if ((r = sshbuf_get_u32(m, &col)) != 0 ||
+	    (r = sshbuf_get_u32(m, &row)) != 0 ||
+	    (r = sshbuf_get_u32(m, &xpix)) != 0 ||
+	    (r = sshbuf_get_u32(m, &ypix)) != 0) {
+		error_f("malformed message");
+		return -1;
+	}
+
+	debug2_f("channel %d: winsize %ux%u", c->self, col, row);
+
+	state->ws.ws_col = col;
+	state->ws.ws_row = row;
+	state->ws.ws_xpixel = xpix;
+	state->ws.ws_ypixel = ypix;
+	state->ws_valid = 1;
+
+	/* forward to an established session as a window-change request */
+	if (c->have_ctl_child_id &&
+	    (sc = channel_by_id(ssh, c->ctl_child_id)) != NULL &&
+	    sc->client_tty && sc->type == SSH_CHANNEL_OPEN) {
+		channel_request_start(ssh, sc->self, "window-change", 0);
+		if ((r = sshpkt_put_u32(ssh, col)) != 0 ||
+		    (r = sshpkt_put_u32(ssh, row)) != 0 ||
+		    (r = sshpkt_put_u32(ssh, xpix)) != 0 ||
+		    (r = sshpkt_put_u32(ssh, ypix)) != 0 ||
+		    (r = sshpkt_send(ssh)) != 0)
+			fatal_fr(r, "channel %u: send window-change", sc->self);
+	}
+
+	return 0;
+}
+#endif /* WINDOWS */
 
 static int
 mux_master_process_terminate(struct ssh *ssh, u_int rid,
@@ -1222,6 +1297,12 @@ mux_master_read_cb(struct ssh *ssh, Channel *c)
 		if ((r = sshbuf_put_cstring(out, "info")) != 0 ||
 		    (r = sshbuf_put_cstring(out, "0")) != 0)
 			fatal_fr(r, "put info extension");
+#ifdef WINDOWS
+		/* advertise tty session support (client-side console relay) */
+		if ((r = sshbuf_put_cstring(out, MUX_EXT_TTY_RELAY)) != 0 ||
+		    (r = sshbuf_put_string(out, NULL, 0)) != 0)
+			fatal_fr(r, "reply extension");
+#endif
 		if ((r = sshbuf_put_stringb(c->output, out)) != 0)
 			fatal_fr(r, "enqueue");
 		debug3_f("channel %d: hello sent", c->self);
@@ -1478,8 +1559,27 @@ mux_session_confirm(struct ssh *ssh, int id, int success, void *arg)
 	if (cctx->want_agent_fwd && options.forward_agent)
 		client_channel_reqest_agent_forwarding(ssh, id);
 
+#ifdef WINDOWS
+	{
+		/*
+		 * The client's console size arrives via MUX_C_WINSIZE (sent
+		 * before the session request); rfd is a relay pipe here, and
+		 * falling back to ioctl() would leak the master's own console
+		 * size into the pty-req, so pass zeros when no size was seen.
+		 */
+		static const struct winsize zws;
+		struct mux_master_state *state =
+		    (struct mux_master_state *)cc->mux_ctx;
+
+		client_session2_setup(ssh, id, cctx->want_tty,
+		    cctx->want_subsys, cctx->term, &cctx->tio, c->rfd,
+		    cctx->cmd, cctx->env,
+		    (state != NULL && state->ws_valid) ? &state->ws : &zws);
+	}
+#else
 	client_session2_setup(ssh, id, cctx->want_tty, cctx->want_subsys,
-	    cctx->term, &cctx->tio, c->rfd, cctx->cmd, cctx->env);
+	    cctx->term, &cctx->tio, c->rfd, cctx->cmd, cctx->env, NULL);
+#endif
 
 	debug3_f("sending success reply");
 	/* prepare reply */
@@ -1717,6 +1817,14 @@ mux_client_hello_exchange(int fd, int timeout_ms)
 			error_fr(r, "parse extension");
 			goto out;
 		}
+#ifdef WINDOWS
+		if (strcmp(name, MUX_EXT_TTY_RELAY) == 0) {
+			debug2("master supports tty sessions over mux");
+			muxclient_tty_relay = 1;
+			free(name);
+			continue;
+		}
+#endif
 		/* Process extensions. */
 		if (strcmp(name, "info") == 0) {
 			debug("Received 'info' extension");
