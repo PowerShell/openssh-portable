@@ -118,10 +118,16 @@ Describe "E2E scenarios for connection multiplexing (ControlMaster)" -Tags "CI" 
             $banner | Should Match "^SSH-2.0-"
         }
 
-        It "$tC.$tI - tty session falls back to a separate connection" -skip:$skip {
-            iex "cmd /c `"ssh -v -tt -S $controlPath test_target echo tty-fallback-ok > $stdoutFile 2> $stderrFile`""
-            $stdoutFile | Should Contain "tty-fallback-ok"
-            $stderrFile | Should Contain "not yet supported over multiplexed"
+        It "$tC.$tI - tty session multiplexes through the master" -skip:$skip {
+            # -tt forces a pty; on Windows this now runs over the master
+            # (client-side console relay) instead of a separate connection.
+            # With redirected (pipe) stdio the relay is inert but the session
+            # still multiplexes: a master session id is assigned and no
+            # fallback message is emitted.
+            iex "cmd /c `"ssh -v -tt -S $controlPath test_target echo tty-mux-ok > $stdoutFile 2> $stderrFile`""
+            $stdoutFile | Should Contain "tty-mux-ok"
+            $stderrFile | Should Contain "master session id"
+            $stderrFile | Should Not Contain "opening a separate connection"
         }
 
         It "$tC.$tI - second master on the same ControlPath degrades gracefully" -skip:$skip {
