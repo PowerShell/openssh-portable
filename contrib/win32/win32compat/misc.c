@@ -481,6 +481,118 @@ daemon(int nochdir, int noclose)
 	return 0;
 }
 
+/*
+ * ssh ControlPersist support (Windows). Windows has no fork(), so a
+ * persistent mux master cannot be produced by backgrounding an
+ * already-authenticated connection the way POSIX does. Instead the
+ * foreground process spawns a fresh ssh process to act as the master; that
+ * process authenticates itself (sharing this console so it can prompt) and
+ * then detaches. These helpers implement the spawn / liveness / detach
+ * primitives; the policy lives in ssh.c.
+ */
+
+/* environment marker identifying the spawned persistent master process */
+#define W32_CONTROLPERSIST_ENV "SSH_CONTROLPERSIST_MASTER"
+
+/*
+ * Spawn a detached background ssh process (this same executable) with the
+ * given arguments to act as a persistent mux master. The child shares this
+ * process's console so it can prompt for authentication, and is deliberately
+ * NOT registered as a tracked child, so it survives after this process
+ * exits. Returns the child process HANDLE as intptr_t (caller CloseHandle),
+ * or -1 on failure.
+ */
+intptr_t
+w32_spawn_control_master(char *const args[])
+{
+	wchar_t exe_w[MAX_PATH];
+	char *exe = NULL, *cmdline = NULL;
+	wchar_t *cmdline_w = NULL;
+	STARTUPINFOW si;
+	PROCESS_INFORMATION pi;
+	intptr_t ret = -1;
+
+	if (GetModuleFileNameW(NULL, exe_w, MAX_PATH) == 0) {
+		error("%s: GetModuleFileName failed: %d", __func__, GetLastError());
+		return -1;
+	}
+	if ((exe = utf16_to_utf8(exe_w)) == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+	/* build "<exe>" <args...> ; exe path is absolute so no module prepend */
+	if ((cmdline = build_commandline_string(exe, args, FALSE)) == NULL)
+		goto done;
+	if ((cmdline_w = utf8_to_utf16(cmdline)) == NULL) {
+		errno = ENOMEM;
+		goto done;
+	}
+
+	memset(&si, 0, sizeof(si));
+	si.cb = sizeof(si);
+	memset(&pi, 0, sizeof(pi));
+
+	/* the child reads this marker to learn it is the persistent master */
+	SetEnvironmentVariableW(L"" W32_CONTROLPERSIST_ENV, L"1");
+	/*
+	 * No CREATE_NEW_CONSOLE/DETACHED_PROCESS: the child shares our console
+	 * so it can prompt for authentication. It calls FreeConsole() once its
+	 * control socket is up (see w32_detach_console). Handles are not
+	 * inherited; the master opens its own connection.
+	 */
+	if (!CreateProcessW(NULL, cmdline_w, NULL, NULL, FALSE,
+	    0, NULL, NULL, &si, &pi)) {
+		error("%s: CreateProcess failed: %d", __func__, GetLastError());
+		SetEnvironmentVariableW(L"" W32_CONTROLPERSIST_ENV, NULL);
+		goto done;
+	}
+	SetEnvironmentVariableW(L"" W32_CONTROLPERSIST_ENV, NULL);
+	CloseHandle(pi.hThread);
+	ret = (intptr_t)pi.hProcess;
+
+done:
+	free(exe);
+	free(cmdline);
+	free(cmdline_w);
+	return ret;
+}
+
+/* 1 if the spawned process is still running, 0 if it has exited */
+int
+w32_process_alive(intptr_t proc)
+{
+	return WaitForSingleObject((HANDLE)proc, 0) == WAIT_TIMEOUT;
+}
+
+/* close a process handle returned by w32_spawn_control_master */
+void
+w32_close_handle(intptr_t h)
+{
+	if (h != -1 && h != 0)
+		CloseHandle((HANDLE)h);
+}
+
+/* TRUE if this process was spawned as a persistent master (see above) */
+int
+w32_is_controlpersist_master(void)
+{
+	char *val = NULL;
+	size_t len = 0;
+	int ret;
+
+	_dupenv_s(&val, &len, W32_CONTROLPERSIST_ENV);
+	ret = (val != NULL);
+	free(val);
+	return ret;
+}
+
+/* detach the persistent master from the shared console once auth is done */
+void
+w32_detach_console(void)
+{
+	FreeConsole();
+}
+
 int
 w32_ioctl(int d, int request, ...)
 {
