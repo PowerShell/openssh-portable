@@ -198,6 +198,15 @@ usage(void)
 static int ssh_session2(struct ssh *, const struct ssh_conn_info *);
 static void load_public_identity_files(const struct ssh_conn_info *);
 static void main_sigchld_handler(int);
+#ifdef WINDOWS
+static int ssh_controlpersist_spawn(struct ssh *);
+/* ControlPersist spawn/detach primitives, in contrib/win32/win32compat/misc.c */
+intptr_t w32_spawn_control_master(char *const args[]);
+int w32_process_alive(intptr_t proc);
+void w32_close_handle(intptr_t h);
+int w32_is_controlpersist_master(void);
+void w32_detach_console(void);
+#endif
 
 /* ~/ expand a list of paths. NB. assumes path[n] is heap-allocated. */
 static void
@@ -1393,13 +1402,6 @@ main(int ac, char **av)
 	    strcmp(options.proxy_command, "-") == 0 &&
 	    options.proxy_use_fdpass)
 		fatal("ProxyCommand=- and ProxyUseFDPass are incompatible");
-#ifdef WINDOWS
-	/* ControlPersist requires fork(); the mux master must stay in foreground */
-	if (options.control_persist) {
-		verbose("ControlPersist is not supported on Windows; disabling");
-		options.control_persist = 0;
-	}
-#endif
 	if (options.update_hostkeys == SSH_UPDATE_HOSTKEYS_ASK) {
 		if (options.control_persist && options.control_path != NULL) {
 			debug("UpdateHostKeys=ask is incompatible with "
@@ -1687,6 +1689,20 @@ main(int ac, char **av)
 			ssh_packet_set_mux(ssh);
 			goto skip_connect;
 		}
+#ifdef WINDOWS
+		/*
+		 * No master is running. If ControlPersist is requested and we
+		 * are not ourselves the spawned master, start one (a separate
+		 * process, since we cannot fork) and connect to it. On failure,
+		 * fall back to a direct, non-persistent connection. The master
+		 * process keeps control_persist so its idle timeout applies.
+		 */
+		if (options.control_persist && !w32_is_controlpersist_master()) {
+			if (ssh_controlpersist_spawn(ssh))
+				goto skip_connect;
+			options.control_persist = 0;
+		}
+#endif
 	}
 
 	/*
@@ -1889,6 +1905,76 @@ main(int ac, char **av)
 
 	return exit_status;
 }
+
+#ifdef WINDOWS
+/*
+ * Windows ControlPersist. There is no fork(), so we cannot background an
+ * already-authenticated connection like POSIX does. Instead, when the user
+ * wants a persistent master and none is running yet, spawn a fresh ssh
+ * process to be that master: it authenticates itself (sharing our console so
+ * it can prompt), sets up the control socket, and detaches. We then connect
+ * to it as an ordinary mux client. Returns 1 if a session ran against the
+ * spawned master (does not return in the common case, since muxclient()
+ * exits), 0 if the master could not be established (caller falls back to a
+ * direct, non-persistent connection).
+ */
+static int
+ssh_controlpersist_spawn(struct ssh *ssh)
+{
+	char **args = NULL;
+	intptr_t proc;
+	int i, n, ret = 0, sock;
+	time_t deadline;
+
+	/* only the auto-master, no-existing-master, session case applies */
+	if (!options.control_persist || options.control_path == NULL ||
+	    w32_is_controlpersist_master() ||
+	    (options.control_master != SSHCTL_MASTER_AUTO &&
+	    options.control_master != SSHCTL_MASTER_AUTO_ASK))
+		return 0;
+
+	/* args = forced master overrides + this invocation's args (saved_av) */
+	for (n = 0; saved_av[n] != NULL; n++)
+		;
+	args = xcalloc(n + 3, sizeof(*args));
+	args[0] = "-oControlMaster=yes";
+	args[1] = "-oSessionType=none";
+	for (i = 1; i < n; i++)		/* skip saved_av[0] (argv0) */
+		args[i + 1] = saved_av[i];
+	args[n + 1] = NULL;
+
+	debug_f("starting persistent mux master for %s", options.control_path);
+	proc = w32_spawn_control_master(args);
+	free(args);
+	if (proc == -1) {
+		error("could not start persistent control master");
+		return 0;
+	}
+
+	/*
+	 * Wait for the master to authenticate and create its control socket,
+	 * then connect. Generous deadline: interactive auth may prompt.
+	 */
+	deadline = monotime() + 120;
+	while (monotime() < deadline) {
+		sock = muxclient(options.control_path);
+		if (sock >= 0) {
+			/* SSHMUX_COMMAND_PROXY returns the socket */
+			ssh_packet_set_connection(ssh, sock, sock);
+			ssh_packet_set_mux(ssh);
+			ret = 1;
+			break;
+		}
+		if (!w32_process_alive(proc)) {
+			debug_f("persistent master exited before it was ready");
+			break;
+		}
+		usleep(200000);
+	}
+	w32_close_handle(proc);
+	return ret;
+}
+#endif /* WINDOWS */
 
 static void
 control_persist_detach(void)
@@ -2314,6 +2400,19 @@ ssh_session2(struct ssh *ssh, const struct ssh_conn_info *cinfo)
 	if (!ssh_packet_get_mux(ssh))
 		muxserver_listen(ssh);
 
+#ifdef WINDOWS
+	/*
+	 * A persistent master spawned by ssh_controlpersist_spawn() shares the
+	 * console with the foreground process so it can prompt for auth. Now
+	 * that authentication is done and the control socket is up, detach
+	 * from the console so we survive the terminal and don't contend with
+	 * the foreground client. The idle timeout (set_control_persist_exit_
+	 * time) then governs our lifetime. Windows has no fork(), so the POSIX
+	 * backgrounding below does not apply.
+	 */
+	if (w32_is_controlpersist_master() && muxserver_sock != -1)
+		w32_detach_console();
+#else
 	/*
 	 * If we are in control persist mode and have a working mux listen
 	 * socket, then prepare to background ourselves and have a foreground
@@ -2337,6 +2436,7 @@ ssh_session2(struct ssh *ssh, const struct ssh_conn_info *cinfo)
 			need_controlpersist_detach = 1;
 		options.fork_after_authentication = 1;
 	}
+#endif
 	/*
 	 * ControlPersist mux listen socket setup failed, attempt the
 	 * stdio forward setup that we skipped earlier.
