@@ -164,8 +164,53 @@ Describe "E2E scenarios for connection multiplexing (ControlMaster)" -Tags "CI" 
         It "$tC.$tI - ControlMaster auto without a master connects directly" -skip:$skip {
             ssh -o ControlMaster=auto -o ControlPersist=no -S $controlPath test_target echo auto-ok | Set-Content $stdoutFile
             $stdoutFile | Should Contain "auto-ok"
-            # ControlPersist is unsupported on Windows; nothing may linger
+            # ControlPersist=no: no master may linger
             Stop-MuxMaster
+        }
+    }
+
+    Context "$tC - ControlPersist auto-spawned master" {
+        BeforeAll {
+            $tI=1
+            $cpPath = Join-Path $testDir "cp_ctl"
+            # ControlPersist=yes: the auto-started master persists until -O exit
+            # (a numeric timeout would risk expiring mid-test)
+            $cpOpts = "-o", "ControlMaster=auto", "-o", "ControlPersist=yes",
+                "-o", "ControlPath=`"$cpPath`""
+        }
+        AfterAll {
+            # make sure the persistent master does not leak between runs
+            ssh -o ControlPath="$cpPath" -O exit test_target 2>$null
+            $tC++
+        }
+
+        # Windows has no fork(), so ControlPersist auto-starts a separate master
+        # process (which authenticates itself) and connects to it as a client.
+        It "$tC.$tI - first connection auto-starts a persistent master" -skip:$skip {
+            # Start-Process (own console) so the spawned master does not block us
+            $p = Start-Process -FilePath $sshExe `
+                -ArgumentList ($cpOpts + @("test_target", "echo cp-first")) `
+                -WindowStyle Hidden -RedirectStandardOutput $stdoutFile -PassThru
+            $p.WaitForExit(30000) | Should Be $true
+            $stdoutFile | Should Contain "cp-first"
+            # the master should have persisted and answer control requests
+            ssh -o ControlPath="$cpPath" -O check test_target 2>$null
+            $LASTEXITCODE | Should Be 0
+        }
+
+        It "$tC.$tI - subsequent connection reuses the persistent master" -skip:$skip {
+            $p = Start-Process -FilePath $sshExe `
+                -ArgumentList @("-o", "ControlPath=`"$cpPath`"", "test_target", "echo cp-reuse") `
+                -WindowStyle Hidden -RedirectStandardOutput $stdoutFile -PassThru
+            $p.WaitForExit(20000) | Should Be $true
+            $stdoutFile | Should Contain "cp-reuse"
+        }
+
+        It "$tC.$tI - -O exit stops the persistent master" -skip:$skip {
+            iex "cmd /c `"ssh -o ControlPath=$cpPath -O exit test_target 2> $stderrFile`""
+            $stderrFile | Should Contain "Exit request sent"
+            ssh -o ControlPath="$cpPath" -O check test_target 2>$null
+            $LASTEXITCODE | Should Not Be 0
         }
     }
 }
