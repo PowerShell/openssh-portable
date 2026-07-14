@@ -1768,7 +1768,7 @@ struct mux_relay_ent {
 	int is_console;		/* this std fd was a console -> relayed */
 	int is_input;		/* 1 = console->master (stdin); 0 = ->console */
 	int console_fd;		/* the real console std fd (0/1/2), not owned */
-	int local_pipe;	/* our end of the substitute pipe (owned) */
+	int local_pipe;		/* our end of the substitute pipe (owned) */
 	int passed;		/* pipe end handed to the master (-1 if none) */
 	int rd_done;		/* source (console or pipe) hit EOF */
 	int pipe_closed;	/* local_pipe has been closed */
