@@ -1805,7 +1805,9 @@ mux_client_send_winsize(int fd)
 	struct winsize ws;
 	int r;
 
-	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1)
+	/* prefer stdout, but fall back to stdin if only that is a tty */
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 &&
+	    ioctl(STDIN_FILENO, TIOCGWINSZ, &ws) == -1)
 		return;
 	if ((m = sshbuf_new()) == NULL)
 		fatal_f("sshbuf_new");
