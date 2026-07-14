@@ -18,7 +18,7 @@ Describe "E2E scenarios for connection multiplexing (ControlMaster)" -Tags "CI" 
         {
             $null = New-Item $testDir -ItemType directory -Force -ErrorAction SilentlyContinue
         }
-        #skip on ps 2 becase non-interactive cmd require a ENTER before it returns on ps2
+        #skip on ps 2 because non-interactive cmd require a ENTER before it returns on ps2
         $skip = $IsWindows -and ($PSVersionTable.PSVersion.Major -le 2)
 
         $controlPath = Join-Path $testDir "mux_ctl"
