@@ -386,6 +386,8 @@ pkcs11_terminate(void)
 		// Send message to helper to gracefully unload providers
 		pkcs11_del_provider(p->name);
 		TAILQ_REMOVE(&pkcs11_providers, p, next);
+		free(p->name);
+		free(p);
 	}
 
 	if (pid != -1) {

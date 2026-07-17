@@ -940,6 +940,7 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 	while (1) {
 		sub_name_len = MAX_KEY_LENGTH;
 		pin_len = epin_len = provider_len = 0;
+		epin_alloc_len = 0;
 		if (sub) {
 			RegCloseKey(sub);
 			sub = NULL;
@@ -948,6 +949,9 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 			if (RegOpenKeyExW(root, sub_name, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub) == 0 &&
 				RegQueryValueExW(sub, L"provider", 0, NULL, NULL, &provider_len) == 0 &&
 				RegQueryValueExW(sub, L"pin", 0, NULL, NULL, &epin_len) == 0) {
+				if (provider_len == 0 || provider_len >= PATH_MAX ||
+				    epin_len == 0 || epin_len > MAX_MESSAGE_SIZE)
+					continue;
 				epin_alloc_len = epin_len;
 				if ((epin = malloc(epin_alloc_len + 1)) == NULL ||
 					(provider = malloc(provider_len + 1)) == NULL ||
@@ -1018,7 +1022,7 @@ done:
 	if (signature)
 		free(signature);
 #ifdef ENABLE_PKCS11
-	free_pkcs11_sign_provider(&provider, &pin, pin_len, &epin, epin_len,
+	free_pkcs11_sign_provider(&provider, &pin, pin_len, &epin, epin_alloc_len,
 	    &keys, count);
 	del_all_keys();
 	pkcs11_terminate();
