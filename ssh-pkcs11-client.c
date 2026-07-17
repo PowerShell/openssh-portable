@@ -621,6 +621,7 @@ wrap_key(struct sshkey* k)
 #endif /* OPENSSL_HAS_ECC && HAVE_EC_KEY_METHOD_NEW */
 	} else
 		fatal_f("unknown key type");
+	k->flags |= SSHKEY_FLAG_EXT;
 }
 
 #else
@@ -697,7 +698,6 @@ pkcs11_make_cert(const struct sshkey *priv,
 	if ((r = sshkey_from_private(priv, &ret)) != 0)
 		goto out;
 	wrap_key(ret);
-	ret->flags |= SSHKEY_FLAG_EXT;
 	if ((r = sshkey_to_certified(ret)) != 0 ||
 	    (r = sshkey_cert_copy(certpub, ret)) != 0)
 		goto out;
