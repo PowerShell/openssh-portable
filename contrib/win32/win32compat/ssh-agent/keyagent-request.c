@@ -601,6 +601,32 @@ load_pkcs11_identities(HKEY user_root, const char *provider,
 		RegCloseKey(root);
 	return loaded;
 }
+
+static void
+free_pkcs11_sign_provider(char **providerp, char **pinp, DWORD pin_len,
+    char **epinp, DWORD epin_len, struct sshkey ***keysp, int nkeys)
+{
+	int i;
+
+	if (*keysp != NULL) {
+		for (i = 0; i < nkeys; i++)
+			sshkey_free((*keysp)[i]);
+		free(*keysp);
+		*keysp = NULL;
+	}
+	free(*providerp);
+	*providerp = NULL;
+	if (*pinp != NULL) {
+		SecureZeroMemory(*pinp, pin_len);
+		free(*pinp);
+		*pinp = NULL;
+	}
+	if (*epinp != NULL) {
+		SecureZeroMemory(*epinp, epin_len);
+		free(*epinp);
+		*epinp = NULL;
+	}
+}
 #endif /* ENABLE_PKCS11 */
 
 static int sign_blob(const struct sshkey *pubkey, u_char ** sig, size_t *siglen,
@@ -692,10 +718,11 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 	struct sshkey *key = NULL;
 
 #ifdef ENABLE_PKCS11
-	int i, count = 0, index = 0, loaded = 0;
+	int count = 0, index = 0, loaded = 0;
 	wchar_t sub_name[MAX_KEY_LENGTH];
 	DWORD sub_name_len = MAX_KEY_LENGTH;
-	DWORD pin_len, epin_len, provider_len;
+	DWORD pin_len = 0, epin_len = 0, provider_len = 0;
+	DWORD epin_alloc_len = 0;
 	char *pin = NULL, *npin = NULL, *epin = NULL, *provider = NULL;
 	HKEY root = 0, sub = 0, user_root = 0;
 	struct sshkey **keys = NULL;
@@ -713,6 +740,7 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 
 	while (1) {
 		sub_name_len = MAX_KEY_LENGTH;
+		pin_len = epin_len = provider_len = 0;
 		if (sub) {
 			RegCloseKey(sub);
 			sub = NULL;
@@ -721,43 +749,37 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 			if (RegOpenKeyExW(root, sub_name, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub) == 0 &&
 				RegQueryValueExW(sub, L"provider", 0, NULL, NULL, &provider_len) == 0 &&
 				RegQueryValueExW(sub, L"pin", 0, NULL, NULL, &epin_len) == 0) {
-				if ((epin = malloc(epin_len + 1)) == NULL ||
+				epin_alloc_len = epin_len;
+				if ((epin = malloc(epin_alloc_len + 1)) == NULL ||
 					(provider = malloc(provider_len + 1)) == NULL ||
 					RegQueryValueExW(sub, L"provider", 0, NULL, provider, &provider_len) != 0 ||
-					RegQueryValueExW(sub, L"pin", 0, NULL, epin, &epin_len) != 0)
-					goto done;
+					RegQueryValueExW(sub, L"pin", 0, NULL, epin, &epin_len) != 0) {
+					free_pkcs11_sign_provider(&provider, &pin, pin_len,
+					    &epin, epin_alloc_len, &keys, count);
+					continue;
+				}
 				provider[provider_len] = '\0';
 				epin[epin_len] = '\0';
 				if (convert_blob(con, epin, epin_len, &pin, &pin_len, 0) != 0 ||
 					(npin = realloc(pin, pin_len + 1)) == NULL) {
-					goto done;
+					free_pkcs11_sign_provider(&provider, &pin, pin_len,
+					    &epin, epin_len, &keys, count);
+					continue;
 				}
 				pin = npin;
 				pin[pin_len] = '\0';
 				count = pkcs11_add_provider(provider, pin, &keys, NULL);
-				if (count <= 0)
-					goto done;
+				if (count <= 0) {
+					free_pkcs11_sign_provider(&provider, &pin, pin_len,
+					    &epin, epin_len, &keys, count);
+					continue;
+				}
 				loaded = load_pkcs11_identities(user_root, provider,
 				    keys, count);
-				for (i = 0; i < count; i++)
-					sshkey_free(keys[i]);
-				free(keys);
-				keys = NULL;
+				free_pkcs11_sign_provider(&provider, &pin, pin_len,
+				    &epin, epin_len, &keys, count);
 				if (loaded < 0)
 					goto done;
-				if (provider)
-					free(provider);
-				if (pin) {
-					SecureZeroMemory(pin, (DWORD)pin_len);
-					free(pin);
-				}
-				if (epin) {
-					SecureZeroMemory(epin, (DWORD)epin_len);
-					free(epin);
-				}
-				provider = NULL;
-				pin = NULL;
-				epin = NULL;
 			}
 		}
 		else
@@ -797,23 +819,10 @@ done:
 	if (signature)
 		free(signature);
 #ifdef ENABLE_PKCS11
-	if (keys != NULL) {
-		for (i = 0; i < count; i++)
-			sshkey_free(keys[i]);
-		free(keys);
-	}
+	free_pkcs11_sign_provider(&provider, &pin, pin_len, &epin, epin_len,
+	    &keys, count);
 	del_all_keys();
 	pkcs11_terminate();
-	if (provider)
-		free(provider);
-	if (pin) {
-		SecureZeroMemory(pin, (DWORD)pin_len);
-		free(pin);
-	}
-	if (epin) {
-		SecureZeroMemory(epin, (DWORD)epin_len);
-		free(epin);
-	}
 	if (user_root)
 		RegCloseKey(user_root);
 	if (root)

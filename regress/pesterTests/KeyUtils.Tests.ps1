@@ -518,6 +518,104 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             $LASTEXITCODE | Should Be 0
             @(ssh-add -L) -match "The agent has no identities." | Should Be $true
         }
+
+        It "$tC.$tI - ssh-add - stale pkcs11 provider isolation (if configured)" {
+            $pkcs11Path = $env:OPENSSH_TEST_PKCS11_PROVIDER
+            $publicKeyPaths = @($env:OPENSSH_TEST_PKCS11_PUBLIC_KEYS -split ';' |
+                Where-Object { $_ })
+            if (-not $pkcs11Path -or -not (Test-Path $pkcs11Path) -or
+                $publicKeyPaths.Count -eq 0) {
+                Write-Host "skipping stale provider test because provider and public keys are not configured"
+                return
+            }
+
+            $testPin = $env:OPENSSH_TEST_PKCS11_PIN
+            if (-not $testPin) { $testPin = $pkcs11Pin }
+            $softwareKeyPath = Join-Path $testDir "id_rsa"
+            $unavailableKeyPath = Join-Path $testDir "id_ecdsa.pub"
+            $nullFile = Join-Path $testDir "$tC.$tI.nullfile"
+            $null > $nullFile
+            $providerRoot = $null
+            $validProviderKey = $null
+            $staleProviderKey = $null
+            $staleProviderPath = Join-Path $testDir `
+                "nonexistent\openssh-stale-provider.dll"
+            $staleProvider = [IO.Path]::GetFullPath($staleProviderPath).Replace(
+                '\', '/')
+            $corruptProviderPath = Join-Path $testDir `
+                "nonexistent\openssh-corrupt-provider.dll"
+            $corruptProvider = [IO.Path]::GetFullPath(
+                $corruptProviderPath).Replace('\', '/')
+
+            try {
+                ssh-add -D
+                $LASTEXITCODE | Should Be 0
+
+                Add-PasswordSetting -Pass $keypassphrase
+                $env:SSH_ASKPASS_REQUIRE = "force"
+                cmd /c "ssh-add `"$softwareKeyPath`" < `"$nullFile`""
+                $LASTEXITCODE | Should Be 0
+                Remove-PasswordSetting
+
+                Add-PasswordSetting -Pass $testPin
+                $env:SSH_ASKPASS_REQUIRE = "force"
+                & ssh-add -s $pkcs11Path
+                $LASTEXITCODE | Should Be 0
+                & ssh-add -T $softwareKeyPath
+                $LASTEXITCODE | Should Be 0
+                & ssh-add -T $publicKeyPaths[0]
+                $LASTEXITCODE | Should Be 0
+
+                $providerRootPath = "$currentUserSid\Software\OpenSSH\Agent\PKCS11_Providers"
+                $providerRoot = [Microsoft.Win32.Registry]::Users.OpenSubKey(
+                    $providerRootPath, $true)
+                $providerRoot | Should Not Be $null
+                $canonicalProvider = [IO.Path]::GetFullPath($pkcs11Path).Replace('\', '/')
+                $validProviderKey = $providerRoot.OpenSubKey($canonicalProvider)
+                $validProviderKey | Should Not Be $null
+                $encryptedPin = $validProviderKey.GetValue("pin")
+                $encryptedPin -is [byte[]] | Should Be $true
+
+                $staleProviderKey = $providerRoot.CreateSubKey($staleProvider)
+                $staleProviderKey.SetValue("provider",
+                    [Text.Encoding]::UTF8.GetBytes($staleProvider),
+                    [Microsoft.Win32.RegistryValueKind]::Binary)
+                $staleProviderKey.SetValue("pin", $encryptedPin,
+                    [Microsoft.Win32.RegistryValueKind]::Binary)
+
+                & ssh-add -T $softwareKeyPath
+                $LASTEXITCODE | Should Be 0
+                & ssh-add -T $publicKeyPaths[0]
+                $LASTEXITCODE | Should Be 0
+                & ssh-add -T $unavailableKeyPath
+                $LASTEXITCODE | Should Not Be 0
+
+                $staleProviderKey.Dispose()
+                $staleProviderKey = $providerRoot.CreateSubKey($corruptProvider)
+                $staleProviderKey.SetValue("provider",
+                    [Text.Encoding]::UTF8.GetBytes($corruptProvider),
+                    [Microsoft.Win32.RegistryValueKind]::Binary)
+                $staleProviderKey.SetValue("pin",
+                    [Text.Encoding]::UTF8.GetBytes("invalid encrypted pin"),
+                    [Microsoft.Win32.RegistryValueKind]::Binary)
+
+                & ssh-add -T $softwareKeyPath
+                $LASTEXITCODE | Should Be 0
+                & ssh-add -T $publicKeyPaths[0]
+                $LASTEXITCODE | Should Be 0
+            }
+            finally {
+                if ($staleProviderKey) { $staleProviderKey.Dispose() }
+                if ($validProviderKey) { $validProviderKey.Dispose() }
+                if ($providerRoot) {
+                    $providerRoot.DeleteSubKeyTree($staleProvider, $false)
+                    $providerRoot.DeleteSubKeyTree($corruptProvider, $false)
+                    $providerRoot.Dispose()
+                }
+                ssh-add -D | Out-Null
+                Remove-PasswordSetting
+            }
+        }
     }
 
     Context "$tC ssh-keygen known_hosts operations" {
