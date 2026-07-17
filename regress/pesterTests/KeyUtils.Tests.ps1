@@ -681,6 +681,10 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
                 "nonexistent\openssh-corrupt-provider.dll"
             $corruptProvider = [IO.Path]::GetFullPath(
                 $corruptProviderPath).Replace('\', '/')
+            $oversizedProviderPath = Join-Path $testDir `
+                "nonexistent\openssh-oversized-provider.dll"
+            $oversizedProvider = [IO.Path]::GetFullPath(
+                $oversizedProviderPath).Replace('\', '/')
 
             try {
                 ssh-add -D
@@ -738,6 +742,19 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
                 $LASTEXITCODE | Should Be 0
                 & ssh-add -T $publicKeyPaths[0]
                 $LASTEXITCODE | Should Be 0
+
+                $staleProviderKey.Dispose()
+                $staleProviderKey = $providerRoot.CreateSubKey($oversizedProvider)
+                $staleProviderKey.SetValue("provider",
+                    [Text.Encoding]::UTF8.GetBytes($oversizedProvider),
+                    [Microsoft.Win32.RegistryValueKind]::Binary)
+                $staleProviderKey.SetValue("pin", (New-Object byte[] 11000),
+                    [Microsoft.Win32.RegistryValueKind]::Binary)
+
+                & ssh-add -T $softwareKeyPath
+                $LASTEXITCODE | Should Be 0
+                & ssh-add -T $publicKeyPaths[0]
+                $LASTEXITCODE | Should Be 0
             }
             finally {
                 if ($staleProviderKey) { $staleProviderKey.Dispose() }
@@ -745,6 +762,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
                 if ($providerRoot) {
                     $providerRoot.DeleteSubKeyTree($staleProvider, $false)
                     $providerRoot.DeleteSubKeyTree($corruptProvider, $false)
+                    $providerRoot.DeleteSubKeyTree($oversizedProvider, $false)
                     $providerRoot.Dispose()
                 }
                 ssh-add -D | Out-Null
