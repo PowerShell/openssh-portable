@@ -301,10 +301,15 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
         }
 
         It "$tC.$tI - ssh-add - pkcs11 library (if available)" {
-            $pkcs11Path = "C:\\Program Files\\OpenSC Project\\OpenSC\\pkcs11\\opensc-pkcs11.dll"
+            $pkcs11Path = $env:OPENSSH_TEST_PKCS11_PROVIDER
+            if (-not $pkcs11Path) {
+                $pkcs11Path = "C:\\Program Files\\OpenSC Project\\OpenSC\\pkcs11\\opensc-pkcs11.dll"
+            }
             if (Test-Path $pkcs11Path) {
                 #set up SSH_ASKPASS
-                Add-PasswordSetting -Pass $pkcs11Pin
+                $testPin = $env:OPENSSH_TEST_PKCS11_PIN
+                if (-not $testPin) { $testPin = $pkcs11Pin }
+                Add-PasswordSetting -Pass $testPin
 
                 ssh-add -s "$pkcs11Path"
                 $LASTEXITCODE | Should Be 0
@@ -325,6 +330,90 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             else {
                 Write-Host "skipping pkcs11 test because provider not found"
             }
+        }
+
+        It "$tC.$tI - ssh-add - pkcs11 certificates (if configured)" {
+            $pkcs11Path = $env:OPENSSH_TEST_PKCS11_PROVIDER
+            $publicKeyPaths = @($env:OPENSSH_TEST_PKCS11_PUBLIC_KEYS -split ';' |
+                Where-Object { $_ })
+            if (-not $pkcs11Path -or -not (Test-Path $pkcs11Path) -or
+                $publicKeyPaths.Count -eq 0) {
+                Write-Host "skipping pkcs11 certificate test because provider and public keys are not configured"
+                return
+            }
+
+            foreach ($publicKeyPath in $publicKeyPaths) {
+                Test-Path $publicKeyPath | Should Be $true
+            }
+            $testPin = $env:OPENSSH_TEST_PKCS11_PIN
+            if (-not $testPin) { $testPin = $pkcs11Pin }
+            Add-PasswordSetting -Pass $testPin
+
+            $ca = Join-Path $testDir "pkcs11-ca"
+            Remove-Item "$ca*" -Force -ErrorAction SilentlyContinue
+            & ssh-keygen -q -t ed25519 -N '""' -f $ca
+            $LASTEXITCODE | Should Be 0
+
+            $certPaths = @()
+            $copiedPublicKeyPaths = @()
+            $serial = 1
+            foreach ($publicKeyPath in $publicKeyPaths) {
+                $copiedPublicKeyPath = Join-Path $testDir "pkcs11-$serial.pub"
+                Copy-Item $publicKeyPath $copiedPublicKeyPath -Force
+                & ssh-keygen -q -s $ca -I "pkcs11-$serial" -n $env:USERNAME `
+                    -z $serial $copiedPublicKeyPath
+                $LASTEXITCODE | Should Be 0
+                $copiedPublicKeyPaths += $copiedPublicKeyPath
+                $certPaths += $copiedPublicKeyPath.Replace(".pub", "-cert.pub")
+                $serial++
+            }
+            & ssh-keygen -q -s $ca -I "pkcs11-unmatched" -n $env:USERNAME `
+                -z 999 "$ca.pub"
+            $LASTEXITCODE | Should Be 0
+            $unmatchedCertPath = "$ca-cert.pub"
+            $associatedCertPaths = $certPaths + $unmatchedCertPath
+
+            $addArguments = @("-s", $pkcs11Path) + $associatedCertPaths
+            & ssh-add @addArguments
+            $LASTEXITCODE | Should Be 0
+            $allKeys = @(ssh-add -L)
+            foreach ($keyPath in $copiedPublicKeyPaths + $certPaths) {
+                $keyBlob = (Get-Content $keyPath).Split(' ')[1]
+                @($allKeys | Where-Object { $_.Contains($keyBlob) }).Count | Should Be 1
+                & ssh-add -T $keyPath
+                $LASTEXITCODE | Should Be 0
+            }
+
+            Restart-Service ssh-agent
+            WaitForStatus -ServiceName ssh-agent -Status "Running"
+            foreach ($certPath in $certPaths) {
+                & ssh-add -T $certPath
+                $LASTEXITCODE | Should Be 0
+            }
+            & ssh-add -d $certPaths[0]
+            $LASTEXITCODE | Should Be 0
+            $deletedKeyBlob = (Get-Content $certPaths[0]).Split(' ')[1]
+            @((ssh-add -L) | Where-Object { $_.Contains($deletedKeyBlob) }).Count |
+                Should Be 0
+
+            ssh-add -D
+            $LASTEXITCODE | Should Be 0
+            $addArguments = @("-s", $pkcs11Path, "-C") + $associatedCertPaths
+            & ssh-add @addArguments
+            $LASTEXITCODE | Should Be 0
+            $allKeys = @(ssh-add -L)
+            $allKeys.Count | Should Be $certPaths.Count
+            foreach ($certPath in $certPaths) {
+                $keyBlob = (Get-Content $certPath).Split(' ')[1]
+                @($allKeys | Where-Object { $_.Contains($keyBlob) }).Count | Should Be 1
+                & ssh-add -T $certPath
+                $LASTEXITCODE | Should Be 0
+            }
+
+            & ssh-add -e $pkcs11Path
+            $LASTEXITCODE | Should Be 0
+            @(ssh-add -L) -match "The agent has no identities." | Should Be $true
+            Remove-PasswordSetting
         }
     }
 
