@@ -22,6 +22,7 @@
 #define AGENT_MAX_EXT_CERTS	1024
 
 char *pkcs11_identity_name(const struct sshkey *, const u_char *, size_t);
+const char *pkcs11_identity_comment(const char *, const char *);
 int parse_pkcs11_add_constraints(struct sshbuf *, int *,
     struct sshkey ***, size_t *);
 void free_pkcs11_certs(struct sshkey **, size_t);

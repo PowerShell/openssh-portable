@@ -170,6 +170,19 @@ test_pkcs11_cert_identity_name(void)
 }
 
 static void
+test_pkcs11_identity_comment(void)
+{
+	const char *provider = "C:/provider.dll";
+
+	TEST_START("PKCS11 identity comment fallback");
+	ASSERT_STRING_EQ(pkcs11_identity_comment(provider, "token label"),
+	    "token label");
+	ASSERT_STRING_EQ(pkcs11_identity_comment(provider, ""), provider);
+	ASSERT_STRING_EQ(pkcs11_identity_comment(provider, NULL), provider);
+	TEST_DONE();
+}
+
+static void
 test_pkcs11_cert_constraints_duplicate(void)
 {
 	struct sshbuf *m = NULL;
@@ -262,6 +275,7 @@ pkcs11_cert_tests(void)
 	test_pkcs11_cert_constraints_valid();
 	test_pkcs11_cert_constraints_compatible();
 	test_pkcs11_cert_identity_name();
+	test_pkcs11_identity_comment();
 	test_pkcs11_cert_constraints_duplicate();
 	test_pkcs11_cert_constraints_truncated();
 	test_pkcs11_cert_constraints_malformed();

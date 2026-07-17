@@ -48,6 +48,12 @@ pkcs11_identity_name(const struct sshkey *key, const u_char *blob,
 	return name;
 }
 
+const char *
+pkcs11_identity_comment(const char *provider, const char *label)
+{
+	return label == NULL || *label == '\0' ? provider : label;
+}
+
 void
 free_pkcs11_certs(struct sshkey **certs, size_t ncerts)
 {
