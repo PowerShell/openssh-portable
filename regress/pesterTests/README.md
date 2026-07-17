@@ -79,4 +79,5 @@ The test creates short-lived OpenSSH certificates for the supplied public
 keys. It verifies plain and certificate identities, signing, agent service
 restart, individual certificate deletion, cert-only loading, an unmatched
 certificate, and provider removal. Never use production token credentials in
-CI.
+CI. PKCS#11 PIN input is forced through the test askpass helper so an
+unattended run cannot block on an interactive prompt.

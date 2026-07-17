@@ -215,6 +215,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             }
         }
         AfterAll{$tC++}
+        AfterEach { Remove-PasswordSetting }
 
         # Executing ssh-agent will start agent service
         # This is to support typical Unix scenarios where
@@ -310,11 +311,9 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
                 $testPin = $env:OPENSSH_TEST_PKCS11_PIN
                 if (-not $testPin) { $testPin = $pkcs11Pin }
                 Add-PasswordSetting -Pass $testPin
-
+                $env:SSH_ASKPASS_REQUIRE = "force"
                 ssh-add -s "$pkcs11Path"
                 $LASTEXITCODE | Should Be 0
-                #remove SSH_ASKPASS
-                Remove-PasswordSetting
 
                 #ensure added keys are listed
                 $allkeys = ssh-add -L
@@ -347,11 +346,9 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             }
             $testPin = $env:OPENSSH_TEST_PKCS11_PIN
             if (-not $testPin) { $testPin = $pkcs11Pin }
-            Add-PasswordSetting -Pass $testPin
-
             $ca = Join-Path $testDir "pkcs11-ca"
             Remove-Item "$ca*" -Force -ErrorAction SilentlyContinue
-            & ssh-keygen -q -t ed25519 -N '""' -f $ca
+            & ssh-keygen -q -t ed25519 -N $keypassphrase -f $ca
             $LASTEXITCODE | Should Be 0
 
             $certPaths = @()
@@ -360,18 +357,28 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             foreach ($publicKeyPath in $publicKeyPaths) {
                 $copiedPublicKeyPath = Join-Path $testDir "pkcs11-$serial.pub"
                 Copy-Item $publicKeyPath $copiedPublicKeyPath -Force
-                & ssh-keygen -q -s $ca -I "pkcs11-$serial" -n $env:USERNAME `
-                    -z $serial $copiedPublicKeyPath
+                & ssh-keygen -q -s $ca -P $keypassphrase -I "pkcs11-$serial" `
+                    -n $env:USERNAME -z $serial $copiedPublicKeyPath
                 $LASTEXITCODE | Should Be 0
                 $copiedPublicKeyPaths += $copiedPublicKeyPath
                 $certPaths += $copiedPublicKeyPath.Replace(".pub", "-cert.pub")
                 $serial++
             }
-            & ssh-keygen -q -s $ca -I "pkcs11-unmatched" -n $env:USERNAME `
-                -z 999 "$ca.pub"
+            & ssh-keygen -q -s $ca -P $keypassphrase -I "pkcs11-unmatched" `
+                -n $env:USERNAME -z 999 "$ca.pub"
             $LASTEXITCODE | Should Be 0
             $unmatchedCertPath = "$ca-cert.pub"
             $associatedCertPaths = $certPaths + $unmatchedCertPath
+
+            $sequentialPublicKeyPath = Join-Path $testDir "pkcs11-sequential.pub"
+            Copy-Item $publicKeyPaths[0] $sequentialPublicKeyPath -Force
+            & ssh-keygen -q -s $ca -P $keypassphrase -I "pkcs11-sequential" `
+                -n $env:USERNAME -z 1000 $sequentialPublicKeyPath
+            $LASTEXITCODE | Should Be 0
+            $sequentialCertPath = $sequentialPublicKeyPath.Replace(".pub", "-cert.pub")
+
+            Add-PasswordSetting -Pass $testPin
+            $env:SSH_ASKPASS_REQUIRE = "force"
 
             $addArguments = @("-s", $pkcs11Path) + $associatedCertPaths
             & ssh-add @addArguments
@@ -398,22 +405,68 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
 
             ssh-add -D
             $LASTEXITCODE | Should Be 0
-            $addArguments = @("-s", $pkcs11Path, "-C") + $associatedCertPaths
+
+            # Separate additions for the same token key must merge certificates.
+            $addArguments = @("-s", $pkcs11Path, "-C", $certPaths[0])
+            & ssh-add @addArguments
+            $LASTEXITCODE | Should Be 0
+            $addArguments = @("-s", $pkcs11Path, "-C", $sequentialCertPath)
             & ssh-add @addArguments
             $LASTEXITCODE | Should Be 0
             $allKeys = @(ssh-add -L)
-            $allKeys.Count | Should Be $certPaths.Count
-            foreach ($certPath in $certPaths) {
+            foreach ($certPath in @($certPaths[0], $sequentialCertPath)) {
                 $keyBlob = (Get-Content $certPath).Split(' ')[1]
                 @($allKeys | Where-Object { $_.Contains($keyBlob) }).Count | Should Be 1
                 & ssh-add -T $certPath
                 $LASTEXITCODE | Should Be 0
             }
 
+            # Re-adding an exact certificate is successful and idempotent.
+            & ssh-add @addArguments
+            $LASTEXITCODE | Should Be 0
+            $sequentialCertBlob = (Get-Content $sequentialCertPath).Split(' ')[1]
+            @((ssh-add -L) | Where-Object { $_.Contains($sequentialCertBlob) }).Count |
+                Should Be 1
+
+            ssh-add -D
+            $LASTEXITCODE | Should Be 0
+
+            # cert-only applies to this request and must preserve plain identities.
+            & ssh-add -s $pkcs11Path
+            $LASTEXITCODE | Should Be 0
+            & ssh-add -s $pkcs11Path -C $certPaths[0]
+            $LASTEXITCODE | Should Be 0
+            $allKeys = @(ssh-add -L)
+            foreach ($keyPath in $copiedPublicKeyPaths + $certPaths[0]) {
+                $keyBlob = (Get-Content $keyPath).Split(' ')[1]
+                @($allKeys | Where-Object { $_.Contains($keyBlob) }).Count | Should Be 1
+            }
+
+            # A failed unmatched add must not change existing persisted identities.
+            $identitiesBefore = @(ssh-add -L | Sort-Object)
+            & ssh-add -s $pkcs11Path -C $unmatchedCertPath
+            $LASTEXITCODE | Should Not Be 0
+            $identitiesAfter = @(ssh-add -L | Sort-Object)
+            @(Compare-Object $identitiesBefore $identitiesAfter).Count | Should Be 0
+
+            Restart-Service ssh-agent
+            WaitForStatus -ServiceName ssh-agent -Status "Running"
+            foreach ($keyPath in $copiedPublicKeyPaths + $certPaths[0]) {
+                & ssh-add -T $keyPath
+                $LASTEXITCODE | Should Be 0
+            }
+
+            & ssh-add -d $certPaths[0]
+            $LASTEXITCODE | Should Be 0
+            foreach ($keyPath in $copiedPublicKeyPaths) {
+                $keyBlob = (Get-Content $keyPath).Split(' ')[1]
+                @((ssh-add -L) | Where-Object { $_.Contains($keyBlob) }).Count |
+                    Should Be 1
+            }
+
             & ssh-add -e $pkcs11Path
             $LASTEXITCODE | Should Be 0
             @(ssh-add -L) -match "The agent has no identities." | Should Be $true
-            Remove-PasswordSetting
         }
     }
 
