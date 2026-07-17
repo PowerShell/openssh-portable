@@ -455,6 +455,7 @@ store_pkcs11_identity(HKEY user_root, const struct sshkey *key,
 	char *thumbprint = NULL;
 	struct pkcs11_identity_change *change = NULL;
 	DWORD disposition = 0;
+	ULONG sd_len = 0;
 	int success = 0;
 
 	if (changep == NULL || provider == NULL || comment == NULL)
@@ -462,7 +463,7 @@ store_pkcs11_identity(HKEY user_root, const struct sshkey *key,
 	*changep = NULL;
 	sa.nLength = sizeof(sa);
 	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL,
-	    SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sa.nLength) ||
+	    SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sd_len) ||
 	    sshkey_to_blob(key, &blob, &blob_len) != 0 ||
 	    blob_len == 0 || blob_len > MAX_MESSAGE_SIZE ||
 	    (thumbprint = pkcs11_identity_name(key, blob, blob_len)) == NULL ||
@@ -545,11 +546,12 @@ store_pkcs11_provider(HKEY user_root, struct agent_connection *con,
 	char *epin = NULL;
 	DWORD epin_len = 0;
 	DWORD disposition = 0;
+	ULONG sd_len = 0;
 	int success = 0;
 
 	sa.nLength = sizeof(sa);
 	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL,
-	    SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sa.nLength) ||
+	    SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sd_len) ||
 	    convert_blob(con, pin, (DWORD)pin_len, &epin, &epin_len, TRUE) != 0 ||
 	    RegCreateKeyExW(user_root, SSH_PKCS11_PROVIDERS_ROOT, 0, NULL, 0,
 	    KEY_WRITE | KEY_WOW64_64KEY, &sa, &reg, NULL) != ERROR_SUCCESS ||
@@ -966,7 +968,7 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 				if (convert_blob(con, epin, epin_len, &pin, &pin_len, 0) != 0 ||
 					(npin = realloc(pin, pin_len + 1)) == NULL) {
 					free_pkcs11_sign_provider(&provider, &pin, pin_len,
-					    &epin, epin_len, &keys, count);
+					    &epin, epin_alloc_len, &keys, count);
 					continue;
 				}
 				pin = npin;
@@ -974,13 +976,13 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 				count = pkcs11_add_provider(provider, pin, &keys, NULL);
 				if (count <= 0) {
 					free_pkcs11_sign_provider(&provider, &pin, pin_len,
-					    &epin, epin_len, &keys, count);
+					    &epin, epin_alloc_len, &keys, count);
 					continue;
 				}
 				loaded = load_pkcs11_identities(user_root, provider,
 				    keys, count);
 				free_pkcs11_sign_provider(&provider, &pin, pin_len,
-				    &epin, epin_len, &keys, count);
+				    &epin, epin_alloc_len, &keys, count);
 				if (loaded < 0)
 					goto done;
 			}
