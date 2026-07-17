@@ -824,14 +824,59 @@ done:
 	return r;
 }
 
+static LSTATUS
+delete_matching_identity(HKEY root, const char *name, const u_char *blob,
+    size_t blob_len)
+{
+	HKEY sub = NULL;
+	u_char *stored_blob = NULL;
+	DWORD stored_blob_len = 0;
+	LSTATUS status;
+
+	status = RegOpenKeyExA(root, name, 0,
+	    KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub);
+	if (status != ERROR_SUCCESS)
+		return status;
+	status = RegQueryValueExW(sub, L"pub", NULL, NULL, NULL,
+	    &stored_blob_len);
+	if (status != ERROR_SUCCESS)
+		goto out;
+	if (stored_blob_len > MAX_MESSAGE_SIZE) {
+		status = ERROR_INVALID_DATA;
+		goto out;
+	}
+	stored_blob = xmalloc(stored_blob_len == 0 ? 1 : stored_blob_len);
+	status = RegQueryValueExW(sub, L"pub", NULL, NULL, stored_blob,
+	    &stored_blob_len);
+	if (status != ERROR_SUCCESS)
+		goto out;
+	if (stored_blob_len != blob_len ||
+	    memcmp(stored_blob, blob, blob_len) != 0) {
+		status = ERROR_FILE_NOT_FOUND;
+		goto out;
+	}
+	RegCloseKey(sub);
+	sub = NULL;
+	status = RegDeleteTreeA(root, name);
+ out:
+	free(stored_blob);
+	if (sub != NULL)
+		RegCloseKey(sub);
+	return status;
+}
+
 int
 process_remove_key(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con) 
 {
 	HKEY user_root = 0, root = 0;
 	char *blob, *thumbprint = NULL;
+#ifdef ENABLE_PKCS11
+	char *pkcs11_name = NULL;
+#endif
 	size_t blen;
 	int r = 0, success = 0, request_invalid = 0;
 	struct sshkey *key = NULL;
+	LSTATUS status;
 
 	if (sshbuf_get_string_direct(request, &blob, &blen) != 0 ||
 	    sshkey_from_blob(blob, blen, &key) != 0) { 
@@ -839,16 +884,26 @@ process_remove_key(struct sshbuf* request, struct sshbuf* response, struct agent
 		goto done;
 	}
 
-	if ((thumbprint =
-#ifdef ENABLE_PKCS11
-	    pkcs11_identity_name(key, (const u_char *)blob, blen)) == NULL ||
-#else
-	    sshkey_fingerprint(key, SSH_FP_HASH_DEFAULT, SSH_FP_DEFAULT)) == NULL ||
-#endif
+	if ((thumbprint = sshkey_fingerprint(key, SSH_FP_HASH_DEFAULT,
+	    SSH_FP_DEFAULT)) == NULL ||
 	    get_user_root(con, &user_root) != 0 ||
 	    RegOpenKeyExW(user_root, SSH_KEYS_ROOT, 0,
-		DELETE | KEY_ENUMERATE_SUB_KEYS | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &root) != 0 ||
-	    RegDeleteTreeA(root, thumbprint) != 0)
+	    DELETE | KEY_ENUMERATE_SUB_KEYS | KEY_QUERY_VALUE |
+	    KEY_WOW64_64KEY, &root) != 0)
+		goto done;
+	status = delete_matching_identity(root, thumbprint,
+	    (const u_char *)blob, blen);
+#ifdef ENABLE_PKCS11
+	if (status == ERROR_FILE_NOT_FOUND && sshkey_is_cert(key)) {
+		pkcs11_name = pkcs11_identity_name(key,
+		    (const u_char *)blob, blen);
+		if (pkcs11_name == NULL)
+			goto done;
+		status = delete_matching_identity(root, pkcs11_name,
+		    (const u_char *)blob, blen);
+	}
+#endif
+	if (status != ERROR_SUCCESS)
 		goto done;
 	success = 1;
 done:
@@ -866,6 +921,9 @@ done:
 		RegCloseKey(root);
 	if (thumbprint)
 		free(thumbprint);
+#ifdef ENABLE_PKCS11
+	free(pkcs11_name);
+#endif
 	return r;
 }
 int 

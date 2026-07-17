@@ -301,6 +301,56 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             ValidateRegistryACL -count $allkeys.count
         }
 
+        It "$tC.$tI - ssh-add - remove software certificates" {
+            if ($NoLibreSSL) {
+                Write-Host "skipping software certificate removal test without LibreSSL"
+                return
+            }
+
+            $ca = Join-Path $testDir "software-cert-ca"
+            $nullFile = Join-Path $testDir "$tC.$tI.nullfile"
+            $null > $nullFile
+            Remove-Item "$ca*" -Force -ErrorAction SilentlyContinue
+            & ssh-keygen -q -t ed25519 -N $keypassphrase -f $ca
+            $LASTEXITCODE | Should Be 0
+
+            try {
+                ssh-add -D
+                $LASTEXITCODE | Should Be 0
+                Add-PasswordSetting -Pass $keypassphrase
+                $env:SSH_ASKPASS_REQUIRE = "force"
+
+                foreach ($type in @("rsa", "ecdsa")) {
+                    $keyPath = Join-Path $testDir "id_$type"
+                    & ssh-keygen -q -s $ca -P $keypassphrase `
+                        -I "software-$type" -n $env:USERNAME "$keyPath.pub"
+                    $LASTEXITCODE | Should Be 0
+                    $certPath = "$keyPath-cert.pub"
+
+                    cmd /c "ssh-add `"$keyPath`" < `"$nullFile`""
+                    $LASTEXITCODE | Should Be 0
+                    & ssh-add -T $certPath
+                    $LASTEXITCODE | Should Be 0
+
+                    $certBlob = (Get-Content $certPath).Split(' ')[1]
+                    @((ssh-add -L) | Where-Object { $_.Contains($certBlob) }).Count |
+                        Should Be 1
+                    & ssh-add -d $certPath
+                    $LASTEXITCODE | Should Be 0
+                    @((ssh-add -L) | Where-Object { $_.Contains($certBlob) }).Count |
+                        Should Be 0
+                }
+            }
+            finally {
+                ssh-add -D | Out-Null
+                Remove-Item "$ca*" -Force -ErrorAction SilentlyContinue
+                foreach ($type in @("rsa", "ecdsa")) {
+                    Remove-Item (Join-Path $testDir "id_$type-cert.pub") `
+                        -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+
         It "$tC.$tI - ssh-add - pkcs11 library (if available)" {
             $pkcs11Path = $env:OPENSSH_TEST_PKCS11_PROVIDER
             if (-not $pkcs11Path) {
