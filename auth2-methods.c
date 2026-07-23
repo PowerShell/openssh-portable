@@ -50,6 +50,11 @@ struct authmethod_cfg methodcfg_pubkey = {
 	&options.pubkey_authentication
 };
 #ifdef GSSAPI
+struct authmethod_cfg methodcfg_gsskeyex = {
+	"gssapi-keyex",
+	NULL,
+	&options.gss_authentication
+};
 struct authmethod_cfg methodcfg_gssapi = {
 	"gssapi-with-mic",
 	NULL,
@@ -76,6 +81,7 @@ static struct authmethod_cfg *authmethod_cfgs[] = {
 	&methodcfg_none,
 	&methodcfg_pubkey,
 #ifdef GSSAPI
+	&methodcfg_gsskeyex,
 	&methodcfg_gssapi,
 #endif
 	&methodcfg_passwd,

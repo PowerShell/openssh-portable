@@ -850,6 +850,8 @@ main(int ac, char **av)
 			else if (strcmp(optarg, "kex") == 0 ||
 			    strcasecmp(optarg, "KexAlgorithms") == 0)
 				cp = kex_alg_list('\n');
+			else if (strcmp(optarg, "kex-gss") == 0)
+				cp = kex_gss_alg_list('\n');
 			else if (strcmp(optarg, "key") == 0)
 				cp = sshkey_alg_list(0, 0, 0, '\n');
 			else if (strcmp(optarg, "key-cert") == 0)
@@ -880,8 +882,8 @@ main(int ac, char **av)
 			} else if (strcmp(optarg, "help") == 0) {
 				cp = xstrdup(
 				    "cipher\ncipher-auth\ncompression\nkex\n"
-				    "key\nkey-cert\nkey-plain\nkey-sig\nmac\n"
-				    "protocol-version\nsig");
+				    "kex-gss\nkey\nkey-cert\nkey-plain\n"
+				    "key-sig\nmac\nprotocol-version\nsig");
 			}
 			if (cp == NULL)
 				fatal("Unsupported query \"%s\"", optarg);

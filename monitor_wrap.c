@@ -1123,13 +1123,15 @@ mm_ssh_gssapi_checkmic(Gssctxt *ctx, gss_buffer_t gssbuf, gss_buffer_t gssmic)
 }
 
 int
-mm_ssh_gssapi_userok(char *user)
+mm_ssh_gssapi_userok(char *user, struct passwd *pw, int kex)
 {
 	struct sshbuf *m;
 	int r, authenticated = 0;
 
 	if ((m = sshbuf_new()) == NULL)
 		fatal_f("sshbuf_new failed");
+	if ((r = sshbuf_put_u32(m, kex)) != 0)
+		fatal_fr(r, "buffer error");
 
 	mm_request_send(pmonitor->m_recvfd, MONITOR_REQ_GSSUSEROK, m);
 	mm_request_receive_expect(pmonitor->m_recvfd,
@@ -1142,6 +1144,59 @@ mm_ssh_gssapi_userok(char *user)
 	debug3_f("user %sauthenticated", authenticated ? "" : "not ");
 	return (authenticated);
 }
+
+OM_uint32
+mm_ssh_gssapi_sign(Gssctxt *ctx, gss_buffer_desc *data, gss_buffer_desc *hash)
+{
+	struct sshbuf *m;
+	OM_uint32 major;
+	int r;
+
+	if ((m = sshbuf_new()) == NULL)
+		fatal_f("sshbuf_new failed");
+	if ((r = sshbuf_put_string(m, data->value, data->length)) != 0)
+		fatal_fr(r, "buffer error");
+
+	mm_request_send(pmonitor->m_recvfd, MONITOR_REQ_GSSSIGN, m);
+	mm_request_receive_expect(pmonitor->m_recvfd, MONITOR_ANS_GSSSIGN, m);
+
+	if ((r = sshbuf_get_u32(m, &major)) != 0 ||
+	    (r = ssh_gssapi_get_buffer_desc(m, hash)) != 0)
+		fatal_fr(r, "buffer error");
+
+	sshbuf_free(m);
+
+	return (major);
+}
+
+int
+mm_ssh_gssapi_update_creds(ssh_gssapi_ccache *store)
+{
+	struct sshbuf *m;
+	int r, ok;
+
+	if ((m = sshbuf_new()) == NULL)
+		fatal_f("sshbuf_new failed");
+
+	if ((r = sshbuf_put_cstring(m,
+	    store->filename ? store->filename : "")) != 0 ||
+	    (r = sshbuf_put_cstring(m,
+	    store->envvar ? store->envvar : "")) != 0 ||
+	    (r = sshbuf_put_cstring(m,
+	    store->envval ? store->envval : "")) != 0)
+		fatal_fr(r, "buffer error");
+
+	mm_request_send(pmonitor->m_recvfd, MONITOR_REQ_GSSUPCREDS, m);
+	mm_request_receive_expect(pmonitor->m_recvfd, MONITOR_ANS_GSSUPCREDS, m);
+
+	if ((r = sshbuf_get_u32(m, &ok)) != 0)
+		fatal_fr(r, "buffer error");
+
+	sshbuf_free(m);
+
+	return (ok);
+}
+
 #endif /* GSSAPI */
 
 /*

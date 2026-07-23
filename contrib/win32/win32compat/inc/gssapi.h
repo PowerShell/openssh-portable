@@ -193,6 +193,10 @@ gss_add_oid_set_member(_Out_ OM_uint32 * minor_status, _In_ gss_OID member_oid,
 OM_uint32
 gss_create_empty_oid_set(_Out_ OM_uint32 * minor_status, _Outptr_ gss_OID_set * oid_set);
 
+OM_uint32
+gss_compare_name(_Out_ OM_uint32 * minor_status, _In_ const gss_name_t name1,
+	_In_ const gss_name_t name2, _Out_ int * name_equal);
+
 OM_uint32 
 gss_delete_sec_context(_Out_ OM_uint32 * minor_status, _Inout_ gss_ctx_id_t * context_handle,
 	_Inout_opt_ gss_buffer_t output_token);
@@ -222,6 +226,18 @@ gss_import_name(_Out_ OM_uint32 * minor_status, _In_ gss_buffer_t input_name_buf
 OM_uint32 
 gss_indicate_mechs(_Out_ OM_uint32 * minor_status, _Outptr_ gss_OID_set * mech_set);
 
+OM_uint32
+gss_inquire_cred(_Out_ OM_uint32 * minor_status, _In_ const gss_cred_id_t cred_handle,
+	_Out_opt_ gss_name_t * name, _Out_opt_ OM_uint32 * lifetime,
+	_Out_opt_ gss_cred_usage_t * cred_usage, _Outptr_opt_ gss_OID_set * mechanisms);
+
+OM_uint32
+gss_inquire_cred_by_mech(_Out_ OM_uint32 * minor_status,
+	_In_ const gss_cred_id_t cred_handle, _In_ const gss_OID mech_type,
+	_Out_opt_ gss_name_t * name, _Out_opt_ OM_uint32 * initiator_lifetime,
+	_Out_opt_ OM_uint32 * acceptor_lifetime,
+	_Out_opt_ gss_cred_usage_t * cred_usage);
+
 OM_uint32 
 gss_release_buffer(_Out_ OM_uint32 * minor_status, _Inout_ gss_buffer_t buffer);
 
@@ -244,3 +260,4 @@ gss_verify_mic(_Out_ OM_uint32 * minor_status, _In_ gss_ctx_id_t context_handle,
 	_Inout_ gss_qop_t * qop_state);
 
 extern gss_OID GSS_C_NT_HOSTBASED_SERVICE;
+extern gss_OID GSS_C_NT_USER_NAME;

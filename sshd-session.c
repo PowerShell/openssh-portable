@@ -1065,8 +1065,8 @@ notify_hostkeys(struct ssh *ssh)
 	}
 	debug3_f("sent %u hostkeys", nkeys);
 	if (nkeys == 0)
-		fatal_f("no hostkeys");
-	if ((r = sshpkt_send(ssh)) != 0)
+		debug3_f("no hostkeys");
+	else if ((r = sshpkt_send(ssh)) != 0)
 		sshpkt_fatal(ssh, r, "%s: send", __func__);
 	sshbuf_free(buf);
 }

@@ -739,6 +739,11 @@ Specifies whether to automatically destroy the user's credentials cache
 on logout.
 The default is
 .Cm yes .
+.It Cm GSSAPIKeyExchange
+Specifies whether key exchange based on GSSAPI is allowed. GSSAPI key exchange
+doesn't rely on ssh keys to verify host identity.
+The default is
+.Cm no .
 .It Cm GSSAPIStrictAcceptorCheck
 Determines whether to be strict about the identity of the GSSAPI acceptor
 a client authenticates against.
@@ -753,6 +758,31 @@ machine's default store.
 This facility is provided to assist with operation on multi homed machines.
 The default is
 .Cm yes .
+.It Cm GSSAPIStoreCredentialsOnRekey
+Controls whether the user's GSSAPI credentials should be updated following a
+successful connection rekeying. This option can be used to accepted renewed
+or updated credentials from a compatible client. The default is
+.Dq no .
+.Pp
+For this to work
+.Cm GSSAPIKeyExchange
+needs to be enabled in the server and also used by the client.
+.It Cm GSSAPIKexAlgorithms
+The list of key exchange algorithms that are accepted by GSSAPI
+key exchange. Possible values are
+.Bd -literal -offset 3n
+gss-gex-sha1-,
+gss-group1-sha1-,
+gss-group14-sha1-,
+gss-group14-sha256-,
+gss-group16-sha512-,
+gss-nistp256-sha256-,
+gss-curve25519-sha256-
+.Ed
+.Pp
+The default is
+.Dq gss-group14-sha256-,gss-group16-sha512-,gss-nistp256-sha256-,gss-curve25519-sha256-,gss-gex-sha1-,gss-group14-sha1- .
+This option only applies to connections using GSSAPI.
 .It Cm HostbasedAcceptedAlgorithms
 Specifies the signature algorithms that will be accepted for hostbased
 authentication as a list of comma-separated patterns.

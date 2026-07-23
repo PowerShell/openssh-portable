@@ -369,7 +369,8 @@ auth_root_allowed(struct ssh *ssh, const char *method)
 	case PERMIT_NO_PASSWD:
 		if (strcmp(method, "publickey") == 0 ||
 		    strcmp(method, "hostbased") == 0 ||
-		    strcmp(method, "gssapi-with-mic") == 0)
+		    strcmp(method, "gssapi-with-mic") == 0 ||
+		    strcmp(method, "gssapi-keyex") == 0)
 			return 1;
 		break;
 	case PERMIT_FORCED_ONLY:

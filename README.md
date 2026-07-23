@@ -1,3 +1,39 @@
+Portable OpenSSH with GSSAPI Key Exchange patches
+=================================================
+
+[![Language grade: C/C++](https://img.shields.io/lgtm/grade/cpp/g/openssh-gsskex/openssh-gsskex.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/openssh-gsskex/openssh-gsskex/context:cpp)
+
+Currently, there are two branches with gssapi key exchange related
+patches:
+
+ * fedora/master: Changes that are shipped in Fedora [![Build Status](https://travis-ci.org/openssh-gsskex/openssh-gsskex.svg?branch=fedora%2Fmaster)](https://travis-ci.org/openssh-gsskex/openssh-gsskex)
+ * debian/master: Changes that are shipped in Debian [![Build Status](https://travis-ci.org/openssh-gsskex/openssh-gsskex.svg?branch=debian%2Fmaster)](https://travis-ci.org/openssh-gsskex/openssh-gsskex)
+
+The target is to converge to a shared repository with single master
+branch from where we could build releases for both OSes.
+
+
+What is in:
+
+ * The original patch implementing missing parts of RFC4462 by Simon Wilkinson
+   adapted to the current OpenSSH versions and with several fixes
+ * New methods for GSSAPI Kex from IETF draft [1] from Jakub Jelen
+
+
+Missing kerberos-related parts:
+
+ * .k5login and .kusers support available in Fedora [2] [3].
+ * Improved handling of kerberos ccache location [4]
+
+
+
+[1] https://tools.ietf.org/html/draft-ietf-curdle-gss-keyex-sha2-08
+[2] https://src.fedoraproject.org/rpms/openssh/blob/master/f/openssh-6.6p1-kuserok.patch
+[3] https://src.fedoraproject.org/rpms/openssh/blob/master/f/openssh-6.6p1-GSSAPIEnablek5users.patch
+[4] https://bugzilla.mindrot.org/show_bug.cgi?id=2775
+
+-------------------------------------------------------------------------------
+
 # Portable OpenSSH
 
 [![C/C++ CI](https://github.com/openssh/openssh-portable/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/openssh/openssh-portable/actions/workflows/c-cpp.yml)

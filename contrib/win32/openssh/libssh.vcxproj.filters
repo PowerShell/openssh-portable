@@ -32,6 +32,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)kexecdh.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)kexgex.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)kexgexc.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)kexgssc.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)krl.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)log.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)mac.c" />
@@ -46,6 +47,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-ed25519.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-pkcs11.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-rsa.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)ssh-null.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sshbuf-getput-basic.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sshbuf-getput-crypto.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sshbuf-misc.c" />
@@ -176,6 +178,9 @@
     <ClCompile Include="$(OpenSSH-Src-Path)kexgexc.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="$(OpenSSH-Src-Path)kexgssc.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)krl.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -216,6 +221,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-rsa.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="$(OpenSSH-Src-Path)ssh-null.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)sshbuf-getput-basic.c">

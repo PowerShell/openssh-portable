@@ -49,13 +49,23 @@ kex_dh_keygen(struct kex *kex)
 {
 	switch (kex->kex_type) {
 	case KEX_DH_GRP1_SHA1:
+#ifdef GSSAPI
+	case KEX_GSS_GRP1_SHA1:
+#endif
 		kex->dh = dh_new_group1();
 		break;
 	case KEX_DH_GRP14_SHA1:
 	case KEX_DH_GRP14_SHA256:
+#ifdef GSSAPI
+	case KEX_GSS_GRP14_SHA1:
+	case KEX_GSS_GRP14_SHA256:
+#endif
 		kex->dh = dh_new_group14();
 		break;
 	case KEX_DH_GRP16_SHA512:
+#ifdef GSSAPI
+	case KEX_GSS_GRP16_SHA512:
+#endif
 		kex->dh = dh_new_group16();
 		break;
 	case KEX_DH_GRP18_SHA512:

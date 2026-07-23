@@ -436,8 +436,6 @@
     <ClCompile Include="$(OpenSSH-Src-Path)audit-bsm.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)audit-linux.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)audit.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)gss-serv-krb5.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)gss-serv.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)loginrec.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)platform.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sandbox-capsicum.c" />

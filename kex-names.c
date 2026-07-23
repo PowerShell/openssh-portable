@@ -45,6 +45,10 @@
 #include "ssherr.h"
 #include "xmalloc.h"
 
+#ifdef GSSAPI
+#include "ssh-gss.h"
+#endif
+
 struct kexalg {
 	char *name;
 	u_int type;
@@ -89,15 +93,28 @@ static const struct kexalg kexalgs[] = {
 #endif /* HAVE_EVP_SHA256 || !WITH_OPENSSL */
 	{ NULL, 0, -1, -1},
 };
+static const struct kexalg gss_kexalgs[] = {
+#ifdef GSSAPI
+	{ KEX_GSS_GEX_SHA1_ID, KEX_GSS_GEX_SHA1, 0, SSH_DIGEST_SHA1 },
+	{ KEX_GSS_GRP1_SHA1_ID, KEX_GSS_GRP1_SHA1, 0, SSH_DIGEST_SHA1 },
+	{ KEX_GSS_GRP14_SHA1_ID, KEX_GSS_GRP14_SHA1, 0, SSH_DIGEST_SHA1 },
+	{ KEX_GSS_GRP14_SHA256_ID, KEX_GSS_GRP14_SHA256, 0, SSH_DIGEST_SHA256 },
+	{ KEX_GSS_GRP16_SHA512_ID, KEX_GSS_GRP16_SHA512, 0, SSH_DIGEST_SHA512 },
+	{ KEX_GSS_NISTP256_SHA256_ID, KEX_GSS_NISTP256_SHA256,
+	    NID_X9_62_prime256v1, SSH_DIGEST_SHA256 },
+	{ KEX_GSS_C25519_SHA256_ID, KEX_GSS_C25519_SHA256, 0, SSH_DIGEST_SHA256 },
+#endif
+	{ NULL, 0, -1, -1},
+};
 
-char *
-kex_alg_list(char sep)
+static char *
+kex_alg_list_internal(char sep, const struct kexalg *algs)
 {
 	char *ret = NULL, *tmp;
 	size_t nlen, rlen = 0;
 	const struct kexalg *k;
 
-	for (k = kexalgs; k->name != NULL; k++) {
+	for (k = algs; k->name != NULL; k++) {
 		if (ret != NULL)
 			ret[rlen++] = sep;
 		nlen = strlen(k->name);
@@ -112,6 +129,18 @@ kex_alg_list(char sep)
 	return ret;
 }
 
+char *
+kex_alg_list(char sep)
+{
+	return kex_alg_list_internal(sep, kexalgs);
+}
+
+char *
+kex_gss_alg_list(char sep)
+{
+	return kex_alg_list_internal(sep, gss_kexalgs);
+}
+
 static const struct kexalg *
 kex_alg_by_name(const char *name)
 {
@@ -119,6 +148,10 @@ kex_alg_by_name(const char *name)
 
 	for (k = kexalgs; k->name != NULL; k++) {
 		if (strcmp(k->name, name) == 0)
+			return k;
+	}
+	for (k = gss_kexalgs; k->name != NULL; k++) {
+		if (strncmp(k->name, name, strlen(k->name)) == 0)
 			return k;
 	}
 	return NULL;
@@ -179,6 +212,29 @@ kex_names_valid(const char *names)
 		}
 	}
 	debug3("kex names ok: [%s]", names);
+	free(s);
+	return 1;
+}
+
+/* Validate GSS KEX method name list */
+int
+kex_gss_names_valid(const char *names)
+{
+	char *s, *cp, *p;
+
+	if (names == NULL || *names == '\0')
+		return 0;
+	s = cp = xstrdup(names);
+	for ((p = strsep(&cp, ",")); p && *p != '\0';
+	    (p = strsep(&cp, ","))) {
+		if (strncmp(p, "gss-", 4) != 0
+		  || kex_alg_by_name(p) == NULL) {
+			error("Unsupported KEX algorithm \"%.100s\"", p);
+			free(s);
+			return 0;
+		}
+	}
+	debug3("gss kex names ok: [%s]", names);
 	free(s);
 	return 1;
 }
