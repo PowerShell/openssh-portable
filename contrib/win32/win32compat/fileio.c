@@ -339,6 +339,7 @@ fileio_afunix_bind(struct w32_io* pio, const char* sun_path)
 
 	pio->handle = h;
 	pio->internal.context = state;
+	pio->internal.state = SOCK_BOUND;	/* tag checked by fileio_close */
 	ret = 0;
 
 cleanup:
@@ -1358,7 +1359,8 @@ fileio_close(struct w32_io* pio)
 	debug4("fileclose - pio:%p", pio);
 
 	/* bound/listening AF_UNIX socket emulated over named pipes */
-	if (pio->internal.context) {
+	if (pio->internal.state == SOCK_BOUND ||
+	    pio->internal.state == SOCK_LISTENING) {
 		struct afunix_listener_state* state =
 		    (struct afunix_listener_state*)pio->internal.context;
 		if (WINHANDLE(pio) != 0 && WINHANDLE(pio) != INVALID_HANDLE_VALUE) {
