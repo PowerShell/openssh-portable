@@ -62,7 +62,8 @@ enum w32_io_sock_state {
 	SOCK_INITIALIZED = 0,
 	SOCK_LISTENING = 1,	/*listen called on socket*/
 	SOCK_CONNECTING = 2,	/*connect called on socket, connect is in progress*/
-	SOCK_READY = 3		/*recv and send can be done*/
+	SOCK_READY = 3,		/*recv and send can be done*/
+	SOCK_BOUND = 4		/*bind called on AF_UNIX (named pipe) socket*/
 };
 
 /*
