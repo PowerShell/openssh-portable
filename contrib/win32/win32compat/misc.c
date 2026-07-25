@@ -491,26 +491,60 @@ daemon(int nochdir, int noclose)
  * primitives; the policy lives in ssh.c.
  */
 
-/* environment marker identifying the spawned persistent master process */
+/* environment marker identifying the spawned persistent master process;
+ * its value names the ready event the master signals (see below) */
 #define W32_CONTROLPERSIST_ENV "SSH_CONTROLPERSIST_MASTER"
+
+/* copy of this process's environment block with one extra "VAR=value" entry */
+static wchar_t *
+env_block_append(const wchar_t *entry)
+{
+	wchar_t *parent, *block = NULL, *p;
+	size_t plen, elen;
+
+	if ((parent = GetEnvironmentStringsW()) == NULL)
+		return NULL;
+	for (p = parent; *p != L'\0'; p += wcslen(p) + 1)
+		;
+	plen = p - parent;
+	elen = wcslen(entry) + 1;
+	if ((block = malloc((plen + elen + 1) * sizeof(wchar_t))) != NULL) {
+		memcpy(block, parent, plen * sizeof(wchar_t));
+		memcpy(block + plen, entry, elen * sizeof(wchar_t));
+		block[plen + elen] = L'\0';
+	}
+	FreeEnvironmentStringsW(parent);
+	return block;
+}
 
 /*
  * Spawn a detached background ssh process (this same executable) with the
  * given arguments to act as a persistent mux master. The child shares this
  * process's console so it can prompt for authentication, and is deliberately
  * NOT registered as a tracked child, so it survives after this process
- * exits. Returns the child process HANDLE as intptr_t (caller CloseHandle),
- * or -1 on failure.
+ * exits. *ready_event receives an event HANDLE (as intptr_t) that the child
+ * signals once its control socket is up; the child opens it by the name
+ * carried in the environment marker (see w32_signal_controlpersist_ready).
+ * A named event is used rather than handle inheritance: for a console child
+ * CreateProcess propagates the parent's standard handles regardless of any
+ * PROC_THREAD_ATTRIBUTE_HANDLE_LIST restriction, and the long-lived master
+ * must not hold the client's redirected stdio open. Returns the child
+ * process HANDLE as intptr_t (caller w32_close_handle's both), or -1 on
+ * failure.
  */
 intptr_t
-w32_spawn_control_master(char *const args[])
+w32_spawn_control_master(char *const args[], intptr_t *ready_event)
 {
-	wchar_t exe_w[MAX_PATH];
+	wchar_t exe_w[MAX_PATH], event_name[64], env_entry[96];
 	char *exe = NULL, *cmdline = NULL;
-	wchar_t *cmdline_w = NULL;
+	wchar_t *cmdline_w = NULL, *env = NULL;
+	LARGE_INTEGER qpc;
+	HANDLE event = NULL;
 	STARTUPINFOW si;
 	PROCESS_INFORMATION pi;
 	intptr_t ret = -1;
+
+	*ready_event = -1;
 
 	if (GetModuleFileNameW(NULL, exe_w, MAX_PATH) == 0) {
 		error("%s: GetModuleFileName failed: %d", __func__, GetLastError());
@@ -528,12 +562,38 @@ w32_spawn_control_master(char *const args[])
 		goto done;
 	}
 
+	/* named event (session-local) the child signals once its control
+	 * socket is up; pid + perf counter makes the name unique */
+	QueryPerformanceCounter(&qpc);
+	swprintf_s(event_name, _countof(event_name),
+	    L"Local\\ssh-controlpersist-%u-%08x%08x", GetCurrentProcessId(),
+	    (unsigned int)qpc.HighPart, (unsigned int)qpc.LowPart);
+	if ((event = CreateEventW(NULL, TRUE, FALSE, event_name)) == NULL) {
+		error("%s: CreateEvent failed: %d", __func__, GetLastError());
+		goto done;
+	}
+
+	/* the child reads this marker to learn it is the persistent master
+	 * and which event to signal when its control socket is up */
+	swprintf_s(env_entry, _countof(env_entry),
+	    L"" W32_CONTROLPERSIST_ENV L"=%s", event_name);
+	if ((env = env_block_append(env_entry)) == NULL) {
+		errno = ENOMEM;
+		goto done;
+	}
+
 	memset(&si, 0, sizeof(si));
 	si.cb = sizeof(si);
+	/*
+	 * Explicit null std handles: without STARTF_USESTDHANDLES, Windows
+	 * duplicates a console parent's std handles into a console child even
+	 * with bInheritHandles=FALSE, and the long-lived master must not keep
+	 * the client's redirected stdio open. Auth prompts are unaffected:
+	 * they use the shared console directly (conio), not the std handles.
+	 */
+	si.dwFlags = STARTF_USESTDHANDLES;
 	memset(&pi, 0, sizeof(pi));
 
-	/* the child reads this marker to learn it is the persistent master */
-	SetEnvironmentVariableW(L"" W32_CONTROLPERSIST_ENV, L"1");
 	/*
 	 * No CREATE_NEW_CONSOLE/DETACHED_PROCESS: the child shares our console
 	 * so it can prompt for authentication. It calls FreeConsole() once its
@@ -541,27 +601,70 @@ w32_spawn_control_master(char *const args[])
 	 * inherited; the master opens its own connection.
 	 */
 	if (!CreateProcessW(NULL, cmdline_w, NULL, NULL, FALSE,
-	    0, NULL, NULL, &si, &pi)) {
+	    CREATE_UNICODE_ENVIRONMENT, env, NULL, &si, &pi)) {
 		error("%s: CreateProcess failed: %d", __func__, GetLastError());
-		SetEnvironmentVariableW(L"" W32_CONTROLPERSIST_ENV, NULL);
 		goto done;
 	}
-	SetEnvironmentVariableW(L"" W32_CONTROLPERSIST_ENV, NULL);
 	CloseHandle(pi.hThread);
+	*ready_event = (intptr_t)event;
 	ret = (intptr_t)pi.hProcess;
 
 done:
+	if (ret == -1 && event != NULL)
+		CloseHandle(event);
+	free(env);
 	free(exe);
 	free(cmdline);
 	free(cmdline_w);
 	return ret;
 }
 
-/* 1 if the spawned process is still running, 0 if it has exited */
+/*
+ * Wait for the spawned master to become ready or fail. Returns 1 when the
+ * ready event was signaled (the control socket is up), 0 when the process
+ * exited without signaling it, -1 on timeout or error.
+ */
 int
-w32_process_alive(intptr_t proc)
+w32_wait_controlpersist_ready(intptr_t proc, intptr_t ready_event,
+    int timeout_ms)
 {
-	return WaitForSingleObject((HANDLE)proc, 0) == WAIT_TIMEOUT;
+	HANDLE handles[2] = { (HANDLE)ready_event, (HANDLE)proc };
+
+	switch (WaitForMultipleObjects(2, handles, FALSE, (DWORD)timeout_ms)) {
+	case WAIT_OBJECT_0:
+		return 1;
+	case WAIT_OBJECT_0 + 1:
+		return 0;
+	default:
+		return -1;
+	}
+}
+
+/*
+ * In a spawned persistent master: signal the ready event named by the
+ * environment marker to unblock the spawning process's wait. No-op if the
+ * event cannot be opened (e.g. the spawning process already gave up).
+ */
+void
+w32_signal_controlpersist_ready(void)
+{
+	char *val = NULL;
+	wchar_t *name_w = NULL;
+	size_t len = 0;
+	HANDLE event;
+
+	_dupenv_s(&val, &len, W32_CONTROLPERSIST_ENV);
+	if (val == NULL)
+		return;
+	if ((name_w = utf8_to_utf16(val)) != NULL &&
+	    (event = OpenEventW(EVENT_MODIFY_STATE, FALSE, name_w)) != NULL) {
+		SetEvent(event);
+		CloseHandle(event);
+	} else
+		debug3("%s: cannot signal ready event: %d", __func__,
+		    GetLastError());
+	free(name_w);
+	free(val);
 }
 
 /* close a process handle returned by w32_spawn_control_master */
