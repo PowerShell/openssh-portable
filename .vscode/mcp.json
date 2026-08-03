@@ -7,8 +7,18 @@
                 "-noprofile",
                 "-c",
                 "MCPServerPS\\Start-MyMCP -ScriptRoot ./.github/tools"
-            ]
+            ],
+            "env": {
+                "GITHUB_TOKEN": "${input:github_token}"
+            }
         }
     },
-    "inputs": []
+    "inputs": [
+        {
+            "id": "github_token",
+            "type": "promptString",
+            "description": "GitHub Personal Access Token (used for commit-group CI status queries)",
+            "password": true
+        }
+    ]
 }
