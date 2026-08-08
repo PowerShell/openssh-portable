@@ -140,9 +140,9 @@ allowed_user(struct ssh *ssh, struct passwd * pw)
 
 #ifdef WINDOWS
 		if ((resolved_shell = resolve_configured_user_path(shell,
-		    pw->pw_name, 1)) == NULL) {
+		    pw->pw_dir, 1)) == NULL) {
 			logit("User %.100s not allowed because shell %.100s "
-			    "could not be resolved to an absolute path",
+			    "could not be resolved to a fully qualified path",
 			    pw->pw_name, shell);
 			free(shell);
 			return 0;
@@ -593,7 +593,7 @@ getpwnamallow(struct ssh *ssh, const char *user)
 		pw = pwcopy(pw);
 #ifdef WINDOWS
 		if ((resolved_shell = resolve_configured_user_path(pw->pw_shell,
-		    pw->pw_name, 1)) == NULL) {
+		    pw->pw_dir, 1)) == NULL) {
 			free(pw->pw_name);
 			free(pw->pw_passwd);
 			free(pw->pw_dir);

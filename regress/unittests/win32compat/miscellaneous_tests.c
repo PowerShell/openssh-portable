@@ -424,19 +424,38 @@ test_build_commandline_string()
 void
 test_resolve_configured_user_path()
 {
-	char *out;
+	char *out, *old_test_root = NULL;
+	size_t old_test_root_len = 0;
 
 	TEST_START("configured path expansion");
+	_dupenv_s(&old_test_root, &old_test_root_len, "OPENSSH_TEST_ROOT");
 	SetEnvironmentVariableA("OPENSSH_TEST_ROOT", "C:\\OpenSSHTest");
 	out = resolve_configured_user_path("%OPENSSH_TEST_ROOT%\\pwsh.exe",
 	    NULL, 1);
 	ASSERT_STRING_EQ(out, "C:\\OpenSSHTest\\pwsh.exe");
 	free(out);
-	SetEnvironmentVariableA("OPENSSH_TEST_ROOT", NULL);
+	SetEnvironmentVariableA("OPENSSH_TEST_ROOT", old_test_root);
+	free(old_test_root);
 	TEST_DONE();
 
-	TEST_START("configured path requires absolute result");
+	TEST_START("configured user profile path expansion");
+	out = resolve_configured_user_path(
+	    "%LOCALAPPDATA%\\Microsoft\\WindowsApps\\pwsh.exe",
+	    "C:\\Users\\TestUser", 1);
+	ASSERT_STRING_EQ(out,
+	    "C:\\Users\\TestUser\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe");
+	free(out);
+	TEST_DONE();
+
+	TEST_START("configured path requires fully qualified result");
 	out = resolve_configured_user_path("pwsh.exe", NULL, 1);
+	ASSERT_PTR_EQ(out, NULL);
+	ASSERT_INT_EQ(errno, EINVAL);
+	TEST_DONE();
+
+	TEST_START("configured path rejects rooted drive-relative result");
+	out = resolve_configured_user_path("\\Windows\\System32\\cmd.exe",
+	    NULL, 1);
 	ASSERT_PTR_EQ(out, NULL);
 	ASSERT_INT_EQ(errno, EINVAL);
 	TEST_DONE();
@@ -444,6 +463,13 @@ test_resolve_configured_user_path()
 	TEST_START("configured path preserves explicit relative subsystem");
 	out = resolve_configured_user_path("sftp-server.exe", NULL, 0);
 	ASSERT_STRING_EQ(out, "sftp-server.exe");
+	free(out);
+	TEST_DONE();
+
+	TEST_START("configured path permits literal percent");
+	out = resolve_configured_user_path("C:\\OpenSSH%%Test\\pwsh.exe",
+	    NULL, 1);
+	ASSERT_STRING_EQ(out, "C:\\OpenSSH%Test\\pwsh.exe");
 	free(out);
 	TEST_DONE();
 

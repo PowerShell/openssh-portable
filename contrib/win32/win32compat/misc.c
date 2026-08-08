@@ -37,7 +37,6 @@
 #include <stdio.h>
 #include <time.h>
 #include <Shlwapi.h>
-#include <Userenv.h>
 #include <conio.h>
 #include <LM.h>
 #include <Sddl.h>
@@ -1418,98 +1417,193 @@ is_absolute_path(const char *path)
 	return retVal;
 }
 
-char *
-resolve_configured_user_path(const char *path, const char *user, int require_absolute)
+static int
+is_fully_qualified_path(const char *path)
 {
-	wchar_t *path_utf16 = NULL, *expanded_path = NULL;
-	char *ret = NULL, *resolved = NULL;
-	HANDLE user_token = NULL;
-	DWORD expanded_len = 0, last_error = ERROR_SUCCESS;
+	char *slash;
+
+	if (path == NULL || *path == '\0')
+		return 0;
+	if (*path == '\"' || *path == '\'')
+		path++;
+
+	if (__isascii(path[0]) && isalpha(path[0]) && path[1] == ':' &&
+	    (path[2] == '\\' || path[2] == '/'))
+		return 1;
+
+	if (path[0] != '\\' || path[1] != '\\')
+		return 0;
+
+	if (_strnicmp(path, "\\\\?\\UNC\\", 8) == 0)
+		path += 8;
+	else if (_strnicmp(path, "\\\\?\\", 4) == 0)
+		return __isascii(path[4]) && isalpha(path[4]) &&
+		    path[5] == ':' && (path[6] == '\\' || path[6] == '/');
+	else if (_strnicmp(path, "\\\\.\\", 4) == 0)
+		return 0;
+	else
+		path += 2;
+
+	if (*path == '\0' || *path == '\\' || *path == '/')
+		return 0;
+	slash = strpbrk(path, "\\/");
+	if (slash == NULL || slash == path || slash[1] == '\0' ||
+	    slash[1] == '\\' || slash[1] == '/')
+		return 0;
+
+	return 1;
+}
+
+static int
+append_path_segment(char **buffer, size_t *capacity, size_t *length,
+    const char *segment, size_t segment_len)
+{
+	char *tmp;
+	size_t new_capacity;
+
+	if (*length + segment_len + 1 > *capacity) {
+		new_capacity = *capacity == 0 ? 128 : *capacity;
+		while (*length + segment_len + 1 > new_capacity)
+			new_capacity *= 2;
+		if ((tmp = realloc(*buffer, new_capacity)) == NULL) {
+			errno = ENOMEM;
+			return -1;
+		}
+		*buffer = tmp;
+		*capacity = new_capacity;
+	}
+
+	memcpy(*buffer + *length, segment, segment_len);
+	*length += segment_len;
+	(*buffer)[*length] = '\0';
+	return 0;
+}
+
+static int
+append_profile_path(char **buffer, size_t *capacity, size_t *length,
+    const char *profile_path, const char *suffix)
+{
+	if (profile_path == NULL || *profile_path == '\0') {
+		errno = EINVAL;
+		return -1;
+	}
+	if (append_path_segment(buffer, capacity, length, profile_path,
+	    strlen(profile_path)) != 0)
+		return -1;
+	if (suffix != NULL && append_path_segment(buffer, capacity, length,
+	    suffix, strlen(suffix)) != 0)
+		return -1;
+	return 0;
+}
+
+static int
+append_configured_path_variable(char **buffer, size_t *capacity,
+    size_t *length, const char *name, size_t name_len,
+    const char *profile_path)
+{
+	char *name_buffer = NULL, *value = NULL;
+	size_t value_len;
+	int ret = -1;
+
+	if (name_len == 11 && _strnicmp(name, "USERPROFILE", name_len) == 0)
+		return append_profile_path(buffer, capacity, length,
+		    profile_path, NULL);
+	if (name_len == 12 && _strnicmp(name, "LOCALAPPDATA", name_len) == 0)
+		return append_profile_path(buffer, capacity, length,
+		    profile_path, "\\AppData\\Local");
+	if (name_len == 7 && _strnicmp(name, "APPDATA", name_len) == 0)
+		return append_profile_path(buffer, capacity, length,
+		    profile_path, "\\AppData\\Roaming");
+
+	if ((name_buffer = calloc(name_len + 1, 1)) == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+	memcpy(name_buffer, name, name_len);
+
+	if (_dupenv_s(&value, &value_len, name_buffer) != 0 ||
+	    value == NULL) {
+		errno = EINVAL;
+		goto cleanup;
+	}
+	ret = append_path_segment(buffer, capacity, length, value,
+	    strlen(value));
+
+cleanup:
+	free(name_buffer);
+	free(value);
+	return ret;
+}
+
+static char *
+expand_configured_path_variables(const char *path, const char *profile_path)
+{
+	char *buffer = NULL, *end;
+	size_t capacity = 0, length = 0;
+
+	for (; *path != '\0'; path++) {
+		if (*path != '%') {
+			if (append_path_segment(&buffer, &capacity, &length,
+			    path, 1) != 0)
+				goto cleanup;
+			continue;
+		}
+		if (path[1] == '%') {
+			if (append_path_segment(&buffer, &capacity, &length,
+			    "%", 1) != 0)
+				goto cleanup;
+			path++;
+			continue;
+		}
+		if ((end = strchr(path + 1, '%')) == NULL) {
+			if (append_path_segment(&buffer, &capacity, &length,
+			    path, 1) != 0)
+				goto cleanup;
+			continue;
+		}
+		if (end == path + 1) {
+			if (append_path_segment(&buffer, &capacity, &length,
+			    "%", 1) != 0)
+				goto cleanup;
+			path = end;
+			continue;
+		}
+		if (append_configured_path_variable(&buffer, &capacity,
+		    &length, path + 1, end - path - 1, profile_path) != 0)
+			goto cleanup;
+		path = end;
+	}
+
+	if (buffer == NULL && append_path_segment(&buffer, &capacity,
+	    &length, "", 0) != 0)
+		goto cleanup;
+	return buffer;
+
+cleanup:
+	free(buffer);
+	return NULL;
+}
+
+char *
+resolve_configured_user_path(const char *path, const char *profile_path,
+    int require_absolute)
+{
+	char *ret = NULL;
 
 	if (path == NULL || *path == '\0') {
 		errno = EINVAL;
 		return NULL;
 	}
 
-	if ((path_utf16 = utf8_to_utf16(path)) == NULL) {
-		errno = ENOMEM;
-		goto cleanup;
-	}
+	if ((ret = expand_configured_path_variables(path, profile_path)) == NULL)
+		return NULL;
+	convertToBackslash(ret);
 
-	convertToBackslashW(path_utf16);
-	if (wcschr(path_utf16, L'%') != NULL) {
-		if (user != NULL && *user != '\0') {
-			if ((user_token = get_user_token(user, 1)) == NULL) {
-				errno = EOTHER;
-				goto cleanup;
-			}
-
-			if (load_user_profile(user_token, (char *)user) != 0)
-				goto cleanup;
-
-			expanded_len = ExpandEnvironmentStringsForUserW(
-			    user_token, path_utf16, NULL, 0);
-		} else
-			expanded_len = ExpandEnvironmentStringsW(path_utf16,
-			    NULL, 0);
-
-		if (expanded_len == 0 || expanded_len > PATH_MAX) {
-			last_error = GetLastError();
-			errno = last_error == ERROR_SUCCESS ? EINVAL :
-			    errno_from_Win32Error(last_error);
-			goto cleanup;
-		}
-
-		if ((expanded_path = calloc(expanded_len, sizeof(wchar_t))) ==
-		    NULL) {
-			errno = ENOMEM;
-			goto cleanup;
-		}
-
-		if (user_token != NULL) {
-			if (!ExpandEnvironmentStringsForUserW(user_token,
-			    path_utf16, expanded_path, expanded_len)) {
-				errno = errno_from_Win32LastError();
-				goto cleanup;
-			}
-		} else if (ExpandEnvironmentStringsW(path_utf16,
-		    expanded_path, expanded_len) == 0) {
-			errno = errno_from_Win32LastError();
-			goto cleanup;
-		}
-
-		if (wcschr(expanded_path, L'%') != NULL) {
-			errno = EINVAL;
-			goto cleanup;
-		}
-	} else {
-		expanded_path = path_utf16;
-		path_utf16 = NULL;
-	}
-
-	convertToBackslashW(expanded_path);
-	if ((resolved = utf16_to_utf8(expanded_path)) == NULL) {
-		errno = ENOMEM;
-		goto cleanup;
-	}
-
-	if (require_absolute && !is_absolute_path(resolved)) {
+	if (require_absolute && !is_fully_qualified_path(ret)) {
 		errno = EINVAL;
-		goto cleanup;
+		free(ret);
+		return NULL;
 	}
-
-	ret = resolved;
-	resolved = NULL;
-
-cleanup:
-	if (user_token)
-		CloseHandle(user_token);
-	if (path_utf16)
-		free(path_utf16);
-	if (expanded_path)
-		free(expanded_path);
-	if (resolved)
-		free(resolved);
 
 	return ret;
 }

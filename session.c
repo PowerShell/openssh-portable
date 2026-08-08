@@ -1965,6 +1965,7 @@ session_subsystem_req(struct ssh *ssh, Session *s)
 	struct stat st;
 	int r, success = 0;
 	char *prog, *cmd, *type;
+	const char *failure_reason = "subsystem not found";
 #ifdef WINDOWS
 	char *resolved_prog = NULL, *resolved_cmd = NULL, *suffix;
 	size_t prog_len;
@@ -1989,9 +1990,11 @@ session_subsystem_req(struct ssh *ssh, Session *s)
 				if (strchr(prog, '%') != NULL) {
 					if ((resolved_prog =
 					    resolve_configured_user_path(prog,
-					    s->pw->pw_name, 1)) == NULL) {
+					    s->pw->pw_dir, 1)) == NULL) {
 						debug("subsystem: cannot resolve %s",
 						    prog);
+						failure_reason =
+						    "configured subsystem path could not be resolved";
 						break;
 					}
 					prog_len = strlen(prog);
@@ -2032,7 +2035,7 @@ session_subsystem_req(struct ssh *ssh, Session *s)
 
 	if (!success)
 		logit("subsystem request for %.100s by user %s failed, "
-		    "subsystem not found", s->subsys, s->pw->pw_name);
+		    "%s", s->subsys, s->pw->pw_name, failure_reason);
 
 	return success;
 }
