@@ -4,6 +4,7 @@
 #include <misc_internal.h>
 #include <sys/statvfs.h>
 #include <unistd.h>
+#include <Windows.h>
 
 #include "../test_helper/test_helper.h"
 #include "tests.h"
@@ -421,6 +422,40 @@ test_build_commandline_string()
 }
 
 void
+test_resolve_configured_user_path()
+{
+	char *out;
+
+	TEST_START("configured path expansion");
+	SetEnvironmentVariableA("OPENSSH_TEST_ROOT", "C:\\OpenSSHTest");
+	out = resolve_configured_user_path("%OPENSSH_TEST_ROOT%\\pwsh.exe",
+	    NULL, 1);
+	ASSERT_STRING_EQ(out, "C:\\OpenSSHTest\\pwsh.exe");
+	free(out);
+	SetEnvironmentVariableA("OPENSSH_TEST_ROOT", NULL);
+	TEST_DONE();
+
+	TEST_START("configured path requires absolute result");
+	out = resolve_configured_user_path("pwsh.exe", NULL, 1);
+	ASSERT_PTR_EQ(out, NULL);
+	ASSERT_INT_EQ(errno, EINVAL);
+	TEST_DONE();
+
+	TEST_START("configured path preserves explicit relative subsystem");
+	out = resolve_configured_user_path("sftp-server.exe", NULL, 0);
+	ASSERT_STRING_EQ(out, "sftp-server.exe");
+	free(out);
+	TEST_DONE();
+
+	TEST_START("configured path rejects unresolved environment");
+	out = resolve_configured_user_path("%OPENSSH_MISSING_VAR%\\pwsh.exe",
+	    NULL, 1);
+	ASSERT_PTR_EQ(out, NULL);
+	ASSERT_INT_EQ(errno, EINVAL);
+	TEST_DONE();
+}
+
+void
 miscellaneous_tests()
 {
 	//test_ioctl();
@@ -432,4 +467,5 @@ miscellaneous_tests()
 	test_chroot();
 	test_build_exec_command();
 	test_build_commandline_string();
+	test_resolve_configured_user_path();
 }

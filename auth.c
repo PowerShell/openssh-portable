@@ -132,8 +132,24 @@ allowed_user(struct ssh *ssh, struct passwd * pw)
 	 */
 	if (options.chroot_directory == NULL ||
 	    strcasecmp(options.chroot_directory, "none") == 0) {
+#ifdef WINDOWS
+		char *resolved_shell;
+#endif
 		char *shell = xstrdup((pw->pw_shell[0] == '\0') ?
 		    _PATH_BSHELL : pw->pw_shell); /* empty = /bin/sh */
+
+#ifdef WINDOWS
+		if ((resolved_shell = resolve_configured_user_path(shell,
+		    pw->pw_name, 1)) == NULL) {
+			logit("User %.100s not allowed because shell %.100s "
+			    "could not be resolved to an absolute path",
+			    pw->pw_name, shell);
+			free(shell);
+			return 0;
+		}
+		free(shell);
+		shell = resolved_shell;
+#endif
 
 		if (stat(shell, &st) == -1) {
 			logit("User %.100s not allowed because shell %.100s "
@@ -570,8 +586,26 @@ getpwnamallow(struct ssh *ssh, const char *user)
 		auth_close(as);
 #endif
 #endif
-	if (pw != NULL)
-		return (pwcopy(pw));
+	if (pw != NULL) {
+#ifdef WINDOWS
+		char *resolved_shell;
+#endif
+		pw = pwcopy(pw);
+#ifdef WINDOWS
+		if ((resolved_shell = resolve_configured_user_path(pw->pw_shell,
+		    pw->pw_name, 1)) == NULL) {
+			free(pw->pw_name);
+			free(pw->pw_passwd);
+			free(pw->pw_dir);
+			free(pw->pw_shell);
+			free(pw);
+			return (NULL);
+		}
+		free(pw->pw_shell);
+		pw->pw_shell = resolved_shell;
+#endif
+		return (pw);
+	}
 	return (NULL);
 }
 

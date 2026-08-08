@@ -37,6 +37,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <Shlwapi.h>
+#include <Userenv.h>
 #include <conio.h>
 #include <LM.h>
 #include <Sddl.h>
@@ -1417,6 +1418,102 @@ is_absolute_path(const char *path)
 	return retVal;
 }
 
+char *
+resolve_configured_user_path(const char *path, const char *user, int require_absolute)
+{
+	wchar_t *path_utf16 = NULL, *expanded_path = NULL;
+	char *ret = NULL, *resolved = NULL;
+	HANDLE user_token = NULL;
+	DWORD expanded_len = 0, last_error = ERROR_SUCCESS;
+
+	if (path == NULL || *path == '\0') {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	if ((path_utf16 = utf8_to_utf16(path)) == NULL) {
+		errno = ENOMEM;
+		goto cleanup;
+	}
+
+	convertToBackslashW(path_utf16);
+	if (wcschr(path_utf16, L'%') != NULL) {
+		if (user != NULL && *user != '\0') {
+			if ((user_token = get_user_token(user, 1)) == NULL) {
+				errno = EOTHER;
+				goto cleanup;
+			}
+
+			if (load_user_profile(user_token, (char *)user) != 0)
+				goto cleanup;
+
+			expanded_len = ExpandEnvironmentStringsForUserW(
+			    user_token, path_utf16, NULL, 0);
+		} else
+			expanded_len = ExpandEnvironmentStringsW(path_utf16,
+			    NULL, 0);
+
+		if (expanded_len == 0 || expanded_len > PATH_MAX) {
+			last_error = GetLastError();
+			errno = last_error == ERROR_SUCCESS ? EINVAL :
+			    errno_from_Win32Error(last_error);
+			goto cleanup;
+		}
+
+		if ((expanded_path = calloc(expanded_len, sizeof(wchar_t))) ==
+		    NULL) {
+			errno = ENOMEM;
+			goto cleanup;
+		}
+
+		if (user_token != NULL) {
+			if (!ExpandEnvironmentStringsForUserW(user_token,
+			    path_utf16, expanded_path, expanded_len)) {
+				errno = errno_from_Win32LastError();
+				goto cleanup;
+			}
+		} else if (ExpandEnvironmentStringsW(path_utf16,
+		    expanded_path, expanded_len) == 0) {
+			errno = errno_from_Win32LastError();
+			goto cleanup;
+		}
+
+		if (wcschr(expanded_path, L'%') != NULL) {
+			errno = EINVAL;
+			goto cleanup;
+		}
+	} else {
+		expanded_path = path_utf16;
+		path_utf16 = NULL;
+	}
+
+	convertToBackslashW(expanded_path);
+	if ((resolved = utf16_to_utf8(expanded_path)) == NULL) {
+		errno = ENOMEM;
+		goto cleanup;
+	}
+
+	if (require_absolute && !is_absolute_path(resolved)) {
+		errno = EINVAL;
+		goto cleanup;
+	}
+
+	ret = resolved;
+	resolved = NULL;
+
+cleanup:
+	if (user_token)
+		CloseHandle(user_token);
+	if (path_utf16)
+		free(path_utf16);
+	if (expanded_path)
+		free(expanded_path);
+	if (resolved)
+		free(resolved);
+
+	return ret;
+}
+
 /* return -1 - in case of failure, 0 - success */
 int
 create_directory_withsddl(wchar_t *path_w, wchar_t *sddl_w, BOOL check_permissions)
@@ -2148,4 +2245,3 @@ strrstr(const char *inStr, const char *pattern)
 
 	return last;
 }
-
