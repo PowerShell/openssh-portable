@@ -69,7 +69,9 @@
 
 #include <ctype.h>
 #include <errno.h>
+#ifdef HAVE_PATHS_H
 #include <paths.h>
+#endif
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>

@@ -94,7 +94,9 @@
 #endif
 #include <libgen.h>
 #include <limits.h>
+#ifdef HAVE_UTIL_H
 #include <util.h>
+#endif
 #include <locale.h>
 #include <pwd.h>
 #include <signal.h>

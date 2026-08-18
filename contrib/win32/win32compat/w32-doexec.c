@@ -473,15 +473,9 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	* handle the case that fdin and fdout are the same.
 	*/
 	if (pty) {
-		/* Set interactive/non-interactive mode */
-		ssh_packet_set_interactive(ssh, 1, options.ip_qos_interactive,
-			options.ip_qos_bulk);
 		session_set_fds(ssh, s, pipein[1], pipeout[0], -1, 1, 1);
 	}
 	else {
-		/* Set interactive/non-interactive mode */
-		ssh_packet_set_interactive(ssh, s->display != NULL, options.ip_qos_interactive,
-			options.ip_qos_bulk);
 		session_set_fds(ssh, s, pipein[1], pipeout[0], pipeerr[0], s->is_subsystem, 0);
 	}
 

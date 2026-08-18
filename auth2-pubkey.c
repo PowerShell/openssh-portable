@@ -30,7 +30,9 @@
 
 #include <stdlib.h>
 #include <errno.h>
+#ifdef HAVE_PATHS_H
 #include <paths.h>
+#endif
 #include <pwd.h>
 #include <signal.h>
 #include <stdio.h>

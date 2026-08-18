@@ -474,6 +474,7 @@
     <ClCompile Include="..\..\..\auth2-methods.c" />
     <ClCompile Include="..\..\..\auth2-pubkeyfile.c" />
     <ClCompile Include="..\..\..\misc.c" />
+    <ClCompile Include="..\..\..\misc-agent.c" />
     <ClCompile Include="..\..\..\platform-listen.c" />
     <ClCompile Include="..\..\..\srclimit.c" />
     <ClCompile Include="..\..\..\ssh-sk-client.c" />

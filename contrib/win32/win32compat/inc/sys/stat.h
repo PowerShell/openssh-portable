@@ -16,6 +16,10 @@
 #define S_IFLNK  _S_IFLNK
 #define S_IFSOCK _S_IFSOCK
 
+#ifndef S_ISSOCK
+#define S_ISSOCK(mode) (((mode) & S_IFMT) == S_IFSOCK)
+#endif
+
 # define S_ISUID            0x800 
 # define S_ISGID            0x400
 

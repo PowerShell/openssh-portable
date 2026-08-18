@@ -29,7 +29,9 @@
 #include <ctype.h>
 #include <errno.h>
 
+#ifdef HAVE_PATHS_H
 #include <paths.h>
+#endif
 #include <libgen.h>
 #ifdef HAVE_LOCALE_H
 # include <locale.h>
@@ -48,7 +50,9 @@ typedef void EditLine;
 #include <unistd.h>
 #include <fcntl.h>
 
+#ifdef HAVE_UTIL_H
 #include <util.h>
+#endif
 
 #include "xmalloc.h"
 #include "log.h"
