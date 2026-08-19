@@ -58,7 +58,7 @@ The process consists of several interconnected phases:
    ```pwsh
    # Run prerequisite check via MCP tool
    # MCP Tool Name: mcp_openssh-server_Test_MergePrerequisites
-   # Parameters: TargetVersion (required), SkipBaselineBuild (optional)
+   # Parameters: TargetVersion (required)
 
    # Example invocation (replace <VERSION> with target like "V_10_0_P2"):
    # The MCP tool will verify:
@@ -190,12 +190,12 @@ The process consists of several interconnected phases:
 
      Use the Start-OpenSSHBuild MCP tool:
      - **MCP Tool Name**: `mcp_openssh-server_Start_OpenSSHBuild`
-     - **Parameters**: `Configuration="Release"`, `Architecture="x64"`
+     - **Parameters**: `Configuration="Release"` (Architecture defaults to the host machine's architecture; only pass `Architecture` when intentionally cross-building)
 
      **ALWAYS check warnings after build (success or failure):**
      - **Use Test-OpenSSHBuild MCP tool to parse errors and warnings**:
          - **MCP Tool Name**: `mcp_openssh-server_Test_OpenSSHBuild`
-         - **Parameters**: `Configuration="Release"`, `Architecture="x64"`
+         - **Parameters**: `Configuration="Release"` (Architecture defaults to the host machine's architecture)
      - **DO NOT** try to read log files directly with `Get-Content` or locate them manually
 
      If build failed:

@@ -79,8 +79,9 @@ for installation details: https://github.com/daxian-dbw/MCPServerPS/pkgs/nuget/M
 
 ### 2. Configure VS Code
 
-Create `.vscode/mcp.json` at the repo root (already present in this repo
-— adjust the path if your clone lives elsewhere):
+This repo already ships a working `.vscode/mcp.json` at the repo root. It uses a
+repo-relative `ScriptRoot`, so it works out of the box when VS Code is opened at
+the repository root — no editing required in that case:
 
 ```json
 {
@@ -91,16 +92,30 @@ Create `.vscode/mcp.json` at the repo root (already present in this repo
             "args": [
                 "-noprofile",
                 "-c",
-                "MCPServerPS\\Start-MyMCP -ScriptRoot C:\\repos\\openssh-portable\\.github\\tools"
-            ]
+                "MCPServerPS\\Start-MyMCP -ScriptRoot ./.github/tools"
+            ],
+            "env": {
+                "GITHUB_TOKEN": "${input:github_token}"
+            }
         }
     },
-    "inputs": []
+    "inputs": [
+        {
+            "id": "github_token",
+            "type": "promptString",
+            "description": "GitHub Personal Access Token (used for commit-group CI status queries)",
+            "password": true
+        }
+    ]
 }
 ```
 
-> **Path note:** Update `C:\repos\openssh-portable\.github\tools` to the
-> absolute path of `.github/tools` in your clone.
+> **Path note:** The relative `./.github/tools` path resolves against the
+> workspace root, so it works as-is when you open this repository as the VS Code
+> workspace. Only switch to an absolute path (e.g.
+> `C:\repos\openssh-portable\.github\tools`) if you run the server from a
+> different working directory or a multi-root workspace where the relative path
+> does not resolve.
 
 ### 3. Start the server in VS Code
 

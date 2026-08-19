@@ -172,20 +172,38 @@ try {
     Write-Host "`n[5/6] Checking target version exists..." -ForegroundColor Cyan
     if ($result.GitInstalled -and $result.RemotesConfigured) {
         try {
-            # Check if tag/branch ref exists in .git directory
-            $tagPath = Join-Path $repoRoot ".git\refs\tags\$TargetVersion"
-            $upstreamBranchPath = Join-Path $repoRoot ".git\refs\remotes\upstream\$TargetVersion"
+            # Use git to resolve the ref so packed-refs (packed tags/remote branches) are honored.
+            $job = Start-Job -ScriptBlock {
+                param($repoPath, $target)
+                Set-Location $repoPath
+                # Prefer an exact tag, then an upstream remote-tracking branch.
+                & git show-ref --verify --quiet "refs/tags/$target"
+                if ($LASTEXITCODE -eq 0) { return 'tag' }
+                & git show-ref --verify --quiet "refs/remotes/upstream/$target"
+                if ($LASTEXITCODE -eq 0) { return 'branch' }
+                return 'missing'
+            } -ArgumentList $repoRoot, $TargetVersion
 
-            if (Test-Path $tagPath) {
-                $result.TargetExists = $true
-                Write-Host "  ✓ Target tag exists locally: $TargetVersion" -ForegroundColor Green
-            } elseif (Test-Path $upstreamBranchPath) {
-                $result.TargetExists = $true
-                Write-Host "  ✓ Target branch exists: upstream/$TargetVersion" -ForegroundColor Green
+            $jobResult = Wait-Job $job -Timeout 10
+            if ($jobResult) {
+                $refKind = Receive-Job $job
+                Remove-Job $job -Force
+
+                if ($refKind -eq 'tag') {
+                    $result.TargetExists = $true
+                    Write-Host "  ✓ Target tag exists locally: $TargetVersion" -ForegroundColor Green
+                } elseif ($refKind -eq 'branch') {
+                    $result.TargetExists = $true
+                    Write-Host "  ✓ Target branch exists: upstream/$TargetVersion" -ForegroundColor Green
+                } else {
+                    $result.Issues += "Target version/tag '$TargetVersion' not found locally. Run 'git fetch upstream --tags' to update."
+                    Write-Host "  ✗ Target '$TargetVersion' not found locally" -ForegroundColor Red
+                    Write-Host "    Hint: Run 'git fetch upstream --tags' to fetch latest tags" -ForegroundColor Yellow
+                }
             } else {
-                $result.Issues += "Target version/tag '$TargetVersion' not found locally. Run 'git fetch upstream --tags' to update."
-                Write-Host "  ✗ Target '$TargetVersion' not found locally" -ForegroundColor Red
-                Write-Host "    Hint: Run 'git fetch upstream --tags' to fetch latest tags" -ForegroundColor Yellow
+                Remove-Job $job -Force
+                $result.Issues += "Target version check timed out"
+                Write-Host "  ✗ Target version check timed out" -ForegroundColor Red
             }
         } catch {
             $result.Issues += "Error checking target version: $($_.Exception.Message)"

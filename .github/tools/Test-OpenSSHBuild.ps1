@@ -26,7 +26,7 @@
 
 .PARAMETER LogFile
     Optional path to the build log file. If not specified, uses default pattern:
-    OpenSSH{Configuration}{Architecture}.log in repository root.
+    contrib\win32\openssh\OpenSSH{Configuration}{Architecture}.log (where OpenSSHBuildHelper writes it).
 
 .OUTPUTS
     Returns a hashtable with:
@@ -51,7 +51,7 @@
     Tests debug build artifacts for x86 using a custom log file location.
 
 .NOTES
-    - Expected build artifact location: bin\{Architecture}\{Configuration}\
+    - Expected build artifact location: bin\{Architecture}\{Configuration}\ (x86 maps to the "Win32" folder)
     - Error parsing regex (file/line form): ^(?<file>.+?)\((?<line>\d+)[,)].*?\s(?<severity>fatal error|error)\s+(?<code>(?:C|LNK|MSB)\d+)\s*:\s*(?<message>.+)$
     - Error parsing regex (generic/no line): ^(?:.*?:\s*)?(?<severity>fatal error|error)\s+(?<code>(?:C|LNK|MSB)\d+)\s*:\s*(?<message>.+)$
     - Warning parsing regex (file/line form): ^(?<file>.+?)\((?<line>\d+)[,)].*?\swarning\s+(?<code>(?:C|LNK|MSB)\d+)\s*:\s*(?<message>.+)$
@@ -125,7 +125,8 @@ try {
     Write-Host "========================================`n" -ForegroundColor Cyan
 
     # Define build output path
-    $buildPath = Join-Path $repoRoot "bin\$Architecture\$Configuration"
+    $folderName = if ($Architecture -eq 'x86') { 'Win32' } else { $Architecture }
+    $buildPath = Join-Path $repoRoot "bin\$folderName\$Configuration"
 
     if (-not (Test-Path $buildPath)) {
         Write-Host "Build path does not exist: $buildPath" -ForegroundColor Red

@@ -49,17 +49,17 @@ Use the Start-OpenSSHBuild MCP tool:
 - **MCP Tool Name**: `mcp_openssh-server_Start_OpenSSHBuild`
 - **Parameters**:
   - `Configuration` (optional): "Debug" or "Release" (default: "Release")
-  - `Architecture` (optional): "x64", "x86", "ARM", "ARM64" (default: "x64")
+  - `Architecture` (optional): "x64", "x86", "ARM", "ARM64" (default: the host machine's architecture, auto-detected; a mismatched value is rejected unless `AllowArchMismatch` is set)
   - `Clean` (optional): Perform clean build (default: false)
 
 **Examples:**
-- Incremental build: `Configuration="Release"`, `Architecture="x64"`
-- Clean build: `Configuration="Release"`, `Architecture="x64"`, `Clean=true`
+- Incremental build: `Configuration="Release"` (Architecture defaults to the host machine's architecture)
+- Clean build: `Configuration="Release"`, `Clean=true`
 
 #### Test Existing Build (on failure only)
 Use the Test-OpenSSHBuild MCP tool when a build fails:
 - **MCP Tool Name**: `mcp_openssh-server_Test_OpenSSHBuild`
-- **Parameters**: `Configuration="Release"`, `Architecture="x64"`
+- **Parameters**: `Configuration="Release"` (Architecture defaults to the host machine's architecture; only pass it when intentionally cross-building)
 
 ## Compiler Warning Policy
 

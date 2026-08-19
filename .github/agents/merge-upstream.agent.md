@@ -157,8 +157,6 @@ This agent assists with merging upstream OpenSSH commits into the PowerShell for
    - **MCP Tool Name**: `mcp_openssh-server_Test_MergePrerequisites`
    - **Parameters**:
      - `TargetVersion` (string, required): Upstream version/tag to start from (e.g., "V_10_0_P2")
-     - `EndCommit` (string, optional): Commit SHA to end at (default: HEAD - most recent upstream commit)
-     - `SkipBaselineBuild` (boolean, optional): Skip baseline build check (default: false)
 
    This single tool verifies:
    - Git, PowerShell, Visual Studio are available

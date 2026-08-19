@@ -137,8 +137,10 @@ try {
     Import-Module $buildHelperPath -Force -ErrorAction Stop
     Write-Host "✓ Loaded OpenSSHBuildHelper module" -ForegroundColor Green
 
-    # Define build output path
-    $buildPath = Join-Path $repoRoot "contrib\win32\openssh\$Architecture\$Configuration"
+    # Define build output path (matches OpenSSHBuildHelper.psm1: bin\<folderName>\<Configuration>,
+    # where x86 maps to the "Win32" folder name)
+    $folderName = if ($Architecture -eq 'x86') { 'Win32' } else { $Architecture }
+    $buildPath = Join-Path $repoRoot "bin\$folderName\$Configuration"
 
     # Perform clean if requested
     if ($Clean -and (Test-Path $buildPath)) {

@@ -70,6 +70,11 @@
     git log --oneline. Returns commit SHAs in oldest-first order suitable for building
     a cherry-pick loop. result.Commits will contain [{Hash: "<sha>", Message: ""}].
 
+.PARAMETER NameOnly
+    When specified alongside Operation=Diff, adds --name-only so git emits just the list
+    of changed file paths instead of a full patch.
+    Used by: Diff.
+
 .OUTPUTS
     Hashtable with:
       Success     [bool]     Whether the command exited with code 0
@@ -222,7 +227,10 @@ param(
     [string]$Mode = 'mixed',
 
     # Log — use git rev-list --reverse (SHAs only, oldest first) instead of git log --oneline
-    [switch]$ShasOnly
+    [switch]$ShasOnly,
+
+    # Diff — emit only the list of changed file paths (git diff --name-only)
+    [switch]$NameOnly
 )
 
 Set-StrictMode -Version Latest
@@ -422,6 +430,7 @@ $result = switch ($Operation) {
 
     'Diff' {
         $args = @('diff')
+        if ($NameOnly) { $args += '--name-only' }
         if ($Range) { $args += $Range }
         if ($Path -and $Path -ne '.') { $args += '--'; $args += $Path }
         Invoke-GitCommand -Arguments $args
