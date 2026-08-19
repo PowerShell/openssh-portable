@@ -131,6 +131,9 @@ ipch/
 *.vspx
 *.sap
 
+# VSCode profiler
+*.vscode
+
 # TFS 2012 Local Workspace
 $tf/
 

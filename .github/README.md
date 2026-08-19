@@ -143,7 +143,6 @@ based on `applyTo` globs. They encode the conventions and workflows of
 this repo so you don't need to repeat them in every prompt.
 
 General:
-- [getting-started.instructions.md](./instructions/getting-started.instructions.md) — index of all instruction files
 - [repository-overview.instructions.md](./instructions/repository-overview.instructions.md) — repo layout + Windows compatibility layer
 - [setup.instructions.md](./instructions/setup.instructions.md) — clone, remotes, prerequisites, vcpkg
 - [build.instructions.md](./instructions/build.instructions.md) — building on Windows + warning policy
@@ -224,14 +223,18 @@ background reading is in
 3. Invoke the merge prompt
    ([prompts/merge.prompt.md](./prompts/merge.prompt.md)) with at minimum
    a start ref — see that file for the full input list and examples.
-4. Approve each batch summary the agent presents; at the end, push the
+4. Follow the phase checklist, use the tools under [`tools/`](./tools/),
+  and surface documented blockers for human guidance when needed.
+5. Approve each batch summary the agent presents; at the end, push the
    real branch and open the PR.
 
 ### Driving the merge manually
 
 Follow
 [merge-process-overview.instructions.md](./instructions/merge/merge-process-overview.instructions.md)
-step by step.
+phase by phase. Refer to the repository [setup](./instructions/setup.instructions.md),
+[build](./instructions/build.instructions.md), and
+[testing](./instructions/testing.instructions.md) instructions as needed.
 
 ### Validation
 
