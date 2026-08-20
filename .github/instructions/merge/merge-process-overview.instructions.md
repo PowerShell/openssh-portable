@@ -410,22 +410,47 @@ git fetch <base-remote>            # e.g. origin or upstream-pwsh
     # Operation="Push", Remote="origin", Branch="merge-v<VERSION>-<DATE>"
     ```
 
-15. **Create Pull Request:**
+15. **Generate PR review artifacts (conflict-resolution summary + merge-commit diff view):**
+    The merge commit touches 300+ files, so reviewers cannot easily find the
+    actual conflict resolutions inside it. Produce two artifacts to attach to the
+    PR (see [PR #871](https://github.com/PowerShell/openssh-portable/pull/871) for
+    an example). These are review aids — **do not commit them to the branch**;
+    attach them to the PR.
+
+    - **Conflict-resolution summary** (`V<VERSION>_Merge_Conflict_Resolutions.md`):
+      a per-file *what / why / how* write-up of every resolved conflict plus any
+      cleanly auto-merged upstream change that still needed a Windows follow-up
+      (build fixes, `config.h.vs`, `.vcxproj`, `win32compat` shims, regress-test
+      adaptations, `version.h`/`version.rc`). Structure it with the PR-summary
+      guidance in the [resolve-merge-conflict skill](../../skills/resolve-merge-conflict/SKILL.md).
+
+    - **Merge-commit diff view** (`V<VERSION>-Merge_Commit_Diff_Viewer.html`):
+      a rendered diff of ONLY the conflict resolutions, produced from the single
+      merge commit with `--remerge-diff` (which shows how the merge *resolved*
+      conflicts, not every upstream file change):
+      ```pwsh
+      # <merge-commit> = the single merge commit created on the real branch
+      git show --remerge-diff <merge-commit> > V<VERSION>-Merge_Commit_Diff.diff
+      npx diff2html-cli -i file -s side -F V<VERSION>-Merge_Commit_Diff_Viewer.html -- V<VERSION>-Merge_Commit_Diff.diff
+      ```
+
+16. **Create Pull Request:**
     - Target: `PowerShell/openssh-portable:<branch>` (typically the branch you started from, e.g., latestw_all)
     - Title: `Merge upstream OpenSSH <VERSION>`
     - Include comprehensive description of changes and resolutions
+    - Attach the two review artifacts from step 15
 
-16. **Normalize upstream workflow triggers for Windows fork:**
+17. **Normalize upstream workflow triggers for Windows fork:**
     - Ensure merged upstream workflow files under `.github/workflows/*.yml` are dispatch-only in this fork.
     - Keep `workflow_dispatch` enabled and disable automatic triggers (`push`, `pull_request`, `schedule`) unless explicitly required for this fork.
     - Preserve trigger blocks as commented context where practical so future re-syncs are straightforward.
 
-17. **Address CI/test failures:**
+18. **Address CI/test failures:**
     - Monitor automated tests
     - Fix any Windows-specific test failures
     - Ensure all checks pass
 
-18. **Request review:**
+19. **Request review:**
     - Tag appropriate PowerShell team reviewers
     - Provide context for complex conflict resolutions
 
@@ -439,6 +464,7 @@ git fetch <base-remote>            # e.g. origin or upstream-pwsh
 - [ ] Basic SSH connection test passes
 - [ ] All CI tests pass
 - [ ] Upstream workflow triggers normalized to dispatch-only for this fork
+- [ ] Conflict-resolution summary and merge-commit diff view generated and attached to the PR
 - [ ] PR approved and ready for merge
 
 ---

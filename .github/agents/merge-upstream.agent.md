@@ -509,8 +509,15 @@ If any returned path matches `*.c` or `*.h`, perform the build/validation steps 
 3. Note any Windows-specific changes
 4. Normalize merged upstream `.github/workflows/*.yml` triggers to dispatch-only for this fork (keep `workflow_dispatch`, disable `push`/`pull_request`/`schedule`)
 5. Push branch: `git push origin merge-v<VERSION>-<DATE>`
-6. Create PR with comprehensive description
-7. Add labels and request reviewers
+6. **Generate PR review artifacts** (attach to the PR; do NOT commit them). The merge commit touches 300+ files, so reviewers need a focused view of just the conflict resolutions — see [PR #871](https://github.com/PowerShell/openssh-portable/pull/871) for an example:
+   - **Conflict-resolution summary** `V<VERSION>_Merge_Conflict_Resolutions.md` — a per-file *what / why / how* write-up of every resolved conflict plus any cleanly auto-merged upstream change that still needed a Windows follow-up (build fixes, `config.h.vs`, `.vcxproj`, `win32compat` shims, regress-test adaptations, `version.h`/`version.rc`). Structure it with the [resolve-merge-conflict skill](../skills/resolve-merge-conflict/SKILL.md) PR-summary guidance.
+   - **Merge-commit diff view** `V<VERSION>-Merge_Commit_Diff_Viewer.html` — a rendered diff of ONLY the conflict resolutions, from the single merge commit via `--remerge-diff`:
+     ```pwsh
+     git show --remerge-diff <merge-commit> > V<VERSION>-Merge_Commit_Diff.diff
+     npx diff2html-cli -i file -s side -F V<VERSION>-Merge_Commit_Diff_Viewer.html -- V<VERSION>-Merge_Commit_Diff.diff
+     ```
+7. Create PR with comprehensive description, attaching the two review artifacts from step 6
+8. Add labels and request reviewers
 
 **PR Description Template:**
 ```markdown
