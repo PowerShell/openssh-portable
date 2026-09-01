@@ -64,3 +64,23 @@ Follow these simple steps for test case indexing
   AfterAll{$tC++}
 ```
 - Prefix any test out file with $tC.$tI. You may use pre-created $stderrFile, $stdoutFile, $logFile for this purpose
+
+#### PKCS#11 certificate tests
+
+The PKCS#11 certificate scenario in `KeyUtils.Tests.ps1` is enabled when the
+following environment variables are set before running the E2E tests:
+
+* `OPENSSH_TEST_PKCS11_PROVIDER`: absolute path to a PKCS#11 provider DLL.
+* `OPENSSH_TEST_PKCS11_PIN`: token PIN.
+* `OPENSSH_TEST_PKCS11_PUBLIC_KEYS`: semicolon-separated public-key files whose
+  corresponding private keys are present on the token.
+* `OPENSSH_TEST_PKCS11_LABELS`: semicolon-separated labels corresponding
+  positionally to `OPENSSH_TEST_PKCS11_PUBLIC_KEYS`. An empty item expects the
+  canonical provider path fallback.
+
+The test creates short-lived OpenSSH certificates for the supplied public
+keys. It verifies plain and certificate identities, signing, agent service
+restart, individual certificate deletion, cert-only loading, an unmatched
+certificate, and provider removal. Never use production token credentials in
+CI. PKCS#11 PIN input is forced through the test askpass helper so an
+unattended run cannot block on an interactive prompt.

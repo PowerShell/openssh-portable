@@ -855,7 +855,7 @@ main(int argc, char **argv)
 	skprovider = getenv("SSH_SK_PROVIDER");
 
 #ifdef WINDOWS
-	while ((ch = getopt(argc, argv, "vkKlLcdDTxXE:e:M:m:qs:S:t:")) != -1) {
+	while ((ch = getopt(argc, argv, "vkKlLCcdDTxXE:e:M:m:qs:S:t:")) != -1) {
 #else
 	while ((ch = getopt(argc, argv, "vkKlLCcdDTxXE:e:h:H:M:m:qs:S:t:")) != -1) {
 #endif

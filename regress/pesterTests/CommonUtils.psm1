@@ -67,7 +67,7 @@ function Set-FilePermission
 function Add-PasswordSetting
 {
     param([string] $pass)
-    if ($IsWindows) {
+    if ($IsWindows -or $env:OS -eq "Windows_NT") {
         if (-not($env:DISPLAY)) {$env:DISPLAY = 1}
         $askpass_util = Join-Path $PSScriptRoot "utilities\askpass_util\askpass_util.exe"
         $env:SSH_ASKPASS=$askpass_util

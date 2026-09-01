@@ -386,6 +386,8 @@ pkcs11_terminate(void)
 		// Send message to helper to gracefully unload providers
 		pkcs11_del_provider(p->name);
 		TAILQ_REMOVE(&pkcs11_providers, p, next);
+		free(p->name);
+		free(p);
 	}
 
 	if (pid != -1) {
@@ -619,6 +621,7 @@ wrap_key(struct sshkey* k)
 #endif /* OPENSSL_HAS_ECC && HAVE_EC_KEY_METHOD_NEW */
 	} else
 		fatal_f("unknown key type");
+	k->flags |= SSHKEY_FLAG_EXT;
 }
 
 #else
@@ -661,6 +664,50 @@ wrap_key(struct helper *helper, struct sshkey *k)
 #endif /* WINDOWS */
 
 #ifdef WINDOWS
+
+/*
+ * Make a private PKCS#11-backed certificate by grafting a previously-loaded
+ * PKCS#11 private key and a public certificate key.
+ */
+int
+pkcs11_make_cert(const struct sshkey *priv,
+    const struct sshkey *certpub, struct sshkey **certprivp)
+{
+	struct sshkey *ret = NULL;
+	int r;
+
+	if (certprivp == NULL)
+		return SSH_ERR_INVALID_ARGUMENT;
+	*certprivp = NULL;
+	debug3_f("private key type %s cert type %s", sshkey_type(priv),
+	    sshkey_type(certpub));
+	if (!sshkey_is_cert(certpub) || sshkey_is_cert(priv) ||
+	    !sshkey_equal_public(priv, certpub)) {
+		error_f("private key %s doesn't match cert %s",
+		    sshkey_type(priv), sshkey_type(certpub));
+		return SSH_ERR_INVALID_ARGUMENT;
+	}
+	if (priv->type != KEY_RSA
+#if defined(OPENSSL_HAS_ECC) && defined(HAVE_EC_KEY_METHOD_NEW)
+	    && priv->type != KEY_ECDSA
+#endif
+	    ) {
+		error_f("unsupported PKCS11 key type %s", sshkey_type(priv));
+		return SSH_ERR_KEY_TYPE_UNKNOWN;
+	}
+	if ((r = sshkey_from_private(priv, &ret)) != 0)
+		goto out;
+	wrap_key(ret);
+	if ((r = sshkey_to_certified(ret)) != 0 ||
+	    (r = sshkey_cert_copy(certpub, ret)) != 0)
+		goto out;
+	*certprivp = ret;
+	ret = NULL;
+	r = 0;
+ out:
+	sshkey_free(ret);
+	return r;
+}
 
 static int
 pkcs11_start_helper_methods(void)

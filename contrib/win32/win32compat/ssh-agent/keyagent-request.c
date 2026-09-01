@@ -36,6 +36,7 @@
 #include <sddl.h>
 #ifdef ENABLE_PKCS11
 #include "ssh-pkcs11.h"
+#include "pkcs11-cert.h"
 #endif
 #include "xmalloc.h"
 
@@ -365,6 +366,470 @@ done:
 	return r;
 }
 
+#ifdef ENABLE_PKCS11
+struct pkcs11_identity_change {
+	char *name;
+	int created;
+	int had_provider;
+	DWORD provider_type;
+	u_char *provider;
+	DWORD provider_len;
+	int had_comment;
+	DWORD comment_type;
+	u_char *comment;
+	DWORD comment_len;
+};
+
+static void
+free_pkcs11_identity_change(struct pkcs11_identity_change *change)
+{
+	if (change == NULL)
+		return;
+	free(change->name);
+	free(change->provider);
+	free(change->comment);
+	free(change);
+}
+
+static int
+read_optional_reg_value(HKEY key, const wchar_t *name, int *presentp,
+    DWORD *typep, u_char **datap, DWORD *lenp)
+{
+	LSTATUS status;
+
+	*presentp = 0;
+	*datap = NULL;
+	*lenp = 0;
+	status = RegQueryValueExW(key, name, NULL, typep, NULL, lenp);
+	if (status == ERROR_FILE_NOT_FOUND)
+		return 0;
+	if (status != ERROR_SUCCESS || *lenp > MAX_MESSAGE_SIZE)
+		return -1;
+	*datap = xmalloc(*lenp == 0 ? 1 : *lenp);
+	if (RegQueryValueExW(key, name, NULL, typep, *datap,
+	    lenp) != ERROR_SUCCESS) {
+		free(*datap);
+		*datap = NULL;
+		return -1;
+	}
+	*presentp = 1;
+	return 0;
+}
+
+static int
+restore_optional_reg_value(HKEY key, const wchar_t *name, int present,
+    DWORD type, const u_char *data, DWORD len)
+{
+	LSTATUS status;
+
+	if (present)
+		return RegSetValueExW(key, name, 0, type, data, len) ==
+		    ERROR_SUCCESS ? 0 : -1;
+	status = RegDeleteValueW(key, name);
+	return status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND ? 0 : -1;
+}
+
+static int
+restore_pkcs11_identity_metadata(HKEY key,
+    const struct pkcs11_identity_change *change)
+{
+	int r1, r2;
+
+	r1 = restore_optional_reg_value(key, L"provider",
+	    change->had_provider, change->provider_type, change->provider,
+	    change->provider_len);
+	r2 = restore_optional_reg_value(key, L"comment", change->had_comment,
+	    change->comment_type, change->comment, change->comment_len);
+	return r1 == 0 && r2 == 0 ? 0 : -1;
+}
+
+static int
+store_pkcs11_identity(HKEY user_root, const struct sshkey *key,
+    const char *provider, const char *comment,
+    struct pkcs11_identity_change **changep)
+{
+	SECURITY_ATTRIBUTES sa = { 0, NULL, 0 };
+	HKEY reg = NULL, sub = NULL;
+	u_char *blob = NULL;
+	size_t blob_len;
+	char *thumbprint = NULL;
+	struct pkcs11_identity_change *change = NULL;
+	DWORD disposition = 0;
+	ULONG sd_len = 0;
+	int success = 0;
+
+	if (changep == NULL || provider == NULL || comment == NULL)
+		return -1;
+	*changep = NULL;
+	sa.nLength = sizeof(sa);
+	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL,
+	    SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sd_len) ||
+	    sshkey_to_blob(key, &blob, &blob_len) != 0 ||
+	    blob_len == 0 || blob_len > MAX_MESSAGE_SIZE ||
+	    (thumbprint = pkcs11_identity_name(key, blob, blob_len)) == NULL ||
+	    RegCreateKeyExW(user_root, SSH_KEYS_ROOT, 0, NULL, 0,
+	    KEY_WRITE | KEY_WOW64_64KEY, &sa, &reg, NULL) != ERROR_SUCCESS ||
+	    RegCreateKeyExA(reg, thumbprint, 0, NULL, 0,
+	    KEY_WRITE | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sa, &sub,
+	    &disposition) != ERROR_SUCCESS) {
+		error_f("failed to persist PKCS11 identity");
+		goto out;
+	}
+	change = xcalloc(1, sizeof(*change));
+	change->name = xstrdup(thumbprint);
+	if (disposition == REG_OPENED_EXISTING_KEY) {
+		if (read_optional_reg_value(sub, L"provider",
+		    &change->had_provider, &change->provider_type,
+		    &change->provider, &change->provider_len) != 0 ||
+		    read_optional_reg_value(sub, L"comment",
+		    &change->had_comment, &change->comment_type,
+		    &change->comment, &change->comment_len) != 0) {
+			error_f("failed to read PKCS11 identity metadata");
+			goto out;
+		}
+		if (RegSetValueExW(sub, L"provider", 0, REG_BINARY,
+		    (const BYTE *)provider, (DWORD)strlen(provider)) !=
+		    ERROR_SUCCESS ||
+		    RegSetValueExW(sub, L"comment", 0, REG_BINARY,
+		    (const BYTE *)comment, (DWORD)strlen(comment)) !=
+		    ERROR_SUCCESS) {
+			error_f("failed to update PKCS11 identity metadata");
+			if (restore_pkcs11_identity_metadata(sub, change) != 0)
+				error_f("failed to restore PKCS11 identity metadata");
+			goto out;
+		}
+	} else {
+		change->created = 1;
+		if (RegSetValueExW(sub, NULL, 0, REG_BINARY, blob,
+		    (DWORD)blob_len) != ERROR_SUCCESS ||
+		    RegSetValueExW(sub, L"pub", 0, REG_BINARY, blob,
+		    (DWORD)blob_len) != ERROR_SUCCESS ||
+		    RegSetValueExW(sub, L"type", 0, REG_DWORD,
+		    (const BYTE *)&key->type, sizeof(key->type)) != ERROR_SUCCESS ||
+		    RegSetValueExW(sub, L"provider", 0, REG_BINARY,
+		    (const BYTE *)provider, (DWORD)strlen(provider)) !=
+		    ERROR_SUCCESS ||
+		    RegSetValueExW(sub, L"comment", 0, REG_BINARY,
+		    (const BYTE *)comment, (DWORD)strlen(comment)) !=
+		    ERROR_SUCCESS) {
+			error_f("failed to persist PKCS11 identity");
+			goto out;
+		}
+	}
+	*changep = change;
+	change = NULL;
+	success = 1;
+ out:
+	if (sub != NULL) {
+		RegCloseKey(sub);
+		sub = NULL;
+	}
+	if (!success && disposition == REG_CREATED_NEW_KEY && reg != NULL &&
+	    thumbprint != NULL)
+		RegDeleteTreeA(reg, thumbprint);
+	if (reg != NULL)
+		RegCloseKey(reg);
+	if (sa.lpSecurityDescriptor != NULL)
+		LocalFree(sa.lpSecurityDescriptor);
+	free_pkcs11_identity_change(change);
+	free(thumbprint);
+	free(blob);
+	return success ? 0 : -1;
+}
+
+static int
+store_pkcs11_provider(HKEY user_root, struct agent_connection *con,
+    const char *provider, const char *pin, size_t pin_len)
+{
+	SECURITY_ATTRIBUTES sa = { 0, NULL, 0 };
+	HKEY reg = NULL, sub = NULL;
+	char *epin = NULL;
+	DWORD epin_len = 0;
+	DWORD disposition = 0;
+	ULONG sd_len = 0;
+	int success = 0;
+
+	sa.nLength = sizeof(sa);
+	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL,
+	    SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sd_len) ||
+	    convert_blob(con, pin, (DWORD)pin_len, &epin, &epin_len, TRUE) != 0 ||
+	    RegCreateKeyExW(user_root, SSH_PKCS11_PROVIDERS_ROOT, 0, NULL, 0,
+	    KEY_WRITE | KEY_WOW64_64KEY, &sa, &reg, NULL) != ERROR_SUCCESS ||
+	    RegCreateKeyExA(reg, provider, 0, NULL, 0,
+	    KEY_WRITE | KEY_WOW64_64KEY, &sa, &sub,
+	    &disposition) != ERROR_SUCCESS ||
+	    RegSetValueExW(sub, L"provider", 0, REG_BINARY,
+	    (const BYTE *)provider, (DWORD)strlen(provider)) != ERROR_SUCCESS ||
+	    RegSetValueExW(sub, L"pin", 0, REG_BINARY, (const BYTE *)epin,
+	    epin_len) != ERROR_SUCCESS) {
+		error_f("failed to persist PKCS11 provider");
+		goto out;
+	}
+	success = 1;
+ out:
+	if (epin != NULL) {
+		SecureZeroMemory(epin, epin_len);
+		free(epin);
+	}
+	if (sub != NULL) {
+		RegCloseKey(sub);
+		sub = NULL;
+	}
+	if (!success && disposition == REG_CREATED_NEW_KEY && reg != NULL)
+		RegDeleteTreeA(reg, provider);
+	if (reg != NULL)
+		RegCloseKey(reg);
+	if (sa.lpSecurityDescriptor != NULL)
+		LocalFree(sa.lpSecurityDescriptor);
+	return success ? 0 : -1;
+}
+
+static void
+rollback_pkcs11_identities(HKEY user_root,
+    struct pkcs11_identity_change **changes,
+    size_t nidentities)
+{
+	HKEY reg = NULL, sub = NULL;
+	size_t i;
+
+	if (nidentities == 0)
+		return;
+	if (RegOpenKeyExW(user_root, SSH_KEYS_ROOT, 0,
+	    DELETE | KEY_ENUMERATE_SUB_KEYS | KEY_WOW64_64KEY,
+	    &reg) != ERROR_SUCCESS) {
+		error_f("failed to open PKCS11 identities for rollback");
+		return;
+	}
+	for (i = nidentities; i > 0; i--) {
+		if (changes[i - 1]->created) {
+			if (RegDeleteTreeA(reg, changes[i - 1]->name) !=
+			    ERROR_SUCCESS)
+				error_f("failed to roll back PKCS11 identity");
+			continue;
+		}
+		if (RegOpenKeyExA(reg, changes[i - 1]->name, 0,
+		    KEY_SET_VALUE | KEY_WOW64_64KEY, &sub) != ERROR_SUCCESS ||
+		    restore_pkcs11_identity_metadata(sub, changes[i - 1]) != 0)
+			error_f("failed to roll back PKCS11 identity metadata");
+		if (sub != NULL) {
+			RegCloseKey(sub);
+			sub = NULL;
+		}
+	}
+	RegCloseKey(reg);
+}
+
+static int
+remove_pkcs11_identities(HKEY user_root, const char *provider)
+{
+	HKEY root = NULL, sub = NULL;
+	wchar_t sub_name[MAX_KEY_LENGTH];
+	DWORD sub_name_len, type, data_len;
+	u_char *data = NULL;
+	size_t provider_len = strlen(provider);
+	int index = 0, present, remove;
+	LSTATUS status;
+
+	status = RegOpenKeyExW(user_root, SSH_KEYS_ROOT, 0,
+	    DELETE | KEY_ENUMERATE_SUB_KEYS | KEY_WOW64_64KEY, &root);
+	if (status == ERROR_FILE_NOT_FOUND)
+		return 0;
+	if (status != ERROR_SUCCESS)
+		return -1;
+	for (;;) {
+		sub_name_len = MAX_KEY_LENGTH;
+		status = RegEnumKeyExW(root, index, sub_name, &sub_name_len,
+		    NULL, NULL, NULL, NULL);
+		if (status == ERROR_NO_MORE_ITEMS)
+			break;
+		if (status != ERROR_SUCCESS) {
+			index++;
+			continue;
+		}
+		if (RegOpenKeyExW(root, sub_name, 0,
+		    KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub) != ERROR_SUCCESS) {
+			index++;
+			continue;
+		}
+		free(data);
+		data = NULL;
+		if (read_optional_reg_value(sub, L"provider", &present, &type,
+		    &data, &data_len) != 0 ||
+		    (!present && read_optional_reg_value(sub, L"comment",
+		    &present, &type, &data, &data_len) != 0)) {
+			RegCloseKey(sub);
+			sub = NULL;
+			index++;
+			continue;
+		}
+		remove = present && data_len == provider_len &&
+		    memcmp(data, provider, provider_len) == 0;
+		RegCloseKey(sub);
+		sub = NULL;
+		if (remove) {
+			if (RegDeleteTreeW(root, sub_name) != ERROR_SUCCESS) {
+				RegCloseKey(root);
+				free(data);
+				return -1;
+			}
+		} else
+			index++;
+	}
+	RegCloseKey(root);
+	free(data);
+	return 0;
+}
+
+static int
+load_pkcs11_identities(HKEY user_root, const char *provider,
+    struct sshkey **token_keys, int nkeys)
+{
+	HKEY root = NULL, sub = NULL;
+	wchar_t sub_name[MAX_KEY_LENGTH];
+	DWORD sub_name_len, blob_len, comment_len, association_len;
+	u_char *blob = NULL;
+	char *comment = NULL, *association = NULL;
+	struct sshkey *registered = NULL, *cert = NULL;
+	u_char *plain_added = NULL;
+	size_t provider_len = strlen(provider);
+	int i, index = 0, legacy, loaded = 0;
+	LSTATUS status;
+
+	if (nkeys > 0)
+		plain_added = xcalloc((size_t)nkeys, sizeof(*plain_added));
+	status = RegOpenKeyExW(user_root, SSH_KEYS_ROOT, 0,
+	    KEY_ENUMERATE_SUB_KEYS | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &root);
+	if (status == ERROR_FILE_NOT_FOUND)
+		goto out;
+	if (status != ERROR_SUCCESS) {
+		error_f("failed to open persisted identities: %ld", status);
+		loaded = -1;
+		goto out;
+	}
+	for (;;) {
+		sub_name_len = MAX_KEY_LENGTH;
+		if (sub != NULL) {
+			RegCloseKey(sub);
+			sub = NULL;
+		}
+		status = RegEnumKeyExW(root, index++, sub_name, &sub_name_len,
+		    NULL, NULL, NULL, NULL);
+		if (status == ERROR_NO_MORE_ITEMS)
+			break;
+		if (status != ERROR_SUCCESS)
+			continue;
+		if (RegOpenKeyExW(root, sub_name, 0,
+		    KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub) != ERROR_SUCCESS ||
+		    RegQueryValueExW(sub, L"pub", NULL, NULL, NULL,
+		    &blob_len) != ERROR_SUCCESS ||
+		    RegQueryValueExW(sub, L"comment", NULL, NULL, NULL,
+		    &comment_len) != ERROR_SUCCESS ||
+		    blob_len == 0 || blob_len > MAX_MESSAGE_SIZE ||
+		    comment_len > MAX_MESSAGE_SIZE)
+			continue;
+		status = RegQueryValueExW(sub, L"provider", NULL, NULL, NULL,
+		    &association_len);
+		if (status == ERROR_FILE_NOT_FOUND) {
+			legacy = 1;
+			association_len = comment_len;
+		} else if (status == ERROR_SUCCESS &&
+		    association_len <= MAX_MESSAGE_SIZE)
+			legacy = 0;
+		else
+			continue;
+		free(blob);
+		free(comment);
+		free(association);
+		blob = xmalloc(blob_len);
+		comment = xmalloc((size_t)comment_len + 1);
+		association = xmalloc((size_t)association_len + 1);
+		if (RegQueryValueExW(sub, L"pub", NULL, NULL, blob,
+		    &blob_len) != ERROR_SUCCESS ||
+		    RegQueryValueExW(sub, L"comment", NULL, NULL,
+		    (BYTE *)comment, &comment_len) != ERROR_SUCCESS ||
+		    (!legacy && RegQueryValueExW(sub, L"provider", NULL, NULL,
+		    (BYTE *)association, &association_len) != ERROR_SUCCESS))
+			continue;
+		comment[comment_len] = '\0';
+		if (legacy)
+			memcpy(association, comment, comment_len);
+		association[association_len] = '\0';
+		if (association_len != provider_len ||
+		    memcmp(association, provider, provider_len) != 0)
+			continue;
+		sshkey_free(registered);
+		registered = NULL;
+		if (sshkey_from_blob(blob, blob_len, &registered) != 0)
+			continue;
+		for (i = 0; i < nkeys; i++) {
+			if (token_keys[i] == NULL)
+				continue;
+			if (sshkey_is_cert(registered)) {
+				if (!sshkey_equal_public(token_keys[i], registered))
+					continue;
+				if (pkcs11_make_cert(token_keys[i], registered,
+				    &cert) != 0)
+					continue;
+				add_key(cert, (char *)provider);
+				cert = NULL;
+				loaded++;
+				break;
+			}
+			if (!plain_added[i] &&
+			    sshkey_equal(token_keys[i], registered)) {
+				plain_added[i] = 1;
+				break;
+			}
+		}
+	}
+	for (i = 0; i < nkeys; i++) {
+		if (!plain_added[i] || token_keys[i] == NULL)
+			continue;
+		add_key(token_keys[i], (char *)provider);
+		token_keys[i] = NULL;
+		loaded++;
+	}
+ out:
+	sshkey_free(cert);
+	sshkey_free(registered);
+	free(plain_added);
+	free(association);
+	free(comment);
+	free(blob);
+	if (sub != NULL)
+		RegCloseKey(sub);
+	if (root != NULL)
+		RegCloseKey(root);
+	return loaded;
+}
+
+static void
+free_pkcs11_sign_provider(char **providerp, char **pinp, DWORD pin_len,
+    char **epinp, DWORD epin_len, struct sshkey ***keysp, int nkeys)
+{
+	int i;
+
+	if (*keysp != NULL) {
+		for (i = 0; i < nkeys; i++)
+			sshkey_free((*keysp)[i]);
+		free(*keysp);
+		*keysp = NULL;
+	}
+	free(*providerp);
+	*providerp = NULL;
+	if (*pinp != NULL) {
+		SecureZeroMemory(*pinp, pin_len);
+		free(*pinp);
+		*pinp = NULL;
+	}
+	if (*epinp != NULL) {
+		SecureZeroMemory(*epinp, epin_len);
+		free(*epinp);
+		*epinp = NULL;
+	}
+}
+#endif /* ENABLE_PKCS11 */
+
 static int sign_blob(const struct sshkey *pubkey, u_char ** sig, size_t *siglen,
 	const u_char *blob, size_t blen, u_int flags, struct agent_connection* con) 
 {
@@ -454,10 +919,11 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 	struct sshkey *key = NULL;
 
 #ifdef ENABLE_PKCS11
-	int i, count = 0, index = 0;;
+	int count = 0, index = 0, loaded = 0;
 	wchar_t sub_name[MAX_KEY_LENGTH];
 	DWORD sub_name_len = MAX_KEY_LENGTH;
-	DWORD pin_len, epin_len, provider_len;
+	DWORD pin_len = 0, epin_len = 0, provider_len = 0;
+	DWORD epin_alloc_len = 0;
 	char *pin = NULL, *npin = NULL, *epin = NULL, *provider = NULL;
 	HKEY root = 0, sub = 0, user_root = 0;
 	struct sshkey **keys = NULL;
@@ -475,6 +941,8 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 
 	while (1) {
 		sub_name_len = MAX_KEY_LENGTH;
+		pin_len = epin_len = provider_len = 0;
+		epin_alloc_len = 0;
 		if (sub) {
 			RegCloseKey(sub);
 			sub = NULL;
@@ -483,37 +951,40 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 			if (RegOpenKeyExW(root, sub_name, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub) == 0 &&
 				RegQueryValueExW(sub, L"provider", 0, NULL, NULL, &provider_len) == 0 &&
 				RegQueryValueExW(sub, L"pin", 0, NULL, NULL, &epin_len) == 0) {
-				if ((epin = malloc(epin_len + 1)) == NULL ||
+				if (provider_len == 0 || provider_len >= PATH_MAX ||
+				    epin_len == 0 || epin_len > MAX_MESSAGE_SIZE)
+					continue;
+				epin_alloc_len = epin_len;
+				if ((epin = malloc(epin_alloc_len + 1)) == NULL ||
 					(provider = malloc(provider_len + 1)) == NULL ||
 					RegQueryValueExW(sub, L"provider", 0, NULL, provider, &provider_len) != 0 ||
-					RegQueryValueExW(sub, L"pin", 0, NULL, epin, &epin_len) != 0)
-					goto done;
+					RegQueryValueExW(sub, L"pin", 0, NULL, epin, &epin_len) != 0) {
+					free_pkcs11_sign_provider(&provider, &pin, pin_len,
+					    &epin, epin_alloc_len, &keys, count);
+					continue;
+				}
 				provider[provider_len] = '\0';
 				epin[epin_len] = '\0';
 				if (convert_blob(con, epin, epin_len, &pin, &pin_len, 0) != 0 ||
 					(npin = realloc(pin, pin_len + 1)) == NULL) {
-					goto done;
+					free_pkcs11_sign_provider(&provider, &pin, pin_len,
+					    &epin, epin_alloc_len, &keys, count);
+					continue;
 				}
 				pin = npin;
 				pin[pin_len] = '\0';
 				count = pkcs11_add_provider(provider, pin, &keys, NULL);
-				for (i = 0; i < count; i++) {
-					add_key(keys[i], provider);
+				if (count <= 0) {
+					free_pkcs11_sign_provider(&provider, &pin, pin_len,
+					    &epin, epin_alloc_len, &keys, count);
+					continue;
 				}
-				free(keys);
-				if (provider)
-					free(provider);
-				if (pin) {
-					SecureZeroMemory(pin, (DWORD)pin_len);
-					free(pin);
-				}
-				if (epin) {
-					SecureZeroMemory(epin, (DWORD)epin_len);
-					free(epin);
-				}
-				provider = NULL;
-				pin = NULL;
-				epin = NULL;
+				loaded = load_pkcs11_identities(user_root, provider,
+				    keys, count);
+				free_pkcs11_sign_provider(&provider, &pin, pin_len,
+				    &epin, epin_alloc_len, &keys, count);
+				if (loaded < 0)
+					goto done;
 			}
 		}
 		else
@@ -553,18 +1024,10 @@ done:
 	if (signature)
 		free(signature);
 #ifdef ENABLE_PKCS11
+	free_pkcs11_sign_provider(&provider, &pin, pin_len, &epin, epin_alloc_len,
+	    &keys, count);
 	del_all_keys();
 	pkcs11_terminate();
-	if (provider)
-		free(provider);
-	if (pin) {
-		SecureZeroMemory(pin, (DWORD)pin_len);
-		free(pin);
-	}
-	if (epin) {
-		SecureZeroMemory(epin, (DWORD)epin_len);
-		free(epin);
-	}
 	if (user_root)
 		RegCloseKey(user_root);
 	if (root)
@@ -575,14 +1038,59 @@ done:
 	return r;
 }
 
+static LSTATUS
+delete_matching_identity(HKEY root, const char *name, const u_char *blob,
+    size_t blob_len)
+{
+	HKEY sub = NULL;
+	u_char *stored_blob = NULL;
+	DWORD stored_blob_len = 0;
+	LSTATUS status;
+
+	status = RegOpenKeyExA(root, name, 0,
+	    KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub);
+	if (status != ERROR_SUCCESS)
+		return status;
+	status = RegQueryValueExW(sub, L"pub", NULL, NULL, NULL,
+	    &stored_blob_len);
+	if (status != ERROR_SUCCESS)
+		goto out;
+	if (stored_blob_len > MAX_MESSAGE_SIZE) {
+		status = ERROR_INVALID_DATA;
+		goto out;
+	}
+	stored_blob = xmalloc(stored_blob_len == 0 ? 1 : stored_blob_len);
+	status = RegQueryValueExW(sub, L"pub", NULL, NULL, stored_blob,
+	    &stored_blob_len);
+	if (status != ERROR_SUCCESS)
+		goto out;
+	if (stored_blob_len != blob_len ||
+	    memcmp(stored_blob, blob, blob_len) != 0) {
+		status = ERROR_FILE_NOT_FOUND;
+		goto out;
+	}
+	RegCloseKey(sub);
+	sub = NULL;
+	status = RegDeleteTreeA(root, name);
+ out:
+	free(stored_blob);
+	if (sub != NULL)
+		RegCloseKey(sub);
+	return status;
+}
+
 int
 process_remove_key(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con) 
 {
 	HKEY user_root = 0, root = 0;
 	char *blob, *thumbprint = NULL;
+#ifdef ENABLE_PKCS11
+	char *pkcs11_name = NULL;
+#endif
 	size_t blen;
 	int r = 0, success = 0, request_invalid = 0;
 	struct sshkey *key = NULL;
+	LSTATUS status;
 
 	if (sshbuf_get_string_direct(request, &blob, &blen) != 0 ||
 	    sshkey_from_blob(blob, blen, &key) != 0) { 
@@ -590,11 +1098,26 @@ process_remove_key(struct sshbuf* request, struct sshbuf* response, struct agent
 		goto done;
 	}
 
-	if ((thumbprint = sshkey_fingerprint(key, SSH_FP_HASH_DEFAULT, SSH_FP_DEFAULT)) == NULL ||
+	if ((thumbprint = sshkey_fingerprint(key, SSH_FP_HASH_DEFAULT,
+	    SSH_FP_DEFAULT)) == NULL ||
 	    get_user_root(con, &user_root) != 0 ||
 	    RegOpenKeyExW(user_root, SSH_KEYS_ROOT, 0,
-		DELETE | KEY_ENUMERATE_SUB_KEYS | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &root) != 0 ||
-	    RegDeleteTreeA(root, thumbprint) != 0)
+	    DELETE | KEY_ENUMERATE_SUB_KEYS | KEY_QUERY_VALUE |
+	    KEY_WOW64_64KEY, &root) != 0)
+		goto done;
+	status = delete_matching_identity(root, thumbprint,
+	    (const u_char *)blob, blen);
+#ifdef ENABLE_PKCS11
+	if (status == ERROR_FILE_NOT_FOUND && sshkey_is_cert(key)) {
+		pkcs11_name = pkcs11_identity_name(key,
+		    (const u_char *)blob, blen);
+		if (pkcs11_name == NULL)
+			goto done;
+		status = delete_matching_identity(root, pkcs11_name,
+		    (const u_char *)blob, blen);
+	}
+#endif
+	if (status != ERROR_SUCCESS)
 		goto done;
 	success = 1;
 done:
@@ -612,6 +1135,9 @@ done:
 		RegCloseKey(root);
 	if (thumbprint)
 		free(thumbprint);
+#ifdef ENABLE_PKCS11
+	free(pkcs11_name);
+#endif
 	return r;
 }
 int 
@@ -641,25 +1167,34 @@ done:
 }
 
 #ifdef ENABLE_PKCS11
-int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con)
+int
+process_add_smartcard_key(struct sshbuf *request, struct sshbuf *response,
+    struct agent_connection *con)
 {
-	char *provider = NULL, *pin = NULL, canonical_provider[PATH_MAX];
-	int i, count = 0, r = 0, request_invalid = 0, success = 0;
-	struct sshkey **keys = NULL;
-	struct sshkey* key = NULL;
-	size_t pubkey_blob_len, provider_len, pin_len, epin_len;
-	u_char *pubkey_blob = NULL;
-	char *thumbprint = NULL;
-	char *epin = NULL;
-	HKEY reg = 0, sub = 0, user_root = 0;
-	SECURITY_ATTRIBUTES sa = { 0, NULL, 0 };
+	char *provider = NULL, *pin = NULL, canonical_provider[PATH_MAX] = { 0 };
+	char allowed_provider[PATH_MAX], **labels = NULL;
+	const char *comment;
+	int i, j, count = 0, r = 0, request_invalid = 0, success = 0;
+	int cert_only = 0, identities_stored = 0;
+	struct sshkey **keys = NULL, **certs = NULL, *cert = NULL;
+	struct pkcs11_identity_change *identity_change = NULL;
+	struct pkcs11_identity_change **identity_changes = NULL;
+	size_t k, pin_len = 0, ncerts = 0, nidentity_changes = 0;
+	HKEY user_root = NULL;
 
 	pkcs11_init(0);
 
-	if ((r = sshbuf_get_cstring(request, &provider, &provider_len)) != 0 ||
-		(r = sshbuf_get_cstring(request, &pin, &pin_len)) != 0 ||
-		pin_len > 256) {
+	if ((r = sshbuf_get_cstring(request, &provider, NULL)) != 0 ||
+	    (r = sshbuf_get_cstring(request, &pin, &pin_len)) != 0 ||
+	    pin_len > 256) {
 		error("add smartcard request is invalid");
+		request_invalid = 1;
+		goto done;
+	}
+	if (sshbuf_len(request) != 0 &&
+	    parse_pkcs11_add_constraints(request, &cert_only, &certs,
+	    &ncerts) != 0) {
+		error("add smartcard constraints are invalid");
 		request_invalid = 1;
 		goto done;
 	}
@@ -677,76 +1212,69 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 		goto done;
 	}
 
-	to_lower_case(provider);
-	verbose("provider realpath: \"%.100s\"", provider);
-	verbose("allowed provider paths: \"%.100s\"", allowed_providers);
-	if (match_pattern_list(provider, allowed_providers, 1) != 1) {
-		verbose("refusing PKCS#11 add of \"%.100s\": "
-			"provider not allowed", provider);
-		goto done;
-	}
-
-	// Remove 'drive root' if exists
+	/* Remove the leading slash from the canonical Windows drive path. */
 	if (canonical_provider[0] == '/')
-		memmove(canonical_provider, canonical_provider + 1, strlen(canonical_provider));
-
-	count = pkcs11_add_provider(canonical_provider, pin, &keys, NULL);
-	if (count <= 0) {
-		error_f("failed to add key to store. count:%d", count);
+		memmove(canonical_provider, canonical_provider + 1,
+		    strlen(canonical_provider));
+	strcpy_s(allowed_provider, sizeof(allowed_provider), canonical_provider);
+	for (i = 0; allowed_provider[i] != '\0'; i++) {
+		if (allowed_provider[i] == '/')
+			allowed_provider[i] = '\\';
+	}
+	to_lower_case(allowed_provider);
+	verbose("provider realpath: \"%.100s\"", canonical_provider);
+	verbose("allowed provider paths: \"%.100s\"", allowed_providers);
+	if (match_pattern_list(allowed_provider, allowed_providers, 1) != 1) {
+		verbose("refusing PKCS#11 add of \"%.100s\": "
+		    "provider not allowed", canonical_provider);
 		goto done;
 	}
 
-	// If HKCU registry already has the provider then remove the provider and associated keys.
-	// This allows customers to add new keys.
-	if (get_user_root(con, &user_root) != 0 ||
-		is_reg_sub_key_exists(user_root, SSH_PKCS11_PROVIDERS_ROOT, canonical_provider)) {
-		remove_matching_subkeys_from_registry(user_root, SSH_KEYS_ROOT, L"comment", canonical_provider);
-		remove_matching_subkeys_from_registry(user_root, SSH_PKCS11_PROVIDERS_ROOT, L"provider", canonical_provider);
+	count = pkcs11_add_provider(canonical_provider, pin, &keys, &labels);
+	if (count <= 0) {
+		error_f("failed to load provider keys: count:%d", count);
+		goto done;
 	}
+
+	if (get_user_root(con, &user_root) != 0)
+		goto done;
 
 	for (i = 0; i < count; i++) {
-		key = keys[i];
-		if (sa.lpSecurityDescriptor)
-			LocalFree(sa.lpSecurityDescriptor);
-		if (reg) {
-			RegCloseKey(reg);
-			reg = NULL;
+		comment = pkcs11_identity_comment(canonical_provider, labels[i]);
+		for (j = 0; j < (int)ncerts; j++) {
+			if (!sshkey_is_cert(certs[j]) ||
+			    !sshkey_equal_public(keys[i], certs[j]))
+				continue;
+			if (pkcs11_make_cert(keys[i], certs[j], &cert) != 0)
+				continue;
+			if (store_pkcs11_identity(user_root, cert,
+			    canonical_provider, comment, &identity_change) != 0)
+				goto done;
+			identity_changes = xrecallocarray(identity_changes,
+			    nidentity_changes, nidentity_changes + 1,
+			    sizeof(*identity_changes));
+			identity_changes[nidentity_changes++] = identity_change;
+			identity_change = NULL;
+			sshkey_free(cert);
+			cert = NULL;
+			identities_stored++;
 		}
-		if (sub) {
-			RegCloseKey(sub);
-			sub = NULL;
-		}
-		memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
-		sa.nLength = sizeof(sa);
-		if ((!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL, SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sa.nLength)) ||
-			sshkey_to_blob(key, &pubkey_blob, &pubkey_blob_len) != 0 ||
-			((thumbprint = sshkey_fingerprint(key, SSH_FP_HASH_DEFAULT, SSH_FP_DEFAULT)) == NULL) ||
-			RegCreateKeyExW(user_root, SSH_KEYS_ROOT, 0, 0, 0, KEY_WRITE | KEY_WOW64_64KEY, &sa, &reg, NULL) != 0 ||
-			RegCreateKeyExA(reg, thumbprint, 0, 0, 0, KEY_WRITE | KEY_WOW64_64KEY, &sa, &sub, NULL) != 0 ||
-			RegSetValueExW(sub, NULL, 0, REG_BINARY, pubkey_blob, (DWORD)pubkey_blob_len) != 0 ||
-			RegSetValueExW(sub, L"pub", 0, REG_BINARY, pubkey_blob, (DWORD)pubkey_blob_len) != 0 ||
-			RegSetValueExW(sub, L"type", 0, REG_DWORD, (BYTE*)&key->type, 4) != 0 ||
-			RegSetValueExW(sub, L"comment", 0, REG_BINARY, canonical_provider, (DWORD)strlen(canonical_provider)) != 0) {
-			error_f("failed to add key to store");
+		if (!cert_only && store_pkcs11_identity(user_root, keys[i],
+		    canonical_provider, comment, &identity_change) == 0) {
+			identity_changes = xrecallocarray(identity_changes,
+			    nidentity_changes, nidentity_changes + 1,
+			    sizeof(*identity_changes));
+			identity_changes[nidentity_changes++] = identity_change;
+			identity_change = NULL;
+			identities_stored++;
+		} else if (!cert_only)
 			goto done;
-		}
 	}
 
-	debug("added smartcard keys to store");
-
-	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
-	sa.nLength = sizeof(sa);
-	if ((!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL, SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sa.nLength)) ||
-		convert_blob(con, pin, (DWORD)pin_len, &epin, (DWORD*)&epin_len, 1) != 0 ||
-		RegCreateKeyExW(user_root, SSH_PKCS11_PROVIDERS_ROOT, 0, 0, 0, KEY_WRITE | KEY_WOW64_64KEY, &sa, &reg, NULL) != 0 ||
-		RegCreateKeyExA(reg, canonical_provider, 0, 0, 0, KEY_WRITE | KEY_WOW64_64KEY, &sa, &sub, NULL) != 0 ||
-		RegSetValueExW(sub, L"provider", 0, REG_BINARY, canonical_provider, (DWORD)strlen(canonical_provider)) != 0 ||
-		RegSetValueExW(sub, L"pin", 0, REG_BINARY, epin, (DWORD)epin_len) != 0) {
-		error("failed to add pkcs11 provider to store");
+	if (identities_stored == 0 || store_pkcs11_provider(user_root, con,
+	    canonical_provider, pin, pin_len) != 0)
 		goto done;
-	}
-
-	debug("added pkcs11 provider to store");
+	debug("added PKCS11 provider and identities to store");
 	success = 1;
 done:
 	r = 0;
@@ -755,44 +1283,31 @@ done:
 	else if (sshbuf_put_u8(response, success ? SSH_AGENT_SUCCESS : SSH_AGENT_FAILURE) != 0)
 		r = -1;
 
-	/* delete created reg keys if not succeeded*/
-	if ((success == 0) && reg) {
-		if (thumbprint)
-			RegDeleteKeyExA(reg, thumbprint, KEY_WOW64_64KEY, 0);
-		if (canonical_provider)
-			RegDeleteKeyExA(reg, canonical_provider, KEY_WOW64_64KEY, 0);
-	}
+	if (!success && user_root != NULL)
+		rollback_pkcs11_identities(user_root, identity_changes,
+		    nidentity_changes);
 
 	pkcs11_terminate();
 
-	if (sa.lpSecurityDescriptor)
-		LocalFree(sa.lpSecurityDescriptor);
+	sshkey_free(cert);
+	free_pkcs11_identity_change(identity_change);
+	for (k = 0; k < nidentity_changes; k++)
+		free_pkcs11_identity_change(identity_changes[k]);
+	free(identity_changes);
 	for (i = 0; i < count; i++)
 		sshkey_free(keys[i]);
-	if (keys)
-		free(keys);
-	if (thumbprint)
-		free(thumbprint);
-	if (pubkey_blob)
-		free(pubkey_blob);
-	if (provider)
-		free(provider);
-	if (allowed_providers)
-		free(allowed_providers);
+	free(keys);
+	for (i = 0; i < count; i++)
+		free(labels[i]);
+	free(labels);
+	free_pkcs11_certs(certs, ncerts);
+	free(provider);
 	if (pin) {
 		SecureZeroMemory(pin, (DWORD)pin_len);
 		free(pin);
 	}
-	if (epin) {
-		SecureZeroMemory(epin, (DWORD)epin_len);
-		free(epin);
-	}
 	if (user_root)
 		RegCloseKey(user_root);
-	if (reg)
-		RegCloseKey(reg);
-	if (sub)
-		RegCloseKey(sub);
 	return r;
 }
 
@@ -824,8 +1339,9 @@ int process_remove_smartcard_key(struct sshbuf* request, struct sshbuf* response
 		!is_reg_sub_key_exists(user_root, SSH_PKCS11_PROVIDERS_ROOT, canonical_provider))
 		goto done;
 
-	if (remove_matching_subkeys_from_registry(user_root, SSH_KEYS_ROOT, L"comment", canonical_provider) != 0 ||
-		remove_matching_subkeys_from_registry(user_root, SSH_PKCS11_PROVIDERS_ROOT, L"provider", canonical_provider) != 0) {
+	if (remove_pkcs11_identities(user_root, canonical_provider) != 0 ||
+	    remove_matching_subkeys_from_registry(user_root,
+	    SSH_PKCS11_PROVIDERS_ROOT, L"provider", canonical_provider) != 0) {
 		goto done;
 	}
 
