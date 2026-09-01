@@ -1055,45 +1055,6 @@ int fork()
 }
 char * build_commandline_string(const char* cmd, char *const argv[], BOOLEAN prepend_module_path);
 
-wchar_t*
-get_username_from_token(HANDLE as_user)
-{
-	wchar_t* user_name = NULL;
-	SID_NAME_USE usage;
-	DWORD count = 0;
-	GetTokenInformation(as_user, TokenUser, NULL, 0, &count);
-	if (count) {
-		void* buffer = malloc(count);
-		if (buffer) {
-			if (GetTokenInformation(as_user, TokenUser, buffer, count, &count)) {
-				TOKEN_USER* owner = (TOKEN_USER*)buffer;
-				DWORD name_length = 0;
-				DWORD domain_length = 0;
-				LookupAccountSidW(NULL, owner->User.Sid, NULL, &name_length, NULL, &domain_length, &usage); /* Figure out the length of the name. */
-				if (name_length) {
-					wchar_t* domain_name = malloc(domain_length * sizeof(wchar_t));
-					if (domain_name) {
-						user_name = malloc(name_length * sizeof(wchar_t));
-						if (user_name) {
-							memset(user_name, 0, name_length * sizeof(wchar_t));
-							memset(domain_name, 0, domain_length * sizeof(wchar_t));
-							BOOL success = LookupAccountSidW(NULL, owner->User.Sid, user_name, &name_length, domain_name, &domain_length, &usage);
-							if (!success) /* Silently return an empty string if unsuccessful. */
-							{
-								free(user_name);
-								user_name = NULL;
-							}
-						}
-						free(domain_name);
-					}
-				}
-			}
-			free(buffer);
-		}
-	}
-	return user_name;
-}
-
 /*
 * spawn a child process
 * - specified by cmd with agruments argv
@@ -1102,14 +1063,15 @@ get_username_from_token(HANDLE as_user)
 * spawned child will run as as_user if its not NULL
 */
 static int
-spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDLE err, unsigned long flags, HANDLE as_user, BOOLEAN prepend_module_path)
+spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDLE err, unsigned long flags, HANDLE as_user, BOOLEAN prepend_module_path, BOOLEAN load_user_env)
 {
 	PROCESS_INFORMATION pi;
 	STARTUPINFOW si;
-	BOOL b;
+	BOOL b = FALSE;
 	char *cmdline;
 	wchar_t * cmdline_utf16 = NULL;
 	int ret = -1;
+
 	if ((cmdline = build_commandline_string(cmd, argv, prepend_module_path)) == NULL) {
 		errno = ENOMEM;
 		goto cleanup;
@@ -1125,7 +1087,7 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 	si.hStdOutput = out;
 	si.hStdError = err;
 	si.dwFlags = STARTF_USESTDHANDLES;
-	
+
 	if (strstr(cmd, "sshd-session.exe") || strstr(cmd, "sshd-auth.exe")) {
 		flags |= DETACHED_PROCESS;
 	}
@@ -1146,12 +1108,8 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 		if (as_user) {
 			debug3("spawning %ls as user", t);
 			LPVOID lpEnvironment = NULL;
-			wchar_t* as_user_name = get_username_from_token(as_user);
-			if (as_user_name) {
-				if (wcsncmp(L"sshd", as_user_name, wcslen(L"sshd")) != 0) { /* Ignore any names that begin with the service name `sshd`. */
-					b = CreateEnvironmentBlock(&lpEnvironment, as_user, TRUE); /* Load a user environment block inheriting the current context, thereby passing session state. */
-				}
-				free(as_user_name);
+			if (load_user_env) {
+				CreateEnvironmentBlock(&lpEnvironment, as_user, TRUE);
 			}
 			if (lpEnvironment) { /* Pass the user environment block to the new process. */
 				b = CreateProcessAsUserW(as_user, NULL, t, NULL, NULL, TRUE, flags | CREATE_UNICODE_ENVIRONMENT, lpEnvironment, NULL, &si, &pi);
@@ -1311,7 +1269,7 @@ fd_decode_state(char* enc_buf)
 }
 
 int
-posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], HANDLE user_token, BOOLEAN prepend_module_path)
+posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], HANDLE user_token, BOOLEAN prepend_module_path, BOOLEAN load_user_env)
 {
 	int i, ret = -1;
 	int sc_flags = 0;
@@ -1347,7 +1305,7 @@ posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actio
 
 	if (_putenv_s(POSIX_FD_STATE, fd_info) != 0)
 		goto cleanup;
-	i = spawn_child_internal(path, argv + 1, stdio_handles[STDIN_FILENO], stdio_handles[STDOUT_FILENO], stdio_handles[STDERR_FILENO], sc_flags, user_token, prepend_module_path);
+	i = spawn_child_internal(path, argv + 1, stdio_handles[STDIN_FILENO], stdio_handles[STDOUT_FILENO], stdio_handles[STDERR_FILENO], sc_flags, user_token, prepend_module_path, load_user_env);
 	if (i == -1)
 		goto cleanup;
 	if (pidp)
@@ -1380,23 +1338,23 @@ cleanup:
 int
 posix_spawn(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[])
 {
-	return posix_spawn_internal(pidp, path, file_actions, attrp, argv, envp, NULL, TRUE);
+	return posix_spawn_internal(pidp, path, file_actions, attrp, argv, envp, NULL, TRUE, TRUE);
 }
 
 int
 posix_spawnp(pid_t *pidp, const char *file, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[])
 {
-	return posix_spawn_internal(pidp, file, file_actions, attrp, argv, envp, NULL, FALSE);
+	return posix_spawn_internal(pidp, file, file_actions, attrp, argv, envp, NULL, FALSE, TRUE);
 }
 
 int
 posix_spawn_as_user(pid_t *pidp, const char *file, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], HANDLE user_token)
 {
-	return posix_spawn_internal(pidp, file, file_actions, attrp, argv, envp, user_token, TRUE);
+	return posix_spawn_internal(pidp, file, file_actions, attrp, argv, envp, user_token, TRUE, TRUE);
 }
 
 int
 posix_spawnp_as_user(pid_t *pidp, const char *file, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], HANDLE user_token)
 {
-	return posix_spawn_internal(pidp, file, file_actions, attrp, argv, envp, user_token, FALSE);
+	return posix_spawn_internal(pidp, file, file_actions, attrp, argv, envp, user_token, FALSE, TRUE);
 }

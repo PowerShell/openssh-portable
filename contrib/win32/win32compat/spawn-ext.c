@@ -3,7 +3,7 @@
 #include "inc\unistd.h"
 #include "debug.h"
 
-int posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], HANDLE user_token, BOOLEAN prepend_module_path);
+int posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], HANDLE user_token, BOOLEAN prepend_module_path, BOOLEAN load_user_env);
 
 int
 __posix_spawn_asuser(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], char* user)
@@ -25,10 +25,15 @@ __posix_spawn_asuser(pid_t *pidp, const char *path, const posix_spawn_file_actio
 		errno = EOTHER;
 		return -1;
 	}
-	if (strcmp(user, "sshd"))
+	/*
+	 * This identity check decides whether to load both the user's profile and
+	 * environment block.
+	 */
+	BOOLEAN is_privsep = (strcmp(user, "sshd") == 0);
+	if (!is_privsep)
 		load_user_profile(user_token, user);
-	
-	r = posix_spawn_internal(pidp, path, file_actions, attrp, argv, envp, user_token, TRUE);
+
+	r = posix_spawn_internal(pidp, path, file_actions, attrp, argv, envp, user_token, TRUE, !is_privsep);
 	CloseHandle(user_token);
 	return r;
 }
