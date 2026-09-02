@@ -94,6 +94,24 @@ done:
 	return;
 }
 
+static BOOL
+is_domain_joined_machine(void)
+{
+	BOOL result = FALSE;
+	LPWSTR name = NULL;
+	NETSETUP_JOIN_STATUS s = NetSetupUnknownStatus;
+	DWORD api_res = NetGetJoinInformation(NULL, &name, &s);
+	if (api_res == NERR_Success) {
+		result = s == NetSetupDomainName;
+		NetApiBufferFree(name);
+		name = NULL;
+	} else {
+		debug3("%s: NetGetJoinInformation() failed. Error %d.", __FUNCTION__, api_res);
+	}
+	debug3("%s: NetGetJoinInformation(). Join result %d", __FUNCTION__, result);
+	return result;
+}
+
 HANDLE
 generate_s4u_user_token(wchar_t* user_cpn, int impersonation) {
 	HANDLE lsa_handle = NULL, token = NULL;
@@ -112,7 +130,8 @@ generate_s4u_user_token(wchar_t* user_cpn, int impersonation) {
 	 * so only the only two formats are a NetBiosDomain\SamAccountName which is
 	 * a domain account or just SamAccountName in which is a local account */
 	BOOL domain_user = wcschr(user_cpn, L'\\') != NULL;
-	
+	BOOL use_kerberos = domain_user && is_domain_joined_machine();
+
 	/* initialize connection to local security provider */
 	if (impersonation) {
 
@@ -132,11 +151,11 @@ generate_s4u_user_token(wchar_t* user_cpn, int impersonation) {
 			goto done;
 	}
 
-	InitLsaString(&auth_package_name, (domain_user) ? MICROSOFT_KERBEROS_NAME_A : MSV1_0_PACKAGE_NAME);
+	InitLsaString(&auth_package_name, use_kerberos ? MICROSOFT_KERBEROS_NAME_A : MSV1_0_PACKAGE_NAME);
 	if (ret = LsaLookupAuthenticationPackage(lsa_handle, &auth_package_name, &auth_package_id) != STATUS_SUCCESS)
 		goto done;
 
-	if (domain_user) {
+	if (use_kerberos) {
 
 		/* lookup the user principal name for the account */
 		WCHAR domain_upn[MAX_UPN_LEN + 1];
@@ -168,6 +187,11 @@ generate_s4u_user_token(wchar_t* user_cpn, int impersonation) {
 	}
 	else {
 
+		/* if a domain prefix slipped through (non-domain-joined host. e.g. winpe is backed with such domain), 
+		  point past it without mutating the caller's buffer */
+		wchar_t *backslash = wcschr(user_cpn, L'\\');
+		if (backslash != NULL)
+			user_cpn = backslash + 1;
 		MSV1_0_S4U_LOGON *s4u_logon;
 		logon_info_size = sizeof(MSV1_0_S4U_LOGON);
 
@@ -432,7 +456,7 @@ load_user_profile(HANDLE user_token, char* user)
 	EnablePrivilege("SeBackupPrivilege", 1);
 	EnablePrivilege("SeRestorePrivilege", 1);
 	if (LoadUserProfileW(user_token, &profileInfo) == FALSE) {
-		debug3("%s: LoadUserProfileW() failed for user %S with error %d.", __FUNCTION__, GetLastError());
+		debug3("%s: LoadUserProfileW() failed for user %S with error %d.", __FUNCTION__, user_name, GetLastError());
 	}
 	EnablePrivilege("SeBackupPrivilege", 0);
 	EnablePrivilege("SeRestorePrivilege", 0);

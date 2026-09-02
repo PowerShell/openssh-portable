@@ -30,8 +30,7 @@ Before building OpenSSH for Windows, install the following:
    same install / v143 toolset automatically.
 
 2. Git for Windows.
-   The build script expects git.exe to be on PATH (it will add
-   "%ProgramFiles%\Git\cmd" to the machine PATH if missing).
+   The build script expects git.exe to be on PATH.
 
 3. vcpkg (one-time bootstrap).
    Dependencies (LibreSSL, libfido2, zlib, libcbor) are managed via a
