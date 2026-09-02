@@ -25,6 +25,7 @@ tests()
 	dir_tests();
 	str_tests();
 	miscellaneous_tests();
+	getifaddrs_tests();
 }
 
 char *
