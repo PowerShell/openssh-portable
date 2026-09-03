@@ -72,7 +72,10 @@ static size_t nlog_verbose;
 extern char *__progname;
 
 #ifdef WINDOWS
-#define LOG_SYSLOG_VIS	(VIS_CSTYLE|VIS_NL|VIS_TAB|VIS_OCTAL|VIS_LOG_UTF16)
+/* We need NOSLASH on windows to avoid double escaping slashes when having them
+ * in logs on purpose, such as when using the slog patches from hyperscale
+ */
+#define LOG_SYSLOG_VIS	(VIS_CSTYLE|VIS_NL|VIS_TAB|VIS_OCTAL|VIS_LOG_UTF16|VIS_NOSLASH)
 #else
 #define LOG_SYSLOG_VIS	(VIS_CSTYLE|VIS_NL|VIS_TAB|VIS_OCTAL)
 #endif
