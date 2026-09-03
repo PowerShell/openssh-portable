@@ -183,6 +183,7 @@ typedef struct {
 
 	char	**channel_timeouts;	/* inactivity timeout by channel type */
 	u_int	num_channel_timeouts;
+	char	*tun_options;
 
 	char	*version_addendum;
 

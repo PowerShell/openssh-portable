@@ -1474,6 +1474,9 @@
 /* Open tunnel devices the FreeBSD way */
 /* #undef SSH_TUN_FREEBSD */
 
+/* Use TAP-Windows Adapter V9 (>=W10 only) */
+#define SSH_TUN_TAP_WINDOWS_V9 1
+
 /* Open tunnel devices the Linux tun/tap way */
 /* #undef SSH_TUN_LINUX */
 
