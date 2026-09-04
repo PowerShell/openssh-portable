@@ -74,8 +74,11 @@ first-class tools (`mcp_openssh-server_Start_OpenSSHBuild`,
 ### 1. Install the MCP host module
 
 The server is hosted by the `MCPServerPS` PowerShell module, which wraps
-each `.ps1` in `-ScriptRoot` as an MCP tool. See the linked package page
-for installation details: https://github.com/daxian-dbw/MCPServerPS/pkgs/nuget/MCPServerPS
+each `.ps1` in `-ScriptRoot` as an MCP tool.
+To install the module, run the following command:
+```pwsh
+Install-PSResource -Name MCPServerPS -Repository PSGallery
+```
 
 ### 2. Configure VS Code
 
@@ -92,7 +95,7 @@ the repository root — no editing required in that case:
             "args": [
                 "-noprofile",
                 "-c",
-                "MCPServerPS\\Start-MyMCP -ScriptRoot ./.github/tools"
+                "MCPServerPS\\Start-MyMCP -Name openssh-server -ScriptRoot ./.github/tools"
             ],
             "env": {
                 "GITHUB_TOKEN": "${input:github_token}"
