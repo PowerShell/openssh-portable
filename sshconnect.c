@@ -73,6 +73,7 @@
 #include "ssherr.h"
 #include "authfd.h"
 #include "kex.h"
+#include "pathnames.h"
 
 struct sshkey *previous_host_key = NULL;
 
@@ -736,9 +737,11 @@ try_tilde_unexpand(const char *path)
 	char *home, *ret = NULL;
 	size_t l;
 
+#ifndef WINDOWS
 	if (*path != '/')
 		return xstrdup(path);
-	if ((home = getenv("HOME")) == NULL || (l = strlen(home)) == 0)
+#endif // !WINDOWS
+	if ((home = getenv(HOME_ENV_VAR)) == NULL || (l = strlen(home)) == 0)
 		return xstrdup(path);
 	if (strncmp(path, home, l) != 0)
 		return xstrdup(path);
@@ -746,12 +749,16 @@ try_tilde_unexpand(const char *path)
 	 * ensure we have matched on a path boundary: either the $HOME that
 	 * we just compared ends with a '/' or the next character of the path
 	 * must be a '/'.
+	 * 
+	 * *_PATH_SEPARATOR is used to obtain the char '/' from the path
+	 * separator string. When compiled for Windows, this will be '\\'
+	 * instead.
 	 */
-	if (home[l - 1] != '/' && path[l] != '/')
+	if (home[l - 1] != *_PATH_SEPARATOR && path[l] != *_PATH_SEPARATOR)
 		return xstrdup(path);
-	if (path[l] == '/')
+	if (path[l] == *_PATH_SEPARATOR)
 		l++;
-	xasprintf(&ret, "~/%s", path + l);
+	xasprintf(&ret, "~" _PATH_SEPARATOR "%s", path + l);
 	return ret;
 }
 
