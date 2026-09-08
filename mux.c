@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/ioctl.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -116,10 +117,18 @@ static volatile sig_atomic_t muxclient_terminate = 0;
 /* PID of multiplex server */
 static u_int muxserver_pid = 0;
 
+#ifdef WINDOWS
+/* master advertised MUX_EXT_TTY_RELAY in its hello */
+static int muxclient_tty_relay = 0;
+#endif
+
 static Channel *mux_listener_channel = NULL;
 
 struct mux_master_state {
 	int hello_rcvd;
+	/* last window size received from the mux client (MUX_C_WINSIZE) */
+	struct winsize ws;
+	int ws_valid;
 };
 
 /* mux protocol messages */
@@ -131,6 +140,7 @@ struct mux_master_state {
 #define MUX_C_CLOSE_FWD		0x10000007
 #define MUX_C_NEW_STDIO_FWD	0x10000008
 #define MUX_C_STOP_LISTENING	0x10000009
+#define MUX_C_WINSIZE		0x1000000e
 #define MUX_C_PROXY		0x1000000f
 #define MUX_S_OK		0x80000001
 #define MUX_S_PERMISSION_DENIED	0x80000002
@@ -141,6 +151,14 @@ struct mux_master_state {
 #define MUX_S_REMOTE_PORT	0x80000007
 #define MUX_S_TTY_ALLOC_FAIL	0x80000008
 #define MUX_S_PROXY		0x8000000f
+
+/*
+ * Windows: hello extension advertised by masters that support tty sessions
+ * over multiplexed connections (client-side console relay + MUX_C_WINSIZE).
+ * Name is provisional pending maintainer review; the empty value is reserved
+ * for future versioning.
+ */
+#define MUX_EXT_TTY_RELAY	"tty-relay@win32.openssh.com"
 
 /* type codes for MUX_C_OPEN_FWD and MUX_C_CLOSE_FWD */
 #define MUX_FWD_LOCAL   1
@@ -168,6 +186,10 @@ static int mux_master_process_stop_listening(struct ssh *, u_int,
 	    Channel *, struct sshbuf *, struct sshbuf *);
 static int mux_master_process_proxy(struct ssh *, u_int,
 	    Channel *, struct sshbuf *, struct sshbuf *);
+#ifdef WINDOWS
+static int mux_master_process_winsize(struct ssh *, u_int,
+	    Channel *, struct sshbuf *, struct sshbuf *);
+#endif
 
 static const struct {
 	u_int type;
@@ -183,6 +205,9 @@ static const struct {
 	{ MUX_C_NEW_STDIO_FWD, mux_master_process_stdio_fwd },
 	{ MUX_C_STOP_LISTENING, mux_master_process_stop_listening },
 	{ MUX_C_PROXY, mux_master_process_proxy },
+#ifdef WINDOWS
+	{ MUX_C_WINSIZE, mux_master_process_winsize },
+#endif
 	{ 0, NULL }
 };
 
@@ -447,8 +472,13 @@ mux_master_process_new_session(struct ssh *ssh, u_int rid,
 	}
 
 	/* Try to pick up ttymodes from client before it goes raw */
+#ifdef WINDOWS
+	/* no tcgetattr; tty sessions get default modes */
+	memset(&cctx->tio, 0, sizeof(cctx->tio));
+#else
 	if (cctx->want_tty && tcgetattr(new_fd[0], &cctx->tio) == -1)
 		error_f("tcgetattr: %s", strerror(errno));
+#endif
 
 	window = CHAN_SES_WINDOW_DEFAULT;
 	packetmax = CHAN_SES_PACKET_DEFAULT;
@@ -501,6 +531,56 @@ mux_master_process_alive_check(struct ssh *ssh, u_int rid,
 
 	return 0;
 }
+
+#ifdef WINDOWS
+/*
+ * MUX_C_WINSIZE: the mux client reports its terminal size. Windows masters
+ * cannot query the client's console themselves (console handles are not
+ * usable across processes), so the client sends the size explicitly: once
+ * before MUX_C_NEW_SESSION (the control channel is ordered, so this seeds
+ * the pty-req dimensions) and again on every local resize. No reply is sent.
+ */
+static int
+mux_master_process_winsize(struct ssh *ssh, u_int rid,
+    Channel *c, struct sshbuf *m, struct sshbuf *reply)
+{
+	struct mux_master_state *state = (struct mux_master_state *)c->mux_ctx;
+	Channel *sc;
+	u_int col, row, xpix, ypix;
+	int r;
+
+	if ((r = sshbuf_get_u32(m, &col)) != 0 ||
+	    (r = sshbuf_get_u32(m, &row)) != 0 ||
+	    (r = sshbuf_get_u32(m, &xpix)) != 0 ||
+	    (r = sshbuf_get_u32(m, &ypix)) != 0) {
+		error_f("malformed message");
+		return -1;
+	}
+
+	debug2_f("channel %d: winsize %ux%u", c->self, col, row);
+
+	state->ws.ws_col = col;
+	state->ws.ws_row = row;
+	state->ws.ws_xpixel = xpix;
+	state->ws.ws_ypixel = ypix;
+	state->ws_valid = 1;
+
+	/* forward to an established session as a window-change request */
+	if (c->have_ctl_child_id &&
+	    (sc = channel_by_id(ssh, c->ctl_child_id)) != NULL &&
+	    sc->client_tty && sc->type == SSH_CHANNEL_OPEN) {
+		channel_request_start(ssh, sc->self, "window-change", 0);
+		if ((r = sshpkt_put_u32(ssh, col)) != 0 ||
+		    (r = sshpkt_put_u32(ssh, row)) != 0 ||
+		    (r = sshpkt_put_u32(ssh, xpix)) != 0 ||
+		    (r = sshpkt_put_u32(ssh, ypix)) != 0 ||
+		    (r = sshpkt_send(ssh)) != 0)
+			fatal_fr(r, "channel %u: send window-change", sc->self);
+	}
+
+	return 0;
+}
+#endif /* WINDOWS */
 
 static int
 mux_master_process_terminate(struct ssh *ssh, u_int rid,
@@ -1167,7 +1247,12 @@ mux_master_read_cb(struct ssh *ssh, Channel *c)
 		if ((r = sshbuf_put_u32(out, MUX_MSG_HELLO)) != 0 ||
 		    (r = sshbuf_put_u32(out, SSHMUX_VER)) != 0)
 			fatal_fr(r, "reply");
-		/* no extensions */
+#ifdef WINDOWS
+		/* advertise tty session support (client-side console relay) */
+		if ((r = sshbuf_put_cstring(out, MUX_EXT_TTY_RELAY)) != 0 ||
+		    (r = sshbuf_put_string(out, NULL, 0)) != 0)
+			fatal_fr(r, "reply extension");
+#endif
 		if ((r = sshbuf_put_stringb(c->output, out)) != 0)
 			fatal_fr(r, "enqueue");
 		debug3_f("channel %d: hello sent", c->self);
@@ -1270,10 +1355,12 @@ mux_tty_alloc_failed(struct ssh *ssh, Channel *c)
 void
 muxserver_listen(struct ssh *ssh)
 {
+#ifndef WINDOWS
 	mode_t old_umask;
 	char *orig_control_path = options.control_path;
 	char rbuf[16+1];
 	u_int i, r;
+#endif
 	int oerrno;
 
 	if (options.control_path == NULL ||
@@ -1282,6 +1369,28 @@ muxserver_listen(struct ssh *ssh)
 
 	debug("setting up multiplex master socket");
 
+#ifdef WINDOWS
+	/*
+	 * ControlPath maps to a named pipe: there is no filesystem entry, so
+	 * the umask/temp-path/link tricks below do not apply. Pipe name
+	 * creation is atomic (FILE_FLAG_FIRST_PIPE_INSTANCE) and reports
+	 * EADDRINUSE if the name is owned by another process.
+	 */
+	muxserver_sock = unix_listener(options.control_path, 64, 0);
+	if (muxserver_sock < 0) {
+		oerrno = errno;
+		if (oerrno == EINVAL || oerrno == EADDRINUSE) {
+			error("ControlSocket %s already exists, "
+			    "disabling multiplexing", options.control_path);
+			free(options.control_path);
+			options.control_path = NULL;
+			options.control_master = SSHCTL_MASTER_NO;
+			return;
+		}
+		/* unix_listener() logs the error */
+		cleanup_exit(255);
+	}
+#else /* !WINDOWS */
 	/*
 	 * Use a temporary path before listen so we can pseudo-atomically
 	 * establish the listening socket in its final location to avoid
@@ -1338,6 +1447,7 @@ muxserver_listen(struct ssh *ssh)
 	unlink(options.control_path);
 	free(options.control_path);
 	options.control_path = orig_control_path;
+#endif /* !WINDOWS */
 
 	set_nonblock(muxserver_sock);
 
@@ -1403,8 +1513,27 @@ mux_session_confirm(struct ssh *ssh, int id, int success, void *arg)
 			fatal_fr(r, "send");
 	}
 
+#ifdef WINDOWS
+	{
+		/*
+		 * The client's console size arrives via MUX_C_WINSIZE (sent
+		 * before the session request); rfd is a relay pipe here, and
+		 * falling back to ioctl() would leak the master's own console
+		 * size into the pty-req, so pass zeros when no size was seen.
+		 */
+		static const struct winsize zws;
+		struct mux_master_state *state =
+		    (struct mux_master_state *)cc->mux_ctx;
+
+		client_session2_setup(ssh, id, cctx->want_tty,
+		    cctx->want_subsys, cctx->term, &cctx->tio, c->rfd,
+		    cctx->cmd, cctx->env,
+		    (state != NULL && state->ws_valid) ? &state->ws : &zws);
+	}
+#else
 	client_session2_setup(ssh, id, cctx->want_tty, cctx->want_subsys,
-	    cctx->term, &cctx->tio, c->rfd, cctx->cmd, cctx->env);
+	    cctx->term, &cctx->tio, c->rfd, cctx->cmd, cctx->env, NULL);
+#endif
 
 	debug3_f("sending success reply");
 	/* prepare reply */
@@ -1592,6 +1721,394 @@ mux_client_read_packet(int fd, struct sshbuf *m)
 	return mux_client_read_packet_timeout(fd, m, -1);
 }
 
+#ifdef WINDOWS
+/*
+ * Windows console relay for multiplexed passenger sessions.
+ *
+ * On POSIX the mux client passes its stdio file descriptors to the master
+ * via SCM_RIGHTS and the master does all the terminal I/O. On Windows,
+ * console handles are bound to the owning process's console and cannot be
+ * driven by the master across the process boundary. So when a std fd is a
+ * console, the client substitutes a pipe (which the master CAN drive, just
+ * like redirected stdio) and pumps bytes between its own console and that
+ * pipe itself, reusing the same in-process terminal emulation a non-mux
+ * ssh already uses. Window-size changes travel over the control channel as
+ * MUX_C_WINSIZE (see mux_master_process_winsize) instead of via ioctl on
+ * the master, and instead of relaying SIGWINCH with kill() (which on
+ * Windows would terminate the master process).
+ *
+ * Protocol additions (Windows only; see PROTOCOL.mux for the base
+ * protocol):
+ *
+ * 1. Masters advertise the hello extension "tty-relay@win32.openssh.com"
+ *    with an empty value (reserved for future versioning). Peers that do
+ *    not recognise the extension ignore it, per PROTOCOL.mux.
+ *
+ * 2. A client that saw the extension may send, at any time after the
+ *    hello:
+ *	uint32	MUX_C_WINSIZE
+ *	uint32	request id
+ *	uint32	columns
+ *	uint32	rows
+ *	uint32	x pixels
+ *	uint32	y pixels
+ *    No reply is sent and the request id is not consumed. Because the
+ *    control channel is ordered, a MUX_C_WINSIZE sent before
+ *    MUX_C_NEW_SESSION seeds the dimensions used in the session's pty-req;
+ *    later messages become "window-change" channel requests.
+ *
+ * 3. A client that wants a tty but did not see the extension MUST NOT
+ *    open a session over the multiplexed connection; it falls back to a
+ *    separate direct connection instead (see muxclient()).
+ */
+
+#define MUX_RELAY_BUF 8192
+
+struct mux_relay_ent {
+	int is_console;		/* this std fd was a console -> relayed */
+	int is_input;		/* 1 = console->master (stdin); 0 = ->console */
+	int console_fd;		/* the real console std fd (0/1/2), not owned */
+	int local_pipe;		/* our end of the substitute pipe (owned) */
+	int passed;		/* pipe end handed to the master (-1 if none) */
+	int rd_done;		/* source (console or pipe) hit EOF */
+	int pipe_closed;	/* local_pipe has been closed */
+	char buf[MUX_RELAY_BUF];
+	size_t buf_len;
+};
+
+struct mux_relay {
+	int active;		/* at least one console fd is being relayed */
+	struct mux_relay_ent ent[3];	/* indexed by std fd (0,1,2) */
+	int nent;
+};
+
+#define MUX_RELAY_RD(e) ((e)->is_input ? (e)->console_fd : (e)->local_pipe)
+#define MUX_RELAY_WR(e) ((e)->is_input ? (e)->local_pipe : (e)->console_fd)
+
+static void mux_relay_close_all(struct mux_relay *r);
+
+/* Set when a SIGWINCH is caught; drained by the pump loop. */
+static volatile sig_atomic_t muxclient_winch = 0;
+
+static void
+control_client_sigwinch(int signo)
+{
+	(void)signo;
+	muxclient_winch = 1;
+}
+
+/* Send the local console size to the master. Silent no-op without a tty. */
+static void
+mux_client_send_winsize(int fd)
+{
+	struct sshbuf *m;
+	struct winsize ws;
+	int r;
+
+	/* prefer stdout, but fall back to stdin if only that is a tty */
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 &&
+	    ioctl(STDIN_FILENO, TIOCGWINSZ, &ws) == -1)
+		return;
+	if ((m = sshbuf_new()) == NULL)
+		fatal_f("sshbuf_new");
+	/* no reply is sent for WINSIZE, so the request id is not consumed */
+	if ((r = sshbuf_put_u32(m, MUX_C_WINSIZE)) != 0 ||
+	    (r = sshbuf_put_u32(m, muxclient_request_id)) != 0 ||
+	    (r = sshbuf_put_u32(m, (u_int)ws.ws_col)) != 0 ||
+	    (r = sshbuf_put_u32(m, (u_int)ws.ws_row)) != 0 ||
+	    (r = sshbuf_put_u32(m, (u_int)ws.ws_xpixel)) != 0 ||
+	    (r = sshbuf_put_u32(m, (u_int)ws.ws_ypixel)) != 0)
+		fatal_fr(r, "assemble winsize");
+	if (mux_client_write_packet(fd, m) != 0)
+		debug_f("write winsize: %s", strerror(errno));
+	sshbuf_free(m);
+}
+
+/*
+ * Prepare the relay for a passenger session with nfds std fds (3 for a
+ * normal session, 2 for stdio forwarding). For each fd that is a console,
+ * a pipe is created and its master-facing end is recorded in passed_fd[i]
+ * so the caller sends that instead of the real fd. Returns 0 on success
+ * (relay may be inactive if no fd was a console), -1 on error with all
+ * pipes closed. Real std fds are never modified, so callers can still fall
+ * back to a direct connection.
+ */
+static int
+mux_relay_prepare(struct mux_relay *r, int nfds, int passed_fd[3])
+{
+	int i, p[2];
+
+	memset(r, 0, sizeof(*r));
+	r->nent = nfds;
+	for (i = 0; i < nfds; i++) {
+		r->ent[i].passed = -1;
+		passed_fd[i] = i;	/* default: pass the real fd */
+	}
+
+	if (!muxclient_tty_relay)
+		return 0;
+
+	for (i = 0; i < nfds; i++) {
+		struct mux_relay_ent *e = &r->ent[i];
+
+		if (!isatty(i))
+			continue;
+		if (pipe(p) == -1) {
+			error_f("pipe: %s", strerror(errno));
+			mux_relay_close_all(r);
+			return -1;
+		}
+		e->is_console = 1;
+		e->console_fd = i;
+		if (i == STDIN_FILENO) {
+			/* console -> master: master reads the pipe read end */
+			e->is_input = 1;
+			e->local_pipe = p[1];	/* we write */
+			e->passed = p[0];	/* master reads */
+		} else {
+			/* master -> console: master writes the pipe write end */
+			e->is_input = 0;
+			e->local_pipe = p[0];	/* we read */
+			e->passed = p[1];	/* master writes */
+		}
+		passed_fd[i] = e->passed;
+		r->active = 1;
+		(void)fcntl(e->local_pipe, F_SETFL, O_NONBLOCK);
+		(void)fcntl(e->console_fd, F_SETFL, O_NONBLOCK);
+	}
+	return 0;
+}
+
+/* Close the pipe ends handed to the master (call after the reply arrives). */
+static void
+mux_relay_close_passed(struct mux_relay *r)
+{
+	int i;
+
+	for (i = 0; i < r->nent; i++) {
+		if (r->ent[i].is_console && r->ent[i].passed != -1) {
+			close(r->ent[i].passed);
+			r->ent[i].passed = -1;
+		}
+	}
+}
+
+/* Close every fd the relay still owns (pipe ends only; never the console). */
+static void
+mux_relay_close_all(struct mux_relay *r)
+{
+	int i;
+
+	for (i = 0; i < r->nent; i++) {
+		struct mux_relay_ent *e = &r->ent[i];
+		if (!e->is_console)
+			continue;
+		if (e->passed != -1) {
+			close(e->passed);
+			e->passed = -1;
+		}
+		if (!e->pipe_closed) {
+			close(e->local_pipe);
+			e->pipe_closed = 1;
+		}
+	}
+	memset(r, 0, sizeof(*r));
+}
+
+/* Read from the source fd into the buffer if there is room. */
+static void
+mux_relay_fill(struct mux_relay_ent *e)
+{
+	ssize_t n;
+
+	if (e->rd_done || e->buf_len == sizeof(e->buf))
+		return;
+	n = read(MUX_RELAY_RD(e), e->buf + e->buf_len,
+	    sizeof(e->buf) - e->buf_len);
+	if (n > 0)
+		e->buf_len += n;
+	else if (n == 0)
+		e->rd_done = 1;			/* EOF */
+	else if (errno != EAGAIN && errno != EINTR)
+		e->rd_done = 1;			/* broken pipe counts as EOF */
+}
+
+/* Write buffered bytes out to the destination fd. */
+static void
+mux_relay_flush(struct mux_relay_ent *e)
+{
+	ssize_t n;
+
+	while (e->buf_len > 0) {
+		n = write(MUX_RELAY_WR(e), e->buf, e->buf_len);
+		if (n > 0) {
+			memmove(e->buf, e->buf + n, e->buf_len - n);
+			e->buf_len -= n;
+			continue;
+		}
+		if (n == -1 && (errno == EAGAIN || errno == EINTR))
+			return;			/* retry next poll */
+		/* destination gone: drop this direction */
+		e->rd_done = 1;
+		e->buf_len = 0;
+		return;
+	}
+}
+
+/*
+ * Run the passenger session, moving console<->pipe bytes while watching the
+ * control fd for tty-alloc-fail / exit-message / EOF. Returns when the
+ * master closes the control fd (session over). Mirrors the control-packet
+ * handling of the POSIX SCM_RIGHTS wait-loop.
+ */
+static void
+mux_relay_pump(int fd, struct mux_relay *r, u_int sid,
+    u_int *exitval, int *exitval_seen, int *rawmode)
+{
+	struct sshbuf *m;
+	struct pollfd pfd[7];
+	u_int type, esid;
+	int i, r2, ctl_idx, draining = 0;
+	int rd_idx[3], wr_idx[3];
+	char *e;
+	time_t drain_deadline = 0;
+
+	if ((m = sshbuf_new()) == NULL)
+		fatal_f("sshbuf_new");
+
+	for (;;) {
+		int nfds = 0;
+
+		if (muxclient_terminate)
+			break;
+		if (muxclient_winch) {
+			muxclient_winch = 0;
+			if (tty_flag)
+				mux_client_send_winsize(fd);
+		}
+
+		ctl_idx = -1;
+		if (!draining) {
+			ctl_idx = nfds;
+			pfd[nfds].fd = fd;
+			pfd[nfds].events = POLLIN;
+			pfd[nfds].revents = 0;
+			nfds++;
+		}
+
+		for (i = 0; i < r->nent; i++) {
+			struct mux_relay_ent *ent = &r->ent[i];
+
+			rd_idx[i] = wr_idx[i] = -1;
+			if (!ent->is_console)
+				continue;
+			/* in the drain phase stop reading local console input */
+			if (!(draining && ent->is_input) && !ent->rd_done &&
+			    ent->buf_len < sizeof(ent->buf)) {
+				rd_idx[i] = nfds;
+				pfd[nfds].fd = MUX_RELAY_RD(ent);
+				pfd[nfds].events = POLLIN;
+				pfd[nfds].revents = 0;
+				nfds++;
+			}
+			if (ent->buf_len > 0) {
+				wr_idx[i] = nfds;
+				pfd[nfds].fd = MUX_RELAY_WR(ent);
+				pfd[nfds].events = POLLOUT;
+				pfd[nfds].revents = 0;
+				nfds++;
+			}
+		}
+
+		(void)poll(pfd, nfds, 200);	/* finite: SIGWINCH won't wake it */
+
+		/* move data in both directions */
+		for (i = 0; i < r->nent; i++) {
+			struct mux_relay_ent *ent = &r->ent[i];
+
+			if (!ent->is_console)
+				continue;
+			if (rd_idx[i] != -1 &&
+			    (pfd[rd_idx[i]].revents & (POLLIN | POLLHUP)))
+				mux_relay_fill(ent);
+			if (ent->buf_len > 0)
+				mux_relay_flush(ent);
+			/* propagate console EOF to the master by closing the pipe */
+			if (ent->is_input && ent->rd_done && ent->buf_len == 0 &&
+			    !ent->pipe_closed) {
+				close(ent->local_pipe);
+				ent->pipe_closed = 1;
+			}
+		}
+
+		/* control channel */
+		if (ctl_idx != -1 &&
+		    (pfd[ctl_idx].revents & (POLLIN | POLLHUP))) {
+			sshbuf_reset(m);
+			if (mux_client_read_packet(fd, m) != 0) {
+				/* master closed the control fd: drain output */
+				draining = 1;
+				drain_deadline = monotime() + 5;
+			} else {
+				if ((r2 = sshbuf_get_u32(m, &type)) != 0)
+					fatal_fr(r2, "parse type");
+				switch (type) {
+				case MUX_S_TTY_ALLOC_FAIL:
+					if ((r2 = sshbuf_get_u32(m, &esid)) != 0)
+						fatal_fr(r2, "parse session ID");
+					if (esid != sid)
+						fatal_f("tty alloc fail on unknown "
+						    "session: my id %u theirs %u",
+						    sid, esid);
+					leave_raw_mode(options.request_tty ==
+					    REQUEST_TTY_FORCE);
+					*rawmode = 0;
+					break;
+				case MUX_S_EXIT_MESSAGE:
+					if ((r2 = sshbuf_get_u32(m, &esid)) != 0)
+						fatal_fr(r2, "parse session ID");
+					if (esid != sid)
+						fatal_f("exit on unknown session: "
+						    "my id %u theirs %u", sid, esid);
+					if (*exitval_seen)
+						fatal_f("exitval sent twice");
+					if ((r2 = sshbuf_get_u32(m, exitval)) != 0)
+						fatal_fr(r2, "parse exitval");
+					*exitval_seen = 1;
+					break;
+				default:
+					if ((r2 = sshbuf_get_cstring(m, &e,
+					    NULL)) != 0)
+						fatal_fr(r2, "parse error message");
+					if (*rawmode)
+						leave_raw_mode(options.request_tty
+						    == REQUEST_TTY_FORCE);
+					fatal_f("master returned error: %s", e);
+				}
+			}
+		}
+
+		/* drain phase: leave once output is flushed or the cap is hit */
+		if (draining) {
+			int pending = 0;
+
+			for (i = STDOUT_FILENO;
+			    i <= STDERR_FILENO && i < r->nent; i++) {
+				struct mux_relay_ent *ent = &r->ent[i];
+				if (ent->is_console &&
+				    (!ent->rd_done || ent->buf_len > 0))
+					pending = 1;
+			}
+			if (!pending || monotime() >= drain_deadline)
+				break;
+		}
+	}
+
+	sshbuf_free(m);
+}
+
+#endif /* WINDOWS */
+
 static int
 mux_client_hello_exchange(int fd, int timeout_ms)
 {
@@ -1642,6 +2159,14 @@ mux_client_hello_exchange(int fd, int timeout_ms)
 			error_fr(r, "parse extension");
 			goto out;
 		}
+#ifdef WINDOWS
+		if (strcmp(name, MUX_EXT_TTY_RELAY) == 0) {
+			debug2("master supports tty sessions over mux");
+			muxclient_tty_relay = 1;
+			free(name);
+			continue;
+		}
+#endif
 		debug2("Unrecognised master extension \"%s\"", name);
 		free(name);
 	}
@@ -1888,6 +2413,10 @@ mux_client_request_session(int fd)
 	u_int i, echar, rid, sid, esid, exitval, type, exitval_seen;
 	extern char **environ;
 	int r, rawmode = 0;
+#ifdef WINDOWS
+	struct mux_relay relay;
+	int passed_fd[3];
+#endif
 
 	debug3_f("entering");
 
@@ -1908,6 +2437,21 @@ mux_client_request_session(int fd)
 	echar = 0xffffffff;
 	if (options.escape_char != SSH_ESCAPECHAR_NONE)
 	    echar = (u_int)options.escape_char;
+
+#ifdef WINDOWS
+	/* substitute pipes for console std fds (see relay comment above) */
+	if (mux_relay_prepare(&relay, 3, passed_fd) == -1) {
+		error_f("cannot set up console relay");
+		return -1;
+	}
+	/*
+	 * Seed the master with our terminal size before the session request:
+	 * the control channel is ordered, and the master cannot query our
+	 * console itself.
+	 */
+	if (tty_flag && muxclient_tty_relay)
+		mux_client_send_winsize(fd);
+#endif
 
 	if ((m = sshbuf_new()) == NULL)
 		fatal_f("sshbuf_new");
@@ -1941,10 +2485,18 @@ mux_client_request_session(int fd)
 		fatal_f("write packet: %s", strerror(errno));
 
 	/* Send the stdio file descriptors */
+#ifdef WINDOWS
+	/* console fds were substituted with relay pipe ends */
+	if (mm_send_fd(fd, passed_fd[0]) == -1 ||
+	    mm_send_fd(fd, passed_fd[1]) == -1 ||
+	    mm_send_fd(fd, passed_fd[2]) == -1)
+		fatal_f("send fds failed");
+#else
 	if (mm_send_fd(fd, STDIN_FILENO) == -1 ||
 	    mm_send_fd(fd, STDOUT_FILENO) == -1 ||
 	    mm_send_fd(fd, STDERR_FILENO) == -1)
 		fatal_f("send fds failed");
+#endif
 
 	debug3_f("session request sent");
 
@@ -1953,7 +2505,7 @@ mux_client_request_session(int fd)
 	if (mux_client_read_packet(fd, m) != 0) {
 		error_f("read from master failed: %s", strerror(errno));
 		sshbuf_free(m);
-		return -1;
+		goto fail;
 	}
 
 	if ((r = sshbuf_get_u32(m, &type)) != 0 ||
@@ -1974,19 +2526,28 @@ mux_client_request_session(int fd)
 			fatal_fr(r, "parse error message");
 		error("Master refused session request: %s", e);
 		sshbuf_free(m);
-		return -1;
+		goto fail;
 	case MUX_S_FAILURE:
 		if ((r = sshbuf_get_cstring(m, &e, NULL)) != 0)
 			fatal_fr(r, "parse error message");
 		error_f("session request failed: %s", e);
 		sshbuf_free(m);
-		return -1;
+		goto fail;
 	default:
 		sshbuf_free(m);
 		error_f("unexpected response from master 0x%08x", type);
-		return -1;
+		goto fail;
 	}
 	muxclient_request_id++;
+
+#ifdef WINDOWS
+	/*
+	 * The master duplicated the passed handles while processing the
+	 * request, strictly before its reply, so our copies of the passed
+	 * pipe ends can (and must) be dropped now.
+	 */
+	mux_relay_close_passed(&relay);
+#endif
 
 	if (pledge("stdio proc tty", NULL) == -1)
 		fatal_f("pledge(): %s", strerror(errno));
@@ -1995,7 +2556,16 @@ mux_client_request_session(int fd)
 	ssh_signal(SIGHUP, control_client_sighandler);
 	ssh_signal(SIGINT, control_client_sighandler);
 	ssh_signal(SIGTERM, control_client_sighandler);
+#ifdef WINDOWS
+	/*
+	 * Do not relay SIGWINCH via kill(): w32_kill() terminates a tracked
+	 * child process for any signal. Resizes are detected locally and
+	 * sent to the master as MUX_C_WINSIZE by the relay pump instead.
+	 */
+	ssh_signal(SIGWINCH, control_client_sigwinch);
+#else
 	ssh_signal(SIGWINCH, control_client_sigrelay);
+#endif
 
 	if (options.fork_after_authentication)
 		daemon(1, 1);
@@ -2014,7 +2584,18 @@ mux_client_request_session(int fd)
 	 * the client_fd; if this one closes early, the multiplex master will
 	 * terminate early too (possibly losing data).
 	 */
-	for (exitval = 255, exitval_seen = 0;;) {
+	exitval = 255;
+	exitval_seen = 0;
+#ifdef WINDOWS
+	if (relay.active) {
+		int eseen = 0;
+
+		mux_relay_pump(fd, &relay, sid, &exitval, &eseen, &rawmode);
+		exitval_seen = (u_int)eseen;
+		mux_relay_close_all(&relay);
+	} else
+#endif
+	for (;;) {
 		sshbuf_reset(m);
 		if (mux_client_read_packet(fd, m) != 0)
 			break;
@@ -2067,6 +2648,12 @@ mux_client_request_session(int fd)
 		fprintf(stderr, "Shared connection to %s closed.\r\n", host);
 
 	exit(exitval);
+
+ fail:
+#ifdef WINDOWS
+	mux_relay_close_all(&relay);
+#endif
+	return -1;
 }
 
 static int
@@ -2117,6 +2704,10 @@ mux_client_request_stdio_fwd(int fd)
 	char *e;
 	u_int type, rid, sid;
 	int r;
+#ifdef WINDOWS
+	struct mux_relay relay;
+	int passed_fd[3];
+#endif
 
 	debug3_f("entering");
 
@@ -2129,6 +2720,14 @@ mux_client_request_stdio_fwd(int fd)
 
 	if (options.stdin_null && stdfd_devnull(1, 0, 0) == -1)
 		fatal_f("stdfd_devnull failed");
+
+#ifdef WINDOWS
+	/* substitute pipes for console std fds (see relay comment above) */
+	if (mux_relay_prepare(&relay, 2, passed_fd) == -1) {
+		error_f("cannot set up console relay");
+		return -1;
+	}
+#endif
 
 	if ((m = sshbuf_new()) == NULL)
 		fatal_f("sshbuf_new");
@@ -2143,9 +2742,15 @@ mux_client_request_stdio_fwd(int fd)
 		fatal_f("write packet: %s", strerror(errno));
 
 	/* Send the stdio file descriptors */
+#ifdef WINDOWS
+	if (mm_send_fd(fd, passed_fd[0]) == -1 ||
+	    mm_send_fd(fd, passed_fd[1]) == -1)
+		fatal_f("send fds failed");
+#else
 	if (mm_send_fd(fd, STDIN_FILENO) == -1 ||
 	    mm_send_fd(fd, STDOUT_FILENO) == -1)
 		fatal_f("send fds failed");
+#endif
 
 	if (pledge("stdio proc tty", NULL) == -1)
 		fatal_f("pledge(): %s", strerror(errno));
@@ -2159,7 +2764,7 @@ mux_client_request_stdio_fwd(int fd)
 	if (mux_client_read_packet(fd, m) != 0) {
 		error_f("read from master failed: %s", strerror(errno));
 		sshbuf_free(m);
-		return -1;
+		goto fail;
 	}
 
 	if ((r = sshbuf_get_u32(m, &type)) != 0 ||
@@ -2187,18 +2792,37 @@ mux_client_request_stdio_fwd(int fd)
 	default:
 		sshbuf_free(m);
 		error_f("unexpected response from master 0x%08x", type);
-		return -1;
+		goto fail;
 	}
 	muxclient_request_id++;
+
+#ifdef WINDOWS
+	/* the master duplicated the handles before replying; drop our copies */
+	mux_relay_close_passed(&relay);
+#endif
 
 	ssh_signal(SIGHUP, control_client_sighandler);
 	ssh_signal(SIGINT, control_client_sighandler);
 	ssh_signal(SIGTERM, control_client_sighandler);
+#ifndef WINDOWS
+	/* not on Windows: w32_kill() would terminate a tracked child */
 	ssh_signal(SIGWINCH, control_client_sigrelay);
+#endif
 
 	/*
 	 * Stick around until the controlee closes the client_fd.
 	 */
+#ifdef WINDOWS
+	if (relay.active) {
+		u_int exitval = 0;
+		int exitval_seen = 0, rawmode = 0;
+
+		mux_relay_pump(fd, &relay, sid, &exitval, &exitval_seen,
+		    &rawmode);
+		mux_relay_close_all(&relay);
+		return 0;
+	}
+#endif
 	sshbuf_reset(m);
 	if (mux_client_read_packet(fd, m) != 0) {
 		if (errno == EPIPE ||
@@ -2207,6 +2831,12 @@ mux_client_request_stdio_fwd(int fd)
 		fatal_f("mux_client_read_packet: %s", strerror(errno));
 	}
 	fatal_f("master returned unexpected message %u", type);
+
+ fail:
+#ifdef WINDOWS
+	mux_relay_close_all(&relay);
+#endif
+	return -1;
 }
 
 static void
@@ -2329,6 +2959,21 @@ muxclient(const char *path)
 		close(sock);
 		return -1;
 	}
+
+#ifdef WINDOWS
+	/*
+	 * tty sessions need the console relay (see above), which requires a
+	 * master that understands MUX_C_WINSIZE. Fall back to a separate
+	 * connection when talking to a master that doesn't advertise it.
+	 */
+	if (muxclient_command == SSHMUX_COMMAND_OPEN && tty_flag &&
+	    !muxclient_tty_relay) {
+		debug("master does not support tty sessions over multiplexed "
+		    "connections; opening a separate connection");
+		close(sock);
+		return -1;
+	}
+#endif
 
 	switch (muxclient_command) {
 	case SSHMUX_COMMAND_ALIVE_CHECK:

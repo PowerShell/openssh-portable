@@ -48,6 +48,23 @@
 #include "log.h"
 #include "monitor_fdpass.h"
 
+#ifdef WINDOWS
+/* implemented in contrib/win32/win32compat/w32fd.c over DuplicateHandle */
+int w32_fdpass_send(int sock, int fd);
+int w32_fdpass_recv(int sock);
+
+int
+mm_send_fd(int sock, int fd)
+{
+	return w32_fdpass_send(sock, fd);
+}
+
+int
+mm_receive_fd(int sock)
+{
+	return w32_fdpass_recv(sock);
+}
+#else /* !WINDOWS */
 int
 mm_send_fd(int sock, int fd)
 {
@@ -183,3 +200,4 @@ mm_receive_fd(int sock)
 	return -1;
 #endif
 }
+#endif /* !WINDOWS */

@@ -38,13 +38,15 @@
 #include <termios.h>
 
 struct ssh;
+struct winsize;
 
 /* Client side main loop for the interactive session. */
 int	 client_loop(struct ssh *, int, int, int);
 int	 client_x11_get_proto(struct ssh *, const char *, const char *,
 	    u_int, u_int, char **, char **);
 void	 client_session2_setup(struct ssh *, int, int, int,
-	    const char *, struct termios *, int, struct sshbuf *, char **);
+	    const char *, struct termios *, int, struct sshbuf *, char **,
+	    const struct winsize *);
 char	 *client_request_tun_fwd(struct ssh *, int, int, int,
     channel_open_fn *, void *);
 void	 client_stop_mux(void);

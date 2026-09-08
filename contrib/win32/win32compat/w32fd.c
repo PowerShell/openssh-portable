@@ -275,6 +275,9 @@ w32_io_is_io_available(struct w32_io* pio, BOOL rd)
 {
 	if (pio->type == SOCK_FD)
 		return socketio_is_io_available(pio, rd);
+	else if (pio->internal.state == SOCK_LISTENING)
+		/* listening AF_UNIX socket emulated over named pipes */
+		return rd ? fileio_afunix_listener_ready(pio) : FALSE;
 	else
 		return fileio_is_io_available(pio, rd);
 }
@@ -284,6 +287,9 @@ w32_io_on_select(struct w32_io* pio, BOOL rd)
 {
 	if ((pio->type == SOCK_FD))
 		socketio_on_select(pio, rd);
+	else if (pio->internal.state == SOCK_LISTENING)
+		/* ConnectNamedPipe is already pending; nothing to initiate */
+		return;
 	else
 		fileio_on_select(pio, rd);
 }
@@ -337,7 +343,6 @@ int
 w32_accept(int fd, struct sockaddr* addr, int* addrlen)
 {
 	CHECK_FD(fd);
-	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
 	int min_index = fd_table_get_min_index();
 	struct w32_io* pio = NULL;
 
@@ -345,11 +350,35 @@ w32_accept(int fd, struct sockaddr* addr, int* addrlen)
 		return -1;
 
 	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
-		errno = ENOTSUP;
-		verbose("Unix domain server sockets are not supported");
-		return -1;
+		struct w32_io* listener = fd_table.w32_ios[fd];
+
+		if (listener->internal.state != SOCK_LISTENING ||
+		    WINHANDLE(listener) == 0) {
+			errno = EINVAL;
+			return -1;
+		}
+
+		while (!fileio_afunix_listener_ready(listener)) {
+			if (!w32_io_is_blocking(listener)) {
+				errno = EAGAIN;
+				return -1;
+			}
+			if (wait_for_any_event(&listener->read_overlapped.hEvent,
+			    1, INFINITE) == -1)
+				return -1;
+		}
+
+		if ((pio = fileio_afunix_accept(listener)) == NULL)
+			return -1;
+
+		fd_table_set(pio, min_index);
+		if (addr && addrlen)
+			memset(addr, 0, *addrlen);
+		debug4("afunix accept - handle:%p, io:%p, fd:%d", pio->handle, pio, min_index);
+		return min_index;
 	}
 
+	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
 	pio = socketio_accept(fd_table.w32_ios[fd], addr, addrlen);
 	if (!pio)
 		return -1;
@@ -396,11 +425,8 @@ int
 w32_listen(int fd, int backlog)
 {
 	CHECK_FD(fd);
-	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
-		errno = ENOTSUP;
-		verbose("Unix domain server sockets are not supported");
-		return -1;
-	}
+	if (fd_table.w32_ios[fd]->type == NONSOCK_FD)
+		return fileio_afunix_listen(fd_table.w32_ios[fd], backlog);
 
 	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
 	return socketio_listen(fd_table.w32_ios[fd], backlog);
@@ -411,9 +437,8 @@ w32_bind(int fd, const struct sockaddr *name, int namelen)
 {
 	CHECK_FD(fd);
 	if (fd_table.w32_ios[fd]->type == NONSOCK_FD) {
-		errno = ENOTSUP;
-		verbose("Unix domain server sockets are not supported");
-		return -1;
+		struct sockaddr_un* addr = (struct sockaddr_un*)name;
+		return fileio_afunix_bind(fd_table.w32_ios[fd], addr->sun_path);
 	}
 
 	CHECK_SOCK_IO(fd_table.w32_ios[fd]);
@@ -795,8 +820,9 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 	for (int i = 0; i < fds; i++) {
 		if (readfds && FD_ISSET(i, readfds)) {
 			w32_io_on_select(fd_table.w32_ios[i], TRUE);
-			if ((fd_table.w32_ios[i]->type == SOCK_FD) &&
-			    (fd_table.w32_ios[i]->internal.state == SOCK_LISTENING)) {
+			/* listening sockets (TCP or AF_UNIX pipe) signal via event */
+			if (fd_table.w32_ios[i]->internal.state == SOCK_LISTENING &&
+			    fd_table.w32_ios[i]->read_overlapped.hEvent != NULL) {
 				if (num_events == SELECT_EVENT_LIMIT) {
 					debug3("select - ERROR: max #events breach");
 					errno = ENOMEM;
@@ -1002,6 +1028,222 @@ HANDLE
 w32_fd_to_handle(int fd)
 {
 	return fd_table.w32_ios[fd]->handle;
+}
+
+/* wraps a raw win32 handle in a new fd table entry */
+static int
+w32_allocate_fd_for_handle(HANDLE h, int type)
+{
+	int min_index = fd_table_get_min_index();
+	struct w32_io* pio;
+
+	if (min_index == -1)
+		return -1;
+
+	if ((pio = malloc(sizeof(struct w32_io))) == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+	memset(pio, 0, sizeof(struct w32_io));
+	pio->type = type;
+	pio->handle = h;
+	fd_table_set(pio, min_index);
+	return min_index;
+}
+
+/*
+ * File descriptor passing over AF_UNIX (named pipe) sockets.
+ * Windows has no SCM_RIGHTS: the sender transmits its pid and raw handle
+ * value in-band; the receiver verifies the peer is the same Windows user
+ * and pulls the handle across with DuplicateHandle. Used by ssh mux
+ * (ControlMaster) to pass the mux client's stdio to the mux master.
+ */
+#define W32_FDPASS_MAGIC 0x77465044	/* "wFPD" */
+#define W32_FDPASS_TIMEOUT_MS 15000
+
+#pragma pack(push, 1)
+struct w32_fdpass_msg {
+	unsigned __int32 magic;
+	unsigned __int32 pid;
+	unsigned __int64 handle;
+	unsigned __int32 type;	/* enum w32_io_type of sender's fd */
+};
+#pragma pack(pop)
+
+/* TRUE if process pid runs as the same Windows user as us */
+BOOL
+w32_is_pid_same_user(DWORD pid)
+{
+	BOOL ret = FALSE;
+	HANDLE proc = NULL, token = NULL;
+	TOKEN_USER *peer_info = NULL;
+	PSID my_sid = NULL;
+	DWORD info_len = 0;
+
+	if ((my_sid = get_sid(NULL)) == NULL) {
+		error("fdpass - cannot retrieve own SID");
+		goto done;
+	}
+	if ((proc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid)) == NULL) {
+		error("fdpass - OpenProcess(%d) failed, error: %d", pid, GetLastError());
+		goto done;
+	}
+	if (!OpenProcessToken(proc, TOKEN_QUERY, &token)) {
+		error("fdpass - OpenProcessToken failed, error: %d", GetLastError());
+		goto done;
+	}
+	if (GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE ||
+	    (peer_info = (TOKEN_USER*)malloc(info_len)) == NULL)
+		goto done;
+	if (GetTokenInformation(token, TokenUser, peer_info, info_len, &info_len) == FALSE)
+		goto done;
+	ret = EqualSid(my_sid, peer_info->User.Sid);
+	if (!ret)
+		error("fdpass - peer process %d is a different user", pid);
+
+done:
+	if (peer_info)
+		free(peer_info);
+	if (my_sid)
+		free(my_sid);
+	if (token)
+		CloseHandle(token);
+	if (proc)
+		CloseHandle(proc);
+	return ret;
+}
+
+/* read/write full buffer on possibly nonblocking fd, pumping APCs */
+static int
+fdpass_io(int sock, char* buf, int len, BOOL do_write)
+{
+	int done = 0, r;
+	ULONGLONG deadline = GetTickCount64() + W32_FDPASS_TIMEOUT_MS;
+
+	while (done < len) {
+		r = do_write ? w32_write(sock, buf + done, len - done) :
+		    w32_read(sock, buf + done, len - done);
+		if (r > 0) {
+			done += r;
+			continue;
+		}
+		if (r == 0 && !do_write) {
+			errno = EPIPE;
+			return -1;
+		}
+		if (r < 0 && errno != EAGAIN && errno != EINTR)
+			return -1;
+		if (GetTickCount64() > deadline) {
+			errno = ETIMEDOUT;
+			return -1;
+		}
+		/* pump APCs so pending async io on sock can complete */
+		if (wait_for_any_event(NULL, 0, 100) == -1 && errno != EINTR)
+			return -1;
+		errno = 0;
+	}
+	return 0;
+}
+
+int
+w32_fdpass_send(int sock, int fd)
+{
+	struct w32_fdpass_msg msg;
+	struct w32_io* pio;
+
+	CHECK_FD(sock);
+	CHECK_FD(fd);
+
+	pio = fd_table.w32_ios[fd];
+	if (pio->type == SOCK_FD) {
+		/* would need WSADuplicateSocket with receiver pid */
+		errno = ENOTSUP;
+		error("fdpass - passing socket fds is not supported");
+		return -1;
+	}
+
+	msg.magic = W32_FDPASS_MAGIC;
+	msg.pid = GetCurrentProcessId();
+	msg.handle = (unsigned __int64)(uintptr_t)pio->handle;
+	msg.type = pio->type;
+
+	if (fdpass_io(sock, (char*)&msg, sizeof(msg), TRUE) != 0) {
+		error("fdpass - failed to send fd %d over fd %d, errno: %d", fd, sock, errno);
+		return -1;
+	}
+	debug3("fdpass - sent fd:%d handle:%p over fd:%d", fd, pio->handle, sock);
+	return 0;
+}
+
+int
+w32_fdpass_recv(int sock)
+{
+	struct w32_fdpass_msg msg;
+	HANDLE src_proc = NULL, dup = NULL;
+	DWORD pipe_client_pid = 0;
+	int fd = -1, type;
+
+	CHECK_FD(sock);
+
+	if (fdpass_io(sock, (char*)&msg, sizeof(msg), FALSE) != 0) {
+		error("fdpass - failed to read fd message from fd %d, errno: %d", sock, errno);
+		return -1;
+	}
+
+	if (msg.magic != W32_FDPASS_MAGIC) {
+		error("fdpass - bad magic 0x%08x from fd %d", msg.magic, sock);
+		errno = EINVAL;
+		return -1;
+	}
+
+	/* when the transport is a named pipe, the claimed pid must match the peer */
+	if (fd_table.w32_ios[sock]->type == NONSOCK_FD &&
+	    GetNamedPipeClientProcessId(fd_table.w32_ios[sock]->handle, &pipe_client_pid) &&
+	    pipe_client_pid != 0 && pipe_client_pid != GetCurrentProcessId() &&
+	    pipe_client_pid != msg.pid) {
+		error("fdpass - claimed pid %d does not match pipe peer %d",
+		    msg.pid, pipe_client_pid);
+		errno = EPERM;
+		return -1;
+	}
+
+	if (!w32_is_pid_same_user(msg.pid)) {
+		errno = EPERM;
+		return -1;
+	}
+
+	if ((src_proc = OpenProcess(PROCESS_DUP_HANDLE, FALSE, msg.pid)) == NULL) {
+		error("fdpass - OpenProcess(%d) for dup failed, error: %d", msg.pid, GetLastError());
+		errno = EPERM;
+		return -1;
+	}
+
+	if (!DuplicateHandle(src_proc, (HANDLE)(uintptr_t)msg.handle,
+	    GetCurrentProcess(), &dup, 0, FALSE, DUPLICATE_SAME_ACCESS)) {
+		error("fdpass - DuplicateHandle failed, error: %d", GetLastError());
+		CloseHandle(src_proc);
+		errno = EPERM;
+		return -1;
+	}
+	CloseHandle(src_proc);
+
+	/*
+	 * sender's fd classification decides sync vs async io; inherited stdio
+	 * handles (console, redirected pipes/files) are typically opened
+	 * non-overlapped, so default to synchronous io unless the sender was
+	 * using async io on its end.
+	 */
+	type = (msg.type == NONSOCK_FD) ? NONSOCK_FD : NONSOCK_SYNC_FD;
+	if (GetFileType(dup) == FILE_TYPE_CHAR)
+		type = NONSOCK_SYNC_FD;
+
+	if ((fd = w32_allocate_fd_for_handle(dup, type)) == -1) {
+		CloseHandle(dup);
+		return -1;
+	}
+	debug3("fdpass - received handle:%p from pid:%d as fd:%d type:%d",
+	    dup, msg.pid, fd, type);
+	return fd;
 }
 
 int

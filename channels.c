@@ -4919,6 +4919,15 @@ channel_send_window_changes(struct ssh *ssh)
 		if (sc->channels[i] == NULL || !sc->channels[i]->client_tty ||
 		    sc->channels[i]->type != SSH_CHANNEL_OPEN)
 			continue;
+#ifdef WINDOWS
+		/*
+		 * mux-owned sessions are resized via MUX_C_WINSIZE from the
+		 * mux client; w32_ioctl() would report this process's own
+		 * console size for their relay-pipe rfds, which is wrong.
+		 */
+		if (sc->channels[i]->ctl_chan != -1)
+			continue;
+#endif
 		if (ioctl(sc->channels[i]->rfd, TIOCGWINSZ, &ws) == -1)
 			continue;
 		channel_request_start(ssh, i, "window-change", 0);
