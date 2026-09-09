@@ -148,7 +148,8 @@ fileio_connect(struct w32_io* pio, char* name)
 			break;
 	
 		debug4("waiting for agent connection, retrying after 1 sec");
-		if ((ret = wait_for_any_event(NULL, 0, 1000) != 0) != 0)
+		ret = wait_for_any_event(NULL, 0, 1000);
+		if (ret != 0)
 			goto cleanup;
 	} while(1);
 

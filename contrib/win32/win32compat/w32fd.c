@@ -73,6 +73,58 @@ void fd_decode_state(char*);
 #define POSIX_FD_STATE "c28fc6f98a2c44abbbd89d6a3037d0d9_POSIX_FD_STATE"
 #define POSIX_CHROOTW L"c28fc6f98a2c44abbbd89d6a3037d0d9_POSIX_CHROOT"
 
+static const char *
+w32_io_type_name(enum w32_io_type type)
+{
+	switch (type) {
+	case UNKNOWN_FD:
+		return "UNKNOWN_FD";
+	case SOCK_FD:
+		return "SOCK_FD";
+	case NONSOCK_FD:
+		return "NONSOCK_FD";
+	case NONSOCK_SYNC_FD:
+		return "NONSOCK_SYNC_FD";
+	default:
+		return "invalid";
+	}
+}
+
+static const char *
+w32_sock_state_name(enum w32_io_sock_state state)
+{
+	switch (state) {
+	case SOCK_INITIALIZED:
+		return "SOCK_INITIALIZED";
+	case SOCK_LISTENING:
+		return "SOCK_LISTENING";
+	case SOCK_CONNECTING:
+		return "SOCK_CONNECTING";
+	case SOCK_READY:
+		return "SOCK_READY";
+	default:
+		return "invalid";
+	}
+}
+
+static void
+debug3_fd_entry(const char *label, int fd)
+{
+	struct w32_io *pio;
+
+	if (fd < 0 || fd >= MAX_FDS || fd_table.w32_ios[fd] == NULL) {
+		debug3("w32fd %s fd:%d empty", label, fd);
+		return;
+	}
+
+	pio = fd_table.w32_ios[fd];
+	debug3("w32fd %s fd:%d handle:%p type:%s state:%s pending:%d remaining:%lu error:%lu event:%p",
+	    label, fd, pio->handle, w32_io_type_name(pio->type),
+	    w32_sock_state_name(pio->internal.state), pio->read_details.pending,
+	    (unsigned long)pio->read_details.remaining,
+	    (unsigned long)pio->read_details.error, pio->read_overlapped.hEvent);
+}
+
 /* __progname */
 char* __progname = "";
 
@@ -88,8 +140,6 @@ wchar_t* __wprogdata = L"";
 static int
 fd_table_initialize()
 {
-	struct w32_io *pio;
-	HANDLE wh;
 	char *stdio_mode_env = NULL;
 	int stdio_mode = NONSOCK_SYNC_FD;
 	size_t len = 0;
@@ -102,8 +152,12 @@ fd_table_initialize()
 			stdio_mode = NONSOCK_FD;
 		else if (strcmp(stdio_mode_env, "nonsock_sync") == 0)
 			stdio_mode = NONSOCK_SYNC_FD;
+		debug3("w32fd stdio mode env:%s type:%s",
+		    stdio_mode_env, w32_io_type_name(stdio_mode));
 		free(stdio_mode_env);
-	}
+	} else
+		debug3("w32fd stdio mode env:<null> type:%s",
+		    w32_io_type_name(stdio_mode));
 
 	/* table entries representing std in, out and error*/
 	DWORD wh_index[] = { STD_INPUT_HANDLE , STD_OUTPUT_HANDLE , STD_ERROR_HANDLE };
@@ -113,19 +167,20 @@ fd_table_initialize()
 
 	/* prepare std io fds */
 	for (fd_num = STDIN_FILENO; fd_num <= STDERR_FILENO; fd_num++) {
-		wh  = GetStdHandle(wh_index[fd_num]);
+		HANDLE wh = GetStdHandle(wh_index[fd_num]);
 		if (wh != NULL && wh != INVALID_HANDLE_VALUE) {
-			pio = malloc(sizeof(struct w32_io));
+			struct w32_io *pio = malloc(sizeof(struct w32_io));
 			if (!pio) {
 				errno = ENOMEM;
 				return -1;
 			}
 			memset(pio, 0, sizeof(struct w32_io));
-			pio->type = stdio_mode;
-			pio->handle = wh;
-			fd_table_set(pio, fd_num);
+				pio->type = stdio_mode;
+				pio->handle = wh;
+				fd_table_set(pio, fd_num);
+				debug3_fd_entry("init std", fd_num);
+			}
 		}
-	}
 
 
 	/* decode fd state if any */
@@ -138,10 +193,16 @@ fd_table_initialize()
 		*/
 
 		if ((_dupenv_s(&posix_fd_state, NULL, POSIX_FD_STATE) == 0) && (NULL != posix_fd_state)) {
+			debug3("w32fd POSIX_FD_STATE present len:%llu",
+			    (unsigned long long)strlen(posix_fd_state));
 			fd_decode_state(posix_fd_state);
+			debug3_fd_entry("after decode std", STDIN_FILENO);
+			debug3_fd_entry("after decode std", STDOUT_FILENO);
+			debug3_fd_entry("after decode std", STDERR_FILENO);
 			free(posix_fd_state);
 			_putenv_s(POSIX_FD_STATE, "");
-		}
+		} else
+			debug3("w32fd POSIX_FD_STATE absent");
 	}
 
 	/* decode chroot if any */
@@ -694,11 +755,11 @@ w32_io_process_fd_flags(struct w32_io* pio, int flags)
 int
 w32_fcntl(int fd, int cmd, ... /* arg */)
 {
-	va_list valist;
-	va_start(valist, cmd);
 	int ret = 0;
+	va_list valist;
 
 	CHECK_FD(fd);
+	va_start(valist, cmd);
 
 	switch (cmd) {
 	case F_GETFL:
@@ -732,7 +793,7 @@ w32_fcntl(int fd, int cmd, ... /* arg */)
 int
 w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* exceptfds, const struct timeval *timeout)
 {
-	ULONGLONG ticks_start = GetTickCount64(), ticks_spent, timeout_ms = 0, time_rem = 0;
+	ULONGLONG ticks_start = GetTickCount64(), timeout_ms = 0;
 	w32_fd_set read_ready_fds, write_ready_fds;
 	HANDLE events[SELECT_EVENT_LIMIT];
 	int num_events = 0;
@@ -745,6 +806,8 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 
 	if (timeout)
 		timeout_ms = timeout->tv_sec * 1000 + timeout->tv_usec / 1000;
+	debug3("select enter fds:%d timeout:%llu readfds:%p writefds:%p",
+	    fds, (unsigned long long)timeout_ms, readfds, writefds);
 
 	if (fds > MAX_FDS) {
 		errno = EINVAL;
@@ -769,6 +832,7 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 			if (FD_ISSET(i, readfds)) {
 				CHECK_FD(i);
 				in_set_fds++;
+				debug3_fd_entry("select read input", i);
 			}
 	}
 
@@ -777,6 +841,7 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 			if (FD_ISSET(i, writefds)) {
 				CHECK_FD(i);
 				in_set_fds++;
+				debug3_fd_entry("select write input", i);
 			}
 	}
 
@@ -792,11 +857,21 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 	 * start async io on selected fds if needed and pick up any events
 	 * that select needs to listen on
 	 */
-	for (int i = 0; i < fds; i++) {
+		for (i = 0; i < fds; i++) {
 		if (readfds && FD_ISSET(i, readfds)) {
 			w32_io_on_select(fd_table.w32_ios[i], TRUE);
 			if ((fd_table.w32_ios[i]->type == SOCK_FD) &&
 			    (fd_table.w32_ios[i]->internal.state == SOCK_LISTENING)) {
+				if (num_events == SELECT_EVENT_LIMIT) {
+					debug3("select - ERROR: max #events breach");
+					errno = ENOMEM;
+					return -1;
+				}
+				events[num_events++] = fd_table.w32_ios[i]->read_overlapped.hEvent;
+			} else if ((fd_table.w32_ios[i]->type == SOCK_FD) &&
+			    (fd_table.w32_ios[i]->internal.state == SOCK_READY) &&
+			    fd_table.w32_ios[i]->read_details.pending &&
+			    fd_table.w32_ios[i]->read_overlapped.hEvent != NULL) {
 				if (num_events == SELECT_EVENT_LIMIT) {
 					debug3("select - ERROR: max #events breach");
 					errno = ENOMEM;
@@ -816,9 +891,10 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 					return -1;
 				}
 				events[num_events++] = fd_table.w32_ios[i]->write_overlapped.hEvent;
+				}
 			}
 		}
-	}
+	debug3("select armed input:%d events:%d", in_set_fds, num_events);
 
 	/* excute any scheduled APCs */
 	if (0 != wait_for_any_event(NULL, 0, 0))
@@ -826,28 +902,30 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 
 	/* see if any io is ready */
 	for (i = 0; i < fds; i++) {
-		if (readfds && FD_ISSET(i, readfds)) {
-			if (w32_io_is_io_available(fd_table.w32_ios[i], TRUE)) {
-				FD_SET(i, &read_ready_fds);
-				out_ready_fds++;
+			if (readfds && FD_ISSET(i, readfds)) {
+				if (w32_io_is_io_available(fd_table.w32_ios[i], TRUE)) {
+					FD_SET(i, &read_ready_fds);
+					out_ready_fds++;
+					debug3_fd_entry("select read ready initial", i);
+				}
 			}
-		}
 
-		if (writefds && FD_ISSET(i, writefds)) {
-			if (w32_io_is_io_available(fd_table.w32_ios[i], FALSE)) {
-				FD_SET(i, &write_ready_fds);
-				out_ready_fds++;
+			if (writefds && FD_ISSET(i, writefds)) {
+				if (w32_io_is_io_available(fd_table.w32_ios[i], FALSE)) {
+					FD_SET(i, &write_ready_fds);
+					out_ready_fds++;
+					debug3_fd_entry("select write ready initial", i);
+				}
 			}
 		}
-	}
 
 	/* timeout specified and both fields are 0 - polling mode*/
 	/* proceed with further wait if not in polling mode*/
 	if ((timeout == NULL) || (timeout_ms != 0))
 		/* wait for io until any is ready */
-		while (out_ready_fds == 0) {
-			ticks_spent = GetTickCount64() - ticks_start;
-			time_rem = 0;
+			while (out_ready_fds == 0) {
+				ULONGLONG ticks_spent = GetTickCount64() - ticks_start;
+				ULONGLONG time_rem = 0;
 
 			if (timeout != NULL) {
 				if (timeout_ms < ticks_spent) {
@@ -864,21 +942,23 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 
 			/* check on fd status */
 			out_ready_fds = 0;
-			for (int i = 0; i < fds; i++) {
-				if (readfds && FD_ISSET(i, readfds)) {
-					if (w32_io_is_io_available(fd_table.w32_ios[i], TRUE)) {
-						FD_SET(i, &read_ready_fds);
-						out_ready_fds++;
+				for (i = 0; i < fds; i++) {
+					if (readfds && FD_ISSET(i, readfds)) {
+						if (w32_io_is_io_available(fd_table.w32_ios[i], TRUE)) {
+							FD_SET(i, &read_ready_fds);
+							out_ready_fds++;
+							debug3_fd_entry("select read ready wait", i);
+						}
 					}
-				}
 
-				if (writefds && FD_ISSET(i, writefds)) {
-					if (w32_io_is_io_available(fd_table.w32_ios[i], FALSE)) {
-						FD_SET(i, &write_ready_fds);
-						out_ready_fds++;
+					if (writefds && FD_ISSET(i, writefds)) {
+						if (w32_io_is_io_available(fd_table.w32_ios[i], FALSE)) {
+							FD_SET(i, &write_ready_fds);
+							out_ready_fds++;
+							debug3_fd_entry("select write ready wait", i);
+						}
 					}
 				}
-			}
 
 			if (out_ready_fds == 0)
 				debug5("select - wait ended without any IO completion, looping again");
@@ -915,7 +995,7 @@ w32_select(int fds, w32_fd_set* readfds, w32_fd_set* writefds, w32_fd_set* excep
 					FD_CLR(i, writefds);
 			}
 
-	debug5("select - returning %d", out_ready_fds);
+	debug3("select returning %d", out_ready_fds);
 	return out_ready_fds;
 }
 
@@ -924,6 +1004,7 @@ dup_handle(int fd)
 {
 	HANDLE h = fd_table.w32_ios[fd]->handle;
 	int is_sock = fd_table.w32_ios[fd]->type == SOCK_FD;
+	debug3_fd_entry("dup_handle source", fd);
 
 	if (is_sock) {
 		SOCKET dup_sock;
@@ -940,15 +1021,19 @@ dup_handle(int fd)
 			error("WSASocketW failed, WSALastError: %d", WSAGetLastError());
 			return NULL;
 		}
+		debug3("w32fd dup_handle socket fd:%d source:%p duplicate:%p",
+		    fd, h, (HANDLE)dup_sock);
 		return (HANDLE)dup_sock;
 	}
 	else {
-		HANDLE dup_handle;
-		if (!DuplicateHandle(GetCurrentProcess(), h, GetCurrentProcess(), &dup_handle, 0, TRUE, DUPLICATE_SAME_ACCESS)) {
+		HANDLE duplicated_handle = NULL;
+		if (!DuplicateHandle(GetCurrentProcess(), h, GetCurrentProcess(), &duplicated_handle, 0, TRUE, DUPLICATE_SAME_ACCESS)) {
 			errno = EOTHER;
 			error("dup - ERROR: DuplicatedHandle() :%d", GetLastError());
 		}
-		return dup_handle;
+		debug3("w32fd dup_handle nonsocket fd:%d source:%p duplicate:%p",
+		    fd, h, duplicated_handle);
+		return duplicated_handle;
 	}
 }
 
@@ -978,6 +1063,8 @@ w32_dup2(int oldfd, int newfd)
 		pio->internal.state = SOCK_READY;
 
 	fd_table_set(pio, newfd);
+	debug3("w32fd dup2 oldfd:%d newfd:%d", oldfd, newfd);
+	debug3_fd_entry("dup2 new", newfd);
 	return 0;
 }
 
@@ -1145,14 +1232,16 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 	do {
 		if (as_user) {
 			debug3("spawning %ls as user", t);
-			LPVOID lpEnvironment = NULL;
-			wchar_t* as_user_name = get_username_from_token(as_user);
-			if (as_user_name) {
-				if (wcsncmp(L"sshd", as_user_name, wcslen(L"sshd")) != 0) { /* Ignore any names that begin with the service name `sshd`. */
-					b = CreateEnvironmentBlock(&lpEnvironment, as_user, TRUE); /* Load a user environment block inheriting the current context, thereby passing session state. */
+				LPVOID lpEnvironment = NULL;
+				wchar_t* as_user_name = get_username_from_token(as_user);
+				if (as_user_name) {
+					if (wcsncmp(L"sshd", as_user_name, wcslen(L"sshd")) != 0) { /* Ignore any names that begin with the service name `sshd`. */
+						/* Load a user environment block inheriting the current context, thereby passing session state. */
+						if (!CreateEnvironmentBlock(&lpEnvironment, as_user, TRUE))
+							debug3("CreateEnvironmentBlock failed error:%d", GetLastError());
+					}
+					free(as_user_name);
 				}
-				free(as_user_name);
-			}
 			if (lpEnvironment) { /* Pass the user environment block to the new process. */
 				b = CreateProcessAsUserW(as_user, NULL, t, NULL, NULL, TRUE, flags | CREATE_UNICODE_ENVIRONMENT, lpEnvironment, NULL, &si, &pi);
 				DestroyEnvironmentBlock(lpEnvironment);
@@ -1221,7 +1310,6 @@ fd_encode_state(const posix_spawn_file_actions_t *file_actions, HANDLE aux_h[])
 	struct std_fd_state *std_fd_state;
 	struct inh_fd_state *c;
 	DWORD len_req = 0;
-	BOOL b;
 	int i;
 	int fd_in = file_actions->stdio_redirect[STDIN_FILENO];
 	int fd_out = file_actions->stdio_redirect[STDOUT_FILENO];
@@ -1250,14 +1338,23 @@ fd_encode_state(const posix_spawn_file_actions_t *file_actions, HANDLE aux_h[])
 		c++;
 	}
 
-	b = CryptBinaryToStringA(buf, 8 * (1 + num_aux_fds), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, NULL, &len_req);
+	if (!CryptBinaryToStringA(buf, 8 * (1 + num_aux_fds), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, NULL, &len_req)) {
+		free(buf);
+		errno = EOTHER;
+		return NULL;
+	}
 	encoded = malloc(len_req);
 	if (!encoded) {
 		free(buf);
 		errno = ENOMEM;
 		return NULL;
 	}
-	b = CryptBinaryToStringA(buf, 8 * (1 + num_aux_fds), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, encoded, &len_req);
+	if (!CryptBinaryToStringA(buf, 8 * (1 + num_aux_fds), CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, encoded, &len_req)) {
+		free(buf);
+		free(encoded);
+		errno = EOTHER;
+		return NULL;
+	}
 
 	free(buf);
 	return encoded;
@@ -1281,6 +1378,11 @@ fd_decode_state(char* enc_buf)
 	CryptStringToBinary(enc_buf, 0, CRYPT_STRING_BASE64 | CRYPT_STRING_STRICT, buf, &req, &skipped, &out_flags);
 
 	std_fd_state = (struct std_fd_state *)buf;
+	debug3("w32fd decode std types in:%s out:%s err:%s inherited:%d",
+	    w32_io_type_name(std_fd_state->in_type),
+	    w32_io_type_name(std_fd_state->out_type),
+	    w32_io_type_name(std_fd_state->err_type),
+	    std_fd_state->num_inherited);
 	fd_table.w32_ios[0]->type = std_fd_state->in_type;
 	if (fd_table.w32_ios[0]->type == SOCK_FD)
 		fd_table.w32_ios[0]->internal.state = SOCK_READY;
@@ -1303,6 +1405,9 @@ fd_decode_state(char* enc_buf)
 		if (pio->type == SOCK_FD)
 			pio->internal.state = SOCK_READY;
 		fd_table_set(pio, c->index);
+		debug3("w32fd decode inherited fd:%d handle:%p type:%s state:%s",
+		    c->index, pio->handle, w32_io_type_name(pio->type),
+		    w32_sock_state_name(pio->internal.state));
 		c++;
 	}
 
