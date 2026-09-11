@@ -70,6 +70,26 @@ stages:
         dependenciesArtifactName: vcpkg-dependencies-x86
         vcpkgCacheDir: '$(vcpkgCacheDir)'
 
+  - job: BuildPkg_Coverage_x64
+    displayName: Build Coverage Package (x64 Debug + /PROFILE)
+    pool:
+      vmImage: windows-latest
+    # Consumed only by the PR-only coverage job, so don't spend build time on
+    # branch builds (where CodeQL already competes for the agent budget).
+    condition: eq(variables['Build.Reason'], 'PullRequest')
+    # Non-gating: a coverage-specific build failure must never block the pipeline.
+    continueOnError: true
+    steps:
+    - template: ./templates/build-win32-openssh-job.yml
+      parameters:
+        nativeHostArch: x64
+        buildOutputDir: x64
+        artifactSuffix: Coverage-x64
+        dependenciesArtifactName: vcpkg-dependencies-x64
+        vcpkgCacheDir: '$(vcpkgCacheDir)'
+        configuration: Debug
+        linkerOptions: '/PROFILE'
+
 - stage: Test
   displayName: Test Win32-OpenSSH
   dependsOn: Build
@@ -162,6 +182,194 @@ stages:
         Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
         Clear-TestEnvironmentSetup
       displayName: Clean up OpenSSH test environment
+      condition: always()
+
+  - job: CodeCoverageCore
+    pool:
+      vmImage: windows-latest
+    displayName: Win32-OpenSSH Code Coverage (Core)
+    # Coverage is informational and must never gate a merge while it stabilizes.
+    continueOnError: true
+    # Only run on pull requests. On branch builds CodeQL is enabled and the added
+    # coverage instrumentation overhead risks pushing the agent past its ~60 min timeout.
+    condition: eq(variables['Build.Reason'], 'PullRequest')
+    variables:
+      coverageDir: '$(Build.SourcesDirectory)/CodeCoverage'
+    steps:
+    - task: DownloadBuildArtifacts@0
+      displayName: 'Download coverage build artifacts (Debug + symbols)'
+      inputs:
+        buildType: current
+        downloadType: single
+        artifactName: Win32-OpenSSH-Coverage-x64
+        downloadPath: '$(System.ArtifactsDirectory)'
+
+    - task: DownloadBuildArtifacts@0
+      displayName: 'Download coverage unit test artifacts'
+      inputs:
+        buildType: current
+        downloadType: single
+        artifactName: UnitTests-Coverage-x64
+        downloadPath: '$(System.ArtifactsDirectory)'
+
+    - pwsh: |
+        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+        # Install the Debug (/PROFILE) build so Microsoft.CodeCoverage.Console can
+        # statically instrument the OpenSSH binaries and unit tests.
+        Install-OpenSSH -SourceDir "$(System.ArtifactsDirectory)/Win32-OpenSSH-Coverage-x64/x64/Debug" -OpenSSHDir "$env:SystemDrive/OpenSSH" -Verbose
+        Install-UnitTests -SourceDir "$(System.ArtifactsDirectory)/UnitTests-Coverage-x64/x64/Debug" -OpenSSHDir "$env:SystemDrive/OpenSSH" -Verbose
+      displayName: Install Win32-OpenSSH and unit tests
+
+    - pwsh: |
+        & "$(Build.SourcesDirectory)/contrib/win32/openssh/code_coverage/Invoke-AzDOCodeCoverage.ps1" `
+          -Suite Core `
+          -OpenSSHBinPath "$env:SystemDrive/OpenSSH" `
+          -SourceRoot "$(Build.SourcesDirectory)" `
+          -OutputDirectory "$(coverageDir)" -SkipAggregation -Verbose
+      displayName: Collect coverage - core tests (setup + unit + E2E)
+
+    - pwsh: |
+        if (Test-Path "$(coverageDir)")
+        {
+          $artifactName = 'Win32-OpenSSH-CodeCoverage-Core'
+          Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$(coverageDir)"
+        }
+      displayName: Upload core coverage artifact
+      condition: always()
+
+    - pwsh: |
+        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+        Clear-TestEnvironmentSetup
+      displayName: Clean up OpenSSH test environment
+      condition: always()
+
+  - job: CodeCoverageBash
+    pool:
+      vmImage: windows-latest
+    displayName: Win32-OpenSSH Code Coverage (Bash)
+    continueOnError: true
+    condition: eq(variables['Build.Reason'], 'PullRequest')
+    variables:
+      coverageDir: '$(Build.SourcesDirectory)/CodeCoverage'
+    steps:
+    - task: DownloadBuildArtifacts@0
+      displayName: 'Download coverage build artifacts (Debug + symbols)'
+      inputs:
+        buildType: current
+        downloadType: single
+        artifactName: Win32-OpenSSH-Coverage-x64
+        downloadPath: '$(System.ArtifactsDirectory)'
+
+    - task: DownloadBuildArtifacts@0
+      displayName: 'Download bash test config file artifact'
+      inputs:
+        buildType: current
+        downloadType: single
+        artifactName: ConfigFile-x64
+        downloadPath: '$(System.ArtifactsDirectory)'
+
+    - pwsh: |
+        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+        # Install the Debug (/PROFILE) build so the bash suite runs against
+        # instrumentable binaries with the sshd/ssh-agent services registered.
+        Install-OpenSSH -SourceDir "$(System.ArtifactsDirectory)/Win32-OpenSSH-Coverage-x64/x64/Debug" -OpenSSHDir "$env:SystemDrive/OpenSSH" -Verbose
+      displayName: Install Win32-OpenSSH
+
+    - pwsh: |
+        $configFileSrc = "$(System.ArtifactsDirectory)/ConfigFile-x64/config.h"
+        Copy-Item -Path $configFileSrc -Dest "$(Build.SourcesDirectory)" -Force
+      displayName: Copy config file artifact for bash tests
+
+    - pwsh: |
+        & "$(Build.SourcesDirectory)/contrib/win32/openssh/code_coverage/Invoke-AzDOCodeCoverage.ps1" `
+          -Suite Bash `
+          -OpenSSHBinPath "$env:SystemDrive/OpenSSH" `
+          -SourceRoot "$(Build.SourcesDirectory)" `
+          -OutputDirectory "$(coverageDir)" -SkipAggregation -Verbose
+      displayName: Collect coverage - bash tests
+
+    - pwsh: |
+        if (Test-Path "$(coverageDir)")
+        {
+          $artifactName = 'Win32-OpenSSH-CodeCoverage-Bash'
+          Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$(coverageDir)"
+        }
+      displayName: Upload bash coverage artifact
+      condition: always()
+
+    - pwsh: |
+        Import-Module -Name "$(Build.SourcesDirectory)/contrib/win32/openssh/AzDOBuildTools" -Force
+        Clear-TestEnvironmentSetup
+      displayName: Clean up OpenSSH test environment
+      condition: always()
+
+  - job: CodeCoverageAggregate
+    pool:
+      vmImage: windows-latest
+    displayName: Win32-OpenSSH Code Coverage (Aggregate)
+    # Run after both suite jobs regardless of their outcome (they are non-gating);
+    # aggregate whichever per-suite artifacts were produced.
+    dependsOn:
+    - CodeCoverageCore
+    - CodeCoverageBash
+    continueOnError: true
+    condition: eq(variables['Build.Reason'], 'PullRequest')
+    variables:
+      aggregateDir: '$(Build.SourcesDirectory)/CodeCoverage'
+    steps:
+    - task: DownloadBuildArtifacts@0
+      displayName: 'Download core coverage artifact'
+      continueOnError: true
+      inputs:
+        buildType: current
+        downloadType: single
+        artifactName: Win32-OpenSSH-CodeCoverage-Core
+        downloadPath: '$(System.ArtifactsDirectory)/coverage'
+
+    - task: DownloadBuildArtifacts@0
+      displayName: 'Download bash coverage artifact'
+      continueOnError: true
+      inputs:
+        buildType: current
+        downloadType: single
+        artifactName: Win32-OpenSSH-CodeCoverage-Bash
+        downloadPath: '$(System.ArtifactsDirectory)/coverage'
+
+    - pwsh: |
+        & "$(Build.SourcesDirectory)/contrib/win32/openssh/code_coverage/Invoke-AzDOCoverageAggregate.ps1" `
+          -InputDirectory "$(System.ArtifactsDirectory)/coverage" `
+          -OutputDirectory "$(aggregateDir)" `
+          -SourceRoot "$(Build.SourcesDirectory)" -Verbose
+      displayName: Aggregate per-suite coverage
+
+    - pwsh: |
+        $summary = Join-Path "$(aggregateDir)" 'coverage-summary.md'
+        if (Test-Path $summary) { Get-Content -Raw $summary }
+      displayName: Print coverage summary
+      condition: always()
+
+    - task: PublishCodeCoverageResults@2
+      displayName: Publish code coverage results
+      condition: always()
+      inputs:
+        # Publish the de-duplicated (per-source-file) report so the Azure
+        # DevOps "Code Coverage" widget headline matches the number we stand
+        # behind (see the "Print coverage summary" step). The native
+        # Microsoft.CodeCoverage.Console report counts each shared .c once per
+        # binary it is linked into, which inflates the totals ~3.6x. The native
+        # per-binary report (merged/merged.cobertura.xml) and the raw .coverage
+        # files are still uploaded in the Win32-OpenSSH-CodeCoverage artifact
+        # below for per-binary / per-method drill-down (e.g. in Visual Studio).
+        summaryFileLocation: '$(aggregateDir)/merged/merged-helper.cobertura.xml'
+        pathToSources: '$(Build.SourcesDirectory)'
+
+    - pwsh: |
+        if (Test-Path "$(aggregateDir)")
+        {
+          $artifactName = 'Win32-OpenSSH-CodeCoverage'
+          Write-Host "##vso[artifact.upload containerfolder=$artifactName;artifactname=$artifactName;]$(aggregateDir)"
+        }
+      displayName: Upload code coverage artifacts
       condition: always()
 
   - job: TestPkgWin32OpenSSHBash
