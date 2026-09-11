@@ -27,6 +27,12 @@ tests()
 	miscellaneous_tests();
 }
 
+void
+benchmarks(void)
+{
+	tests();
+}
+
 char *
 dup_str(char *inStr)
 {

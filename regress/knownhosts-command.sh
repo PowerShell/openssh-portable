@@ -1,4 +1,4 @@
-#	$OpenBSD: knownhosts-command.sh,v 1.3 2021/08/30 01:15:45 djm Exp $
+#	$OpenBSD: knownhosts-command.sh,v 1.4 2025/05/06 06:05:48 djm Exp $
 #	Placed in the Public Domain.
 
 tid="known hosts command "
@@ -48,7 +48,6 @@ echo "expected_username: $expected_username"
 
 for keytype in ${SSH_HOSTKEY_TYPES} ; do
 	algs=$keytype
-	test "x$keytype" = "xssh-dss" && continue
 	test "x$keytype" = "xssh-rsa" && algs=ssh-rsa,rsa-sha2-256,rsa-sha2-512
 	verbose "keytype $keytype"
 	cat > $OBJ/knownhosts_command << _EOF

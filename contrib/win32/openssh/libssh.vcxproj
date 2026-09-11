@@ -422,9 +422,6 @@
     <ClCompile Include="$(OpenSSH-Src-Path)rijndael.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)smult_curve25519_ref.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sntrup761.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)ssh-dss.c">
-      <ExcludedFromBuild Condition="$(UseOpenSSL)==false">true</ExcludedFromBuild>
-    </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-ecdsa.c">
       <ExcludedFromBuild Condition="$(UseOpenSSL)==false">true</ExcludedFromBuild>
     </ClCompile>

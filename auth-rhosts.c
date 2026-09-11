@@ -22,7 +22,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #ifdef HAVE_NETGROUP_H
-# include <netgroup.h>
+#include <netgroup.h>
 #endif
 #include <pwd.h>
 #include <stdio.h>
