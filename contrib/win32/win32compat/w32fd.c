@@ -37,6 +37,7 @@
 #include "inc\sys\stat.h"
 #include "inc\unistd.h"
 #include "inc\fcntl.h"
+#include "inc\spawn.h"
 #include "inc\sys\un.h"
 #include "inc\utf.h"
 #include "inc\stdio.h"
@@ -1095,17 +1096,64 @@ get_username_from_token(HANDLE as_user)
 }
 
 /*
+ * Build a PROC_THREAD_ATTRIBUTE_LIST that restricts handle inheritance to the
+ * supplied set. Caller is expected to pass inheritable handles (entries that
+ * are not inheritable will cause CreateProcess to fail with ERROR_INVALID_PARAMETER);
+ * duplicate entries are tolerated by the kernel.
+ *
+ * On success returns a heap-allocated attribute list; caller must release it
+ * with DeleteProcThreadAttributeList() followed by free(). Returns NULL on
+ * any Win32 failure; caller should fall back to default inherit-all behavior.
+ */
+static LPPROC_THREAD_ATTRIBUTE_LIST build_inherit_handle_attr_list(HANDLE *handles, SIZE_T count)
+{
+	LPPROC_THREAD_ATTRIBUTE_LIST attr_list = NULL;
+	SIZE_T attr_list_size = 0;
+	BOOL success;
+	DWORD error;
+
+	if (count == 0)
+		return NULL;
+
+	success = InitializeProcThreadAttributeList(NULL, 1, 0, &attr_list_size);
+	error = GetLastError();
+	if (success || error != ERROR_INSUFFICIENT_BUFFER || attr_list_size == 0) {
+		debug3("InitializeProcThreadAttributeList size query failed, success:%d error:%lu size:%zu",
+			success, error, attr_list_size);
+		return NULL;
+	}
+
+	attr_list = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(attr_list_size);
+	if (!attr_list)
+		return NULL;
+	if (!InitializeProcThreadAttributeList(attr_list, 1, 0, &attr_list_size)) {
+		debug3("InitializeProcThreadAttributeList failed, error:%lu", GetLastError());
+		free(attr_list);
+		return NULL;
+	}
+	if (!UpdateProcThreadAttribute(attr_list, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles, count * sizeof(HANDLE), NULL, NULL)) {
+		debug3("UpdateProcThreadAttribute failed, error:%lu", GetLastError());
+		DeleteProcThreadAttributeList(attr_list);
+		free(attr_list);
+		return NULL;
+	}
+	return attr_list;
+}
+
+/*
 * spawn a child process
-* - specified by cmd with agruments argv
-* - with std handles set to in, out, err
-* - flags are passed to CreateProcess call
+* - specified by cmd with arguments argv
+* - si_ex provides StartupInfo (including stdio handles) and optional
+*   PROC_THREAD_ATTRIBUTE_LIST; caller owns its storage and any
+*   buffers it references (e.g. handle-inherit list)
+* - flags are passed to CreateProcess call (caller should include
+*   EXTENDED_STARTUPINFO_PRESENT when si_ex->lpAttributeList is set)
 * spawned child will run as as_user if its not NULL
 */
 static int
-spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out, HANDLE err, unsigned long flags, HANDLE as_user, BOOLEAN prepend_module_path)
+spawn_child_internal(const char* cmd, char *const argv[], STARTUPINFOEXW *si_ex, unsigned long flags, HANDLE as_user, BOOLEAN prepend_module_path)
 {
 	PROCESS_INFORMATION pi;
-	STARTUPINFOW si;
 	BOOL b;
 	char *cmdline;
 	wchar_t * cmdline_utf16 = NULL;
@@ -1118,14 +1166,6 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 		errno = ENOMEM;
 		goto cleanup;
 	}
-
-	memset(&si, 0, sizeof(STARTUPINFOW));
-	si.cb = sizeof(STARTUPINFOW);
-	si.hStdInput = in;
-	si.hStdOutput = out;
-	si.hStdError = err;
-	si.dwFlags = STARTF_USESTDHANDLES;
-	
 	if (strstr(cmd, "sshd-session.exe") || strstr(cmd, "sshd-auth.exe")) {
 		flags |= DETACHED_PROCESS;
 	}
@@ -1154,16 +1194,16 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 				free(as_user_name);
 			}
 			if (lpEnvironment) { /* Pass the user environment block to the new process. */
-				b = CreateProcessAsUserW(as_user, NULL, t, NULL, NULL, TRUE, flags | CREATE_UNICODE_ENVIRONMENT, lpEnvironment, NULL, &si, &pi);
+				b = CreateProcessAsUserW(as_user, NULL, t, NULL, NULL, TRUE, flags | CREATE_UNICODE_ENVIRONMENT, lpEnvironment, NULL, &si_ex->StartupInfo, &pi);
 				DestroyEnvironmentBlock(lpEnvironment);
 			}
 			else { /* Pass the current context's environment block to the new process. */
-				b = CreateProcessAsUserW(as_user, NULL, t, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
+				b = CreateProcessAsUserW(as_user, NULL, t, NULL, NULL, TRUE, flags, NULL, NULL, &si_ex->StartupInfo, &pi);
 			}
 		}
 		else {
 			debug3("spawning %ls as subprocess", t);
-			b = CreateProcessW(NULL, t, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
+			b = CreateProcessW(NULL, t, NULL, NULL, TRUE, flags, NULL, NULL, &si_ex->StartupInfo, &pi);
 		}
 		if(b || GetLastError() != ERROR_FILE_NOT_FOUND || (argv != NULL && *argv != NULL) || cmd[0] == '\"')
 			break;
@@ -1190,11 +1230,8 @@ cleanup:
 		free(cmdline);
 	if (cmdline_utf16)
 		free(cmdline_utf16);
-
 	return ret;
 }
-
-#include "inc\spawn.h"
 
 /* structures defining binary layout of fd info to be transmitted between parent and child processes*/
 struct std_fd_state {
@@ -1310,6 +1347,13 @@ fd_decode_state(char* enc_buf)
 	return;
 }
 
+/*
+ * Duplicate stdio + aux fds for the child, build a STARTUPINFOEXW carrying a
+ * PROC_THREAD_ATTRIBUTE_HANDLE_LIST allow-list of just those handles, then
+ * hand off to spawn_child_internal(). Owns the lifetime of attr_list and the
+ * duplicated handles: both are released on the cleanup path after CreateProcess
+ * has either consumed or failed to consume them.
+ */
 int
 posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actions_t *file_actions, const posix_spawnattr_t *attrp, char *const argv[], char *const envp[], HANDLE user_token, BOOLEAN prepend_module_path)
 {
@@ -1318,6 +1362,10 @@ posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actio
 	char* fd_info = NULL;
 	HANDLE aux_handles[MAX_INHERITED_FDS];
 	HANDLE stdio_handles[STDERR_FILENO + 1];
+	STARTUPINFOEXW si_ex;
+	LPPROC_THREAD_ATTRIBUTE_LIST attr_list = NULL;
+	HANDLE inherit_list[(STDERR_FILENO + 1) + MAX_INHERITED_FDS];
+	size_t inherit_count = STDERR_FILENO + 1;
 	if (file_actions == NULL || envp) {
 		errno = ENOTSUP;
 		return -1;
@@ -1347,13 +1395,51 @@ posix_spawn_internal(pid_t *pidp, const char *path, const posix_spawn_file_actio
 
 	if (_putenv_s(POSIX_FD_STATE, fd_info) != 0)
 		goto cleanup;
-	i = spawn_child_internal(path, argv + 1, stdio_handles[STDIN_FILENO], stdio_handles[STDOUT_FILENO], stdio_handles[STDERR_FILENO], sc_flags, user_token, prepend_module_path);
+
+	/* assemble extended startup info: stdio handles + handle-inheritance allow-list */
+	memset(&si_ex, 0, sizeof(si_ex));
+	/*
+	 * Always size cb as STARTUPINFOEXW. CreateProcess ignores the bytes past
+	 * STARTUPINFOW when EXTENDED_STARTUPINFO_PRESENT isn't set, so this is
+	 * safe on the attr_list-build-failed fallback path below.
+	 */
+	si_ex.StartupInfo.cb = sizeof(STARTUPINFOEXW);
+	si_ex.StartupInfo.hStdInput = stdio_handles[STDIN_FILENO];
+	si_ex.StartupInfo.hStdOutput = stdio_handles[STDOUT_FILENO];
+	si_ex.StartupInfo.hStdError = stdio_handles[STDERR_FILENO];
+	si_ex.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+
+	/*
+	 * Build an allow-list of handles for PROC_THREAD_ATTRIBUTE_HANDLE_LIST.
+	 * With bInheritHandles=TRUE the kernel would otherwise duplicate every handle in
+	 * this process marked HANDLE_FLAG_INHERIT into the child.
+	 */
+	inherit_list[STDIN_FILENO] = stdio_handles[STDIN_FILENO];
+	inherit_list[STDOUT_FILENO] = stdio_handles[STDOUT_FILENO];
+	inherit_list[STDERR_FILENO] = stdio_handles[STDERR_FILENO];
+	for (i = 0; i < file_actions->num_aux_fds; i++)
+		inherit_list[inherit_count++] = aux_handles[i];
+
+	attr_list = build_inherit_handle_attr_list(inherit_list, inherit_count);
+	if (attr_list) {
+		si_ex.lpAttributeList = attr_list;
+		sc_flags |= EXTENDED_STARTUPINFO_PRESENT;
+	} else {
+		/* Fall back to the default inherit-all behavior rather than fail the spawn. */
+		debug3("PROC_THREAD_ATTRIBUTE_HANDLE_LIST setup failed; using default handle inheritance");
+	}
+
+	i = spawn_child_internal(path, argv + 1, &si_ex, sc_flags, user_token, prepend_module_path);
 	if (i == -1)
 		goto cleanup;
 	if (pidp)
 		*pidp = i;
 	ret = 0;
 cleanup:
+	if (attr_list) {
+		DeleteProcThreadAttributeList(attr_list);
+		free(attr_list);
+	}
 	_putenv_s(POSIX_FD_STATE, "");
 	for (i = 0; i <= STDERR_FILENO; i++) {
 		if (stdio_handles[i] != NULL) {
