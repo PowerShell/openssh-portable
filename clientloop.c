@@ -285,6 +285,31 @@ client_x11_display_valid(const char *display)
 
 #define SSH_X11_PROTO		"MIT-MAGIC-COOKIE-1"
 #define X11_TIMEOUT_SLACK	60
+#ifdef WINDOWS
+/*
+ * Keep Windows xauth process launch in one helper so all subprocess flags and
+ * argv handling stay consistent in this signal/console-sensitive path.
+ */
+static pid_t
+client_x11_run_xauth_for_windows(const char *cmd, arglist *args, FILE **f)
+{
+	u_int flags = SSH_SUBPROCESS_STDERR_DISCARD |
+	    SSH_SUBPROCESS_UNSAFE_PATH | SSH_SUBPROCESS_PRESERVE_ENV;
+	u_int i;
+
+	if (f != NULL)
+		flags |= SSH_SUBPROCESS_STDOUT_CAPTURE;
+	else
+		flags |= SSH_SUBPROCESS_STDOUT_DISCARD;
+
+	for (i = 0; i < args->num; i++)
+		debug3_f("xauth argv[%u]: %s", i, args->list[i]);
+
+	return subprocess("xauth", cmd, args->num, args->list, f, flags,
+	    NULL, NULL, NULL);
+}
+#endif
+
 int
 client_x11_get_proto(struct ssh *ssh, const char *display,
     const char *xauth_path, u_int trusted, u_int timeout,
@@ -388,8 +413,33 @@ client_x11_get_proto(struct ssh *ssh, const char *display,
 				channel_set_x11_refuse_time(ssh,
 				    x11_refuse_time);
 			}
+#ifdef WINDOWS
+			{
+				pid_t pid;
+				arglist args;
+
+				memset(&args, 0, sizeof(args));
+				addargs(&args, "%s", xauth_path);
+				addargs(&args, "-f");
+				addargs(&args, "%s", xauthfile);
+				addargs(&args, "generate");
+				addargs(&args, "%s", display);
+				addargs(&args, "%s", SSH_X11_PROTO);
+				addargs(&args, "untrusted");
+				if (timeout != 0) {
+					addargs(&args, "timeout");
+					addargs(&args, "%u", x11_timeout_real);
+				}
+				pid = client_x11_run_xauth_for_windows(cmd, &args, NULL);
+				if (pid != 0 &&
+				    exited_cleanly(pid, "xauth", cmd, 1) == 0)
+					generated = 1;
+				freeargs(&args);
+			}
+#else
 			if (system(cmd) == 0)
 				generated = 1;
+#endif
 			free(cmd);
 		}
 
@@ -410,12 +460,38 @@ client_x11_get_proto(struct ssh *ssh, const char *display,
 			    generated ? xauthfile : "",
 			    display);
 			debug2("x11_get_proto: %s", cmd);
+#ifdef WINDOWS
+			{
+				pid_t pid;
+				arglist args;
+
+				memset(&args, 0, sizeof(args));
+				addargs(&args, "%s", xauth_path);
+				if (generated) {
+					addargs(&args, "-f");
+					addargs(&args, "%s", xauthfile);
+				}
+				addargs(&args, "list");
+				addargs(&args, "%s", display);
+				pid = client_x11_run_xauth_for_windows(cmd, &args, &f);
+				if (pid != 0 && f != NULL &&
+				    fgets(line, sizeof(line), f) &&
+				    sscanf(line, "%*s %511s %511s", proto, data) == 2)
+					got_data = 1;
+				if (f != NULL)
+					fclose(f);
+				if (pid != 0)
+					(void)exited_cleanly(pid, "xauth", cmd, 1);
+				freeargs(&args);
+			}
+#else
 			f = popen(cmd, "r");
 			if (f && fgets(line, sizeof(line), f) &&
 			    sscanf(line, "%*s %511s %511s", proto, data) == 2)
 				got_data = 1;
 			if (f)
 				pclose(f);
+#endif
 			free(cmd);
 		}
 	}
