@@ -67,6 +67,8 @@ void to_lower_case(char *s);
 void to_wlower_case(wchar_t *s);
 HANDLE get_user_token(const char* user, int impersonation);
 int load_user_profile(HANDLE user_token, char* user);
+extern int attach_to_console_session;
+HANDLE get_console_session_token(HANDLE authenticated_token);
 int create_directory_withsddl(wchar_t *path, wchar_t *sddl, BOOL check_permissions);
 int is_absolute_path(const char *);
 int file_in_chroot_jail(HANDLE);

@@ -106,6 +106,17 @@ load_secur32()
 }
 
 static HMODULE
+load_wtsapi32()
+{
+	static HMODULE s_hm_wtsapi32 = NULL;
+
+	if (!s_hm_wtsapi32)
+		s_hm_wtsapi32 = load_module(L"wtsapi32.dll");
+
+	return s_hm_wtsapi32;
+}
+
+static HMODULE
 load_ntdll()
 {
 	static HMODULE s_hm_ntdll = NULL;
@@ -257,6 +268,62 @@ ULONG pRtlNtStatusToDosError(NTSTATUS status)
 			return STATUS_ASSERTION_FAILURE;
 	}	
 	return pRtlNtStatusToDosError(status);
+}
+
+BOOL pWTSQuerySessionInformationW(HANDLE server, DWORD session_id,
+	WTS_INFO_CLASS info_class,
+	LPWSTR *buffer,
+	DWORD *bytes_returned)
+{
+	HMODULE hm = NULL;
+	typedef BOOL(WINAPI *WTSQuerySessionInformationWType)(HANDLE, DWORD, WTS_INFO_CLASS, LPWSTR *, DWORD *);
+	static WTSQuerySessionInformationWType s_pWTSQuerySessionInformationW = NULL;
+
+	if (!s_pWTSQuerySessionInformationW) {
+		if ((hm = load_wtsapi32()) == NULL)
+			return FALSE;
+
+		if ((s_pWTSQuerySessionInformationW = (WTSQuerySessionInformationWType)
+		    get_proc_address(hm, "WTSQuerySessionInformationW")) == NULL)
+			return FALSE;
+	}
+
+	return s_pWTSQuerySessionInformationW(server, session_id, info_class, buffer, bytes_returned);
+}
+
+BOOL pWTSQueryUserToken(ULONG session_id, PHANDLE token)
+{
+	HMODULE hm = NULL;
+	typedef BOOL(WINAPI *WTSQueryUserTokenType)(ULONG, PHANDLE);
+	static WTSQueryUserTokenType s_pWTSQueryUserToken = NULL;
+
+	if (!s_pWTSQueryUserToken) {
+		if ((hm = load_wtsapi32()) == NULL)
+			return FALSE;
+
+		if ((s_pWTSQueryUserToken = (WTSQueryUserTokenType)
+		    get_proc_address(hm, "WTSQueryUserToken")) == NULL)
+			return FALSE;
+	}
+
+	return s_pWTSQueryUserToken(session_id, token);
+}
+
+void pWTSFreeMemory(PVOID memory)
+{
+	HMODULE hm = NULL;
+	typedef void(WINAPI *WTSFreeMemoryType)(PVOID);
+	static WTSFreeMemoryType s_pWTSFreeMemory = NULL;
+
+	if (!s_pWTSFreeMemory) {
+		if ((hm = load_wtsapi32()) == NULL)
+			return;
+
+		if ((s_pWTSFreeMemory = (WTSFreeMemoryType)get_proc_address(hm, "WTSFreeMemory")) == NULL)
+			return;
+	}
+
+	s_pWTSFreeMemory(memory);
 }
 
 NTSTATUS pLsaClose(LSA_HANDLE lsa_h)

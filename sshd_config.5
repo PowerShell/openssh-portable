@@ -183,6 +183,15 @@ for more information on patterns.
 This keyword may appear multiple times in
 .Nm
 with each instance appending to the list.
+.It Cm AttachToConsoleSession
+Windows only.
+Specifies whether a session should run inside the authenticated user's
+existing physical console session rather than in the service session,
+so that processes it starts are visible on that user's desktop.
+The console session is used only when the same user that authenticated is
+logged on to it; otherwise the session runs in the service session.
+The default is
+.Cm no .
 .It Cm AuthenticationMethods
 Specifies the authentication methods that must be successfully completed
 for a user to be granted access.
@@ -1288,6 +1297,7 @@ Available keywords are
 .Cm AllowStreamLocalForwarding ,
 .Cm AllowTcpForwarding ,
 .Cm AllowUsers ,
+.Cm AttachToConsoleSession ,
 .Cm AuthenticationMethods ,
 .Cm AuthorizedKeysCommand ,
 .Cm AuthorizedKeysCommandUser ,

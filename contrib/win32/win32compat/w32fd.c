@@ -1146,7 +1146,19 @@ spawn_child_internal(const char* cmd, char *const argv[], HANDLE in, HANDLE out,
 		if (as_user) {
 			debug3("spawning %ls as user", t);
 			LPVOID lpEnvironment = NULL;
+			DWORD token_session = 0, my_session = 0, info_len = 0;
+			/* lpDesktop is not const, so this cannot be a literal */
+			static wchar_t winsta0_default[] = L"WinSta0\\Default";
 			wchar_t* as_user_name = get_username_from_token(as_user);
+
+			/* a process in another session cannot inherit our window station and desktop */
+			if (GetTokenInformation(as_user, TokenSessionId, &token_session, sizeof(token_session), &info_len) &&
+			    ProcessIdToSessionId(GetCurrentProcessId(), &my_session) &&
+			    token_session != my_session) {
+				debug3("spawning into session %d (from session %d) on %ls", token_session, my_session, winsta0_default);
+				si.lpDesktop = winsta0_default;
+			}
+
 			if (as_user_name) {
 				if (wcsncmp(L"sshd", as_user_name, wcslen(L"sshd")) != 0) { /* Ignore any names that begin with the service name `sshd`. */
 					b = CreateEnvironmentBlock(&lpEnvironment, as_user, TRUE); /* Load a user environment block inheriting the current context, thereby passing session state. */

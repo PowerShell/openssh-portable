@@ -87,6 +87,15 @@ DESCRIPTION
              This keyword may appear multiple times in sshd_config with each
              instance appending to the list.
 
+     AttachToConsoleSession
+             Windows only.  Specifies whether a session should run inside the
+             authenticated user's existing physical console session rather
+             than in the service session, so that processes it starts are
+             visible on that user's desktop.  The console session is used only
+             when the same user that authenticated is logged on to it;
+             otherwise the session runs in the service session.  The default
+             is no.
+
      AuthenticationMethods
              Specifies the authentication methods that must be successfully
              completed for a user to be granted access.  This option must be
@@ -780,25 +789,25 @@ DESCRIPTION
              Only a subset of keywords may be used on the lines following a
              Match keyword.  Available keywords are AcceptEnv,
              AllowAgentForwarding, AllowGroups, AllowStreamLocalForwarding,
-             AllowTcpForwarding, AllowUsers, AuthenticationMethods,
-             AuthorizedKeysCommand, AuthorizedKeysCommandUser,
-             AuthorizedKeysFile, AuthorizedPrincipalsCommand,
-             AuthorizedPrincipalsCommandUser, AuthorizedPrincipalsFile,
-             Banner, CASignatureAlgorithms, ChannelTimeout, ChrootDirectory,
-             ClientAliveCountMax, ClientAliveInterval, DenyGroups, DenyUsers,
-             DisableForwarding, ExposeAuthInfo, ForceCommand, GatewayPorts,
-             GSSAPIAuthentication, HostbasedAcceptedAlgorithms,
-             HostbasedAuthentication, HostbasedUsesNameFromPacketOnly,
-             IgnoreRhosts, Include, IPQoS, KbdInteractiveAuthentication,
-             KerberosAuthentication, LogLevel, MaxAuthTries, MaxSessions,
-             PAMServiceName, PasswordAuthentication, PermitEmptyPasswords,
-             PermitListen, PermitOpen, PermitRootLogin, PermitTTY,
-             PermitTunnel, PermitUserRC, PubkeyAcceptedAlgorithms,
-             PubkeyAuthentication, PubkeyAuthOptions, RefuseConnection,
-             RekeyLimit, RevokedKeys, RDomain, SetEnv, StreamLocalBindMask,
-             StreamLocalBindUnlink, TrustedUserCAKeys,
-             UnusedConnectionTimeout, X11DisplayOffset, X11Forwarding and
-             X11UseLocalhost.
+             AllowTcpForwarding, AllowUsers, AttachToConsoleSession,
+             AuthenticationMethods, AuthorizedKeysCommand,
+             AuthorizedKeysCommandUser, AuthorizedKeysFile,
+             AuthorizedPrincipalsCommand, AuthorizedPrincipalsCommandUser,
+             AuthorizedPrincipalsFile, Banner, CASignatureAlgorithms,
+             ChannelTimeout, ChrootDirectory, ClientAliveCountMax,
+             ClientAliveInterval, DenyGroups, DenyUsers, DisableForwarding,
+             ExposeAuthInfo, ForceCommand, GatewayPorts, GSSAPIAuthentication,
+             HostbasedAcceptedAlgorithms, HostbasedAuthentication,
+             HostbasedUsesNameFromPacketOnly, IgnoreRhosts, Include, IPQoS,
+             KbdInteractiveAuthentication, KerberosAuthentication, LogLevel,
+             MaxAuthTries, MaxSessions, PAMServiceName,
+             PasswordAuthentication, PermitEmptyPasswords, PermitListen,
+             PermitOpen, PermitRootLogin, PermitTTY, PermitTunnel,
+             PermitUserRC, PubkeyAcceptedAlgorithms, PubkeyAuthentication,
+             PubkeyAuthOptions, RefuseConnection, RekeyLimit, RevokedKeys,
+             RDomain, SetEnv, StreamLocalBindMask, StreamLocalBindUnlink,
+             TrustedUserCAKeys, UnusedConnectionTimeout, X11DisplayOffset,
+             X11Forwarding and X11UseLocalhost.
 
      MaxAuthTries
              Specifies the maximum number of authentication attempts permitted
