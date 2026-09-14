@@ -18,12 +18,29 @@ Describe "E2E scenarios for connection multiplexing (ControlMaster)" -Tags "CI" 
         {
             $null = New-Item $testDir -ItemType directory -Force -ErrorAction SilentlyContinue
         }
-        #skip on ps 2 because non-interactive cmd require a ENTER before it returns on ps2
+        # Non-interactive commands require Enter before returning on PS 2.
         $skip = $IsWindows -and ($PSVersionTable.PSVersion.Major -le 2)
 
         $controlPath = Join-Path $testDir "mux_ctl"
         $sshExe = (Get-Command ssh).Source
         $script:masterProc = $null
+
+        function Wait-MuxClient
+        {
+            param($Process, [int]$Timeout = 30000)
+            if (-not $Process.WaitForExit($Timeout)) {
+                Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+                throw "Mux client $($Process.Id) timed out"
+            }
+            $Process.ExitCode | Should Be 0
+        }
+
+        function Assert-MuxSession
+        {
+            param([string]$Log)
+            $Log | Should Contain "master session id"
+            $Log | Should Not Contain "opening a separate connection"
+        }
 
         function Start-MuxMaster
         {
@@ -80,32 +97,43 @@ Describe "E2E scenarios for connection multiplexing (ControlMaster)" -Tags "CI" 
         }
 
         It "$tC.$tI - remote command through master returns output" -skip:$skip {
-            ssh -S $controlPath test_target echo mux-session-1234 | Set-Content $stdoutFile
+            ssh -v -S $controlPath test_target echo mux-session-1234 2>$stderrFile | Set-Content $stdoutFile
             $stdoutFile | Should Contain "mux-session-1234"
+            Assert-MuxSession $stderrFile
         }
 
         It "$tC.$tI - exit codes propagate through master" -skip:$skip {
             foreach ($i in (0,1,4,5,44)) {
-                ssh -S $controlPath test_target exit $i
+                ssh -v -S $controlPath test_target exit $i 2>$stderrFile
                 $LASTEXITCODE | Should Be $i
+                Assert-MuxSession $stderrFile
             }
         }
 
         It "$tC.$tI - stdin passes through master" -skip:$skip {
-            iex "cmd /c `"echo mux-stdin-data | ssh -S $controlPath test_target findstr mux-stdin > $stdoutFile`""
+            iex "cmd /c `"echo mux-stdin-data | ssh -v -S $controlPath test_target findstr mux-stdin > $stdoutFile 2> $stderrFile`""
             $stdoutFile | Should Contain "mux-stdin-data"
+            Assert-MuxSession $stderrFile
         }
 
         It "$tC.$tI - sessions share the master's single TCP connection" -skip:$skip {
-            ssh -S $controlPath test_target echo again | Set-Content $stdoutFile
+            ssh -v -S $controlPath test_target echo again 2>$stderrFile | Set-Content $stdoutFile
             $stdoutFile | Should Contain "again"
+            Assert-MuxSession $stderrFile
             $conns = @(Get-NetTCPConnection -OwningProcess $script:masterProc.Id -State Established -ErrorAction SilentlyContinue | Where-Object { $_.RemotePort -eq $port })
             $conns.Count | Should Be 1
         }
 
         It "$tC.$tI - -O forward adds a working local forwarding" -skip:$skip {
-            $fwdPort = 5433
-            iex "cmd /c `"ssh -S $controlPath -O forward -L $($fwdPort):127.0.0.1:$port test_target 2> $stderrFile`""
+            # Reserve an ephemeral candidate and retry if another process wins it.
+            for ($attempt = 0; $attempt -lt 5; $attempt++) {
+                $reservation = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, 0)
+                $reservation.Start()
+                $fwdPort = $reservation.LocalEndpoint.Port
+                $reservation.Stop()
+                ssh -S $controlPath -O forward -L "$($fwdPort):127.0.0.1:$port" test_target 2>$stderrFile
+                if ($LASTEXITCODE -eq 0) { break }
+            }
             $LASTEXITCODE | Should Be 0
             # the tunnel targets the test sshd; reading its banner proves end-to-end flow
             $client = New-Object System.Net.Sockets.TcpClient("127.0.0.1", $fwdPort)
@@ -190,10 +218,11 @@ Describe "E2E scenarios for connection multiplexing (ControlMaster)" -Tags "CI" 
         It "$tC.$tI - first connection auto-starts a persistent master" -skip:$skip {
             # Start-Process (own console) so the spawned master does not block us
             $p = Start-Process -FilePath $sshExe `
-                -ArgumentList ($cpOpts + @("test_target", "echo cp-first")) `
-                -WindowStyle Hidden -RedirectStandardOutput $stdoutFile -PassThru
-            $p.WaitForExit(30000) | Should Be $true
+                -ArgumentList ($cpOpts + @("-v", "test_target", "echo cp-first")) `
+                -WindowStyle Hidden -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile -PassThru
+            Wait-MuxClient $p
             $stdoutFile | Should Contain "cp-first"
+            Assert-MuxSession $stderrFile
             # the master should have persisted and answer control requests
             ssh -o ControlPath="$cpPath" -O check test_target 2>$null
             $LASTEXITCODE | Should Be 0
@@ -201,10 +230,11 @@ Describe "E2E scenarios for connection multiplexing (ControlMaster)" -Tags "CI" 
 
         It "$tC.$tI - subsequent connection reuses the persistent master" -skip:$skip {
             $p = Start-Process -FilePath $sshExe `
-                -ArgumentList @("-o", "ControlPath=`"$cpPath`"", "test_target", "echo cp-reuse") `
-                -WindowStyle Hidden -RedirectStandardOutput $stdoutFile -PassThru
-            $p.WaitForExit(20000) | Should Be $true
+                -ArgumentList @("-v", "-o", "ControlPath=`"$cpPath`"", "test_target", "echo cp-reuse") `
+                -WindowStyle Hidden -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile -PassThru
+            Wait-MuxClient $p 20000
             $stdoutFile | Should Contain "cp-reuse"
+            Assert-MuxSession $stderrFile
         }
 
         It "$tC.$tI - -O exit stops the persistent master" -skip:$skip {
@@ -212,6 +242,111 @@ Describe "E2E scenarios for connection multiplexing (ControlMaster)" -Tags "CI" 
             $stderrFile | Should Contain "Exit request sent"
             ssh -o ControlPath="$cpPath" -O check test_target 2>$null
             $LASTEXITCODE | Should Not Be 0
+        }
+    }
+
+    Context "$tC - mux safety regressions" {
+        BeforeAll {$tI=1}
+        AfterAll {$tC++}
+
+        It "$tC.$tI - control endpoint cleanup preserves a regular file" -skip:$skip {
+            "sentinel-$PID" | Set-Content $controlPath
+            try {
+                foreach ($operation in @("exit", "stop")) {
+                    Start-MuxMaster -MasterLog $logFile | Should Be $true
+                    ssh -S $controlPath -O $operation test_target 2>$null
+                    $LASTEXITCODE | Should Be 0
+                    if ($operation -eq "exit") {
+                        $script:masterProc.WaitForExit(10000) | Should Be $true
+                    }
+                    Stop-MuxMaster
+                    (Get-Content $controlPath) | Should Be "sentinel-$PID"
+                }
+            } finally {
+                Stop-MuxMaster
+                Remove-Item -LiteralPath $controlPath -ErrorAction SilentlyContinue
+            }
+        }
+
+        It "$tC.$tI - autoask never becomes an unprompted persistent master" -skip:$skip {
+            ssh -v -o BatchMode=yes -o ControlMaster=autoask -o ControlPersist=yes `
+                -S $controlPath test_target echo consent-preserved 2>$stderrFile | Set-Content $stdoutFile
+            $stdoutFile | Should Contain "consent-preserved"
+            $stderrFile | Should Contain "using a direct connection"
+            ssh -S $controlPath -O check test_target 2>$null
+            $LASTEXITCODE | Should Not Be 0
+        }
+
+        It "$tC.$tI - subsystem startup persists and SFTP reuses the master" -skip:$skip {
+            $batch = Join-Path $testDir "mux-sftp.batch"
+            $inputFile = Join-Path $testDir "mux-sftp-init"
+            "pwd`nquit" | Set-Content $batch -Encoding ASCII
+            # SFTP v3 INIT followed by EOF: no remote filesystem changes.
+            [System.IO.File]::WriteAllBytes($inputFile, [byte[]](0,0,0,5,1,0,0,0,3))
+            try {
+                # sftp/scp force ControlMaster=no on every platform. Exercise
+                # explicit ssh -s startup, then the utilities' reuse path.
+                $p = Start-Process -FilePath $sshExe `
+                    -ArgumentList @("-v", "-oControlMaster=auto", "-oControlPersist=30", `
+                        "-S", "`"$controlPath`"", "-s", "test_target", "sftp") `
+                    -WindowStyle Hidden -RedirectStandardInput $inputFile `
+                    -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile -PassThru
+                Wait-MuxClient $p
+                Assert-MuxSession $stderrFile
+                $p = Start-Process -FilePath (Join-Path (Split-Path $sshExe) "sftp.exe") `
+                    -ArgumentList @("-v", "-b", "`"$batch`"", "-oControlMaster=auto", `
+                        "-oControlPersist=30", "-oControlPath=`"$controlPath`"", "test_target") `
+                    -WindowStyle Hidden -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile -PassThru
+                Wait-MuxClient $p
+                Assert-MuxSession $stderrFile
+                ssh -S $controlPath -O check test_target 2>$null
+                $LASTEXITCODE | Should Be 0
+                ssh -v -S $controlPath test_target echo after-sftp 2>$stderrFile | Set-Content $stdoutFile
+                $stdoutFile | Should Contain "after-sftp"
+                Assert-MuxSession $stderrFile
+            } finally {
+                ssh -S $controlPath -O exit test_target 2>$null
+                Remove-Item -LiteralPath $batch -ErrorAction SilentlyContinue
+                Remove-Item -LiteralPath $inputFile -ErrorAction SilentlyContinue
+            }
+        }
+
+        It "$tC.$tI - stdio forwarding exits after the remote endpoint closes" -skip:$skip {
+            $inputFile = Join-Path $testDir "mux-stdio-input"
+            "mux-stdio-eof" | Set-Content $inputFile -Encoding ASCII
+            $listener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Loopback, 0)
+            $client = $null
+            $p = $null
+            try {
+                $listener.Start()
+                $accept = $listener.AcceptTcpClientAsync()
+                $p = Start-Process -FilePath $sshExe `
+                    -ArgumentList @("-v", "-oControlMaster=auto", "-oControlPersist=30", `
+                        "-S", "`"$controlPath`"", "-W", "127.0.0.1:$($listener.LocalEndpoint.Port)", "test_target") `
+                    -WindowStyle Hidden -RedirectStandardInput $inputFile `
+                    -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile -PassThru
+                $accept.Wait(10000) | Should Be $true
+                $client = $accept.Result
+                $stream = $client.GetStream()
+                $stream.ReadTimeout = 10000
+                $stream.WriteTimeout = 10000
+                $buf = New-Object byte[] 1024
+                while (($n = $stream.Read($buf, 0, $buf.Length)) -gt 0) {
+                    $stream.Write($buf, 0, $n)
+                }
+                $client.Close()
+                Wait-MuxClient $p 10000
+                $stdoutFile | Should Contain "mux-stdio-eof"
+                Assert-MuxSession $stderrFile
+                ssh -S $controlPath -O check test_target 2>$null
+                $LASTEXITCODE | Should Be 0
+            } finally {
+                if ($client) { $client.Close() }
+                $listener.Stop()
+                if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+                ssh -S $controlPath -O exit test_target 2>$null
+                Remove-Item -LiteralPath $inputFile -ErrorAction SilentlyContinue
+            }
         }
     }
 }
