@@ -1028,7 +1028,36 @@ w32_dup(int oldfd)
 HANDLE
 w32_fd_to_handle(int fd)
 {
+	if (fd < 0 || fd >= MAX_FDS || fd_table.w32_ios[fd] == NULL) {
+		errno = EBADF;
+		return NULL;
+	}
 	return fd_table.w32_ios[fd]->handle;
+}
+
+/* Relay pipes must not block close waiting for a master that stopped reading.
+ * A non-forced close defers EOF until the last buffered write completes. */
+int
+w32_close_mux_pipe(int fd, int force)
+{
+	struct w32_io *pio;
+
+	CHECK_FD(fd);
+	pio = fd_table.w32_ios[fd];
+	if (pio->type != NONSOCK_FD || FILETYPE(pio) != FILE_TYPE_PIPE) {
+		errno = EINVAL;
+		return -1;
+	}
+	if (!force && pio->write_details.pending)
+		return 1;
+	if (!CancelIoEx(pio->handle, NULL) && GetLastError() != ERROR_NOT_FOUND) {
+		errno = errno_from_Win32Error(GetLastError());
+		return -1;
+	}
+	/* ReadFileEx/WriteFileEx own pio until their completion APCs run. */
+	while (pio->read_details.pending || pio->write_details.pending)
+		SleepEx(INFINITE, TRUE);
+	return w32_close(fd);
 }
 
 /* wraps a raw win32 handle in a new fd table entry */
@@ -1071,47 +1100,76 @@ struct w32_fdpass_msg {
 };
 #pragma pack(pop)
 
-/* TRUE if process pid runs as the same Windows user as us */
-BOOL
-w32_is_pid_same_user(DWORD pid)
+static void *
+fdpass_token_info(HANDLE token, TOKEN_INFORMATION_CLASS info_class)
 {
-	BOOL ret = FALSE;
-	HANDLE proc = NULL, token = NULL;
-	TOKEN_USER *peer_info = NULL;
-	PSID my_sid = NULL;
-	DWORD info_len = 0;
+	DWORD len = 0;
+	void *info;
 
-	if ((my_sid = get_sid(NULL)) == NULL) {
-		error("fdpass - cannot retrieve own SID");
-		goto done;
+	if (GetTokenInformation(token, info_class, NULL, 0, &len) ||
+	    GetLastError() != ERROR_INSUFFICIENT_BUFFER ||
+	    (info = malloc(len)) == NULL)
+		return NULL;
+	if (!GetTokenInformation(token, info_class, info, len, &len)) {
+		free(info);
+		return NULL;
 	}
-	if ((proc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid)) == NULL) {
-		error("fdpass - OpenProcess(%d) failed, error: %d", pid, GetLastError());
-		goto done;
-	}
-	if (!OpenProcessToken(proc, TOKEN_QUERY, &token)) {
-		error("fdpass - OpenProcessToken failed, error: %d", GetLastError());
-		goto done;
-	}
-	if (GetTokenInformation(token, TokenUser, NULL, 0, &info_len) == TRUE ||
-	    (peer_info = (TOKEN_USER*)malloc(info_len)) == NULL)
-		goto done;
-	if (GetTokenInformation(token, TokenUser, peer_info, info_len, &info_len) == FALSE)
-		goto done;
-	ret = EqualSid(my_sid, peer_info->User.Sid);
-	if (!ret)
-		error("fdpass - peer process %d is a different user", pid);
+	return info;
+}
 
+/* Mux is confined to one user and elevation/integrity level. Return an
+ * authenticated process handle, held through any subsequent duplication.
+ * GetNamedPipeInfo selects the opposite endpoint even for same-process tests. */
+HANDLE
+w32_open_pipe_peer(HANDLE pipe, DWORD access)
+{
+	HANDLE proc = NULL, tokens[2] = { NULL, NULL };
+	TOKEN_USER *users[2] = { NULL, NULL };
+	TOKEN_MANDATORY_LABEL *levels[2] = { NULL, NULL };
+	TOKEN_ELEVATION elevations[2];
+	DWORD flags, pid = 0, checked_pid = 0, len;
+	BOOL ok = FALSE;
+	int i;
+
+	if (!GetNamedPipeInfo(pipe, &flags, NULL, NULL, NULL) ||
+	    !(flags & PIPE_SERVER_END ? GetNamedPipeClientProcessId(pipe, &pid) :
+	    GetNamedPipeServerProcessId(pipe, &pid)) || pid == 0 ||
+	    (proc = OpenProcess(access | PROCESS_QUERY_LIMITED_INFORMATION,
+	    FALSE, pid)) == NULL)
+		goto done;
+	if (!(flags & PIPE_SERVER_END ?
+	    GetNamedPipeClientProcessId(pipe, &checked_pid) :
+	    GetNamedPipeServerProcessId(pipe, &checked_pid)) || checked_pid != pid ||
+	    !OpenProcessToken(proc, TOKEN_QUERY, &tokens[0]) ||
+	    !OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &tokens[1]))
+		goto done;
+	for (i = 0; i < 2; i++) {
+		if ((users[i] = fdpass_token_info(tokens[i], TokenUser)) == NULL ||
+		    (levels[i] = fdpass_token_info(tokens[i], TokenIntegrityLevel)) == NULL ||
+		    !GetTokenInformation(tokens[i], TokenElevation, &elevations[i],
+		    sizeof(elevations[i]), &len))
+			goto done;
+	}
+	ok = EqualSid(users[0]->User.Sid, users[1]->User.Sid) &&
+	    EqualSid(levels[0]->Label.Sid, levels[1]->Label.Sid) &&
+	    elevations[0].TokenIsElevated == elevations[1].TokenIsElevated;
 done:
-	if (peer_info)
-		free(peer_info);
-	if (my_sid)
-		free(my_sid);
-	if (token)
-		CloseHandle(token);
-	if (proc)
-		CloseHandle(proc);
-	return ret;
+	if (!ok)
+		debug3("mux peer authentication failed: pid %lu, checked %lu, error %lu",
+		    pid, checked_pid, GetLastError());
+	for (i = 0; i < 2; i++) {
+		free(users[i]);
+		free(levels[i]);
+		if (tokens[i])
+			CloseHandle(tokens[i]);
+	}
+	if (!ok) {
+		if (proc)
+			CloseHandle(proc);
+		errno = EPERM;
+		return NULL;
+	}
+	return proc;
 }
 
 /* read/write full buffer on possibly nonblocking fd, pumping APCs */
@@ -1181,7 +1239,7 @@ w32_fdpass_recv(int sock)
 {
 	struct w32_fdpass_msg msg;
 	HANDLE src_proc = NULL, dup = NULL;
-	DWORD pipe_client_pid = 0;
+	DWORD filetype, mode;
 	int fd = -1, type;
 
 	CHECK_FD(sock);
@@ -1191,30 +1249,24 @@ w32_fdpass_recv(int sock)
 		return -1;
 	}
 
-	if (msg.magic != W32_FDPASS_MAGIC) {
-		error("fdpass - bad magic 0x%08x from fd %d", msg.magic, sock);
+	if (msg.magic != W32_FDPASS_MAGIC ||
+	    (msg.type != NONSOCK_FD && msg.type != NONSOCK_SYNC_FD) ||
+	    msg.handle == 0 || msg.handle != (uintptr_t)msg.handle ||
+	    (intptr_t)msg.handle < 0) {
+		error("fdpass - invalid descriptor record from fd %d", sock);
 		errno = EINVAL;
 		return -1;
 	}
 
-	/* when the transport is a named pipe, the claimed pid must match the peer */
-	if (fd_table.w32_ios[sock]->type == NONSOCK_FD &&
-	    GetNamedPipeClientProcessId(fd_table.w32_ios[sock]->handle, &pipe_client_pid) &&
-	    pipe_client_pid != 0 && pipe_client_pid != GetCurrentProcessId() &&
-	    pipe_client_pid != msg.pid) {
-		error("fdpass - claimed pid %d does not match pipe peer %d",
-		    msg.pid, pipe_client_pid);
-		errno = EPERM;
+	if (fd_table.w32_ios[sock]->type != NONSOCK_FD) {
+		errno = ENOTSOCK;
 		return -1;
 	}
-
-	if (!w32_is_pid_same_user(msg.pid)) {
-		errno = EPERM;
+	if ((src_proc = w32_open_pipe_peer(fd_table.w32_ios[sock]->handle,
+	    PROCESS_DUP_HANDLE)) == NULL)
 		return -1;
-	}
-
-	if ((src_proc = OpenProcess(PROCESS_DUP_HANDLE, FALSE, msg.pid)) == NULL) {
-		error("fdpass - OpenProcess(%d) for dup failed, error: %d", msg.pid, GetLastError());
+	if (GetProcessId(src_proc) != msg.pid) {
+		CloseHandle(src_proc);
 		errno = EPERM;
 		return -1;
 	}
@@ -1227,6 +1279,13 @@ w32_fdpass_recv(int sock)
 		return -1;
 	}
 	CloseHandle(src_proc);
+	filetype = GetFileType(dup);
+	if ((filetype != FILE_TYPE_DISK && filetype != FILE_TYPE_PIPE &&
+	    filetype != FILE_TYPE_CHAR) || GetConsoleMode(dup, &mode)) {
+		CloseHandle(dup);
+		errno = ENOTSUP;
+		return -1;
+	}
 
 	/*
 	 * sender's fd classification decides sync vs async io; inherited stdio
@@ -1235,7 +1294,7 @@ w32_fdpass_recv(int sock)
 	 * using async io on its end.
 	 */
 	type = (msg.type == NONSOCK_FD) ? NONSOCK_FD : NONSOCK_SYNC_FD;
-	if (GetFileType(dup) == FILE_TYPE_CHAR)
+	if (filetype == FILE_TYPE_CHAR)
 		type = NONSOCK_SYNC_FD;
 
 	if ((fd = w32_allocate_fd_for_handle(dup, type)) == -1) {

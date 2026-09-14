@@ -1783,37 +1783,19 @@ mux_client_read_packet(int fd, struct sshbuf *m)
  * the master, and instead of relaying SIGWINCH with kill() (which on
  * Windows would terminate the master process).
  *
- * Protocol additions (Windows only; see PROTOCOL.mux for the base
- * protocol):
- *
- * 1. Masters advertise the hello extension "tty-relay@win32.openssh.com"
- *    with an empty value (reserved for future versioning). Peers that do
- *    not recognise the extension ignore it, per PROTOCOL.mux.
- *
- * 2. A client that saw the extension may send, at any time after the
- *    hello:
- *	uint32	MUX_C_WINSIZE
- *	uint32	request id
- *	uint32	columns
- *	uint32	rows
- *	uint32	x pixels
- *	uint32	y pixels
- *    No reply is sent and the request id is not consumed. Because the
- *    control channel is ordered, a MUX_C_WINSIZE sent before
- *    MUX_C_NEW_SESSION seeds the dimensions used in the session's pty-req;
- *    later messages become "window-change" channel requests.
- *
- * 3. A client that wants a tty but did not see the extension MUST NOT
- *    open a session over the multiplexed connection; it falls back to a
- *    separate direct connection instead (see muxclient()).
+ * See PROTOCOL.mux for extension negotiation and the window-size message.
  */
 
 #define MUX_RELAY_BUF 8192
+
+int w32_get_console_winsize(struct winsize *);
+int w32_close_mux_pipe(int, int);
 
 struct mux_relay_ent {
 	int is_console;		/* this std fd was a console -> relayed */
 	int is_input;		/* 1 = console->master (stdin); 0 = ->console */
 	int console_fd;		/* the real console std fd (0/1/2), not owned */
+	int console_flags;	/* saved F_GETFL, restored on every return path */
 	int local_pipe;		/* our end of the substitute pipe (owned) */
 	int passed;		/* pipe end handed to the master (-1 if none) */
 	int rd_done;		/* source (console or pipe) hit EOF */
@@ -1847,13 +1829,16 @@ control_client_sigwinch(int signo)
 static void
 mux_client_send_winsize(int fd)
 {
+	static struct winsize last_ws;
+	static int size_sent;
 	struct sshbuf *m;
 	struct winsize ws;
 	int r;
 
-	/* prefer stdout, but fall back to stdin if only that is a tty */
-	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 &&
-	    ioctl(STDIN_FILENO, TIOCGWINSZ, &ws) == -1)
+	if ((!isatty(STDIN_FILENO) && !isatty(STDOUT_FILENO) &&
+	    !isatty(STDERR_FILENO)) || w32_get_console_winsize(&ws) == -1)
+		return;
+	if (size_sent && memcmp(&ws, &last_ws, sizeof(ws)) == 0)
 		return;
 	if ((m = sshbuf_new()) == NULL)
 		fatal_f("sshbuf_new");
@@ -1867,6 +1852,10 @@ mux_client_send_winsize(int fd)
 		fatal_fr(r, "assemble winsize");
 	if (mux_client_write_packet(fd, m) != 0)
 		debug_f("write winsize: %s", strerror(errno));
+	else {
+		last_ws = ws;
+		size_sent = 1;
+	}
 	sshbuf_free(m);
 }
 
@@ -1876,13 +1865,12 @@ mux_client_send_winsize(int fd)
  * a pipe is created and its master-facing end is recorded in passed_fd[i]
  * so the caller sends that instead of the real fd. Returns 0 on success
  * (relay may be inactive if no fd was a console), -1 on error with all
- * pipes closed. Real std fds are never modified, so callers can still fall
- * back to a direct connection.
+ * pipes closed and original console flags restored, allowing fallback.
  */
 static int
 mux_relay_prepare(struct mux_relay *r, int nfds, int passed_fd[3])
 {
-	int i, p[2];
+	int i, p[2], flags;
 
 	memset(r, 0, sizeof(*r));
 	r->nent = nfds;
@@ -1899,6 +1887,10 @@ mux_relay_prepare(struct mux_relay *r, int nfds, int passed_fd[3])
 
 		if (!isatty(i))
 			continue;
+		if ((flags = fcntl(i, F_GETFL, 0)) == -1) {
+			mux_relay_close_all(r);
+			return -1;
+		}
 		if (pipe(p) == -1) {
 			error_f("pipe: %s", strerror(errno));
 			mux_relay_close_all(r);
@@ -1906,6 +1898,7 @@ mux_relay_prepare(struct mux_relay *r, int nfds, int passed_fd[3])
 		}
 		e->is_console = 1;
 		e->console_fd = i;
+		e->console_flags = flags;
 		if (i == STDIN_FILENO) {
 			/* console -> master: master reads the pipe read end */
 			e->is_input = 1;
@@ -1919,8 +1912,11 @@ mux_relay_prepare(struct mux_relay *r, int nfds, int passed_fd[3])
 		}
 		passed_fd[i] = e->passed;
 		r->active = 1;
-		(void)fcntl(e->local_pipe, F_SETFL, O_NONBLOCK);
-		(void)fcntl(e->console_fd, F_SETFL, O_NONBLOCK);
+		if (fcntl(e->local_pipe, F_SETFL, O_NONBLOCK) == -1 ||
+		    fcntl(e->console_fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+			mux_relay_close_all(r);
+			return -1;
+		}
 	}
 	return 0;
 }
@@ -1954,9 +1950,12 @@ mux_relay_close_all(struct mux_relay *r)
 			e->passed = -1;
 		}
 		if (!e->pipe_closed) {
-			close(e->local_pipe);
+			if (w32_close_mux_pipe(e->local_pipe, 1) == -1)
+				error_f("close relay pipe: %s", strerror(errno));
 			e->pipe_closed = 1;
 		}
+		if (fcntl(e->console_fd, F_SETFL, e->console_flags) == -1)
+			error_f("restore console flags: %s", strerror(errno));
 	}
 	memset(r, 0, sizeof(*r));
 }
@@ -2018,6 +2017,7 @@ mux_relay_pump(int fd, struct mux_relay *r, u_int sid,
 	int rd_idx[3], wr_idx[3];
 	char *e;
 	time_t drain_deadline = 0;
+	double next_winsize = 0;
 
 	if ((m = sshbuf_new()) == NULL)
 		fatal_f("sshbuf_new");
@@ -2027,10 +2027,13 @@ mux_relay_pump(int fd, struct mux_relay *r, u_int sid,
 
 		if (muxclient_terminate)
 			break;
-		if (muxclient_winch) {
+		/* Resize events can be absent under redirection or backpressure.
+		 * Check dimensions too; unchanged sizes are not sent. */
+		if (!draining && tty_flag &&
+		    (muxclient_winch || monotime_double() >= next_winsize)) {
 			muxclient_winch = 0;
-			if (tty_flag)
-				mux_client_send_winsize(fd);
+			next_winsize = monotime_double() + 0.2;
+			mux_client_send_winsize(fd);
 		}
 
 		ctl_idx = -1;
@@ -2082,8 +2085,8 @@ mux_relay_pump(int fd, struct mux_relay *r, u_int sid,
 			/* propagate console EOF to the master by closing the pipe */
 			if (ent->is_input && ent->rd_done && ent->buf_len == 0 &&
 			    !ent->pipe_closed) {
-				close(ent->local_pipe);
-				ent->pipe_closed = 1;
+				if (w32_close_mux_pipe(ent->local_pipe, 0) == 0)
+					ent->pipe_closed = 1;
 			}
 		}
 
@@ -3044,7 +3047,7 @@ muxclient(const char *path)
 		if (errno == ECONNREFUSED &&
 		    options.control_master != SSHCTL_MASTER_NO) {
 			debug("Stale control socket %.100s, unlinking", path);
-			unlink(path);
+			unix_unlink(path);
 		} else if (errno == ENOENT) {
 			debug("Control socket \"%.100s\" does not exist", path);
 		} else {
@@ -3054,6 +3057,16 @@ muxclient(const char *path)
 		close(sock);
 		return -1;
 	}
+#ifdef WINDOWS
+	/* A pipe DACL protects the creator, not clients of a squatted name. */
+	{
+		uid_t uid;
+		gid_t gid;
+
+		if (getpeereid(sock, &uid, &gid) == -1 || uid != geteuid())
+			fatal("Control socket peer authentication failed for %.100s", path);
+	}
+#endif
 	set_nonblock(sock);
 
 	/* Timeout on initial connection only. */

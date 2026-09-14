@@ -103,6 +103,7 @@ time_t	 monotime(void);
 double	 monotime_double(void);
 void	 lowercase(char *s);
 int	 unix_listener(const char *, int, int);
+int	 unix_unlink(const char *);
 int	 valid_domain(char *, int, const char **);
 int	 valid_env_name(const char *);
 const char *atoi_err(const char *, int *);
