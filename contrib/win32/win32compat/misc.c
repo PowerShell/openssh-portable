@@ -491,16 +491,22 @@ daemon(int nochdir, int noclose)
  * primitives; the policy lives in ssh.c.
  */
 
-/* environment marker identifying the spawned persistent master process;
- * its value names the ready event the master signals (see below) */
+/* Child-only marker containing an inherited readiness event handle. */
 #define W32_CONTROLPERSIST_ENV "SSH_CONTROLPERSIST_MASTER"
+/* The port targets older SDK APIs; this optional attribute needs Windows 10. */
+#ifndef PROC_THREAD_ATTRIBUTE_JOB_LIST
+#define PROC_THREAD_ATTRIBUTE_JOB_LIST ProcThreadAttributeValue(13, FALSE, TRUE, FALSE)
+#endif
+static int controlpersist_master = -1;
+static HANDLE controlpersist_ready_event;
 
-/* copy of this process's environment block with one extra "VAR=value" entry */
+/* Insert/replace a VAR=value entry, preserving Windows' sorted environment. */
 static wchar_t *
-env_block_append(const wchar_t *entry)
+env_block_set(const wchar_t *entry)
 {
-	wchar_t *parent, *block = NULL, *p;
-	size_t plen, elen;
+	wchar_t *parent, *block = NULL, *p, *out;
+	size_t plen, elen, keylen, len;
+	int inserted = 0;
 
 	if ((parent = GetEnvironmentStringsW()) == NULL)
 		return NULL;
@@ -508,10 +514,26 @@ env_block_append(const wchar_t *entry)
 		;
 	plen = p - parent;
 	elen = wcslen(entry) + 1;
+	keylen = wcscspn(entry, L"=") + 1;
 	if ((block = malloc((plen + elen + 1) * sizeof(wchar_t))) != NULL) {
-		memcpy(block, parent, plen * sizeof(wchar_t));
-		memcpy(block + plen, entry, elen * sizeof(wchar_t));
-		block[plen + elen] = L'\0';
+		out = block;
+		for (p = parent; *p; p += len) {
+			len = wcslen(p) + 1;
+			if (!inserted && _wcsicmp(entry, p) < 0) {
+				memcpy(out, entry, elen * sizeof(wchar_t));
+				out += elen;
+				inserted = 1;
+			}
+			if (_wcsnicmp(p, entry, keylen) != 0) {
+				memcpy(out, p, len * sizeof(wchar_t));
+				out += len;
+			}
+		}
+		if (!inserted) {
+			memcpy(out, entry, elen * sizeof(wchar_t));
+			out += elen;
+		}
+		*out = L'\0';
 	}
 	FreeEnvironmentStringsW(parent);
 	return block;
@@ -521,32 +543,34 @@ env_block_append(const wchar_t *entry)
  * Spawn a detached background ssh process (this same executable) with the
  * given arguments to act as a persistent mux master. The child shares this
  * process's console so it can prompt for authentication, and is deliberately
- * NOT registered as a tracked child, so it survives after this process
- * exits. *ready_event receives an event HANDLE (as intptr_t) that the child
- * signals once its control socket is up; the child opens it by the name
- * carried in the environment marker (see w32_signal_controlpersist_ready).
- * A named event is used rather than handle inheritance: for a console child
- * CreateProcess propagates the parent's standard handles regardless of any
- * PROC_THREAD_ATTRIBUTE_HANDLE_LIST restriction, and the long-lived master
- * must not hold the client's redirected stdio open. Returns the child
- * process HANDLE as intptr_t (caller w32_close_handle's both), or -1 on
- * failure.
+ * NOT registered as a tracked child. A kill-on-close job owns it until
+ * readiness is acknowledged; abandoning startup cannot leave an orphan.
+ * Only the event and deliberately chosen startup stdio handles are inherited.
  */
 intptr_t
-w32_spawn_control_master(char *const args[], intptr_t *ready_event)
+w32_spawn_control_master(char *const args[], intptr_t *ready_event,
+    intptr_t *startup_job)
 {
-	wchar_t exe_w[MAX_PATH], event_name[64], env_entry[96];
+	wchar_t exe_w[32768], env_entry[96];
 	char *exe = NULL, *cmdline = NULL;
 	wchar_t *cmdline_w = NULL, *env = NULL;
-	LARGE_INTEGER qpc;
-	HANDLE event = NULL;
-	STARTUPINFOW si;
+	HANDLE event = NULL, job = NULL, inherited[4] = { NULL };
+	STARTUPINFOEXW si;
 	PROCESS_INFORMATION pi;
+	SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, TRUE };
+	JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits;
+	SIZE_T attr_size = 0;
+	DWORD len;
+	int i, attr_initialized = 0;
 	intptr_t ret = -1;
 
 	*ready_event = -1;
+	*startup_job = -1;
+	memset(&si, 0, sizeof(si));
+	memset(&pi, 0, sizeof(pi));
 
-	if (GetModuleFileNameW(NULL, exe_w, MAX_PATH) == 0) {
+	len = GetModuleFileNameW(NULL, exe_w, _countof(exe_w));
+	if (len == 0 || len >= _countof(exe_w)) {
 		error("%s: GetModuleFileName failed: %d", __func__, GetLastError());
 		return -1;
 	}
@@ -562,13 +586,7 @@ w32_spawn_control_master(char *const args[], intptr_t *ready_event)
 		goto done;
 	}
 
-	/* named event (session-local) the child signals once its control
-	 * socket is up; pid + perf counter makes the name unique */
-	QueryPerformanceCounter(&qpc);
-	swprintf_s(event_name, _countof(event_name),
-	    L"Local\\ssh-controlpersist-%u-%08x%08x", GetCurrentProcessId(),
-	    (unsigned int)qpc.HighPart, (unsigned int)qpc.LowPart);
-	if ((event = CreateEventW(NULL, TRUE, FALSE, event_name)) == NULL) {
+	if ((event = CreateEventW(&sa, TRUE, FALSE, NULL)) == NULL) {
 		error("%s: CreateEvent failed: %d", __func__, GetLastError());
 		goto done;
 	}
@@ -576,42 +594,90 @@ w32_spawn_control_master(char *const args[], intptr_t *ready_event)
 	/* the child reads this marker to learn it is the persistent master
 	 * and which event to signal when its control socket is up */
 	swprintf_s(env_entry, _countof(env_entry),
-	    L"" W32_CONTROLPERSIST_ENV L"=%s", event_name);
-	if ((env = env_block_append(env_entry)) == NULL) {
+	    L"" W32_CONTROLPERSIST_ENV L"=%llu", (unsigned long long)(uintptr_t)event);
+	if ((env = env_block_set(env_entry)) == NULL) {
 		errno = ENOMEM;
 		goto done;
 	}
 
-	memset(&si, 0, sizeof(si));
-	si.cb = sizeof(si);
-	/*
-	 * Explicit null std handles: without STARTF_USESTDHANDLES, Windows
-	 * duplicates a console parent's std handles into a console child even
-	 * with bInheritHandles=FALSE, and the long-lived master must not keep
-	 * the client's redirected stdio open. Auth prompts are unaffected:
-	 * they use the shared console directly (conio), not the std handles.
-	 */
-	si.dwFlags = STARTF_USESTDHANDLES;
-	memset(&pi, 0, sizeof(pi));
+	/* Explicit stdio prevents implicit duplication of redirected stdout.
+	 * Prompt echo uses a fresh console output handle. Retain stderr only
+	 * during authentication; ssh_session2 closes it before signaling ready. */
+	inherited[0] = event;
+	inherited[1] = CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ |
+	    FILE_SHARE_WRITE, &sa, OPEN_EXISTING, 0, NULL);
+	inherited[2] = CreateFileW(L"CONOUT$", GENERIC_READ | GENERIC_WRITE,
+	    FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, OPEN_EXISTING, 0, NULL);
+	if (inherited[2] == INVALID_HANDLE_VALUE)
+		inherited[2] = CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_READ |
+		    FILE_SHARE_WRITE, &sa, OPEN_EXISTING, 0, NULL);
+	if (!DuplicateHandle(GetCurrentProcess(), GetStdHandle(STD_ERROR_HANDLE),
+	    GetCurrentProcess(), &inherited[3], 0, TRUE, DUPLICATE_SAME_ACCESS))
+		inherited[3] = CreateFileW(L"NUL", GENERIC_WRITE, FILE_SHARE_READ |
+		    FILE_SHARE_WRITE, &sa, OPEN_EXISTING, 0, NULL);
+	for (i = 1; i < 4; i++)
+		if (inherited[i] == NULL || inherited[i] == INVALID_HANDLE_VALUE)
+			goto done;
+	si.StartupInfo.cb = sizeof(si);
+	si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+	si.StartupInfo.hStdInput = inherited[1];
+	si.StartupInfo.hStdOutput = inherited[2];
+	si.StartupInfo.hStdError = inherited[3];
+	InitializeProcThreadAttributeList(NULL, 2, 0, &attr_size);
+	if ((si.lpAttributeList = malloc(attr_size)) == NULL)
+		goto done;
+	if (!InitializeProcThreadAttributeList(si.lpAttributeList, 2, 0, &attr_size))
+		goto done;
+	attr_initialized = 1;
+	if (!UpdateProcThreadAttribute(si.lpAttributeList, 0,
+	    PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherited, sizeof(inherited), NULL, NULL))
+		goto done;
+	memset(&limits, 0, sizeof(limits));
+	limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+	if ((job = CreateJobObjectW(NULL, NULL)) == NULL ||
+	    !SetInformationJobObject(job, JobObjectExtendedLimitInformation,
+	    &limits, sizeof(limits)))
+		goto done;
+	if (!UpdateProcThreadAttribute(si.lpAttributeList, 0,
+	    PROC_THREAD_ATTRIBUTE_JOB_LIST, &job, sizeof(job), NULL, NULL))
+		goto done;
 
 	/*
 	 * No CREATE_NEW_CONSOLE/DETACHED_PROCESS: the child shares our console
 	 * so it can prompt for authentication. It calls FreeConsole() once its
-	 * control socket is up (see w32_detach_console). Handles are not
-	 * inherited; the master opens its own connection.
+	 * control socket is up. Assign the job atomically at creation, so even
+	 * parent termination during CreateProcess cannot strand an unowned child.
 	 */
-	if (!CreateProcessW(NULL, cmdline_w, NULL, NULL, FALSE,
-	    CREATE_UNICODE_ENVIRONMENT, env, NULL, &si, &pi)) {
+	if (!CreateProcessW(exe_w, cmdline_w, NULL, NULL, TRUE,
+	    CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT,
+	    env, NULL, &si.StartupInfo, &pi)) {
 		error("%s: CreateProcess failed: %d", __func__, GetLastError());
 		goto done;
 	}
-	CloseHandle(pi.hThread);
 	*ready_event = (intptr_t)event;
+	*startup_job = (intptr_t)job;
 	ret = (intptr_t)pi.hProcess;
 
 done:
-	if (ret == -1 && event != NULL)
-		CloseHandle(event);
+	if (ret == -1) {
+		if (pi.hProcess) {
+			TerminateProcess(pi.hProcess, 255);
+			WaitForSingleObject(pi.hProcess, INFINITE);
+			CloseHandle(pi.hProcess);
+		}
+		if (job)
+			CloseHandle(job);
+		if (event)
+			CloseHandle(event);
+	}
+	if (pi.hThread)
+		CloseHandle(pi.hThread);
+	for (i = 1; i < 4; i++)
+		if (inherited[i] && inherited[i] != INVALID_HANDLE_VALUE)
+			CloseHandle(inherited[i]);
+	if (attr_initialized)
+		DeleteProcThreadAttributeList(si.lpAttributeList);
+	free(si.lpAttributeList);
 	free(env);
 	free(exe);
 	free(cmdline);
@@ -629,42 +695,59 @@ w32_wait_controlpersist_ready(intptr_t proc, intptr_t ready_event,
     int timeout_ms)
 {
 	HANDLE handles[2] = { (HANDLE)ready_event, (HANDLE)proc };
+	ULONGLONG deadline = GetTickCount64() + timeout_ms, now;
 
-	switch (WaitForMultipleObjects(2, handles, FALSE, (DWORD)timeout_ms)) {
-	case WAIT_OBJECT_0:
-		return 1;
-	case WAIT_OBJECT_0 + 1:
-		return 0;
-	default:
-		return -1;
+	for (;;) {
+		switch (WaitForMultipleObjects(2, handles, FALSE, 0)) {
+		case WAIT_OBJECT_0:
+			return 1;
+		case WAIT_OBJECT_0 + 1:
+			return 0;
+		case WAIT_TIMEOUT:
+			break;
+		default:
+			return -1;
+		}
+		if ((now = GetTickCount64()) >= deadline ||
+		    wait_for_any_event(handles, 2, (DWORD)(deadline - now)) == -1)
+			return -1;
 	}
 }
 
-/*
- * In a spawned persistent master: signal the ready event named by the
- * environment marker to unblock the spawning process's wait. No-op if the
- * event cannot be opened (e.g. the spawning process already gave up).
- */
+/* Release the job only after readiness, otherwise stop this startup tree. */
+int
+w32_finish_controlpersist_startup(intptr_t proc, intptr_t startup_job, int ready)
+{
+	JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits;
+	int ret = 0;
+
+	if (ready) {
+		memset(&limits, 0, sizeof(limits));
+		if (!SetInformationJobObject((HANDLE)startup_job,
+		    JobObjectExtendedLimitInformation, &limits, sizeof(limits))) {
+			ready = 0;
+			ret = -1;
+		}
+	}
+	if (!ready) {
+		if (!TerminateJobObject((HANDLE)startup_job, 255))
+			ret = -1;
+		if (WaitForSingleObject((HANDLE)proc, 10000) != WAIT_OBJECT_0)
+			ret = -1;
+	}
+	CloseHandle((HANDLE)startup_job);
+	return ret;
+}
+
+/* Signal readiness only after dropping startup stdio and the console. */
 void
 w32_signal_controlpersist_ready(void)
 {
-	char *val = NULL;
-	wchar_t *name_w = NULL;
-	size_t len = 0;
-	HANDLE event;
-
-	_dupenv_s(&val, &len, W32_CONTROLPERSIST_ENV);
-	if (val == NULL)
-		return;
-	if ((name_w = utf8_to_utf16(val)) != NULL &&
-	    (event = OpenEventW(EVENT_MODIFY_STATE, FALSE, name_w)) != NULL) {
-		SetEvent(event);
-		CloseHandle(event);
-	} else
-		debug3("%s: cannot signal ready event: %d", __func__,
-		    GetLastError());
-	free(name_w);
-	free(val);
+	if (controlpersist_ready_event == NULL ||
+	    !SetEvent(controlpersist_ready_event))
+		fatal("cannot signal persistent master readiness");
+	CloseHandle(controlpersist_ready_event);
+	controlpersist_ready_event = NULL;
 }
 
 /* close a process handle returned by w32_spawn_control_master */
@@ -680,13 +763,32 @@ int
 w32_is_controlpersist_master(void)
 {
 	char *val = NULL;
+	char *end;
 	size_t len = 0;
-	int ret;
+	unsigned long long value;
+	DWORD flags;
+
+	if (controlpersist_master != -1)
+		return controlpersist_master;
 
 	_dupenv_s(&val, &len, W32_CONTROLPERSIST_ENV);
-	ret = (val != NULL);
+	controlpersist_master = val != NULL;
+	if (val != NULL) {
+		/* Do not propagate the marker or event into ProxyCommand children. */
+		if (_putenv_s(W32_CONTROLPERSIST_ENV, "") != 0)
+			fatal("cannot clear persistent master environment marker");
+		errno = 0;
+		value = _strtoui64(val, &end, 10);
+		controlpersist_ready_event = (HANDLE)(uintptr_t)value;
+		if (errno != 0 || end == val || *end != '\0' || value == 0 ||
+		    value != (uintptr_t)value || (intptr_t)value < 0 ||
+		    !GetHandleInformation(controlpersist_ready_event, &flags) ||
+		    !(flags & HANDLE_FLAG_INHERIT) ||
+		    !SetHandleInformation(controlpersist_ready_event, HANDLE_FLAG_INHERIT, 0))
+			fatal("invalid persistent master environment marker");
+	}
 	free(val);
-	return ret;
+	return controlpersist_master;
 }
 
 /* detach the persistent master from the shared console once auth is done */
@@ -694,6 +796,33 @@ void
 w32_detach_console(void)
 {
 	FreeConsole();
+}
+
+/* A mux client may have only console stdin, with both outputs redirected.
+ * GetConsoleScreenBufferInfo needs an output handle, not the input handle. */
+int
+w32_get_console_winsize(struct winsize *ws)
+{
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	HANDLE output;
+	BOOL ok;
+
+	output = CreateFileW(L"CONOUT$", GENERIC_READ,
+	    FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+	if (output == INVALID_HANDLE_VALUE) {
+		errno = ENOTTY;
+		return -1;
+	}
+	ok = GetConsoleScreenBufferInfo(output, &info);
+	CloseHandle(output);
+	if (!ok) {
+		errno = ENOTTY;
+		return -1;
+	}
+	memset(ws, 0, sizeof(*ws));
+	ws->ws_col = info.srWindow.Right - info.srWindow.Left + 1;
+	ws->ws_row = info.srWindow.Bottom - info.srWindow.Top + 1;
+	return 0;
 }
 
 int
@@ -2266,31 +2395,22 @@ bash_to_win_path(const char *in, char *out, const size_t out_len)
  * getpeereid() emulation for AF_UNIX sockets emulated over named pipes.
  * There are no numeric uids on Windows; the contract provided is: succeed
  * with euid == geteuid() iff the pipe peer process runs as the same Windows
- * user, so that callers comparing against getuid()/geteuid() get the right
- * answer. Note that the pipe's DACL (owner + SYSTEM) enforces this too.
+ * user, integrity level and elevation state. This also authenticates a
+ * server to its clients, which the server-controlled DACL cannot do.
  */
 int
 getpeereid(int s, uid_t *euid, gid_t *egid)
 {
-	HANDLE h;
-	DWORD peer_pid = 0;
+	HANDLE h, peer;
 
 	if ((h = w32_fd_to_handle(s)) == NULL || h == INVALID_HANDLE_VALUE) {
 		errno = EBADF;
 		return -1;
 	}
 
-	if (!GetNamedPipeClientProcessId(h, &peer_pid) &&
-	    !GetNamedPipeServerProcessId(h, &peer_pid)) {
-		debug3("%s - cannot determine pipe peer, error: %d", __func__, GetLastError());
-		errno = ENOTSUP;
+	if ((peer = w32_open_pipe_peer(h, 0)) == NULL)
 		return -1;
-	}
-
-	if (peer_pid != GetCurrentProcessId() && !w32_is_pid_same_user(peer_pid)) {
-		errno = EPERM;
-		return -1;
-	}
+	CloseHandle(peer);
 
 	*euid = geteuid();
 	*egid = getegid();

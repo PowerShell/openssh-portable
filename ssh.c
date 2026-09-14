@@ -190,12 +190,15 @@ static void main_sigchld_handler(int);
 #ifdef WINDOWS
 static int ssh_controlpersist_spawn(struct ssh *);
 /* ControlPersist spawn/detach primitives, in contrib/win32/win32compat/misc.c */
-intptr_t w32_spawn_control_master(char *const args[], intptr_t *ready_event);
+intptr_t w32_spawn_control_master(char *const args[], intptr_t *ready_event,
+    intptr_t *startup_job);
 int w32_wait_controlpersist_ready(intptr_t proc, intptr_t ready_event,
     int timeout_ms);
 void w32_close_handle(intptr_t h);
 int w32_is_controlpersist_master(void);
 void w32_signal_controlpersist_ready(void);
+int w32_finish_controlpersist_startup(intptr_t proc, intptr_t startup_job,
+    int ready);
 void w32_detach_console(void);
 #endif
 
@@ -685,6 +688,10 @@ main(int ac, char **av)
 
 	/* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */
 	sanitise_stdfd();
+#ifdef WINDOWS
+	/* Consume startup state before configuration can run Match exec helpers. */
+	(void)w32_is_controlpersist_master();
+#endif
 
 	/*
 	 * Discard other fds that are hanging around. These can cause problem
@@ -1429,6 +1436,24 @@ main(int ac, char **av)
 		log_verbose_add(options.log_verbose[j]);
 	}
 
+#ifdef WINDOWS
+	/* Parse the passenger invocation normally, then suppress its session in
+	 * the spawned master. Prepending -N would conflict with -s/SessionType. */
+	if (w32_is_controlpersist_master()) {
+		options.control_master = SSHCTL_MASTER_YES;
+		options.session_type = SESSION_TYPE_NONE;
+		options.request_tty = REQUEST_TTY_NO;
+		options.stdin_null = 1;
+		options.fork_after_authentication = 0;
+		options.permit_local_command = 0;
+		free(options.stdio_forward_host);
+		options.stdio_forward_host = NULL;
+		free(options.remote_command);
+		options.remote_command = NULL;
+		sshbuf_reset(command);
+	}
+#endif
+
 	if (options.request_tty == REQUEST_TTY_YES ||
 	    options.request_tty == REQUEST_TTY_FORCE)
 		tty_flag = 1;
@@ -1891,7 +1916,7 @@ main(int ac, char **av)
 	pwfree(pw);
 
 	if (options.control_path != NULL && muxserver_sock != -1)
-		unlink(options.control_path);
+		unix_unlink(options.control_path);
 
 	/* Kill ProxyCommand if it is running. */
 	ssh_kill_proxy_command();
@@ -1914,9 +1939,8 @@ main(int ac, char **av)
 static int
 ssh_controlpersist_spawn(struct ssh *ssh)
 {
-	char **args = NULL;
-	intptr_t proc, ready_event;
-	int i, n, r, ret = 0, sock;
+	intptr_t proc, ready_event, startup_job;
+	int r, sock;
 
 	/* only the auto-master, no-existing-master, session case applies */
 	if (!options.control_persist || options.control_path == NULL ||
@@ -1925,43 +1949,43 @@ ssh_controlpersist_spawn(struct ssh *ssh)
 	    options.control_master != SSHCTL_MASTER_AUTO_ASK))
 		return 0;
 
-	/* args = forced master overrides + this invocation's args (saved_av) */
-	for (n = 0; saved_av[n] != NULL; n++)
-		;
-	args = xcalloc(n + 3, sizeof(*args));
-	args[0] = "-oControlMaster=yes";
-	args[1] = "-oSessionType=none";
-	for (i = 1; i < n; i++)		/* skip saved_av[0] (argv0) */
-		args[i + 1] = saved_av[i];
-	args[n + 1] = NULL;
+	/* A detached master cannot reliably obtain per-passenger consent. */
+	if (options.control_master == SSHCTL_MASTER_AUTO_ASK) {
+		logit("ControlPersist with ControlMaster=autoask is not supported "
+		    "on Windows; using a direct connection");
+		return 0;
+	}
 
 	debug_f("starting persistent mux master for %s", options.control_path);
-	proc = w32_spawn_control_master(args, &ready_event);
-	free(args);
+	proc = w32_spawn_control_master(saved_av + 1, &ready_event, &startup_job);
 	if (proc == -1) {
 		error("could not start persistent control master");
 		return 0;
 	}
 
 	/*
-	 * Wait for the master to signal (via the named ready event) that it
+	 * Wait for the master to signal (via the inherited ready event) that it
 	 * has authenticated and its control socket is up, then connect.
 	 * Generous timeout: interactive auth may prompt.
 	 */
-	if ((r = w32_wait_controlpersist_ready(proc, ready_event,
-	    120 * 1000)) == 1) {
-		if ((sock = muxclient(options.control_path)) >= 0) {
-			/* SSHMUX_COMMAND_PROXY returns the socket */
-			ssh_packet_set_connection(ssh, sock, sock);
-			ssh_packet_set_mux(ssh);
-			ret = 1;
-		}
-	} else
+	r = w32_wait_controlpersist_ready(proc, ready_event, 120 * 1000);
+	if (r != 1)
 		debug_f("persistent master %s", r == 0 ?
 		    "exited before it was ready" : "was not ready in time");
+	/* Release ownership before muxclient(), which normally exits. Failure
+	 * cancels only this startup and its descendants, never another master. */
+	r = w32_finish_controlpersist_startup(proc, startup_job, r == 1);
 	w32_close_handle(ready_event);
 	w32_close_handle(proc);
-	return ret;
+	if (r == -1)
+		fatal("could not clean up persistent master startup");
+	/* A competing startup may have won the bind even if our child failed. */
+	if ((sock = muxclient(options.control_path)) >= 0) {
+		ssh_packet_set_connection(ssh, sock, sock);
+		ssh_packet_set_mux(ssh);
+		return 1;
+	}
+	return 0;
 }
 #endif /* WINDOWS */
 
@@ -2391,9 +2415,14 @@ ssh_session2(struct ssh *ssh, const struct ssh_conn_info *cinfo)
 	 * governs our lifetime. Windows has no fork(), so the POSIX
 	 * backgrounding below does not apply.
 	 */
-	if (w32_is_controlpersist_master() && muxserver_sock != -1) {
-		w32_signal_controlpersist_ready();
+	if (w32_is_controlpersist_master()) {
+		if (muxserver_sock == -1)
+			fatal("persistent master could not establish its control socket");
+		/* Drop startup-only diagnostics before publishing readiness. */
+		if (stdfd_devnull(1, 1, 1) == -1)
+			fatal_f("stdfd_devnull failed");
 		w32_detach_console();
+		w32_signal_controlpersist_ready();
 	}
 #else
 	/*

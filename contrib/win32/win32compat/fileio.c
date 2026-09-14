@@ -46,6 +46,7 @@
 #include "misc_internal.h"
 #include "debug.h"
 #include <Sddl.h>
+#include <wincrypt.h>
 
 /* internal read buffer size */
 #define READ_BUFFER_SIZE 100*1024
@@ -135,7 +136,6 @@ fileio_connect(struct w32_io* pio, char* name)
 	}
 
 	if ((name_w = afunix_pipe_name(name)) == NULL) {
-		errno = ENOMEM;
 		return -1;
 	}
 
@@ -201,8 +201,14 @@ struct afunix_listener_state {
 static wchar_t *
 afunix_pipe_name(const char *sun_path)
 {
-	wchar_t *path_w = NULL, *ret = NULL, *p;
-	size_t len;
+	wchar_t *path_w = NULL, *full = NULL, *ret = NULL, *p;
+	PSID sid = NULL;
+	HCRYPTPROV provider = 0;
+	HCRYPTHASH hash = 0;
+	BYTE digest[32];
+	DWORD size = sizeof(digest);
+	size_t i, len;
+	static const wchar_t hex[] = L"0123456789abcdef";
 
 	if ((path_w = utf8_to_utf16(sun_path)) == NULL) {
 		errno = ENOMEM;
@@ -213,27 +219,48 @@ afunix_pipe_name(const char *sun_path)
 		if (*p == L'/')
 			*p = L'\\';
 
-	if (_wcsnicmp(path_w, AFUNIX_PIPE_PREFIX, AFUNIX_PIPE_PREFIX_LEN) == 0)
+	if (_wcsnicmp(path_w, AFUNIX_PIPE_PREFIX, AFUNIX_PIPE_PREFIX_LEN) == 0) {
+		if (wcslen(path_w) - AFUNIX_PIPE_PREFIX_LEN > AFUNIX_PIPE_NAME_MAX) {
+			free(path_w);
+			errno = ENAMETOOLONG;
+			return NULL;
+		}
 		return path_w;
-
-	/* map filesystem-style path to \\.\pipe\openssh-uds-<mangled path> */
-	for (p = path_w; *p; p++)
-		if (*p == L'\\' || *p == L':')
-			*p = L'-';
-
-	if (wcslen(path_w) > AFUNIX_PIPE_NAME_MAX - wcslen(L"openssh-uds-")) {
-		free(path_w);
-		errno = ENAMETOOLONG;
-		return NULL;
 	}
 
-	len = AFUNIX_PIPE_PREFIX_LEN + wcslen(L"openssh-uds-") + wcslen(path_w) + 1;
-	if ((ret = malloc(len * sizeof(wchar_t))) == NULL) {
-		free(path_w);
+	/* Preserve path boundaries and resolve relative paths before hashing.
+	 * The SID namespaces filesystem-style paths per user. Case is preserved;
+	 * literal pipe names above retain their existing Windows semantics. */
+	if ((full = _wfullpath(NULL, path_w, 0)) == NULL ||
+	    (sid = get_sid(NULL)) == NULL)
+		goto done;
+	if (!CryptAcquireContextW(&provider, NULL, NULL, PROV_RSA_AES,
+	    CRYPT_VERIFYCONTEXT) ||
+	    !CryptCreateHash(provider, CALG_SHA_256, 0, 0, &hash) ||
+	    !CryptHashData(hash, (BYTE *)full,
+	    (DWORD)((wcslen(full) + 1) * sizeof(wchar_t)), 0) ||
+	    !CryptHashData(hash, sid, GetLengthSid(sid), 0) ||
+	    !CryptGetHashParam(hash, HP_HASHVAL, digest, &size, 0)) {
+		errno = EIO;
+		goto done;
+	}
+	len = AFUNIX_PIPE_PREFIX_LEN + wcslen(L"openssh-uds-v2-");
+	if ((ret = calloc(len + sizeof(digest) * 2 + 1, sizeof(wchar_t))) == NULL) {
 		errno = ENOMEM;
-		return NULL;
+		goto done;
 	}
-	swprintf_s(ret, len, L"%s%s%s", AFUNIX_PIPE_PREFIX, L"openssh-uds-", path_w);
+	wcscpy_s(ret, len + 1, AFUNIX_PIPE_PREFIX L"openssh-uds-v2-");
+	for (i = 0; i < sizeof(digest); i++) {
+		ret[len + i * 2] = hex[digest[i] >> 4];
+		ret[len + i * 2 + 1] = hex[digest[i] & 15];
+	}
+done:
+	if (hash)
+		CryptDestroyHash(hash);
+	if (provider)
+		CryptReleaseContext(provider, 0);
+	free(sid);
+	free(full);
 	free(path_w);
 	return ret;
 }
@@ -434,18 +461,21 @@ fileio_afunix_accept(struct w32_io* pio)
 	}
 	memset(accepted, 0, sizeof(struct w32_io));
 
-	connected = WINHANDLE(pio);
-	state->client_connected = FALSE;
-
 	/* stand up the next instance before handing out the connected one */
 	if ((next = afunix_create_instance(state, FALSE)) == INVALID_HANDLE_VALUE) {
-		/* listener is degraded; subsequent accepts will fail */
-		error("afunix accept - failed to create next pipe instance, errno:%d", errno);
-		pio->handle = 0;
-	} else {
-		pio->handle = next;
-		if (afunix_listener_arm(pio) != 0)
-			error("afunix accept - failed to arm next pipe instance");
+		free(accepted);
+		return NULL;
+	}
+	connected = WINHANDLE(pio);
+	state->client_connected = FALSE;
+	pio->handle = next;
+	if (afunix_listener_arm(pio) != 0) {
+		CloseHandle(next);
+		pio->handle = connected;
+		state->client_connected = TRUE;
+		SetEvent(pio->read_overlapped.hEvent);
+		free(accepted);
+		return NULL;
 	}
 
 	accepted->handle = connected;
@@ -1364,7 +1394,14 @@ fileio_close(struct w32_io* pio)
 		struct afunix_listener_state* state =
 		    (struct afunix_listener_state*)pio->internal.context;
 		if (WINHANDLE(pio) != 0 && WINHANDLE(pio) != INVALID_HANDLE_VALUE) {
-			CancelIo(WINHANDLE(pio));
+			if (state->connect_pending) {
+				DWORD bytes;
+				/* Cancellation is asynchronous, including when accept races
+				 * with close. Keep OVERLAPPED and its event alive until done. */
+				CancelIoEx(WINHANDLE(pio), &pio->read_overlapped);
+				GetOverlappedResult(WINHANDLE(pio),
+				    &pio->read_overlapped, &bytes, TRUE);
+			}
 			CloseHandle(WINHANDLE(pio));
 		}
 		if (pio->read_overlapped.hEvent)

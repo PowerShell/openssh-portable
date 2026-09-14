@@ -2081,6 +2081,17 @@ lowercase(char *s)
 }
 
 int
+unix_unlink(const char *path)
+{
+#ifdef WINDOWS
+	/* Named-pipe endpoints disappear on close; never delete a real file. */
+	return 0;
+#else
+	return unlink(path);
+#endif
+}
+
+int
 unix_listener(const char *path, int backlog, int unlink_first)
 {
 	struct sockaddr_un sunaddr;
@@ -2103,7 +2114,7 @@ unix_listener(const char *path, int backlog, int unlink_first)
 		return -1;
 	}
 	if (unlink_first == 1) {
-		if (unlink(path) != 0 && errno != ENOENT)
+		if (unix_unlink(path) != 0 && errno != ENOENT)
 			error("unlink(%s): %.100s", path, strerror(errno));
 	}
 	if (bind(sock, (struct sockaddr *)&sunaddr, sizeof(sunaddr)) == -1) {
@@ -2117,7 +2128,7 @@ unix_listener(const char *path, int backlog, int unlink_first)
 		saved_errno = errno;
 		error_f("cannot listen on path %s: %s", path, strerror(errno));
 		close(sock);
-		unlink(path);
+		unix_unlink(path);
 		errno = saved_errno;
 		return -1;
 	}

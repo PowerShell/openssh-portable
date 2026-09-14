@@ -2870,7 +2870,7 @@ void
 client_stop_mux(void)
 {
 	if (options.control_path != NULL && muxserver_sock != -1)
-		unlink(options.control_path);
+		unix_unlink(options.control_path);
 	/*
 	 * If we are in persist mode, or don't have a shell, signal that we
 	 * should close when all active channels are closed.
@@ -2887,7 +2887,7 @@ cleanup_exit(int i)
 {
 	leave_raw_mode(options.request_tty == REQUEST_TTY_FORCE);
 	if (options.control_path != NULL && muxserver_sock != -1)
-		unlink(options.control_path);
+		unix_unlink(options.control_path);
 	ssh_kill_proxy_command();
 	_exit(i);
 }
