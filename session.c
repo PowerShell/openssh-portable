@@ -96,6 +96,11 @@
 #include "atomicio.h"
 #include "pal_doexec.h"
 
+#ifdef WINDOWS
+#include <Windows.h>
+#include "misc_internal.h"
+#endif
+
 #if defined(KRB5) && defined(USE_AFS)
 #include <kafs.h>
 #endif
@@ -1960,6 +1965,11 @@ session_subsystem_req(struct ssh *ssh, Session *s)
 	struct stat st;
 	int r, success = 0;
 	char *prog, *cmd, *type;
+	const char *failure_reason = "subsystem not found";
+#ifdef WINDOWS
+	char *resolved_prog = NULL, *resolved_cmd = NULL, *suffix;
+	size_t prog_len;
+#endif
 	u_int i;
 
 	if ((r = sshpkt_get_cstring(ssh, &s->subsys, NULL)) != 0 ||
@@ -1976,6 +1986,34 @@ session_subsystem_req(struct ssh *ssh, Session *s)
 				s->is_subsystem = SUBSYSTEM_INT_SFTP;
 				debug("subsystem: %s", prog);
 			} else {
+#ifdef WINDOWS
+				if (strchr(prog, '%') != NULL) {
+					if ((resolved_prog =
+					    resolve_configured_user_path(prog,
+					    s->pw->pw_dir, 1)) == NULL) {
+						debug("subsystem: cannot resolve %s",
+						    prog);
+						failure_reason =
+						    "configured subsystem path could not be resolved";
+						break;
+					}
+					prog_len = strlen(prog);
+					if (strncmp(cmd, prog, prog_len) == 0)
+						suffix = cmd + prog_len;
+					else if (cmd[0] == '"' &&
+					    strncmp(cmd + 1, prog, prog_len) ==
+					    0 && cmd[prog_len + 1] == '"')
+						suffix = cmd + prog_len + 2;
+					else
+						suffix = "";
+					xasprintf(&resolved_cmd,
+					    strchr(resolved_prog, ' ') == NULL ?
+					    "%s%s" : "\"%s\"%s",
+					    resolved_prog, suffix);
+					prog = resolved_prog;
+					cmd = resolved_cmd;
+				}
+#endif
 				if (stat(prog, &st) == -1)
 					debug("subsystem: cannot stat %s: %s",
 					    prog, strerror(errno));
@@ -1990,10 +2028,14 @@ session_subsystem_req(struct ssh *ssh, Session *s)
 			break;
 		}
 	}
+#ifdef WINDOWS
+	free(resolved_prog);
+	free(resolved_cmd);
+#endif
 
 	if (!success)
 		logit("subsystem request for %.100s by user %s failed, "
-		    "subsystem not found", s->subsys, s->pw->pw_name);
+		    "%s", s->subsys, s->pw->pw_name, failure_reason);
 
 	return success;
 }
