@@ -1,4 +1,4 @@
-/* $OpenBSD: scp.c,v 1.268 2025/09/25 06:23:19 jsg Exp $ */
+/* $OpenBSD: scp.c,v 1.273 2026/04/02 07:42:16 djm Exp $ */
 /*
  * scp - secure remote copy.  This is basically patched BSD rcp which
  * uses ssh to do the data transfer (instead of using rcmd).
@@ -75,7 +75,6 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <poll.h>
 #include <sys/time.h>
 #include <sys/wait.h>
 #include <sys/uio.h>
@@ -87,17 +86,10 @@
 #ifdef HAVE_FNMATCH_H
 #include <fnmatch.h>
 #endif
-#ifdef USE_SYSTEM_GLOB
-# include <glob.h>
-#else
-# include "openbsd-compat/glob.h"
-#endif
+#include <glob.h>
 #include <libgen.h>
-#include <limits.h>
-#ifdef HAVE_UTIL_H
-#include <util.h>
-#endif
 #include <locale.h>
+#include <poll.h>
 #include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -107,7 +99,10 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include "openbsd-compat/glob.h"
+#include <limits.h>
+#ifdef HAVE_UTIL_H
+#include <util.h>
+#endif
 #if defined(HAVE_STRNVIS) && defined(HAVE_VIS_H) && !defined(BROKEN_STRNVIS)
 #include <vis.h>
 #endif
@@ -230,7 +225,7 @@ suspchild(int signo)
 static int
 do_local_cmd(arglist *a)
 {
-	u_int i;
+	char *cp;
 	int status;
 	pid_t pid;
 
@@ -238,16 +233,16 @@ do_local_cmd(arglist *a)
 		fatal("do_local_cmd: no arguments");
 
 	if (verbose_mode) {
-		fprintf(stderr, "Executing:");
-		for (i = 0; i < a->num; i++)
-			fmprintf(stderr, " %s", a->list[i]);
-		fprintf(stderr, "\n");
+		cp = argv_assemble(a->num, a->list);
+		fmprintf(stderr, "Executing: %s\n", cp);
+		free(cp);
 	}
 #ifdef WINDOWS
 	/* flatten the cmd into a long space separated string and execute using system(cmd) api */
 	{
 		char* cmd;
 		size_t cmdlen = 0;
+		int i;
 		for (i = 0; i < a->num; i++)
 			cmdlen += strlen(a->list[i]) + 1;
 
@@ -1161,7 +1156,7 @@ brace_expand(const char *pattern, char ***patternsp, size_t *npatternsp)
 			continue;
 		}
 		/*
-		 * Pattern did not expand; append the finename component to
+		 * Pattern did not expand; append the filename component to
 		 * the completed list
 		 */
 		if ((cp2 = strrchr(cp, '/')) != NULL)
@@ -1576,6 +1571,10 @@ source_sftp(int argc, char *src, char *targ, struct sftp_conn *conn)
 	if ((filename = basename(src)) == NULL)
 		fatal("basename \"%s\": %s", src, strerror(errno));
 
+	/* Special handling for source of '..' */
+	if (strcmp(filename, "..") == 0)
+		filename = "."; /* Upload to dest, not dest/.. */
+
 	/*
 	 * No need to glob here - the local shell already took care of
 	 * the expansions
@@ -1928,6 +1927,10 @@ sink_sftp(int argc, char *dst, const char *src, struct sftp_conn *conn)
 			goto out;
 		}
 
+		/* Special handling for destination of '..' */
+		if (strcmp(filename, "..") == 0)
+			filename = "."; /* Download to dest, not dest/.. */
+
 		if (dst_is_dir)
 			abs_dst = sftp_path_append(dst, filename);
 		else
@@ -1990,8 +1993,10 @@ sink(int argc, char **argv, const char *src)
 
 	setimes = targisdir = 0;
 	mask = umask(0);
-	if (!pflag)
+	if (!pflag) {
+		mask |= 07000;
 		(void) umask(mask);
+	}
 	if (argc != 1) {
 		run_err("ambiguous target");
 		exit(1);

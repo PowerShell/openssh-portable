@@ -1,6 +1,6 @@
-/* $OpenBSD: version.h,v 1.107 2025/10/08 00:32:52 djm Exp $ */
+/* $OpenBSD: version.h,v 1.108 2026/04/02 07:51:12 djm Exp $ */
 
-#define SSH_WINDOWS_VERSION "OpenSSH_for_Windows_10.2"
+#define SSH_WINDOWS_VERSION "OpenSSH_for_Windows_10.3"
 #define SSH_WINDOWS_BANNER " Win32-OpenSSH-GitHub"
 #define SSH_VERSION	SSH_WINDOWS_VERSION SSH_WINDOWS_BANNER
 

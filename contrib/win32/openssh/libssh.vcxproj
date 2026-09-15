@@ -384,10 +384,10 @@
     <ClCompile Include="$(OpenSSH-Src-Path)dispatch.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)dns.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ed25519.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)ed25519-openssl.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)entropy.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)fatal.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)gss-genr.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)hash.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)hmac.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)hostfile.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)kex.c" />
@@ -435,6 +435,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)sshbuf-misc.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sshbuf.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssherr.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)ssherr-libcrypto.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sshkey.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssh_api.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)umac.c" />
