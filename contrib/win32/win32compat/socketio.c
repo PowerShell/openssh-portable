@@ -106,7 +106,7 @@ socketio_acceptEx(struct w32_io* pio)
 {
 	struct acceptEx_context *context;
 	struct sockaddr_storage addr; int addrlen = sizeof addr;
-	
+
 	debug5("acceptEx - io:%p", pio);
 	context = (struct acceptEx_context *)pio->internal.context;
 	ResetEvent(pio->read_overlapped.hEvent);
@@ -114,7 +114,7 @@ socketio_acceptEx(struct w32_io* pio)
 	if (getsockname(pio->sock, (struct sockaddr*)&addr, &addrlen) == SOCKET_ERROR) {
 		errno = errno_from_WSALastError();
 		debug("acceptEx - getsockname() ERROR:%d, io:%p", WSAGetLastError(), pio);
-		return -1;		
+		return -1;
 	}
 
 	/* create accepting socket */
@@ -165,6 +165,8 @@ CALLBACK WSARecvCompletionRoutine(IN DWORD dwError,
 	pio->read_details.remaining = cbTransferred;
 	pio->read_details.completed = 0;
 	pio->read_details.pending = FALSE;
+	if (pio->read_overlapped.hEvent)
+		SetEvent(pio->read_overlapped.hEvent);
 }
 
 /* initiates async receive operation*/
@@ -197,6 +199,16 @@ socketio_WSARecv(struct w32_io* pio, BOOL* completed, int len)
 
 	if (len)
 		wsabuf.len = min((ULONG)len, wsabuf.len);
+
+	if (pio->read_overlapped.hEvent == NULL) {
+		pio->read_overlapped.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+		if (pio->read_overlapped.hEvent == NULL) {
+			errno = ENOMEM;
+			debug3("WSARecv - CreateEvent() ERROR:%d, io:%p", errno, pio);
+			return -1;
+		}
+	}
+	ResetEvent(pio->read_overlapped.hEvent);
 
 	ret = WSARecv(pio->sock, &wsabuf, 1, NULL, &recv_flags, &pio->read_overlapped, &WSARecvCompletionRoutine);
 	if (ret == 0) {
@@ -251,7 +263,7 @@ socketio_socket(int domain, int type, int protocol)
         debug3("%s - ERROR:%d", __FUNCTION__, WSAGetLastError());	\
     }									\
     return ret;								\
-} while (0) 
+} while (0)
 
 /* implements setsockopt() */
 int
@@ -363,7 +375,7 @@ int
 socketio_recv(struct w32_io* pio, void *buf, size_t len, int flags)
 {
 	BOOL completed = FALSE;
-	errno_t r = 0;
+	errno_t r;
 	debug5("recv - io:%p state:%d", pio, pio->internal.state);
 
 	if ((buf == NULL) || (len == 0)) {
@@ -393,7 +405,7 @@ socketio_recv(struct w32_io* pio, void *buf, size_t len, int flags)
 			debug4("recv - io is already pending, io:%p", pio);
 			return -1;
 		}
-	}	
+	}
 
 	/* if we have some buffer copy it and return #bytes copied */
 	if (pio->read_details.remaining) {
@@ -511,6 +523,12 @@ CALLBACK WSASendCompletionRoutine(IN DWORD dwError,
 	pio->write_details.pending = FALSE;
 }
 
+static BOOL
+socketio_write_is_pending(struct w32_io* pio)
+{
+	return pio->write_details.pending;
+}
+
 /* implementation of send() */
 int
 socketio_send(struct w32_io* pio, const void *buf, size_t len, int flags)
@@ -518,7 +536,7 @@ socketio_send(struct w32_io* pio, const void *buf, size_t len, int flags)
 	int ret = 0;
 	WSABUF wsabuf;
 	errno_t r = 0;
-		
+
 	debug5("send - io:%p state:%d", pio, pio->internal.state);
 
 	if ((buf == NULL) || (len == 0)) {
@@ -550,7 +568,11 @@ socketio_send(struct w32_io* pio, const void *buf, size_t len, int flags)
 
 	if (pio->write_details.error) {
 		errno = errno_from_WSAError(pio->write_details.error);
-		debug3("ERROR:%d, io:%p", pio->write_details.error, pio);
+		/*
+		 * Logging can write through the Win32 fd table.  A socket
+		 * write-error path must return before logging so the log writer
+		 * cannot re-enter socketio_send on the failed writer.
+		 */
 		return -1;
 	}
 
@@ -600,10 +622,10 @@ socketio_send(struct w32_io* pio, const void *buf, size_t len, int flags)
 			if (w32_io_is_blocking(pio)) {
 				/* wait until io is done */
 				debug5("send - waiting as socket is in blocking mode, io:%p", pio);
-				while (pio->write_details.pending)
+				while (socketio_write_is_pending(pio))
 					if (wait_for_any_event(NULL, 0, INFINITE) == -1) {
 						/* if interrupted but send has completed, we are good*/
-						if ((errno != EINTR) || (pio->write_details.pending))
+						if ((errno != EINTR) || socketio_write_is_pending(pio))
 							return -1;
 						errno = 0;
 					}
@@ -653,6 +675,10 @@ socketio_close(struct w32_io* pio)
 		if (pio->write_overlapped.hEvent)
 			CloseHandle(pio->write_overlapped.hEvent);
 	} else {
+		if (pio->read_overlapped.hEvent)
+			CloseHandle(pio->read_overlapped.hEvent);
+		if (pio->write_overlapped.hEvent)
+			CloseHandle(pio->write_overlapped.hEvent);
 		if (pio->read_details.buf)
 			free(pio->read_details.buf);
 
@@ -669,7 +695,6 @@ struct w32_io*
 socketio_accept(struct w32_io* pio, struct sockaddr* addr, int* addrlen)
 {
 	struct w32_io *accept_io = NULL;
-	int iResult = 0;
 	struct acceptEx_context* context;
 	struct sockaddr *local_address, *remote_address;
 	int local_address_len, remote_address_len;
@@ -786,7 +811,7 @@ socketio_connectex(struct w32_io* pio, const struct sockaddr* name, int namelen)
 
 	if (SOCKET_ERROR == bind(pio->sock, tmp_addr, (int)tmp_addr_len)) {
 		errno = errno_from_WSALastError();
-		/* 
+		/*
 		 * When use bind_address or bind_interface, this bind will return WSAEINVAL. But it doesn't matter.
 		 * https://docs.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-bind
 		 */
@@ -975,8 +1000,6 @@ socketio_on_select(struct w32_io* pio, BOOL rd)
 int
 w32_gethostname(char *name_utf8, size_t len)
 {
-	char* tmp_name_utf8 = NULL;
-
 	if (IsWindows8OrGreater()) {
 		/* TODO - GetHostNameW not present in Win7, do GetProcAddr on Win8+*/
 	        /*
@@ -1003,9 +1026,8 @@ w32_gethostname(char *name_utf8, size_t len)
 void
 w32_freeaddrinfo(struct addrinfo *ai)
 {
-	struct addrinfo *cur;
 	while (ai) {
-		cur = ai;
+		struct addrinfo *cur = ai;
 		ai = ai->ai_next;
 		if (cur->ai_addr)
 			free(cur->ai_addr);
