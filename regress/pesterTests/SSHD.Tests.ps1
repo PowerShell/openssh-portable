@@ -43,7 +43,7 @@ Describe "E2E scenarios for sshd" -Tags "CI" {
             $sshdPidCountBefore = (Get-Process -Name sshd* | Select-Object -ExpandProperty Id).Count
             # Start ssh process (do not authenticate)
             $sshProc = Start-Process -FilePath ssh -ArgumentList "-l $user test_target" -PassThru
-            Start-Sleep -Seconds 2
+            Start-Sleep -Seconds 4
             $sshdPidsCountWithConn = (Get-Process -Name sshd* | Select-Object -ExpandProperty Id).Count
             # Wait for LoginGraceTime to expire, accounting for jitter
             Start-Sleep -Seconds 14

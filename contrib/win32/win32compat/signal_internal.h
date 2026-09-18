@@ -13,6 +13,9 @@ struct _children {
 	 */
 	HANDLE handles[MAX_CHILDREN];
 	DWORD process_id[MAX_CHILDREN];
+	/* per-child loaded profile and token used to unload it (NULL if none) */
+	HANDLE profiles[MAX_CHILDREN];
+	HANDLE tokens[MAX_CHILDREN];
 	/* total children */
 	DWORD num_children;
 	/* #zombies */
@@ -23,6 +26,7 @@ struct _children {
 
 int sw_initialize();
 int register_child(HANDLE child, DWORD pid);
+int register_child_profile(DWORD pid, HANDLE profile, HANDLE user_token);
 int sw_remove_child_at_index(DWORD index);
 int sw_child_to_zombie(DWORD index);
 void sw_cleanup_child_zombies();
