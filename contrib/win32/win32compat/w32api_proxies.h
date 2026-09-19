@@ -11,6 +11,7 @@
 #define SECURITY_WIN32
 #include <security.h>
 #include <Ntsecapi.h>
+#include <WtsApi32.h>
 
 BOOL pLogonUserExExW(wchar_t *, wchar_t *, wchar_t *, DWORD, DWORD, PTOKEN_GROUPS, PHANDLE, PSID *, PVOID *, LPDWORD, PQUOTA_LIMITS);
 BOOLEAN pTranslateNameW(LPCWSTR, EXTENDED_NAME_FORMAT, EXTENDED_NAME_FORMAT, LPWSTR, PULONG);
@@ -20,5 +21,7 @@ NTSTATUS pLsaAddAccountRights(LSA_HANDLE, PSID,	PLSA_UNICODE_STRING, ULONG);
 ULONG pRtlNtStatusToDosError(NTSTATUS);
 NTSTATUS pLsaClose(LSA_HANDLE);
 NTSTATUS pLsaRemoveAccountRights(LSA_HANDLE, PSID, BOOLEAN, PLSA_UNICODE_STRING, ULONG);
-
+BOOL pWTSQuerySessionInformationW(HANDLE, DWORD, WTS_INFO_CLASS, LPWSTR *, DWORD *);
+BOOL pWTSQueryUserToken(ULONG, PHANDLE);
+void pWTSFreeMemory(PVOID);
 

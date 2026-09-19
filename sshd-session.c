@@ -122,6 +122,7 @@
 /* Privilege separation related spawn fds */
 #ifdef WINDOWS
 #define PRIVSEP_AUTH_MIN_FREE_FD	(PRIVSEP_LOG_FD + 1)
+extern int attach_to_console_session;
 #endif /* WINDOWS */
 
 extern char *__progname;
@@ -820,6 +821,10 @@ privsep_postauth(struct ssh *ssh, Authctxt *authctxt)
 			fatal("posix_spawn initialization failed");
 
 		char** argv = privsep_child_cmdline();
+#ifdef WINDOWS
+		/* arm for this spawn only, the pre-auth child stays in the service session */
+		attach_to_console_session = options.attach_to_console_session;
+#endif /* WINDOWS */
 		if (__posix_spawn_asuser(&pmonitor->m_pid, argv[0], &actions, NULL, argv, NULL, authctxt->pw->pw_name) != 0)
 			fatal("fork of unprivileged child failed");
 		posix_spawn_file_actions_destroy(&actions);
