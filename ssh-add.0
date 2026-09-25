@@ -216,4 +216,4 @@ AUTHORS
      created OpenSSH.  Markus Friedl contributed the support for SSH protocol
      versions 1.5 and 2.0.
 
-OpenBSD 7.8                      March 5, 2026                      SSH-ADD(1)
+OpenBSD 7.9                      March 5, 2026                      SSH-ADD(1)

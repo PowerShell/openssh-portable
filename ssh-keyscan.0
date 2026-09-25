@@ -25,6 +25,12 @@ DESCRIPTION
      network range (e.g. 192.168.16/28).  If a network range is specified,
      then all addresses in that range will be scanned.
 
+     ssh-keyscan cannot verify the authenticity of the host keys it obtains,
+     and an attacker on the network with the ability to intercept traffic
+     could substitute their own host keys to enable impersonation of servers.
+     Because of this, ssh-keyscan output should be verified out of band, or
+     only used directly for host authentication if the network is trusted.
+
      The options are as follows:
 
      -4      Force ssh-keyscan to use IPv4 addresses only.
@@ -120,4 +126,4 @@ AUTHORS
      Davison <wayned@users.sourceforge.net> added support for protocol version
      2.
 
-OpenBSD 7.8                     October 4, 2025                 SSH-KEYSCAN(1)
+OpenBSD 7.9                      June 26, 2026                  SSH-KEYSCAN(1)

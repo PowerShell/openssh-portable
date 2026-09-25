@@ -1778,5 +1778,8 @@
 
 /* Definitions to enable mlkem768-x25519 */
 #define USE_MLKEM768X25519 1
+/* Enable composite ML-DSA44/Ed25519 keys (USE_MLDSA is set with the other PQ
+   flags in defines.h only for compilers advertising VLAs; set it here for MSVC) */
+#define USE_MLDSA 1
 #define HAVE_DECL_HTOLE64 0
 #define HAVE_DECL_LE64TOH 0

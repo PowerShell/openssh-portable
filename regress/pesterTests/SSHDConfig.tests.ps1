@@ -409,20 +409,23 @@ Match User matchuser
 
         It "$tC.$tI - Include Directive with absolute path starting with forward slash" {
             Set-SSHDConfigLine -line "Include /$absoluteFilePath" -file $sshdconfig_custom
-            $result = Invoke-Expression "$binPath -T -f '$sshdconfig_custom'"          
-            $result.Contains($content) | Should Be $true
+            $result = Invoke-Expression "$binPath -T -f '$sshdconfig_custom'"
+            # sshd -T emits keywords in canonical case (e.g. LogLevel), so match case-insensitively
+            ($result -join "`n").ToLower().Contains($content.ToLower()) | Should Be $true
         }
 
         It "$tC.$tI - Include Directive with absolute path starting with drive" {
             Set-SSHDConfigLine -line "Include $absoluteFilePath" -file $sshdconfig_custom
-            $result = Invoke-Expression "$binPath -T -f '$sshdconfig_custom'"            
-            $result.Contains($content) | Should Be $true
+            $result = Invoke-Expression "$binPath -T -f '$sshdconfig_custom'"
+            # sshd -T emits keywords in canonical case (e.g. LogLevel), so match case-insensitively
+            ($result -join "`n").ToLower().Contains($content.ToLower()) | Should Be $true
         }
 
         It "$tC.$tI - Include Directive with filename, relative to ProgramData" {
             Set-SSHDConfigLine -line "Include $relativeFilePath" -file $sshdconfig_custom
-            $result = Invoke-Expression "$binPath -T -f '$sshdconfig_custom'"            
-            $result.Contains($content) | Should Be $true
+            $result = Invoke-Expression "$binPath -T -f '$sshdconfig_custom'"
+            # sshd -T emits keywords in canonical case (e.g. LogLevel), so match case-insensitively
+            ($result -join "`n").ToLower().Contains($content.ToLower()) | Should Be $true
         }
     }
 }

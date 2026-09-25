@@ -285,7 +285,6 @@ DESCRIPTION
                    GatewayPorts
                    GlobalKnownHostsFile
                    HashKnownHosts
-                   Host
                    HostKeyAlgorithms
                    HostKeyAlias
                    HostbasedAcceptedAlgorithms
@@ -296,7 +295,6 @@ DESCRIPTION
                    IdentityAgent
                    IdentityFile
                    IgnoreUnknown
-                   Include
                    KbdInteractiveAuthentication
                    KbdInteractiveDevices
                    KexAlgorithms
@@ -320,6 +318,7 @@ DESCRIPTION
                    ProxyUseFdpass
                    PubkeyAcceptedAlgorithms
                    PubkeyAuthentication
+                   RefuseConnection
                    RekeyLimit
                    RemoteCommand
                    RemoteForward
@@ -345,7 +344,9 @@ DESCRIPTION
                    User
                    UserKnownHostsFile
                    VerifyHostKeyDNS
+                   VersionAddendum
                    VisualHostKey
+                   WarnWeakCrypto
                    XAuthLocation
 
      -P tag  Specify a tag name that may be used to select configuration in
@@ -1030,4 +1031,4 @@ AUTHORS
      created OpenSSH.  Markus Friedl contributed the support for SSH protocol
      versions 1.5 and 2.0.
 
-OpenBSD 7.8                    December 22, 2025                        SSH(1)
+OpenBSD 7.9                      July 1, 2026                           SSH(1)
