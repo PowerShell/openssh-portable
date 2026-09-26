@@ -37,6 +37,8 @@ void* w32_fd_to_handle(int fd);
 #define O_SEQUENTIAL _O_SEQUENTIAL
 #define O_RANDOM     _O_RANDOM
 #define O_U16TEXT     _O_U16TEXT
+// Hack to deal with TAP driver requirements: FILE_ATTRIBUTE_SYSTEM, no FILE_FLAG_BACKUP_SEMANTICS
+#define O_SYSTEM     0x4000000
 
 /*
 * open() POSIX specific modes and flags.
