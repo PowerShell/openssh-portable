@@ -219,6 +219,7 @@ initialize_server_options(ServerOptions *options)
 	options->sshd_session_path = NULL;
 	options->sshd_auth_path = NULL;
 	options->refuse_connection = -1;
+	options->attach_to_console_session = -1;
 }
 
 /* Returns 1 if a string option is unset or set to "none" or 0 otherwise. */
@@ -511,6 +512,8 @@ fill_default_server_options(ServerOptions *options)
 #endif // WINDOWS
 	if (options->refuse_connection == -1)
 		options->refuse_connection = 0;
+	if (options->attach_to_console_session == -1)
+		options->attach_to_console_session = 0;
 
 	assemble_algorithms(options);
 
@@ -595,6 +598,7 @@ typedef enum {
 	sExposeAuthInfo, sRDomain, sPubkeyAuthOptions, sSecurityKeyProvider,
 	sRequiredRSASize, sChannelTimeout, sUnusedConnectionTimeout,
 	sSshdSessionPath, sSshdAuthPath, sRefuseConnection,
+	sAttachToConsoleSession,
 	sDeprecated, sIgnore, sUnsupported
 } ServerOpCodes;
 
@@ -766,6 +770,11 @@ static struct {
 	{ "sshdsessionpath", sSshdSessionPath, SSHCFG_GLOBAL },
 	{ "sshdauthpath", sSshdAuthPath, SSHCFG_GLOBAL },
 	{ "refuseconnection", sRefuseConnection, SSHCFG_ALL },
+#ifdef WINDOWS
+	{ "attachtoconsolesession", sAttachToConsoleSession, SSHCFG_ALL },
+#else
+	{ "attachtoconsolesession", sUnsupported, SSHCFG_ALL },
+#endif // WINDOWS
 	{ NULL, sBadOption, 0 }
 };
 
@@ -2861,6 +2870,10 @@ process_server_config_line_depth(ServerOptions *options, char *line,
 		multistate_ptr = multistate_flag;
 		goto parse_multistate;
 
+	case sAttachToConsoleSession:
+		intptr = &options->attach_to_console_session;
+		goto parse_flag;
+
 	case sDeprecated:
 	case sIgnore:
 	case sUnsupported:
@@ -3081,6 +3094,7 @@ copy_set_server_options(ServerOptions *dst, ServerOptions *src, int preauth)
 	M_CP_INTOPT(required_rsa_size);
 	M_CP_INTOPT(unused_connection_timeout);
 	M_CP_INTOPT(refuse_connection);
+	M_CP_INTOPT(attach_to_console_session);
 
 	/*
 	 * The bind_mask is a mode_t that may be unsigned, so we can't use
@@ -3470,6 +3484,9 @@ dump_config(ServerOptions *o)
 	dump_cfg_fmtint(sFingerprintHash, o->fingerprint_hash);
 	dump_cfg_fmtint(sExposeAuthInfo, o->expose_userauth_info);
 	dump_cfg_fmtint(sRefuseConnection, o->refuse_connection);
+#ifdef WINDOWS
+	dump_cfg_fmtint(sAttachToConsoleSession, o->attach_to_console_session);
+#endif // WINDOWS
 
 	/* string arguments */
 	dump_cfg_string(sPidFile, o->pid_file);

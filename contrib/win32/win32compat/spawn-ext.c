@@ -14,7 +14,8 @@ __posix_spawn_asuser(pid_t *pidp, const char *path, const posix_spawn_file_actio
 	int r = -1;
 	/* use token generated from password auth if already present */
 	HANDLE user_token = NULL;
-	
+	int on_console_session = FALSE;
+
 	if (password_auth_token)
 		user_token = password_auth_token;
 	else if (sspi_auth_user) 
@@ -25,7 +26,20 @@ __posix_spawn_asuser(pid_t *pidp, const char *path, const posix_spawn_file_actio
 		errno = EOTHER;
 		return -1;
 	}
-	if (strcmp(user, "sshd"))
+
+	/* if configured, run inside the user's existing console session */
+	if (attach_to_console_session) {
+		HANDLE console_token = get_console_session_token(user_token);
+
+		if (console_token != NULL) {
+			CloseHandle(user_token);
+			user_token = console_token;
+			on_console_session = TRUE;
+		}
+	}
+
+	/* a console user's profile is already loaded by their interactive logon */
+	if (!on_console_session && strcmp(user, "sshd"))
 		load_user_profile(user_token, user);
 	
 	r = posix_spawn_internal(pidp, path, file_actions, attrp, argv, envp, user_token, TRUE);
