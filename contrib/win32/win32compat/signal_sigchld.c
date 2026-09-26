@@ -51,16 +51,40 @@ register_child(HANDLE child, DWORD pid)
 		first_zombie_index = children.num_children - children.num_zombies;
 		children.handles[children.num_children] = children.handles[first_zombie_index];
 		children.process_id[children.num_children] = children.process_id[first_zombie_index];
+		children.profiles[children.num_children] = children.profiles[first_zombie_index];
+		children.tokens[children.num_children] = children.tokens[first_zombie_index];
 
 		children.handles[first_zombie_index] = child;
 		children.process_id[first_zombie_index] = pid;
+		children.profiles[first_zombie_index] = NULL;
+		children.tokens[first_zombie_index] = NULL;
 	} else {
 		children.handles[children.num_children] = child;
 		children.process_id[children.num_children] = pid;
+		children.profiles[children.num_children] = NULL;
+		children.tokens[children.num_children] = NULL;
 	}
 
 	children.num_children++;
 	return 0;
+}
+
+/* associate a loaded profile and its unload token with a registered child */
+int
+register_child_profile(DWORD pid, HANDLE profile, HANDLE user_token)
+{
+	DWORD i;
+
+	for (i = 0; i < children.num_children; i++) {
+		if (children.process_id[i] == pid) {
+			children.profiles[i] = profile;
+			children.tokens[i] = user_token;
+			return 0;
+		}
+	}
+
+	errno = ECHILD;
+	return -1;
 }
 
 int
@@ -76,22 +100,39 @@ sw_remove_child_at_index(DWORD index)
 	}
 
 	CloseHandle(children.handles[index]);
+	/* unload the profile associated with this child, if any */
+	if (children.profiles[index] != NULL) {
+		unload_user_profile(children.tokens[index], children.profiles[index]);
+		children.profiles[index] = NULL;
+	}
+	if (children.tokens[index] != NULL) {
+		CloseHandle(children.tokens[index]);
+		children.tokens[index] = NULL;
+	}
 	if (children.num_zombies == 0) {
 		children.handles[index] = children.handles[children.num_children - 1];
 		children.process_id[index] = children.process_id[children.num_children - 1];
+		children.profiles[index] = children.profiles[children.num_children - 1];
+		children.tokens[index] = children.tokens[children.num_children - 1];
 	} else {
 		/* if its a zombie */
 		if (index >= (children.num_children - children.num_zombies)) {
 			children.handles[index] = children.handles[children.num_children - 1];
 			children.process_id[index] = children.process_id[children.num_children - 1];
+			children.profiles[index] = children.profiles[children.num_children - 1];
+			children.tokens[index] = children.tokens[children.num_children - 1];
 			children.num_zombies--;
 		} else {
 			last_non_zombie = children.num_children - children.num_zombies - 1;
 			children.handles[index] = children.handles[last_non_zombie];
 			children.process_id[index] = children.process_id[last_non_zombie];
+			children.profiles[index] = children.profiles[last_non_zombie];
+			children.tokens[index] = children.tokens[last_non_zombie];
 
 			children.handles[last_non_zombie] = children.handles[children.num_children - 1];
 			children.process_id[last_non_zombie] = children.process_id[children.num_children - 1];
+			children.profiles[last_non_zombie] = children.profiles[children.num_children - 1];
+			children.tokens[last_non_zombie] = children.tokens[children.num_children - 1];
 		}
 	}
 
@@ -103,7 +144,7 @@ int
 sw_child_to_zombie(DWORD index)
 {
 	DWORD last_non_zombie, zombie_pid;
-	HANDLE zombie_handle;
+	HANDLE zombie_handle, zombie_profile, zombie_token;
 
 	debug4("zombie'ing child at index %d, %d zombies of %d", index,
 		children.num_zombies, children.num_children);
@@ -118,10 +159,16 @@ sw_child_to_zombie(DWORD index)
 		/* swap */
 		zombie_pid = children.process_id[index];
 		zombie_handle = children.handles[index];
+		zombie_profile = children.profiles[index];
+		zombie_token = children.tokens[index];
 		children.handles[index] = children.handles[last_non_zombie];
 		children.process_id[index] = children.process_id[last_non_zombie];
+		children.profiles[index] = children.profiles[last_non_zombie];
+		children.tokens[index] = children.tokens[last_non_zombie];
 		children.handles[last_non_zombie] = zombie_handle;
 		children.process_id[last_non_zombie] = zombie_pid;
+		children.profiles[last_non_zombie] = zombie_profile;
+		children.tokens[last_non_zombie] = zombie_token;
 	}
 	children.num_zombies++;
 	return 0;
