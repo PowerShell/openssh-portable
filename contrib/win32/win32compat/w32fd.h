@@ -62,7 +62,8 @@ enum w32_io_sock_state {
 	SOCK_INITIALIZED = 0,
 	SOCK_LISTENING = 1,	/*listen called on socket*/
 	SOCK_CONNECTING = 2,	/*connect called on socket, connect is in progress*/
-	SOCK_READY = 3		/*recv and send can be done*/
+	SOCK_READY = 3,		/*recv and send can be done*/
+	SOCK_BOUND = 4		/*bind called on AF_UNIX (named pipe) socket*/
 };
 
 /*
@@ -155,6 +156,10 @@ void fileio_on_select(struct w32_io* pio, BOOL rd);
 int fileio_close(struct w32_io* pio);
 int fileio_pipe(struct w32_io* pio[2], int);
 struct w32_io* fileio_afunix_socket();
+int fileio_afunix_bind(struct w32_io* pio, const char* sun_path);
+int fileio_afunix_listen(struct w32_io* pio, int backlog);
+BOOL fileio_afunix_listener_ready(struct w32_io* pio);
+struct w32_io* fileio_afunix_accept(struct w32_io* pio);
 int fileio_connect(struct w32_io*, char*);
 struct w32_io* fileio_open(const char *pathname, int flags, mode_t mode);
 int fileio_read(struct w32_io* pio, void *dst, size_t max);

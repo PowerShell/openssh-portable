@@ -2898,6 +2898,21 @@ channel_prepare_poll(struct ssh *ssh, struct pollfd **pfdp, u_int *npfd_allocp,
 
 	channel_handler(ssh, CHAN_PRE, timeout);
 
+#ifdef WINDOWS
+	/* A later session's cleanup may have started an earlier mux channel's
+	 * output drain. Named pipes have no shutdown() wakeup, so finish an
+	 * empty drain before polling or a stdio-forward passenger can hang. */
+	for (i = 0; i < sc->channels_alloc; i++) {
+		Channel *c = sc->channels[i];
+		if (c != NULL && c->type == SSH_CHANNEL_MUX_CLIENT &&
+		    c->ostate == CHAN_OUTPUT_WAIT_DRAIN &&
+		    sshbuf_len(c->output) == 0) {
+			channel_pre_mux_client(ssh, c);
+			channel_garbage_collect(ssh, c);
+		}
+	}
+#endif
+
 	if (oalloc != sc->channels_alloc) {
 		/* shouldn't happen */
 		fatal_f("channels_alloc changed during CHAN_PRE "
@@ -4993,6 +5008,15 @@ channel_send_window_changes(struct ssh *ssh)
 		if (sc->channels[i] == NULL || !sc->channels[i]->client_tty ||
 		    sc->channels[i]->type != SSH_CHANNEL_OPEN)
 			continue;
+#ifdef WINDOWS
+		/*
+		 * mux-owned sessions are resized via MUX_C_WINSIZE from the
+		 * mux client; w32_ioctl() would report this process's own
+		 * console size for their relay-pipe rfds, which is wrong.
+		 */
+		if (sc->channels[i]->ctl_chan != -1)
+			continue;
+#endif
 		if (ioctl(sc->channels[i]->rfd, TIOCGWINSZ, &ws) == -1)
 			continue;
 		channel_request_start(ssh, i, "window-change", 0);

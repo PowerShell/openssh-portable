@@ -279,6 +279,55 @@ The MUX_S_PERMISSION_DENIED and MUX_S_FAILURE include a reason:
 #define MUX_FWD_REMOTE	2
 #define MUX_FWD_DYNAMIC	3
 
+12. Windows transport and console relay
+
+On Windows, filesystem-style ControlPaths name local pipes, not filesystem
+objects. The pipe name is "\\.\pipe\openssh-uds-v2-" followed by the lower-case
+hex SHA-256 of the absolute, lexically normalized UTF-16LE path (including
+its terminating NUL) and the current user's binary SID. Path case is
+preserved. Literal "\\.\pipe\..." names bypass this mapping. There is no
+fallback to the earlier, collision-prone path mangling; restart development
+masters after upgrading. Endpoint cleanup closes handles and never unlinks
+ControlPath from the filesystem.
+
+Both peers must have the same Windows user SID, integrity level and elevation
+state. The client authenticates the pipe server before its hello. Descriptor
+transfer replaces SCM_RIGHTS with a packed, little-endian record:
+
+	uint32	0x77465044 (magic)
+	uint32	sender process ID
+	uint64	sender handle
+	uint32	I/O type (2 = overlapped, 3 = synchronous)
+
+The receiver checks the pipe peer against the claimed PID and duplicates
+from that authenticated process handle. Only file/device/pipe handles are
+supported; sockets and console handles cannot be passed. The sender must
+keep its handles open until MUX_S_SESSION_OPENED acknowledges the transfer.
+
+Windows masters advertise "tty-relay@win32.openssh.com" in their hello with
+an empty value. Clients replace console descriptors with pipes and relay
+console I/O locally. After seeing this extension, a client may send:
+
+	uint32	MUX_C_WINSIZE (0x1000000e)
+	uint32	request id
+	uint32	columns
+	uint32	rows
+	uint32	x pixels
+	uint32	y pixels
+
+There is no reply and the request ID is not consumed. A message preceding
+MUX_C_NEW_SESSION supplies the initial pty dimensions; later messages send
+window-change requests to that session. Zero pixel dimensions mean unknown.
+A client requesting a tty must fall back to a direct connection if the
+master does not advertise this extension.
+
+Windows ControlPersist auto-starts a separate, initially owned master and
+waits for authentication/listener readiness before sending a mux request.
+Startup uses Windows 10 job-list process attributes; failure falls back to
+a direct connection. ControlMaster=autoask does not auto-start a persistent
+master on Windows: it falls back directly without weakening consent policy.
+SFTP/SCP retain their upstream ControlMaster=no policy (reuse only).
+
 XXX TODO
 XXX extended status (e.g. report open channels / forwards)
 XXX lock (maybe)
