@@ -1417,6 +1417,197 @@ is_absolute_path(const char *path)
 	return retVal;
 }
 
+static int
+is_fully_qualified_path(const char *path)
+{
+	char *slash;
+
+	if (path == NULL || *path == '\0')
+		return 0;
+	if (*path == '\"' || *path == '\'')
+		path++;
+
+	if (__isascii(path[0]) && isalpha(path[0]) && path[1] == ':' &&
+	    (path[2] == '\\' || path[2] == '/'))
+		return 1;
+
+	if (path[0] != '\\' || path[1] != '\\')
+		return 0;
+
+	if (_strnicmp(path, "\\\\?\\UNC\\", 8) == 0)
+		path += 8;
+	else if (_strnicmp(path, "\\\\?\\", 4) == 0)
+		return __isascii(path[4]) && isalpha(path[4]) &&
+		    path[5] == ':' && (path[6] == '\\' || path[6] == '/');
+	else if (_strnicmp(path, "\\\\.\\", 4) == 0)
+		return 0;
+	else
+		path += 2;
+
+	if (*path == '\0' || *path == '\\' || *path == '/')
+		return 0;
+	slash = strpbrk(path, "\\/");
+	if (slash == NULL || slash == path || slash[1] == '\0' ||
+	    slash[1] == '\\' || slash[1] == '/')
+		return 0;
+
+	return 1;
+}
+
+static int
+append_path_segment(char **buffer, size_t *capacity, size_t *length,
+    const char *segment, size_t segment_len)
+{
+	char *tmp;
+	size_t new_capacity;
+
+	if (*length + segment_len + 1 > *capacity) {
+		new_capacity = *capacity == 0 ? 128 : *capacity;
+		while (*length + segment_len + 1 > new_capacity)
+			new_capacity *= 2;
+		if ((tmp = realloc(*buffer, new_capacity)) == NULL) {
+			errno = ENOMEM;
+			return -1;
+		}
+		*buffer = tmp;
+		*capacity = new_capacity;
+	}
+
+	memcpy(*buffer + *length, segment, segment_len);
+	*length += segment_len;
+	(*buffer)[*length] = '\0';
+	return 0;
+}
+
+static int
+append_profile_path(char **buffer, size_t *capacity, size_t *length,
+    const char *profile_path, const char *suffix)
+{
+	if (profile_path == NULL || *profile_path == '\0') {
+		errno = EINVAL;
+		return -1;
+	}
+	if (append_path_segment(buffer, capacity, length, profile_path,
+	    strlen(profile_path)) != 0)
+		return -1;
+	if (suffix != NULL && append_path_segment(buffer, capacity, length,
+	    suffix, strlen(suffix)) != 0)
+		return -1;
+	return 0;
+}
+
+static int
+append_configured_path_variable(char **buffer, size_t *capacity,
+    size_t *length, const char *name, size_t name_len,
+    const char *profile_path)
+{
+	char *name_buffer = NULL, *value = NULL;
+	size_t value_len;
+	int ret = -1;
+
+	if (name_len == 11 && _strnicmp(name, "USERPROFILE", name_len) == 0)
+		return append_profile_path(buffer, capacity, length,
+		    profile_path, NULL);
+	if (name_len == 12 && _strnicmp(name, "LOCALAPPDATA", name_len) == 0)
+		return append_profile_path(buffer, capacity, length,
+		    profile_path, "\\AppData\\Local");
+	if (name_len == 7 && _strnicmp(name, "APPDATA", name_len) == 0)
+		return append_profile_path(buffer, capacity, length,
+		    profile_path, "\\AppData\\Roaming");
+
+	if ((name_buffer = calloc(name_len + 1, 1)) == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+	memcpy(name_buffer, name, name_len);
+
+	if (_dupenv_s(&value, &value_len, name_buffer) != 0 ||
+	    value == NULL) {
+		errno = EINVAL;
+		goto cleanup;
+	}
+	ret = append_path_segment(buffer, capacity, length, value,
+	    strlen(value));
+
+cleanup:
+	free(name_buffer);
+	free(value);
+	return ret;
+}
+
+static char *
+expand_configured_path_variables(const char *path, const char *profile_path)
+{
+	char *buffer = NULL, *end;
+	size_t capacity = 0, length = 0;
+
+	for (; *path != '\0'; path++) {
+		if (*path != '%') {
+			if (append_path_segment(&buffer, &capacity, &length,
+			    path, 1) != 0)
+				goto cleanup;
+			continue;
+		}
+		if (path[1] == '%') {
+			if (append_path_segment(&buffer, &capacity, &length,
+			    "%", 1) != 0)
+				goto cleanup;
+			path++;
+			continue;
+		}
+		if ((end = strchr(path + 1, '%')) == NULL) {
+			if (append_path_segment(&buffer, &capacity, &length,
+			    path, 1) != 0)
+				goto cleanup;
+			continue;
+		}
+		if (end == path + 1) {
+			if (append_path_segment(&buffer, &capacity, &length,
+			    "%", 1) != 0)
+				goto cleanup;
+			path = end;
+			continue;
+		}
+		if (append_configured_path_variable(&buffer, &capacity,
+		    &length, path + 1, end - path - 1, profile_path) != 0)
+			goto cleanup;
+		path = end;
+	}
+
+	if (buffer == NULL && append_path_segment(&buffer, &capacity,
+	    &length, "", 0) != 0)
+		goto cleanup;
+	return buffer;
+
+cleanup:
+	free(buffer);
+	return NULL;
+}
+
+char *
+resolve_configured_user_path(const char *path, const char *profile_path,
+    int require_absolute)
+{
+	char *ret = NULL;
+
+	if (path == NULL || *path == '\0') {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	if ((ret = expand_configured_path_variables(path, profile_path)) == NULL)
+		return NULL;
+	convertToBackslash(ret);
+
+	if (require_absolute && !is_fully_qualified_path(ret)) {
+		errno = EINVAL;
+		free(ret);
+		return NULL;
+	}
+
+	return ret;
+}
+
 /* return -1 - in case of failure, 0 - success */
 int
 create_directory_withsddl(wchar_t *path_w, wchar_t *sddl_w, BOOL check_permissions)
@@ -2148,4 +2339,3 @@ strrstr(const char *inStr, const char *pattern)
 
 	return last;
 }
-
