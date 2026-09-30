@@ -1287,8 +1287,6 @@ done:
 		rollback_pkcs11_identities(user_root, identity_changes,
 		    nidentity_changes);
 
-	pkcs11_terminate();
-
 	sshkey_free(cert);
 	free_pkcs11_identity_change(identity_change);
 	for (k = 0; k < nidentity_changes; k++)
@@ -1301,6 +1299,7 @@ done:
 		free(labels[i]);
 	free(labels);
 	free_pkcs11_certs(certs, ncerts);
+	pkcs11_terminate();
 	free(provider);
 	if (pin) {
 		SecureZeroMemory(pin, (DWORD)pin_len);
