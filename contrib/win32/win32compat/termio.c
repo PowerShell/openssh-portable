@@ -77,9 +77,9 @@ syncio_transfer(struct w32_io* pio, BOOL rd, void* buf, DWORD len, DWORD* transf
 	if ((ov.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL)) == NULL)
 		return FALSE;
 
-	ret = rd ? ReadFile(WINHANDLE(pio), buf, len, NULL, &ov) :
-	    WriteFile(WINHANDLE(pio), buf, len, NULL, &ov);
-	if (ret || GetLastError() == ERROR_IO_PENDING)
+	ret = rd ? ReadFile(WINHANDLE(pio), buf, len, transferred, &ov) :
+	    WriteFile(WINHANDLE(pio), buf, len, transferred, &ov);
+	if (!ret && GetLastError() == ERROR_IO_PENDING)
 		ret = GetOverlappedResult(WINHANDLE(pio), &ov, transferred, TRUE);
 
 	err = GetLastError();
