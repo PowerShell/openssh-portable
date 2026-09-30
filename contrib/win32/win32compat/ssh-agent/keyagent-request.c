@@ -33,21 +33,11 @@
 #include "agent-request.h"
 #include "config.h"
 #include <sddl.h>
-#include "pkcs11-cert.h"
-#ifdef ENABLE_PKCS11
-#include "ssh-pkcs11.h"
-#endif
 #include "xmalloc.h"
 #include "keyagent-registry.h"
 #include "keyagent-pkcs11.h"
 
 #pragma warning(push, 3)
-
-extern struct sshkey *
-lookup_key(const struct sshkey *k);
-
-extern void
-del_all_keys();
 
 int
 process_unsupported_request(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con)
@@ -211,16 +201,12 @@ static int sign_blob(const struct sshkey *pubkey, u_char ** sig, size_t *siglen,
 	struct sshbuf* tmpbuf = NULL;
 	char *keyblob = NULL;
 	const char *sk_provider = NULL;
-#ifdef ENABLE_PKCS11
 	int is_pkcs11_key = 0;
-#endif /* ENABLE_PKCS11 */
 
 	*sig = NULL;
 	*siglen = 0;
 
-#ifdef ENABLE_PKCS11
-	if ((prikey = lookup_key(pubkey)) == NULL) {
-#endif /* ENABLE_PKCS11 */
+	if ((prikey = keyagent_pkcs11_lookup_key(pubkey)) == NULL) {
 		if ((thumbprint = sshkey_fingerprint(pubkey, SSH_FP_HASH_DEFAULT, SSH_FP_DEFAULT)) == NULL ||
 			get_user_root(con, &user_root) != 0 ||
 			RegOpenKeyExW(user_root, SSH_KEYS_ROOT,
@@ -236,11 +222,9 @@ static int sign_blob(const struct sshkey *pubkey, u_char ** sig, size_t *siglen,
 				error("cannot retrieve and deserialize key from registry");
 				goto done;
 			}
-#ifdef ENABLE_PKCS11
 	}
 	else
 		is_pkcs11_key = 1;
-#endif /* ENABLE_PKCS11 */
 	if (flags & SSH_AGENT_RSA_SHA2_256)
 		algo = "rsa-sha2-256";
 	else if (flags & SSH_AGENT_RSA_SHA2_512)
@@ -262,9 +246,7 @@ done:
 		free(regdata);
 	if (tmpbuf)
 		sshbuf_free(tmpbuf);
-#ifdef ENABLE_PKCS11
 	if (!is_pkcs11_key)
-#endif /* ENABLE_PKCS11 */
 		if (prikey)
 			sshkey_free(prikey);
 	if (thumbprint)
@@ -288,79 +270,8 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 	int r, request_invalid = 0, success = 0;
 	struct sshkey *key = NULL;
 
-#ifdef ENABLE_PKCS11
-	int count = 0, index = 0, loaded = 0;
-	wchar_t sub_name[MAX_KEY_LENGTH];
-	DWORD sub_name_len = MAX_KEY_LENGTH;
-	DWORD pin_len = 0, epin_len = 0, provider_len = 0;
-	DWORD epin_alloc_len = 0;
-	char *pin = NULL, *npin = NULL, *epin = NULL, *provider = NULL;
-	HKEY root = 0, sub = 0, user_root = 0;
-	struct sshkey **keys = NULL;
-	SECURITY_ATTRIBUTES sa = { 0, NULL, 0 };
-
-	pkcs11_init(0);
-
-	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
-	sa.nLength = sizeof(sa);
-	if ((!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL, SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sa.nLength)) ||
-		get_user_root(con, &user_root) != 0 ||
-		RegCreateKeyExW(user_root, SSH_PKCS11_PROVIDERS_ROOT, 0, 0, 0, KEY_WRITE | STANDARD_RIGHTS_READ | KEY_ENUMERATE_SUB_KEYS | KEY_WOW64_64KEY, &sa, &root, NULL) != 0) {
+	if (keyagent_pkcs11_reload_providers(con) != 0)
 		goto done;
-	}
-
-	while (1) {
-		sub_name_len = MAX_KEY_LENGTH;
-		pin_len = epin_len = provider_len = 0;
-		epin_alloc_len = 0;
-		if (sub) {
-			RegCloseKey(sub);
-			sub = NULL;
-		}
-		if (RegEnumKeyExW(root, index++, sub_name, &sub_name_len, NULL, NULL, NULL, NULL) == 0) {
-			if (RegOpenKeyExW(root, sub_name, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub) == 0 &&
-				RegQueryValueExW(sub, L"provider", 0, NULL, NULL, &provider_len) == 0 &&
-				RegQueryValueExW(sub, L"pin", 0, NULL, NULL, &epin_len) == 0) {
-				if (provider_len == 0 || provider_len >= PATH_MAX ||
-				    epin_len == 0 || epin_len > MAX_MESSAGE_SIZE)
-					continue;
-				epin_alloc_len = epin_len;
-				if ((epin = malloc(epin_alloc_len + 1)) == NULL ||
-					(provider = malloc(provider_len + 1)) == NULL ||
-					RegQueryValueExW(sub, L"provider", 0, NULL, provider, &provider_len) != 0 ||
-					RegQueryValueExW(sub, L"pin", 0, NULL, epin, &epin_len) != 0) {
-					free_pkcs11_sign_provider(&provider, &pin, pin_len,
-					    &epin, epin_alloc_len, &keys, count);
-					continue;
-				}
-				provider[provider_len] = '\0';
-				epin[epin_len] = '\0';
-				if (convert_blob(con, epin, epin_len, &pin, &pin_len, 0) != 0 ||
-					(npin = realloc(pin, pin_len + 1)) == NULL) {
-					free_pkcs11_sign_provider(&provider, &pin, pin_len,
-					    &epin, epin_alloc_len, &keys, count);
-					continue;
-				}
-				pin = npin;
-				pin[pin_len] = '\0';
-				count = pkcs11_add_provider(provider, pin, &keys, NULL);
-				if (count <= 0) {
-					free_pkcs11_sign_provider(&provider, &pin, pin_len,
-					    &epin, epin_alloc_len, &keys, count);
-					continue;
-				}
-				loaded = load_pkcs11_identities(user_root, provider,
-				    keys, count);
-				free_pkcs11_sign_provider(&provider, &pin, pin_len,
-				    &epin, epin_alloc_len, &keys, count);
-				if (loaded < 0)
-					goto done;
-			}
-		}
-		else
-			break;
-	}
-#endif /* ENABLE_PKCS11 */
 
 	if (sshbuf_get_string_direct(request, &blob, &blen) != 0 ||
 	    sshbuf_get_string_direct(request, &data, &dlen) != 0 ||
@@ -393,60 +304,8 @@ done:
 		sshkey_free(key);
 	if (signature)
 		free(signature);
-#ifdef ENABLE_PKCS11
-	free_pkcs11_sign_provider(&provider, &pin, pin_len, &epin, epin_alloc_len,
-	    &keys, count);
-	del_all_keys();
-	pkcs11_terminate();
-	if (user_root)
-		RegCloseKey(user_root);
-	if (root)
-		RegCloseKey(root);
-	if (sub)
-		RegCloseKey(sub);
-#endif /* ENABLE_PKCS11 */
+	keyagent_pkcs11_release();
 	return r;
-}
-
-static LSTATUS
-delete_matching_identity(HKEY root, const char *name, const u_char *blob,
-    size_t blob_len)
-{
-	HKEY sub = NULL;
-	u_char *stored_blob = NULL;
-	DWORD stored_blob_len = 0;
-	LSTATUS status;
-
-	status = RegOpenKeyExA(root, name, 0,
-	    KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub);
-	if (status != ERROR_SUCCESS)
-		return status;
-	status = RegQueryValueExW(sub, L"pub", NULL, NULL, NULL,
-	    &stored_blob_len);
-	if (status != ERROR_SUCCESS)
-		goto out;
-	if (stored_blob_len > MAX_MESSAGE_SIZE) {
-		status = ERROR_INVALID_DATA;
-		goto out;
-	}
-	stored_blob = xmalloc(stored_blob_len == 0 ? 1 : stored_blob_len);
-	status = RegQueryValueExW(sub, L"pub", NULL, NULL, stored_blob,
-	    &stored_blob_len);
-	if (status != ERROR_SUCCESS)
-		goto out;
-	if (stored_blob_len != blob_len ||
-	    memcmp(stored_blob, blob, blob_len) != 0) {
-		status = ERROR_FILE_NOT_FOUND;
-		goto out;
-	}
-	RegCloseKey(sub);
-	sub = NULL;
-	status = RegDeleteTreeA(root, name);
- out:
-	free(stored_blob);
-	if (sub != NULL)
-		RegCloseKey(sub);
-	return status;
 }
 
 int
@@ -454,9 +313,6 @@ process_remove_key(struct sshbuf* request, struct sshbuf* response, struct agent
 {
 	HKEY user_root = 0, root = 0;
 	char *blob, *thumbprint = NULL;
-#ifdef ENABLE_PKCS11
-	char *pkcs11_name = NULL;
-#endif
 	size_t blen;
 	int r = 0, success = 0, request_invalid = 0;
 	struct sshkey *key = NULL;
@@ -477,16 +333,9 @@ process_remove_key(struct sshbuf* request, struct sshbuf* response, struct agent
 		goto done;
 	status = delete_matching_identity(root, thumbprint,
 	    (const u_char *)blob, blen);
-#ifdef ENABLE_PKCS11
-	if (status == ERROR_FILE_NOT_FOUND && sshkey_is_cert(key)) {
-		pkcs11_name = pkcs11_identity_name(key,
+	if (status == ERROR_FILE_NOT_FOUND && sshkey_is_cert(key))
+		status = keyagent_pkcs11_delete_cert_identity(root, key,
 		    (const u_char *)blob, blen);
-		if (pkcs11_name == NULL)
-			goto done;
-		status = delete_matching_identity(root, pkcs11_name,
-		    (const u_char *)blob, blen);
-	}
-#endif
 	if (status != ERROR_SUCCESS)
 		goto done;
 	success = 1;
@@ -505,9 +354,6 @@ done:
 		RegCloseKey(root);
 	if (thumbprint)
 		free(thumbprint);
-#ifdef ENABLE_PKCS11
-	free(pkcs11_name);
-#endif
 	return r;
 }
 int 
@@ -735,41 +581,5 @@ send:
 	
 	return r;
 }
-
-#if 0
-int process_keyagent_request(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con) 
-{
-	u_char type;
-
-	if (sshbuf_get_u8(request, &type) != 0)
-		return -1;
-	debug2("process key agent request type %d", type);
-
-	switch (type) {
-	case SSH2_AGENTC_ADD_IDENTITY:
-		return process_add_identity(request, response, con);
-	case SSH2_AGENTC_REQUEST_IDENTITIES:
-		return process_request_identities(request, response, con);
-	case SSH2_AGENTC_SIGN_REQUEST:
-		return process_sign_request(request, response, con);
-	case SSH2_AGENTC_REMOVE_IDENTITY:
-		return process_remove_key(request, response, con);
-	case SSH2_AGENTC_REMOVE_ALL_IDENTITIES:
-		return process_remove_all(request, response, con);
-#ifdef ENABLE_PKCS11
-	case SSH_AGENTC_ADD_SMARTCARD_KEY:
-		return process_add_smartcard_key(request, response, con);
-	case SSH_AGENTC_ADD_SMARTCARD_KEY_CONSTRAINED:
-		return process_add_smartcard_key(request, response, con);
-	case SSH_AGENTC_REMOVE_SMARTCARD_KEY:
-		return process_remove_smartcard_key(request, response, con);
-		break;
-#endif /* ENABLE_PKCS11 */
-	default:
-		debug("unknown key agent request %d", type);
-		return -1;		
-	}
-}
-#endif
 
 #pragma warning(pop)

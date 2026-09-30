@@ -225,4 +225,49 @@ restore_optional_reg_value(HKEY key, const wchar_t *name, int present,
 	return status == ERROR_SUCCESS || status == ERROR_FILE_NOT_FOUND ? 0 : -1;
 }
 
+/*
+ * delete the identity sub key name below root, but only if its stored
+ * public key blob matches blob
+ */
+LSTATUS
+delete_matching_identity(HKEY root, const char *name, const u_char *blob,
+    size_t blob_len)
+{
+	HKEY sub = NULL;
+	u_char *stored_blob = NULL;
+	DWORD stored_blob_len = 0;
+	LSTATUS status;
+
+	status = RegOpenKeyExA(root, name, 0,
+	    KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub);
+	if (status != ERROR_SUCCESS)
+		return status;
+	status = RegQueryValueExW(sub, L"pub", NULL, NULL, NULL,
+	    &stored_blob_len);
+	if (status != ERROR_SUCCESS)
+		goto out;
+	if (stored_blob_len > MAX_MESSAGE_SIZE) {
+		status = ERROR_INVALID_DATA;
+		goto out;
+	}
+	stored_blob = xmalloc(stored_blob_len == 0 ? 1 : stored_blob_len);
+	status = RegQueryValueExW(sub, L"pub", NULL, NULL, stored_blob,
+	    &stored_blob_len);
+	if (status != ERROR_SUCCESS)
+		goto out;
+	if (stored_blob_len != blob_len ||
+	    memcmp(stored_blob, blob, blob_len) != 0) {
+		status = ERROR_FILE_NOT_FOUND;
+		goto out;
+	}
+	RegCloseKey(sub);
+	sub = NULL;
+	status = RegDeleteTreeA(root, name);
+ out:
+	free(stored_blob);
+	if (sub != NULL)
+		RegCloseKey(sub);
+	return status;
+}
+
 #pragma warning(pop)

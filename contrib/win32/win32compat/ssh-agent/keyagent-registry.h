@@ -28,3 +28,4 @@ int read_optional_reg_value(HKEY, const wchar_t *, int *, DWORD *,
     u_char **, DWORD *);
 int restore_optional_reg_value(HKEY, const wchar_t *, int, DWORD,
     const u_char *, DWORD);
+LSTATUS delete_matching_identity(HKEY, const char *, const u_char *, size_t);
