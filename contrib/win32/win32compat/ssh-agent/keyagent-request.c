@@ -300,6 +300,7 @@ process_add_identity(struct sshbuf* request, struct sshbuf* response, struct age
 	char* eblob = NULL;
 	HKEY reg = 0, sub = 0, user_root = 0;
 	SECURITY_ATTRIBUTES sa;
+	LSTATUS status;
 
 	/* parse input request */
 	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
@@ -330,7 +331,10 @@ process_add_identity(struct sshbuf* request, struct sshbuf* response, struct age
 	    RegSetValueExW(sub, NULL, 0, REG_BINARY, eblob, eblob_len) != 0 ||
 	    RegSetValueExW(sub, L"pub", 0, REG_BINARY, pubkey_blob, (DWORD)pubkey_blob_len) != 0 ||
 	    RegSetValueExW(sub, L"type", 0, REG_DWORD, (BYTE*)&key->type, 4) != 0 ||
-	    RegSetValueExW(sub, L"comment", 0, REG_BINARY, comment, (DWORD)comment_len) != 0 ) {
+	    RegSetValueExW(sub, L"comment", 0, REG_BINARY, comment, (DWORD)comment_len) != 0 ||
+	    /* a software key does not belong to a PKCS#11 provider */
+	    ((status = RegDeleteValueW(sub, L"provider")) != ERROR_SUCCESS &&
+	    status != ERROR_FILE_NOT_FOUND)) {
 		error("failed to add key to store");
 		goto done;
 	}

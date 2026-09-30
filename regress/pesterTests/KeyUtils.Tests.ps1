@@ -729,6 +729,50 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             @(ssh-add -L) -match "The agent has no identities." | Should Be $true
         }
 
+        It "$tC.$tI - ssh-add - software add detaches identity from pkcs11 provider (if configured)" {
+            $pkcs11Path = $env:OPENSSH_TEST_PKCS11_PROVIDER
+            $publicKeyPaths = @($env:OPENSSH_TEST_PKCS11_PUBLIC_KEYS -split ';' |
+                Where-Object { $_ })
+            $softwareKeySource = $env:OPENSSH_TEST_PKCS11_SOFTWARE_KEY
+            if (-not $pkcs11Path -or -not (Test-Path $pkcs11Path) -or
+                $publicKeyPaths.Count -eq 0 -or -not $softwareKeySource -or
+                -not (Test-Path $softwareKeySource)) {
+                Write-Host "skipping pkcs11 software detach test because provider, public keys and OPENSSH_TEST_PKCS11_SOFTWARE_KEY are not configured"
+                return
+            }
+
+            $testPin = $env:OPENSSH_TEST_PKCS11_PIN
+            if (-not $testPin) { $testPin = $pkcs11Pin }
+            $softwareKeyPath = Join-Path $testDir "pkcs11-software"
+            $nullFile = Join-Path $testDir "$tC.$tI.nullfile"
+            $null > $nullFile
+            Copy-Item $softwareKeySource $softwareKeyPath -Force
+            Repair-UserKeyPermission $softwareKeyPath -confirm:$false
+            $softwareBlob = ((ssh-keygen -y -f $softwareKeyPath) -split ' ')[1]
+            $softwareBlob | Should Be ((Get-Content $publicKeyPaths[0]).Split(' ')[1])
+
+            ssh-add -D
+            $LASTEXITCODE | Should Be 0
+            Add-PasswordSetting -Pass $testPin
+            $env:SSH_ASKPASS_REQUIRE = "force"
+            & ssh-add -s $pkcs11Path
+            $LASTEXITCODE | Should Be 0
+            Remove-PasswordSetting
+
+            # Adding the same key as software key makes it a software identity.
+            # Removing the provider must no longer delete it.
+            iex "cmd /c `"ssh-add $softwareKeyPath < $nullFile 2> nul `""
+            & ssh-add -e $pkcs11Path
+            $LASTEXITCODE | Should Be 0
+            @((ssh-add -L) | Where-Object { $_.Contains($softwareBlob) }).Count |
+                Should Be 1
+            & ssh-add -T "$softwareKeyPath.pub"
+            $LASTEXITCODE | Should Be 0
+
+            ssh-add -D
+            $LASTEXITCODE | Should Be 0
+        }
+
         It "$tC.$tI - ssh-add - stale pkcs11 provider isolation (if configured)" {
             $pkcs11Path = $env:OPENSSH_TEST_PKCS11_PROVIDER
             $publicKeyPaths = @($env:OPENSSH_TEST_PKCS11_PUBLIC_KEYS -split ';' |
