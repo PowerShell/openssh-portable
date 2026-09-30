@@ -17,6 +17,7 @@ $ErrorActionPreference = 'Continue'
 # Resolve the relative paths
 $OpenSSHBinPath = Resolve-Path $OpenSSHBinPath -ErrorAction Stop | select -ExpandProperty Path
 $BashTestsPath = Resolve-Path $BashTestsPath -ErrorAction Stop | select -ExpandProperty Path
+$BashTestsWindowsPath = $BashTestsPath
 $ShellPath = Resolve-Path $ShellPath -ErrorAction Stop | select -ExpandProperty Path
 $ArtifactsDirectoryPath = Resolve-Path $ArtifactsDirectoryPath -ErrorAction Stop | select -ExpandProperty Path
 if ($TestFilePath) {
@@ -25,6 +26,7 @@ if ($TestFilePath) {
 	$TestFilePath = $TestFilePath -replace "\\","/"
 }
 $OriginalSystemPath = [System.Environment]::GetEnvironmentVariable('Path', [System.EnvironmentVariableTarget]::Machine)
+$OriginalUserSoftHsmConf = [System.Environment]::GetEnvironmentVariable('SOFTHSM2_CONF', [System.EnvironmentVariableTarget]::User)
 
 # Make sure config.h exists. It is used in some bashstests (Ex - sftp-glob.sh, cfgparse.sh)
 # first check in $BashTestsPath folder. If not then it's parent folder. If not then in the $OpenSSHBinPath
@@ -62,6 +64,12 @@ if(!$SkipInstallSSHD) {
 
 	# We need ssh-agent to be installed as service to run some bash tests.
 	& "$OpenSSHBinPath\install-sshd.ps1"
+	if (-not [string]::IsNullOrEmpty($env:TEST_SSH_PKCS11_PROVIDER)) {
+		$testProvider = (& $ShellPath -c "cygpath -w '$env:TEST_SSH_PKCS11_PROVIDER'").Trim()
+		$agentImagePath = '"{0}" -P "{1}"' -f (Join-Path $OpenSSHBinPath 'ssh-agent.exe'), $testProvider
+		Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\ssh-agent' `
+			-Name ImagePath -Value $agentImagePath -Force
+	}
 }
 
 try
@@ -147,6 +155,10 @@ try
 	$env:TEST_SSH_SFTP = $OpenSSHBinPath_shell_fmt+"/sftp.exe"
 	$env:TEST_SSH_SFTPSERVER = $OpenSSHBinPath_shell_fmt+"/sftp-server.exe"
 	$env:TEST_SSH_SCP = $OpenSSHBinPath_shell_fmt+"/scp.exe"
+	$env:TEST_SSH_OPENSSL = (&$ShellPath -c "command -v openssl").Trim()
+	if ([string]::IsNullOrEmpty($env:TEST_SSH_OPENSSL)) {
+		throw "openssl was not found in the test shell"
+	}
 	$env:BUILDDIR = $BUILDDIR
 	$env:TEST_WINDOWS_SSH = 1
 	$env:TEST_SSH_ASKPASS = $TEST_SSH_ASKPASS
@@ -173,6 +185,10 @@ try
 	$temp_test_path = "temp_test"
 	$null = Remove-Item -Recurse -Force $temp_test_path -ErrorAction SilentlyContinue
 	$null = New-Item -ItemType directory -Path $temp_test_path -Force -ErrorAction Stop
+	if (-not [string]::IsNullOrEmpty($env:TEST_SSH_PKCS11_PROVIDER)) {
+		$testSoftHsmConf = Join-Path $BashTestsWindowsPath "$temp_test_path\SOFTHSM\softhsm2.conf"
+		[System.Environment]::SetEnvironmentVariable('SOFTHSM2_CONF', $testSoftHsmConf, [System.EnvironmentVariableTarget]::User)
+	}
 
 	# remove the summary, output files.
 	$bash_test_summary = "$ArtifactsDirectoryPath\bash_tests_summary.txt"
@@ -271,6 +287,7 @@ finally
 {
 	# Restore User Path variable in the registry once the tests finish running.
 	[System.Environment]::SetEnvironmentVariable('Path', $OriginalSystemPath, [System.EnvironmentVariableTarget]::Machine)
+	[System.Environment]::SetEnvironmentVariable('SOFTHSM2_CONF', $OriginalUserSoftHsmConf, [System.EnvironmentVariableTarget]::User)
 	# remove temp test directory
 	if (!$SkipCleanup)
 	{

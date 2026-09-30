@@ -1028,6 +1028,17 @@ p11_find_lib() {
 	done
 }
 
+p11_make_public() {
+	chmod 600 "$1" || fatal "chmod private key failed"
+	if test "x$TEST_WINDOWS_SSH" = "x1"; then
+		/usr/bin/ssh-keygen -y -f "$1" > "$1.pub" || \
+		    fatal "Cygwin ssh-keygen public key extraction failed"
+	else
+		${SSHKEYGEN} -y -f "$1" > "$1.pub" || \
+		    fatal "ssh-keygen public key extraction failed"
+	fi
+}
+
 # Perform PKCS#11 setup: prepares a softhsm2 token configuration, generated
 # keys and loads them into the virtual token.
 PKCS11_OK=
@@ -1036,10 +1047,22 @@ p11_setup() {
 	# XXX we could potentially test ed25519 only in the absence of
 	# RSA and ECDSA support.
 	$SSH -Q key | grep ssh-rsa >/dev/null || return 1
-	p11_find_lib \
-		/usr/local/lib/softhsm/libsofthsm2.so \
-		/usr/lib64/pkcs11/libsofthsm2.so \
-		/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
+	if test "x$TEST_WINDOWS_SSH" = "x1"; then
+		if test -n "$TEST_SSH_PKCS11_PROVIDER"; then
+			p11_find_lib "$TEST_SSH_PKCS11_PROVIDER"
+		else
+			p11_find_lib \
+				"/cygdrive/c/Program Files/SoftHSM2/lib/softhsm2-x64.dll" \
+				"/cygdrive/c/Program Files/SoftHSM2/lib/softhsm2.dll"
+		fi
+		SOFTHSM2_UTIL="${TEST_SSH_SOFTHSM2_UTIL:-/cygdrive/c/Program Files/SoftHSM2/bin/softhsm2-util.exe}"
+	else
+		p11_find_lib \
+			/usr/local/lib/softhsm/libsofthsm2.so \
+			/usr/lib64/pkcs11/libsofthsm2.so \
+			/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
+		SOFTHSM2_UTIL=softhsm2-util
+	fi
 	test -z "$TEST_SSH_PKCS11" && return 1
 	trace "using token library $TEST_SSH_PKCS11"
 	TEST_SSH_PIN=1234
@@ -1056,18 +1079,26 @@ p11_setup() {
 	TOKEN=$SSH_SOFTHSM_DIR/tokendir
 	mkdir -p $TOKEN
 	SOFTHSM2_CONF=$SSH_SOFTHSM_DIR/softhsm2.conf
+	SOFTHSM2_CONF_FILE=$SOFTHSM2_CONF
+	TOKEN_CONFIG=$TOKEN
+	if test "x$TEST_WINDOWS_SSH" = "x1"; then
+		TOKEN_CONFIG=$(cygpath -w "$TOKEN")
+		SOFTHSM2_CONF=$(cygpath -w "$SOFTHSM2_CONF")
+		TEST_SSH_PKCS11=$(cygpath -w "$TEST_SSH_PKCS11")
+	fi
 	export SOFTHSM2_CONF
-	cat > $SOFTHSM2_CONF << EOF
+	cat > "$SOFTHSM2_CONF_FILE" << EOF
 # SoftHSM v2 configuration file
-directories.tokendir = ${TOKEN}
+directories.tokendir = ${TOKEN_CONFIG}
 objectstore.backend = file
 # ERROR, WARNING, INFO, DEBUG
 log.level = DEBUG
 # If CKF_REMOVABLE_DEVICE flag should be set
 slots.removable = false
 EOF
-	out=$(softhsm2-util --init-token --free --label token-slot-0 --pin "$TEST_SSH_PIN" --so-pin "$TEST_SSH_SOPIN")
-	slot=$(echo -- $out | sed 's/.* //')
+	out=$("$SOFTHSM2_UTIL" --module "$TEST_SSH_PKCS11" --init-token --free \
+	    --label token-slot-0 --pin "$TEST_SSH_PIN" --so-pin "$TEST_SSH_SOPIN")
+	slot=$(echo -- $out | tr -d '\r' | sed 's/.* //')
 	trace "generating keys"
 	# RSA key
 	RSA=${SSH_SOFTHSM_DIR}/RSA
@@ -1075,10 +1106,14 @@ EOF
 	$OPENSSL_BIN genpkey -algorithm rsa > $RSA 2>/dev/null || \
 	    fatal "genpkey RSA fail"
 	$OPENSSL_BIN pkcs8 -nocrypt -in $RSA > $RSAP8 || fatal "pkcs8 RSA fail"
-	softhsm2-util --slot "$slot" --label 01 --id 01 --pin "$TEST_SSH_PIN" \
-	    --import $RSAP8 >/dev/null || fatal "softhsm import RSA fail"
-	chmod 600 $RSA
-	${SSHKEYGEN} -y -f $RSA > ${RSA}.pub
+	RSAP8_IMPORT=$RSAP8
+	if test "x$TEST_WINDOWS_SSH" = "x1"; then
+		RSAP8_IMPORT=$(cygpath -w "$RSAP8")
+	fi
+	"$SOFTHSM2_UTIL" --module "$TEST_SSH_PKCS11" --slot "$slot" \
+	    --label 01 --id 01 --pin "$TEST_SSH_PIN" \
+	    --import "$RSAP8_IMPORT" >/dev/null || fatal "softhsm import RSA fail"
+	p11_make_public $RSA
 	# ECDSA key
 	ECPARAM=${SSH_SOFTHSM_DIR}/ECPARAM
 	EC=${SSH_SOFTHSM_DIR}/EC
@@ -1089,10 +1124,14 @@ EOF
 	$OPENSSL_BIN genpkey -paramfile $ECPARAM > $EC || \
 	    fatal "genpkey EC fail"
 	$OPENSSL_BIN pkcs8 -nocrypt -in $EC > $ECP8 || fatal "pkcs8 EC fail"
-	softhsm2-util --slot "$slot" --label 02 --id 02 --pin "$TEST_SSH_PIN" \
-	    --import $ECP8 >/dev/null || fatal "softhsm import EC fail"
-	chmod 600 $EC
-	${SSHKEYGEN} -y -f $EC > ${EC}.pub
+	ECP8_IMPORT=$ECP8
+	if test "x$TEST_WINDOWS_SSH" = "x1"; then
+		ECP8_IMPORT=$(cygpath -w "$ECP8")
+	fi
+	"$SOFTHSM2_UTIL" --module "$TEST_SSH_PKCS11" --slot "$slot" \
+	    --label 02 --id 02 --pin "$TEST_SSH_PIN" \
+	    --import "$ECP8_IMPORT" >/dev/null || fatal "softhsm import EC fail"
+	p11_make_public $EC
 	# Ed25519 key
 	ED25519=${SSH_SOFTHSM_DIR}/ED25519
 	ED25519P8=${SSH_SOFTHSM_DIR}/ED25519P8
@@ -1100,11 +1139,15 @@ EOF
 	    fatal "genpkey Ed25519 fail"
 	$OPENSSL_BIN pkcs8 -nocrypt -in $ED25519 > $ED25519P8 || \
 		fatal "pkcs8 Ed25519 fail"
-	softhsm2-util --slot "$slot" --label 03 --id 03 --pin "$TEST_SSH_PIN" \
-	    --import $ED25519P8 >/dev/null || \
+	ED25519P8_IMPORT=$ED25519P8
+	if test "x$TEST_WINDOWS_SSH" = "x1"; then
+		ED25519P8_IMPORT=$(cygpath -w "$ED25519P8")
+	fi
+	"$SOFTHSM2_UTIL" --module "$TEST_SSH_PKCS11" --slot "$slot" \
+	    --label 03 --id 03 --pin "$TEST_SSH_PIN" \
+	    --import "$ED25519P8_IMPORT" >/dev/null || \
 		fatal "softhsm import ed25519 fail"
-	chmod 600 $ED25519
-	${SSHKEYGEN} -y -f $ED25519 > ${ED25519}.pub
+	p11_make_public $ED25519
 	# Prepare some askpass scripts to load PINs.
 	PIN_SH=$SSH_SOFTHSM_DIR/pin.sh
 	cat > $PIN_SH << EOF
@@ -1128,7 +1171,12 @@ EOF
 
 # Peforms ssh-add with the right token PIN.
 p11_ssh_add() {
-	env SSH_ASKPASS="$PIN_SH" SSH_ASKPASS_REQUIRE=force ${SSHADD} "$@"
+	if test "x$TEST_WINDOWS_SSH" = "x1"; then
+		env ASKPASS_PASSWORD="$TEST_SSH_PIN" SSH_ASKPASS="$TEST_SSH_ASKPASS" \
+		    SSH_ASKPASS_REQUIRE=force ${SSHADD} "$@"
+	else
+		env SSH_ASKPASS="$PIN_SH" SSH_ASKPASS_REQUIRE=force ${SSHADD} "$@"
+	fi
 }
 
 start_ssh_agent() {
@@ -1140,10 +1188,22 @@ start_ssh_agent() {
 	export SSH_AUTH_SOCK
 	rm -f $SSH_AUTH_SOCK $OBJ/agent.log
 	trace "start agent"
-	${SSHAGENT} ${EXTRA_AGENT_ARGS} -d -a $SSH_AUTH_SOCK \
-	    > $OBJ/agent.log 2>&1 &
-	AGENT_PID=$!
-	trap "kill $AGENT_PID" EXIT
+	if test "x$TEST_WINDOWS_SSH" = "x1"; then
+		unset SSH_AUTH_SOCK
+		${SSHAGENT} > $OBJ/agent.log 2>&1
+		if test "$PKCS11_OK" = "yes"; then
+			${SSHADD} -e "$TEST_SSH_PKCS11" >/dev/null 2>&1
+			powershell.exe -NoProfile -NonInteractive -Command \
+			    "Stop-Service ssh-agent -Force" >/dev/null 2>&1 || \
+			    fatal "failed to reset ssh-agent service"
+			${SSHAGENT} >> $OBJ/agent.log 2>&1
+		fi
+	else
+		${SSHAGENT} ${EXTRA_AGENT_ARGS} -d -a $SSH_AUTH_SOCK \
+		    > $OBJ/agent.log 2>&1 &
+		AGENT_PID=$!
+		trap "kill $AGENT_PID" EXIT
+	fi
 	for x in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 ; do
 		# Give it a chance to start
 		${SSHADD} -l > /dev/null 2>&1
