@@ -710,10 +710,12 @@ process_add_smartcard_key(struct sshbuf *request, struct sshbuf *response,
 		goto done;
 	}
 	if (sshbuf_len(request) != 0 &&
-	    parse_pkcs11_add_constraints(request, &cert_only, &certs,
-	    &ncerts) != 0) {
-		error("add smartcard constraints are invalid");
-		request_invalid = 1;
+	    (r = parse_pkcs11_add_constraints(request, &cert_only, &certs,
+	    &ncerts)) != 0) {
+		if (r != SSH_ERR_FEATURE_UNSUPPORTED) {
+			error("add smartcard constraints are invalid");
+			request_invalid = 1;
+		}
 		goto done;
 	}
 

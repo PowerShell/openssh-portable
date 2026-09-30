@@ -67,6 +67,19 @@ Follow these simple steps for test case indexing
 
 #### PKCS#11 certificate tests
 
+The Windows agent rejects PKCS#11 adds with lifetime, confirmation, or
+destination constraints because persisted identities cannot enforce them.
+This applies both to plain keys and to associated certificates. Adds without
+these constraints, including certificate-only adds, remain supported. Existing
+Registry identities are not migrated or removed.
+
+`PKCS11Constraints.Tests.ps1` is a required CI test that sends raw agent
+requests without a provider DLL, PIN, or token. It checks rejection of all
+three constraints, including combinations with RSA/ECDSA certificates,
+unchanged identities and Registry subkey names, and continued use of the same
+connection. It requires the test agent to be running and permission to read
+the test user's agent Registry keys; missing prerequisites fail the test.
+
 The PKCS#11 certificate scenario in `KeyUtils.Tests.ps1` is enabled when the
 following environment variables are set before running the E2E tests:
 

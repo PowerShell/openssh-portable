@@ -88,50 +88,127 @@ test_pkcs11_cert_constraints_valid(void)
 	struct sshbuf *m = NULL;
 	struct sshkey *cert = NULL, **certs = NULL;
 	size_t ncerts = 0;
-	int cert_only = 0, r;
+	int cert_only = 0, mode;
 
 	TEST_START("PKCS11 associated certificate constraint");
 	ASSERT_PTR_NE(cert = load_test_cert(), NULL);
-	ASSERT_PTR_NE(m = sshbuf_new(), NULL);
-	ASSERT_INT_EQ(put_associated_certs(m, 1, cert, 1), 0);
-	ASSERT_INT_EQ(r = parse_pkcs11_add_constraints(m, &cert_only,
-	    &certs, &ncerts), 0);
-	ASSERT_INT_EQ(cert_only, 1);
-	ASSERT_SIZE_T_EQ(ncerts, 1);
-	ASSERT_INT_EQ(sshkey_equal(cert, certs[0]), 1);
-	free_pkcs11_certs(certs, ncerts);
+	for (mode = 0; mode < 2; mode++) {
+		certs = NULL;
+		ncerts = 0;
+		ASSERT_PTR_NE(m = sshbuf_new(), NULL);
+		ASSERT_INT_EQ(put_associated_certs(m, mode, cert, 1), 0);
+		ASSERT_INT_EQ(parse_pkcs11_add_constraints(m, &cert_only,
+		    &certs, &ncerts), 0);
+		ASSERT_INT_EQ(cert_only, mode);
+		ASSERT_SIZE_T_EQ(ncerts, 1);
+		ASSERT_INT_EQ(sshkey_equal(cert, certs[0]), 1);
+		free_pkcs11_certs(certs, ncerts);
+		sshbuf_free(m);
+	}
 	sshkey_free(cert);
+	TEST_DONE();
+}
+
+static void
+test_pkcs11_cert_constraints_empty(void)
+{
+	struct sshbuf *m = NULL;
+	struct sshkey **certs = NULL;
+	size_t ncerts = 0;
+	int cert_only = 1;
+
+	TEST_START("PKCS11 empty constraints");
+	ASSERT_PTR_NE(m = sshbuf_new(), NULL);
+	ASSERT_INT_EQ(parse_pkcs11_add_constraints(m, &cert_only,
+	    &certs, &ncerts), 0);
+	ASSERT_INT_EQ(cert_only, 0);
+	ASSERT_PTR_EQ(certs, NULL);
+	ASSERT_SIZE_T_EQ(ncerts, 0);
 	sshbuf_free(m);
 	TEST_DONE();
 }
 
 static void
-test_pkcs11_cert_constraints_compatible(void)
+test_pkcs11_cert_constraints_unsupported(void)
 {
-	struct sshbuf *m = NULL, *destinations = NULL;
+	static const struct {
+		const char *name;
+		u_char type;
+		u_int lifetime;
+		const char *destinations;
+	} cases[] = {
+		{ "PKCS11 lifetime rejected", SSH_AGENT_CONSTRAIN_LIFETIME,
+		    60, NULL },
+		{ "PKCS11 zero lifetime rejected", SSH_AGENT_CONSTRAIN_LIFETIME,
+		    0, NULL },
+		{ "PKCS11 confirm rejected", SSH_AGENT_CONSTRAIN_CONFIRM,
+		    0, NULL },
+		{ "PKCS11 empty destinations rejected",
+		    SSH_AGENT_CONSTRAIN_EXTENSION, 0, "" },
+		{ "PKCS11 unparsed destinations rejected",
+		    SSH_AGENT_CONSTRAIN_EXTENSION, 0, "bad" }
+	};
+	struct sshbuf *m = NULL;
 	struct sshkey *cert = NULL, **certs = NULL;
+	size_t i, ncerts;
+	int mode, cert_only;
+	char name[128];
+
+	ASSERT_PTR_NE(cert = load_test_cert(), NULL);
+	for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+		/* Alone, before/after a certificate, with cert-only off/on. */
+		for (mode = 0; mode < 5; mode++) {
+			snprintf(name, sizeof(name), "%s (mode %d)",
+			    cases[i].name, mode);
+			TEST_START(name);
+			certs = NULL;
+			ncerts = 0;
+			cert_only = 0;
+			ASSERT_PTR_NE(m = sshbuf_new(), NULL);
+			if (mode == 2 || mode == 4)
+				ASSERT_INT_EQ(put_associated_certs(m,
+				    mode >= 3, cert, 1), 0);
+			ASSERT_INT_EQ(sshbuf_put_u8(m, cases[i].type), 0);
+			if (cases[i].type == SSH_AGENT_CONSTRAIN_LIFETIME)
+				ASSERT_INT_EQ(sshbuf_put_u32(m,
+				    cases[i].lifetime), 0);
+			if (cases[i].type == SSH_AGENT_CONSTRAIN_EXTENSION) {
+				ASSERT_INT_EQ(sshbuf_put_cstring(m,
+				    "restrict-destination-v00@openssh.com"), 0);
+				ASSERT_INT_EQ(sshbuf_put_cstring(m,
+				    cases[i].destinations), 0);
+			}
+			if (mode == 1 || mode == 3)
+				ASSERT_INT_EQ(put_associated_certs(m,
+				    mode >= 3, cert, 1), 0);
+			ASSERT_INT_EQ(parse_pkcs11_add_constraints(m,
+			    &cert_only, &certs, &ncerts),
+			    SSH_ERR_FEATURE_UNSUPPORTED);
+			ASSERT_SIZE_T_EQ(ncerts,
+			    mode == 2 || mode == 4 ? 1 : 0);
+			if (ncerts != 0)
+				ASSERT_INT_EQ(sshkey_equal(cert, certs[0]), 1);
+			free_pkcs11_certs(certs, ncerts);
+			sshbuf_free(m);
+			TEST_DONE();
+		}
+	}
+	sshkey_free(cert);
+}
+
+static void
+test_pkcs11_cert_constraints_unsupported_truncated(void)
+{
+	struct sshbuf *m = NULL;
+	struct sshkey **certs = NULL;
 	size_t ncerts = 0;
 	int cert_only = 0;
 
-	TEST_START("PKCS11 certificate with existing constraints");
-	ASSERT_PTR_NE(cert = load_test_cert(), NULL);
+	TEST_START("PKCS11 rejects unsupported lifetime before payload parsing");
 	ASSERT_PTR_NE(m = sshbuf_new(), NULL);
-	ASSERT_PTR_NE(destinations = sshbuf_new(), NULL);
 	ASSERT_INT_EQ(sshbuf_put_u8(m, SSH_AGENT_CONSTRAIN_LIFETIME), 0);
-	ASSERT_INT_EQ(sshbuf_put_u32(m, 60), 0);
-	ASSERT_INT_EQ(sshbuf_put_u8(m, SSH_AGENT_CONSTRAIN_CONFIRM), 0);
-	ASSERT_INT_EQ(sshbuf_put_u8(m, SSH_AGENT_CONSTRAIN_EXTENSION), 0);
-	ASSERT_INT_EQ(sshbuf_put_cstring(m,
-	    "restrict-destination-v00@openssh.com"), 0);
-	ASSERT_INT_EQ(sshbuf_put_stringb(m, destinations), 0);
-	ASSERT_INT_EQ(put_associated_certs(m, 1, cert, 1), 0);
 	ASSERT_INT_EQ(parse_pkcs11_add_constraints(m, &cert_only,
-	    &certs, &ncerts), 0);
-	ASSERT_INT_EQ(cert_only, 1);
-	ASSERT_SIZE_T_EQ(ncerts, 1);
-	free_pkcs11_certs(certs, ncerts);
-	sshkey_free(cert);
-	sshbuf_free(destinations);
+	    &certs, &ncerts), SSH_ERR_FEATURE_UNSUPPORTED);
 	sshbuf_free(m);
 	TEST_DONE();
 }
@@ -370,7 +447,9 @@ void
 pkcs11_cert_tests(void)
 {
 	test_pkcs11_cert_constraints_valid();
-	test_pkcs11_cert_constraints_compatible();
+	test_pkcs11_cert_constraints_empty();
+	test_pkcs11_cert_constraints_unsupported();
+	test_pkcs11_cert_constraints_unsupported_truncated();
 	test_pkcs11_cert_identity_name();
 	test_pkcs11_identity_comment();
 	test_pkcs11_provider_equal();

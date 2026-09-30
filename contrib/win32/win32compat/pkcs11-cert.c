@@ -122,9 +122,7 @@ parse_pkcs11_add_constraints(struct sshbuf *m, int *cert_onlyp,
 	struct sshkey *key = NULL;
 	char *ext_name = NULL;
 	u_char ctype, value;
-	u_int seconds;
-	int r, seen = 0, seen_lifetime = 0, seen_confirm = 0;
-	int seen_destinations = 0;
+	int r, seen = 0;
 
 	if (m == NULL || cert_onlyp == NULL || certsp == NULL ||
 	    ncertsp == NULL || *certsp != NULL || *ncertsp != 0)
@@ -134,23 +132,7 @@ parse_pkcs11_add_constraints(struct sshbuf *m, int *cert_onlyp,
 	while (sshbuf_len(m) != 0) {
 		if ((r = sshbuf_get_u8(m, &ctype)) != 0)
 			goto out;
-		if (ctype == SSH_AGENT_CONSTRAIN_LIFETIME) {
-			if (seen_lifetime ||
-			    (r = sshbuf_get_u32(m, &seconds)) != 0) {
-				r = SSH_ERR_INVALID_FORMAT;
-				goto out;
-			}
-			seen_lifetime = 1;
-			continue;
-		}
-		if (ctype == SSH_AGENT_CONSTRAIN_CONFIRM) {
-			if (seen_confirm) {
-				r = SSH_ERR_INVALID_FORMAT;
-				goto out;
-			}
-			seen_confirm = 1;
-			continue;
-		}
+		/* Only certificate associations are supported for persisted keys. */
 		if (ctype != SSH_AGENT_CONSTRAIN_EXTENSION) {
 			error_f("unsupported smartcard constraint %u", ctype);
 			r = SSH_ERR_FEATURE_UNSUPPORTED;
@@ -158,17 +140,6 @@ parse_pkcs11_add_constraints(struct sshbuf *m, int *cert_onlyp,
 		}
 		if ((r = sshbuf_get_cstring(m, &ext_name, NULL)) != 0)
 			goto out;
-		if (strcmp(ext_name,
-		    "restrict-destination-v00@openssh.com") == 0) {
-			if (seen_destinations || sshbuf_skip_string(m) != 0) {
-				r = SSH_ERR_INVALID_FORMAT;
-				goto out;
-			}
-			seen_destinations = 1;
-			free(ext_name);
-			ext_name = NULL;
-			continue;
-		}
 		if (strcmp(ext_name,
 		    "associated-certs-v00@openssh.com") != 0) {
 			error_f("unsupported smartcard constraint \"%s\"",
