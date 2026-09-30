@@ -212,33 +212,70 @@ fileio_pipe(struct w32_io* pio[2], int duplex)
 	sec_attributes.lpSecurityDescriptor = NULL;
 	sec_attributes.nLength = sizeof(sec_attributes);
 
-	/* create named pipe */
-	write_handle = CreateNamedPipeA(pipe_name,
-		(duplex ? PIPE_ACCESS_DUPLEX : PIPE_ACCESS_OUTBOUND ) | FILE_FLAG_OVERLAPPED,
-		PIPE_TYPE_BYTE | PIPE_WAIT,
-		1,
-		4096,
-		4096,
-		0,
-		&sec_attributes);
-	if (write_handle == INVALID_HANDLE_VALUE) {
-		errno = errno_from_Win32LastError();
-		debug3("pipe - CreateNamedPipe() ERROR:%d", errno);
-		goto error;
-	}
+	/*
+	 * For pipe(), lay out the ends like CreatePipe() does: the read end is
+	 * the server end and the write end is a client end opened with
+	 * FILE_READ_ATTRIBUTES. The write end is often handed to a child as
+	 * stdout/stderr, and runtimes such as Cygwin query it with
+	 * NtQueryInformationFile(FilePipeLocalInformation) to find the free
+	 * space before a non-blocking write. A PIPE_ACCESS_OUTBOUND server end
+	 * can never have FILE_READ_ATTRIBUTES, so that query fails and Cygwin
+	 * programs (ex. rsync --server) get spurious EAGAIN errors.
+	 */
+	if (duplex) {
+		write_handle = CreateNamedPipeA(pipe_name,
+			PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
+			PIPE_TYPE_BYTE | PIPE_WAIT,
+			1,
+			4096,
+			4096,
+			0,
+			&sec_attributes);
+		if (write_handle == INVALID_HANDLE_VALUE) {
+			errno = errno_from_Win32LastError();
+			debug3("pipe - CreateNamedPipe() ERROR:%d", errno);
+			goto error;
+		}
 
-	/* connect to named pipe */
-	read_handle = CreateFileA(pipe_name,
-		duplex ? GENERIC_READ | GENERIC_WRITE :  GENERIC_READ,
-		0,
-		&sec_attributes,
-		OPEN_EXISTING,
-		FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
-		NULL);
-	if (read_handle == INVALID_HANDLE_VALUE) {
-		errno = errno_from_Win32LastError();
-		debug3("pipe - ERROR CreateFile() :%d", errno);
-		goto error;
+		read_handle = CreateFileA(pipe_name,
+			GENERIC_READ | GENERIC_WRITE,
+			0,
+			&sec_attributes,
+			OPEN_EXISTING,
+			FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+			NULL);
+		if (read_handle == INVALID_HANDLE_VALUE) {
+			errno = errno_from_Win32LastError();
+			debug3("pipe - ERROR CreateFile() :%d", errno);
+			goto error;
+		}
+	} else {
+		read_handle = CreateNamedPipeA(pipe_name,
+			PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED,
+			PIPE_TYPE_BYTE | PIPE_WAIT,
+			1,
+			4096,
+			4096,
+			0,
+			&sec_attributes);
+		if (read_handle == INVALID_HANDLE_VALUE) {
+			errno = errno_from_Win32LastError();
+			debug3("pipe - CreateNamedPipe() ERROR:%d", errno);
+			goto error;
+		}
+
+		write_handle = CreateFileA(pipe_name,
+			GENERIC_WRITE | FILE_READ_ATTRIBUTES,
+			0,
+			&sec_attributes,
+			OPEN_EXISTING,
+			FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+			NULL);
+		if (write_handle == INVALID_HANDLE_VALUE) {
+			errno = errno_from_Win32LastError();
+			debug3("pipe - ERROR CreateFile() :%d", errno);
+			goto error;
+		}
 	}
 
 	/* create w32_io objects encapsulating above handles */
