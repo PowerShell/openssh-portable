@@ -269,6 +269,31 @@ test_pkcs11_cert_constraints_oversized(void)
 	TEST_DONE();
 }
 
+static void
+test_pkcs11_provider_equal(void)
+{
+	/* Registry data is not NUL terminated. */
+	const u_char stored[] = { 'C', ':', '\\', 'T', 'o', 'k', 'e', 'n',
+	    '.', 'd', 'l', 'l' };
+
+	TEST_START("PKCS11 provider comparison");
+	ASSERT_INT_EQ(pkcs11_provider_equal(stored, sizeof(stored),
+	    "C:\\Token.dll"), 1);
+	ASSERT_INT_EQ(pkcs11_provider_equal(stored, sizeof(stored),
+	    "c:\\TOKEN.DLL"), 1);
+	/* The whole value must match, not a prefix of either side. */
+	ASSERT_INT_EQ(pkcs11_provider_equal(stored, sizeof(stored),
+	    "C:\\Token.dll.old"), 0);
+	ASSERT_INT_EQ(pkcs11_provider_equal(stored, sizeof(stored) - 1,
+	    "C:\\Token.dll"), 0);
+	ASSERT_INT_EQ(pkcs11_provider_equal(stored, sizeof(stored),
+	    "C:\\Other.dll"), 0);
+	ASSERT_INT_EQ(pkcs11_provider_equal(NULL, 0, "C:\\Token.dll"), 0);
+	ASSERT_INT_EQ(pkcs11_provider_equal(stored, sizeof(stored), NULL), 0);
+	ASSERT_INT_EQ(pkcs11_provider_equal(stored, 0, ""), 0);
+	TEST_DONE();
+}
+
 void
 pkcs11_cert_tests(void)
 {
@@ -276,6 +301,7 @@ pkcs11_cert_tests(void)
 	test_pkcs11_cert_constraints_compatible();
 	test_pkcs11_cert_identity_name();
 	test_pkcs11_identity_comment();
+	test_pkcs11_provider_equal();
 	test_pkcs11_cert_constraints_duplicate();
 	test_pkcs11_cert_constraints_truncated();
 	test_pkcs11_cert_constraints_malformed();

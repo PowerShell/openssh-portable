@@ -34,9 +34,9 @@
 #include "config.h"
 #include "match.h"
 #include <sddl.h>
+#include "pkcs11-cert.h"
 #ifdef ENABLE_PKCS11
 #include "ssh-pkcs11.h"
-#include "pkcs11-cert.h"
 #endif
 #include "xmalloc.h"
 
@@ -172,7 +172,8 @@ remove_matching_subkeys_from_registry(HKEY user_root, wchar_t const* key_name, w
 					RegQueryValueExW(sub, value_name_to_remove, 0, NULL, data, &data_len) != 0)
 					goto done;
 				data[data_len] = '\0';
-				if (strncmp(data, value_data_to_remove, data_len) == 0) {
+				if (pkcs11_provider_equal((u_char *)data, data_len,
+				    value_data_to_remove)) {
 					if (RegDeleteTreeW(root, sub_name) != 0)
 						goto done;
 					--index;
@@ -626,7 +627,6 @@ remove_pkcs11_identities(HKEY user_root, const char *provider)
 	wchar_t sub_name[MAX_KEY_LENGTH];
 	DWORD sub_name_len, type, data_len;
 	u_char *data = NULL;
-	size_t provider_len = strlen(provider);
 	int index = 0, present, remove;
 	LSTATUS status;
 
@@ -662,8 +662,7 @@ remove_pkcs11_identities(HKEY user_root, const char *provider)
 			index++;
 			continue;
 		}
-		remove = present && data_len == provider_len &&
-		    memcmp(data, provider, provider_len) == 0;
+		remove = present && pkcs11_provider_equal(data, data_len, provider);
 		RegCloseKey(sub);
 		sub = NULL;
 		if (remove) {
@@ -691,7 +690,6 @@ load_pkcs11_identities(HKEY user_root, const char *provider,
 	char *comment = NULL, *association = NULL;
 	struct sshkey *registered = NULL, *cert = NULL;
 	u_char *plain_added = NULL;
-	size_t provider_len = strlen(provider);
 	int i, index = 0, legacy, loaded = 0;
 	LSTATUS status;
 
@@ -754,8 +752,8 @@ load_pkcs11_identities(HKEY user_root, const char *provider,
 		if (legacy)
 			memcpy(association, comment, comment_len);
 		association[association_len] = '\0';
-		if (association_len != provider_len ||
-		    memcmp(association, provider, provider_len) != 0)
+		if (!pkcs11_provider_equal((u_char *)association, association_len,
+		    provider))
 			continue;
 		sshkey_free(registered);
 		registered = NULL;

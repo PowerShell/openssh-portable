@@ -491,6 +491,27 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             Assert-Pkcs11IdentityComments `
                 ($copiedPublicKeyPaths + $certPaths) `
                 ($expectedComments + $expectedComments)
+
+            # Provider paths and Registry key names are case-insensitive on
+            # Windows. Re-adding only one certificate with alternate casing
+            # must not orphan the identities that retain the original path.
+            $caseVariantProvider = ([IO.Path]::GetFullPath(
+                $pkcs11Path)).ToUpperInvariant()
+            & ssh-add -s $caseVariantProvider -C $certPaths[0]
+            $LASTEXITCODE | Should Be 0
+            Restart-Service ssh-agent
+            WaitForStatus -ServiceName ssh-agent -Status "Running"
+            foreach ($keyPath in $copiedPublicKeyPaths + $certPaths) {
+                & ssh-add -T $keyPath
+                $LASTEXITCODE | Should Be 0
+            }
+            & ssh-add -e $caseVariantProvider
+            $LASTEXITCODE | Should Be 0
+            @(ssh-add -L) -match "The agent has no identities." | Should Be $true
+
+            # Restore the complete set for the remaining deletion scenarios.
+            & ssh-add @addArguments
+            $LASTEXITCODE | Should Be 0
             & ssh-add -d $certPaths[0]
             $LASTEXITCODE | Should Be 0
             $deletedKeyBlob = (Get-Content $certPaths[0]).Split(' ')[1]

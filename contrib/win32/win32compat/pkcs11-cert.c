@@ -54,6 +54,21 @@ pkcs11_identity_comment(const char *provider, const char *label)
 	return label == NULL || *label == '\0' ? provider : label;
 }
 
+/*
+ * Compare a provider path stored in the Registry, which is not NUL
+ * terminated, with a canonical provider path. Windows paths are case
+ * insensitive, and the whole value must match.
+ */
+int
+pkcs11_provider_equal(const u_char *stored, size_t stored_len,
+    const char *provider)
+{
+	if (stored == NULL || provider == NULL || stored_len == 0 ||
+	    strlen(provider) != stored_len)
+		return 0;
+	return strncasecmp((const char *)stored, provider, stored_len) == 0;
+}
+
 void
 free_pkcs11_certs(struct sshkey **certs, size_t ncerts)
 {
