@@ -26,7 +26,10 @@ if ($TestFilePath) {
 	$TestFilePath = $TestFilePath -replace "\\","/"
 }
 $OriginalSystemPath = [System.Environment]::GetEnvironmentVariable('Path', [System.EnvironmentVariableTarget]::Machine)
-$OriginalUserSoftHsmConf = [System.Environment]::GetEnvironmentVariable('SOFTHSM2_CONF', [System.EnvironmentVariableTarget]::User)
+$AgentServiceRegistryPath = 'HKLM:\SYSTEM\CurrentControlSet\Services\ssh-agent'
+$AgentEnvironmentConfigured = $false
+$OriginalAgentEnvironmentPresent = $false
+$OriginalAgentEnvironment = $null
 
 # Make sure config.h exists. It is used in some bashstests (Ex - sftp-glob.sh, cfgparse.sh)
 # first check in $BashTestsPath folder. If not then it's parent folder. If not then in the $OpenSSHBinPath
@@ -67,7 +70,7 @@ if(!$SkipInstallSSHD) {
 	if (-not [string]::IsNullOrEmpty($env:TEST_SSH_PKCS11_PROVIDER)) {
 		$testProvider = (& $ShellPath -c "cygpath -w '$env:TEST_SSH_PKCS11_PROVIDER'").Trim()
 		$agentImagePath = '"{0}" -P "{1}"' -f (Join-Path $OpenSSHBinPath 'ssh-agent.exe'), $testProvider
-		Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\ssh-agent' `
+		Set-ItemProperty -Path $AgentServiceRegistryPath `
 			-Name ImagePath -Value $agentImagePath -Force
 	}
 }
@@ -155,10 +158,7 @@ try
 	$env:TEST_SSH_SFTP = $OpenSSHBinPath_shell_fmt+"/sftp.exe"
 	$env:TEST_SSH_SFTPSERVER = $OpenSSHBinPath_shell_fmt+"/sftp-server.exe"
 	$env:TEST_SSH_SCP = $OpenSSHBinPath_shell_fmt+"/scp.exe"
-	$env:TEST_SSH_OPENSSL = (&$ShellPath -c "command -v openssl").Trim()
-	if ([string]::IsNullOrEmpty($env:TEST_SSH_OPENSSL)) {
-		throw "openssl was not found in the test shell"
-	}
+	$env:TEST_SSH_OPENSSL = ([string](&$ShellPath -c "command -v openssl")).Trim()
 	$env:BUILDDIR = $BUILDDIR
 	$env:TEST_WINDOWS_SSH = 1
 	$env:TEST_SSH_ASKPASS = $TEST_SSH_ASKPASS
@@ -187,7 +187,21 @@ try
 	$null = New-Item -ItemType directory -Path $temp_test_path -Force -ErrorAction Stop
 	if (-not [string]::IsNullOrEmpty($env:TEST_SSH_PKCS11_PROVIDER)) {
 		$testSoftHsmConf = Join-Path $BashTestsWindowsPath "$temp_test_path\SOFTHSM\softhsm2.conf"
-		[System.Environment]::SetEnvironmentVariable('SOFTHSM2_CONF', $testSoftHsmConf, [System.EnvironmentVariableTarget]::User)
+		$agentEnvironmentProperty = Get-ItemProperty -Path $AgentServiceRegistryPath `
+			-Name Environment -ErrorAction SilentlyContinue
+		if ($null -ne $agentEnvironmentProperty) {
+			$OriginalAgentEnvironmentPresent = $true
+			$OriginalAgentEnvironment = @($agentEnvironmentProperty.Environment)
+		}
+		$agentEnvironment = @($OriginalAgentEnvironment | Where-Object {
+			-not ([string]$_).StartsWith('SOFTHSM2_CONF=',
+				[StringComparison]::OrdinalIgnoreCase)
+		})
+		$agentEnvironment += "SOFTHSM2_CONF=$testSoftHsmConf"
+		New-ItemProperty -Path $AgentServiceRegistryPath -Name Environment `
+			-PropertyType MultiString -Value $agentEnvironment -Force `
+			-ErrorAction Stop | Out-Null
+		$AgentEnvironmentConfigured = $true
 	}
 
 	# remove the summary, output files.
@@ -287,7 +301,16 @@ finally
 {
 	# Restore User Path variable in the registry once the tests finish running.
 	[System.Environment]::SetEnvironmentVariable('Path', $OriginalSystemPath, [System.EnvironmentVariableTarget]::Machine)
-	[System.Environment]::SetEnvironmentVariable('SOFTHSM2_CONF', $OriginalUserSoftHsmConf, [System.EnvironmentVariableTarget]::User)
+	if ($AgentEnvironmentConfigured) {
+		if ($OriginalAgentEnvironmentPresent) {
+			New-ItemProperty -Path $AgentServiceRegistryPath -Name Environment `
+				-PropertyType MultiString -Value $OriginalAgentEnvironment `
+				-Force -ErrorAction SilentlyContinue | Out-Null
+		} else {
+			Remove-ItemProperty -Path $AgentServiceRegistryPath -Name Environment `
+				-ErrorAction SilentlyContinue
+		}
+	}
 	# remove temp test directory
 	if (!$SkipCleanup)
 	{

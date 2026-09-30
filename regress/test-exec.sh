@@ -1039,6 +1039,14 @@ p11_make_public() {
 	fi
 }
 
+p11_softhsm2_util() {
+	if test -n "$SOFTHSM2_MODULE"; then
+		"$SOFTHSM2_UTIL" --module "$SOFTHSM2_MODULE" "$@"
+	else
+		"$SOFTHSM2_UTIL" "$@"
+	fi
+}
+
 # Perform PKCS#11 setup: prepares a softhsm2 token configuration, generated
 # keys and loads them into the virtual token.
 PKCS11_OK=
@@ -1047,6 +1055,8 @@ p11_setup() {
 	# XXX we could potentially test ed25519 only in the absence of
 	# RSA and ECDSA support.
 	$SSH -Q key | grep ssh-rsa >/dev/null || return 1
+	test -n "$OPENSSL_BIN" || return 1
+	"$OPENSSL_BIN" version >/dev/null 2>&1 || return 1
 	if test "x$TEST_WINDOWS_SSH" = "x1"; then
 		if test -n "$TEST_SSH_PKCS11_PROVIDER"; then
 			p11_find_lib "$TEST_SSH_PKCS11_PROVIDER"
@@ -1056,12 +1066,19 @@ p11_setup() {
 				"/cygdrive/c/Program Files/SoftHSM2/lib/softhsm2.dll"
 		fi
 		SOFTHSM2_UTIL="${TEST_SSH_SOFTHSM2_UTIL:-/cygdrive/c/Program Files/SoftHSM2/bin/softhsm2-util.exe}"
+		SOFTHSM2_MODULE="${TEST_SSH_SOFTHSM2_MODULE:-$TEST_SSH_PKCS11}"
+		case "$SOFTHSM2_MODULE" in
+		*softhsm2-x64.dll)
+			SOFTHSM2_MODULE="${SOFTHSM2_MODULE%-x64.dll}.dll"
+			;;
+		esac
 	else
 		p11_find_lib \
 			/usr/local/lib/softhsm/libsofthsm2.so \
 			/usr/lib64/pkcs11/libsofthsm2.so \
 			/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
 		SOFTHSM2_UTIL=softhsm2-util
+		SOFTHSM2_MODULE=
 	fi
 	test -z "$TEST_SSH_PKCS11" && return 1
 	trace "using token library $TEST_SSH_PKCS11"
@@ -1085,6 +1102,7 @@ p11_setup() {
 		TOKEN_CONFIG=$(cygpath -w "$TOKEN")
 		SOFTHSM2_CONF=$(cygpath -w "$SOFTHSM2_CONF")
 		TEST_SSH_PKCS11=$(cygpath -w "$TEST_SSH_PKCS11")
+		SOFTHSM2_MODULE=$(cygpath -w "$SOFTHSM2_MODULE")
 	fi
 	export SOFTHSM2_CONF
 	cat > "$SOFTHSM2_CONF_FILE" << EOF
@@ -1096,7 +1114,7 @@ log.level = DEBUG
 # If CKF_REMOVABLE_DEVICE flag should be set
 slots.removable = false
 EOF
-	out=$("$SOFTHSM2_UTIL" --module "$TEST_SSH_PKCS11" --init-token --free \
+	out=$(p11_softhsm2_util --init-token --free \
 	    --label token-slot-0 --pin "$TEST_SSH_PIN" --so-pin "$TEST_SSH_SOPIN")
 	slot=$(echo -- $out | tr -d '\r' | sed 's/.* //')
 	trace "generating keys"
@@ -1110,7 +1128,7 @@ EOF
 	if test "x$TEST_WINDOWS_SSH" = "x1"; then
 		RSAP8_IMPORT=$(cygpath -w "$RSAP8")
 	fi
-	"$SOFTHSM2_UTIL" --module "$TEST_SSH_PKCS11" --slot "$slot" \
+	p11_softhsm2_util --slot "$slot" \
 	    --label 01 --id 01 --pin "$TEST_SSH_PIN" \
 	    --import "$RSAP8_IMPORT" >/dev/null || fatal "softhsm import RSA fail"
 	p11_make_public $RSA
@@ -1128,7 +1146,7 @@ EOF
 	if test "x$TEST_WINDOWS_SSH" = "x1"; then
 		ECP8_IMPORT=$(cygpath -w "$ECP8")
 	fi
-	"$SOFTHSM2_UTIL" --module "$TEST_SSH_PKCS11" --slot "$slot" \
+	p11_softhsm2_util --slot "$slot" \
 	    --label 02 --id 02 --pin "$TEST_SSH_PIN" \
 	    --import "$ECP8_IMPORT" >/dev/null || fatal "softhsm import EC fail"
 	p11_make_public $EC
@@ -1143,7 +1161,7 @@ EOF
 	if test "x$TEST_WINDOWS_SSH" = "x1"; then
 		ED25519P8_IMPORT=$(cygpath -w "$ED25519P8")
 	fi
-	"$SOFTHSM2_UTIL" --module "$TEST_SSH_PKCS11" --slot "$slot" \
+	p11_softhsm2_util --slot "$slot" \
 	    --label 03 --id 03 --pin "$TEST_SSH_PIN" \
 	    --import "$ED25519P8_IMPORT" >/dev/null || \
 		fatal "softhsm import ed25519 fail"
