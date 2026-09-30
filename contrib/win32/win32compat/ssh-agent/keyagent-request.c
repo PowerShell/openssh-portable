@@ -445,6 +445,52 @@ restore_pkcs11_identity_metadata(HKEY key,
 }
 
 static int
+pkcs11_identity_reusable(HKEY sub, const struct pkcs11_identity_change *change,
+    const u_char *blob, size_t blob_len, int key_type, const char *provider)
+{
+	struct pkcs11_identity_entry entry;
+	u_char *pub = NULL, *dflt = NULL;
+	DWORD pub_type, dflt_type, pub_len, dflt_len, type, type_kind;
+	DWORD type_len = sizeof(type);
+	int has_pub, has_dflt, reusable = 0;
+
+	memset(&entry, 0, sizeof(entry));
+	if (read_optional_reg_value(sub, L"pub", &has_pub, &pub_type, &pub,
+	    &pub_len) != 0 ||
+	    read_optional_reg_value(sub, NULL, &has_dflt, &dflt_type, &dflt,
+	    &dflt_len) != 0)
+		goto out;
+	if (has_pub && pub_type == REG_BINARY) {
+		entry.pub = pub;
+		entry.pub_len = pub_len;
+	}
+	if (has_dflt && dflt_type == REG_BINARY) {
+		entry.dflt = dflt;
+		entry.dflt_len = dflt_len;
+	}
+	if (RegQueryValueExW(sub, L"type", NULL, &type_kind, (BYTE *)&type,
+	    &type_len) == ERROR_SUCCESS && type_kind == REG_DWORD &&
+	    type_len == sizeof(type)) {
+		entry.has_type = 1;
+		entry.type = (int)type;
+	}
+	if (change->had_provider) {
+		entry.provider = change->provider;
+		entry.provider_len = change->provider_len;
+	}
+	if (change->had_comment) {
+		entry.comment = change->comment;
+		entry.comment_len = change->comment_len;
+	}
+	reusable = pkcs11_identity_entry_matches(&entry, blob, blob_len,
+	    key_type, provider);
+ out:
+	free(pub);
+	free(dflt);
+	return reusable;
+}
+
+static int
 store_pkcs11_identity(HKEY user_root, const struct sshkey *key,
     const char *provider, const char *comment,
     struct pkcs11_identity_change **changep)
@@ -486,6 +532,12 @@ store_pkcs11_identity(HKEY user_root, const struct sshkey *key,
 		    &change->had_comment, &change->comment_type,
 		    &change->comment, &change->comment_len) != 0) {
 			error_f("failed to read PKCS11 identity metadata");
+			goto out;
+		}
+		if (!pkcs11_identity_reusable(sub, change, blob, blob_len,
+		    key->type, provider)) {
+			error_f("refusing to replace existing identity %s "
+			    "not created for this provider", thumbprint);
 			goto out;
 		}
 		if (RegSetValueExW(sub, L"provider", 0, REG_BINARY,

@@ -294,6 +294,78 @@ test_pkcs11_provider_equal(void)
 	TEST_DONE();
 }
 
+static void
+test_pkcs11_identity_entry_matches(void)
+{
+	const u_char blob[] = "public-key-blob";
+	const u_char other[] = "other-key-blob";
+	const u_char encrypted[] = "encrypted-private-key";
+	const char *provider = "C:\\Token.dll";
+	struct pkcs11_identity_entry e;
+
+	TEST_START("existing PKCS11 registry identity validation");
+	memset(&e, 0, sizeof(e));
+	e.pub = blob; e.pub_len = sizeof(blob);
+	e.dflt = blob; e.dflt_len = sizeof(blob);
+	e.has_type = 1; e.type = KEY_RSA;
+	e.provider = (const u_char *)provider; e.provider_len = strlen(provider);
+	e.comment = (const u_char *)"token label"; e.comment_len = 11;
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 1);
+	/* The provider path is case insensitive. */
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, "c:\\TOKEN.DLL"), 1);
+	/* Another provider must not take over the identity. */
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, "C:\\Other.dll"), 0);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_ECDSA, provider), 0);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, other, sizeof(other),
+	    KEY_RSA, provider), 0);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(NULL, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, NULL, 0,
+	    KEY_RSA, provider), 0);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, NULL), 0);
+
+	/* A software key keeps its encrypted private key as default value. */
+	e.dflt = encrypted; e.dflt_len = sizeof(encrypted);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	e.dflt = blob; e.dflt_len = sizeof(blob);
+
+	/* Stored public key, type, or default value missing or different. */
+	e.pub = other; e.pub_len = sizeof(other);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	e.pub = NULL; e.pub_len = 0;
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	e.pub = blob; e.pub_len = sizeof(blob);
+	e.dflt = NULL; e.dflt_len = 0;
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	e.dflt = blob; e.dflt_len = sizeof(blob);
+	e.has_type = 0;
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	e.has_type = 1;
+
+	/* Entries from before the provider value existed use the comment. */
+	e.provider = NULL; e.provider_len = 0;
+	e.comment = (const u_char *)provider; e.comment_len = strlen(provider);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 1);
+	e.comment = (const u_char *)"user comment"; e.comment_len = 12;
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	e.comment = NULL; e.comment_len = 0;
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	TEST_DONE();
+}
+
 void
 pkcs11_cert_tests(void)
 {
@@ -302,6 +374,7 @@ pkcs11_cert_tests(void)
 	test_pkcs11_cert_identity_name();
 	test_pkcs11_identity_comment();
 	test_pkcs11_provider_equal();
+	test_pkcs11_identity_entry_matches();
 	test_pkcs11_cert_constraints_duplicate();
 	test_pkcs11_cert_constraints_truncated();
 	test_pkcs11_cert_constraints_malformed();

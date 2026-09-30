@@ -69,6 +69,41 @@ pkcs11_provider_equal(const u_char *stored, size_t stored_len,
 	return strncasecmp((const char *)stored, provider, stored_len) == 0;
 }
 
+/*
+ * Decide whether an existing Registry identity may be reused for the PKCS#11
+ * identity (blob, key_type) of provider. Only identities previously created
+ * for the same key by the same provider qualify: a software key that happens
+ * to have the same public key stores its private key as default value and
+ * must not be adopted by, and later removed with, a provider.
+ */
+int
+pkcs11_identity_entry_matches(const struct pkcs11_identity_entry *e,
+    const u_char *blob, size_t blob_len, int key_type, const char *provider)
+{
+	const u_char *association;
+	size_t association_len;
+
+	if (e == NULL || blob == NULL || blob_len == 0 || provider == NULL)
+		return 0;
+	if (e->pub == NULL || e->pub_len != blob_len ||
+	    memcmp(e->pub, blob, blob_len) != 0)
+		return 0;
+	if (e->dflt == NULL || e->dflt_len != blob_len ||
+	    memcmp(e->dflt, blob, blob_len) != 0)
+		return 0;
+	if (!e->has_type || e->type != key_type)
+		return 0;
+	/* Entries created before the provider value existed use the comment. */
+	if (e->provider != NULL) {
+		association = e->provider;
+		association_len = e->provider_len;
+	} else {
+		association = e->comment;
+		association_len = e->comment_len;
+	}
+	return pkcs11_provider_equal(association, association_len, provider);
+}
+
 void
 free_pkcs11_certs(struct sshkey **certs, size_t ncerts)
 {

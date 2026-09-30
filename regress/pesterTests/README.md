@@ -77,6 +77,11 @@ following environment variables are set before running the E2E tests:
 * `OPENSSH_TEST_PKCS11_LABELS`: semicolon-separated labels corresponding
   positionally to `OPENSSH_TEST_PKCS11_PUBLIC_KEYS`. An empty item expects the
   canonical provider path fallback.
+* `OPENSSH_TEST_PKCS11_SOFTWARE_KEY` (optional): unencrypted private key file
+  whose public key equals the first entry of `OPENSSH_TEST_PKCS11_PUBLIC_KEYS`,
+  for example the key that was imported into a SoftHSM token. It enables the
+  scenario that a provider must not adopt a software identity with the same
+  public key.
 
 The test creates short-lived OpenSSH certificates for the supplied public
 keys. It verifies plain and certificate identities, signing, agent service

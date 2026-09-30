@@ -21,9 +21,18 @@
 
 #define AGENT_MAX_EXT_CERTS	1024
 
+/* Values of an existing Registry identity, NULL when not present. */
+struct pkcs11_identity_entry {
+	const u_char *pub, *dflt, *provider, *comment;
+	size_t pub_len, dflt_len, provider_len, comment_len;
+	int has_type, type;
+};
+
 char *pkcs11_identity_name(const struct sshkey *, const u_char *, size_t);
 const char *pkcs11_identity_comment(const char *, const char *);
 int pkcs11_provider_equal(const u_char *, size_t, const char *);
+int pkcs11_identity_entry_matches(const struct pkcs11_identity_entry *,
+    const u_char *, size_t, int, const char *);
 int parse_pkcs11_add_constraints(struct sshbuf *, int *,
     struct sshkey ***, size_t *);
 void free_pkcs11_certs(struct sshkey **, size_t);
