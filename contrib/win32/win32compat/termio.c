@@ -51,6 +51,43 @@
 extern int in_raw_mode;
 BOOL isFirstTime = TRUE;
 
+/*
+ * Blocking ReadFile/WriteFile on a non-console handle.
+ * Handles inherited through std io may have been opened for overlapped io,
+ * ex. sockets created by Cygwin's socketpair() (used by rsync for its -e
+ * transport). ReadFile/WriteFile on those fail with ERROR_INVALID_PARAMETER
+ * when lpOverlapped is NULL, so pipe type handles (which includes sockets)
+ * always get an OVERLAPPED and the call waits for completion. Pipes ignore
+ * the offset, so this works for synchronous pipe handles as well. Other
+ * handle types keep the NULL OVERLAPPED so disk files continue to use and
+ * advance the file pointer.
+ */
+static BOOL
+syncio_transfer(struct w32_io* pio, BOOL rd, void* buf, DWORD len, DWORD* transferred)
+{
+	OVERLAPPED ov;
+	BOOL ret;
+	DWORD err;
+
+	if (FILETYPE(pio) != FILE_TYPE_PIPE)
+		return rd ? ReadFile(WINHANDLE(pio), buf, len, transferred, NULL) :
+		    WriteFile(WINHANDLE(pio), buf, len, transferred, NULL);
+
+	memset(&ov, 0, sizeof(ov));
+	if ((ov.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL)) == NULL)
+		return FALSE;
+
+	ret = rd ? ReadFile(WINHANDLE(pio), buf, len, NULL, &ov) :
+	    WriteFile(WINHANDLE(pio), buf, len, NULL, &ov);
+	if (ret || GetLastError() == ERROR_IO_PENDING)
+		ret = GetOverlappedResult(WINHANDLE(pio), &ov, transferred, TRUE);
+
+	err = GetLastError();
+	CloseHandle(ov.hEvent);
+	SetLastError(err);
+	return ret;
+}
+
 /* APC that gets queued on main thread when a sync Read completes on worker thread */
 static VOID CALLBACK
 ReadAPCProc(_In_ ULONG_PTR dwParam)
@@ -119,8 +156,8 @@ ReadThread(_In_ LPVOID lpParameter)
 			}
 		}
 	} else {
-		if (!ReadFile(WINHANDLE(pio), pio->read_details.buf,
-		    pio->read_details.buf_size, &(pio->sync_read_status.transferred), NULL)) {
+		if (!syncio_transfer(pio, TRUE, pio->read_details.buf,
+		    pio->read_details.buf_size, &(pio->sync_read_status.transferred))) {
 			debug4("ReadThread - ReadFile failed, error:%d, io:%p", GetLastError(), pio); 
 			pio->sync_read_status.error = GetLastError();
 			goto done;
@@ -212,8 +249,8 @@ WriteThread(_In_ LPVOID lpParameter)
 		}
 		pio->sync_write_status.transferred = pio->sync_write_status.to_transfer;
 	} else {
-		if (!WriteFile(WINHANDLE(pio), pio->write_details.buf, pio->sync_write_status.to_transfer,
-		    &(pio->sync_write_status.transferred), NULL)) {
+		if (!syncio_transfer(pio, FALSE, pio->write_details.buf, pio->sync_write_status.to_transfer,
+		    &(pio->sync_write_status.transferred))) {
 			pio->sync_write_status.error = GetLastError();
 			debug4("WriteThread - WriteFile %d, io:%p", GetLastError(), pio);
 		}
