@@ -1,7 +1,7 @@
 /*
  * Author: Manoj Ampalam <manoj.ampalam@microsoft.com>
  * ssh-agent implementation on Windows
- * 
+ *
  * Copyright (c) 2015 Microsoft Corp.
  * All rights reserved
  *
@@ -722,7 +722,7 @@ process_add_smartcard_key(struct sshbuf *request, struct sshbuf *response,
 		    "providers is disabled", provider);
 		goto done;
 	}
-	
+
 	if (canonicalize_provider_path(provider, canonical_provider,
 	    "add") != 0) {
 		request_invalid = 1;

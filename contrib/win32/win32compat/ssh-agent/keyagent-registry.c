@@ -1,7 +1,7 @@
 /*
  * Author: Manoj Ampalam <manoj.ampalam@microsoft.com>
  * ssh-agent implementation on Windows
- * 
+ *
  * Copyright (c) 2015 Microsoft Corp.
  * All rights reserved
  *
@@ -48,20 +48,20 @@ get_user_root(struct agent_connection* con, HKEY *root)
 	int r = 0;
 	LONG ret;
 	*root = HKEY_LOCAL_MACHINE;
-	
+
 	if (con->client_type <= ADMIN_USER) {
 		if (ImpersonateLoggedOnUser(con->client_impersonation_token) == FALSE)
 			return -1;
 		*root = NULL;
-		/* 
-		 * TODO - check that user profile is loaded, 
-		 * otherwise, this will return default profile 
+		/*
+		 * TODO - check that user profile is loaded,
+		 * otherwise, this will return default profile
 		 */
 		if ((ret = RegOpenCurrentUser(KEY_ALL_ACCESS, root)) != ERROR_SUCCESS) {
 			debug("unable to open user's registry hive, ERROR - %d", ret);
 			r = -1;
 		}
-			
+
 		RevertToSelf();
 	}
 	return r;
@@ -95,7 +95,7 @@ convert_blob(struct agent_connection* con, const char *blob, DWORD blen, char **
 	}
 
 	*eblob = malloc(out.cbData);
-	if (*eblob == NULL) 
+	if (*eblob == NULL)
 		goto done;
 
 	if((r = memcpy_s(*eblob, out.cbData, out.pbData, out.cbData)) != 0) {
