@@ -53,6 +53,10 @@
 #define SUBSYSTEM_INT_SFTP_ERROR	3
 #endif
 
+#ifndef SSHD_ENABLE_JOB_OBJECTS
+#define SSHD_ENABLE_JOB_OBJECTS		1
+#endif
+
 /* import */
 extern ServerOptions options;
 extern struct sshauthopt *auth_opts;
@@ -77,6 +81,10 @@ do_setup_env_proxy(struct ssh *, Session *, const char *);
 	if ((exp) != 0)						\
 		goto cleanup;					\
 } while(0)
+
+#define SSHD_CHILD_PROCESS_ACCESS \
+	(PROCESS_TERMINATE | PROCESS_DUP_HANDLE | PROCESS_SET_QUOTA | \
+	PROCESS_QUERY_INFORMATION | SYNCHRONIZE)
 
 
 static char*
@@ -161,8 +169,8 @@ setup_session_user_vars(wchar_t* pw_dir_w)
 	wchar_t* user_path = NULL;
 	wchar_t* hklm_path = get_registry_key_value(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", L"PATH", &hklm_path_sz);
 	wchar_t* hkcu_path = get_registry_key_value(HKEY_CURRENT_USER, L"Environment", L"PATH", &hkcu_path_sz);
-	DWORD user_path_sz = hklm_path_sz + hkcu_path_sz;
 	if (hklm_path && hkcu_path) {
+		DWORD user_path_sz = hklm_path_sz + hkcu_path_sz;
 		user_path = malloc(user_path_sz);
 		if (user_path) {
 			memcpy_s(user_path, user_path_sz, hklm_path, hklm_path_sz);
@@ -194,8 +202,8 @@ setup_session_env(struct ssh *ssh, Session* s)
 		_snprintf(buf, ARRAYSIZE(buf), "%s@%s", s->pw->pw_name, getenv("COMPUTERNAME"));
 		UTF8_TO_UTF16_WITH_CLEANUP(tmp, buf);
 		/* escape $ characters as $$ to distinguish from special prompt characters */
-		for (size_t i = 0, j = 0; i < wcslen(tmp) && j < ARRAYSIZE(wbuf) - 1; i++) {
-			wbuf[j] = tmp[i];
+		for (size_t tmp_index = 0, j = 0; tmp_index < wcslen(tmp) && j < ARRAYSIZE(wbuf) - 1; tmp_index++) {
+			wbuf[j] = tmp[tmp_index];
 			if (wbuf[j++] == L'$')
 				wbuf[j++] = L'$';
 		}
@@ -367,7 +375,12 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		exec_command = build_exec_command(command);
 		debug3("exec_command: %s", exec_command);
 
-		if (shell_type == SH_PS || shell_type == SH_BASH ||
+		if (s->is_subsystem && exec_command &&
+		    strstr(exec_command, "sftp-server.exe")) {
+			spawn_argv[0] = exec_command;
+			debug3("spawning sftp subsystem directly");
+		}
+		else if (shell_type == SH_PS || shell_type == SH_BASH ||
 			shell_type == SH_CYGWIN || (shell_type == SH_OTHER) && arg_escape) {
 			spawn_argv[0] = shell;
 
@@ -439,12 +452,13 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	memset(&job_info, 0, sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION));
 	job_info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
 
-	if ((process_handle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid)) == NULL) {
+	if ((process_handle = OpenProcess(SSHD_CHILD_PROCESS_ACCESS, FALSE, pid)) == NULL) {
 		errno = EOTHER;
 		error("cannot get process handle: %d", GetLastError());
 		goto cleanup;
 	}
 
+#if SSHD_ENABLE_JOB_OBJECTS
 	/*
 	* assign job object to control processes spawned
 	* 1. create job object
@@ -461,6 +475,10 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		CloseHandle(process_handle);
 		goto cleanup;
 	}
+#else
+	CloseHandle(process_handle);
+	process_handle = NULL;
+#endif
 	s->pid = pid;
 
 	/* Close the child sides of the socket pairs. */
