@@ -417,11 +417,15 @@
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\ssh-agent\agent-request.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\ssh-agent\agent.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\pkcs11-cert.h" />
+    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\ssh-agent\keyagent-pkcs11.h" />
+    <ClInclude Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\ssh-agent\keyagent-registry.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\ssh-agent\agent-main.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\ssh-agent\agent.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\ssh-agent\connection.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\ssh-agent\keyagent-pkcs11.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\ssh-agent\keyagent-registry.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\ssh-agent\keyagent-request.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\pkcs11-cert.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-pkcs11-client.c" />
