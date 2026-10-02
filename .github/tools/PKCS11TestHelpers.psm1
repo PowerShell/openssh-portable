@@ -214,7 +214,6 @@ function Set-Pkcs11PrivateDirectory {
 }
 
 function Restart-Pkcs11Agent {
-    param([string]$BinaryDirectory)
     $service = Get-Service ssh-agent -ErrorAction Stop
     if ($service.Status -ne 'Stopped') {
         $null = Invoke-Pkcs11Command "$env:SystemRoot/System32/sc.exe" @('stop', 'ssh-agent')

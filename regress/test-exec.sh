@@ -1131,7 +1131,7 @@ EOF
 	p11_softhsm2_util --slot "$slot" \
 	    --label 01 --id 01 --pin "$TEST_SSH_PIN" \
 	    --import "$RSAP8_IMPORT" >/dev/null || fatal "softhsm import RSA fail"
-	p11_make_public $RSA
+	p11_make_public "$RSA"
 	# ECDSA key
 	ECPARAM=${SSH_SOFTHSM_DIR}/ECPARAM
 	EC=${SSH_SOFTHSM_DIR}/EC
@@ -1149,7 +1149,7 @@ EOF
 	p11_softhsm2_util --slot "$slot" \
 	    --label 02 --id 02 --pin "$TEST_SSH_PIN" \
 	    --import "$ECP8_IMPORT" >/dev/null || fatal "softhsm import EC fail"
-	p11_make_public $EC
+	p11_make_public "$EC"
 	# Ed25519 key
 	ED25519=${SSH_SOFTHSM_DIR}/ED25519
 	ED25519P8=${SSH_SOFTHSM_DIR}/ED25519P8
@@ -1165,7 +1165,7 @@ EOF
 	    --label 03 --id 03 --pin "$TEST_SSH_PIN" \
 	    --import "$ED25519P8_IMPORT" >/dev/null || \
 		fatal "softhsm import ed25519 fail"
-	p11_make_public $ED25519
+	p11_make_public "$ED25519"
 	# Prepare some askpass scripts to load PINs.
 	PIN_SH=$SSH_SOFTHSM_DIR/pin.sh
 	cat > $PIN_SH << EOF
