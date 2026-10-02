@@ -138,9 +138,11 @@ WARNING: Following changes will be made to OpenSSH configuration
     Copy-Item "$($Script:E2ETestDataDirectory)\sshtest_ca_userkeys.pub"  $testSvcConfigDir -Force
 
     $acl = New-Object System.Security.AccessControl.DirectorySecurity
-    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("Administrators","FullControl","Allow")
+    $administratorsSid = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-32-544")
+    $systemSid = New-Object System.Security.Principal.SecurityIdentifier("S-1-5-18")
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($administratorsSid,"FullControl","Allow")
     $acl.AddAccessRule($rule)
-    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("System","FullControl","Allow")
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($systemSid,"FullControl","Allow")
     $acl.AddAccessRule($rule)
     $acl.SetAccessRuleProtection($true, $true)
 
@@ -225,8 +227,8 @@ WARNING: Following changes will be made to OpenSSH configuration
     $NonAdminUserProfile = Get-LocalUserProfile -User $NonAdminUser
     $Global:OpenSSHTestInfo.Add("NonAdminUserProfile", $NonAdminUserProfile)
 
-    #make $AdminUser admin
-    net localgroup Administrators $AdminUser /add
+    #make $AdminUser admin; use the well-known SID so this works on localized Windows
+    Add-LocalGroupMember -SID "S-1-5-32-544" -Member $AdminUser
 
     New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
