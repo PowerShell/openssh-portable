@@ -36,6 +36,7 @@
 #include "xmalloc.h"
 #include "keyagent-registry.h"
 #include "keyagent-pkcs11.h"
+#include "pkcs11-cert.h"
 
 #pragma warning(push, 3)
 
@@ -114,12 +115,23 @@ process_add_identity(struct sshbuf* request, struct sshbuf* response, struct age
 	int r = 0, blob_len, eblob_len, request_invalid = 0, success = 0;
 	size_t comment_len, pubkey_blob_len;
 	u_char *pubkey_blob = NULL;
-	char *thumbprint = NULL, *comment;
+	char *thumbprint = NULL, *comment = NULL, *cert_name = NULL;
 	const char *blob;
 	char* eblob = NULL;
-	HKEY reg = 0, sub = 0, user_root = 0;
+	HKEY reg = 0, sub = 0, user_root = 0, token = 0;
 	SECURITY_ATTRIBUTES sa;
 	LSTATUS status;
+	const wchar_t *names[] = { NULL, L"pub", L"type", L"comment",
+	    L"provider" };
+	u_char *saved[5] = { NULL };
+	DWORD saved_type[5] = { 0 }, saved_len[5] = { 0 };
+	DWORD disposition = 0, children = 0;
+	const BYTE *value;
+	DWORD value_len;
+	ULONG sd_len = 0;
+	int present[5] = { 0 }, i, changed = 0;
+	struct sshkey *stored_cert = NULL;
+	char *association = NULL;
 
 	/* parse input request */
 	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
@@ -140,21 +152,65 @@ process_add_identity(struct sshbuf* request, struct sshbuf* response, struct age
 
 	memset(&sa, 0, sizeof(SECURITY_ATTRIBUTES));
 	sa.nLength = sizeof(sa);
-	if ((!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL, SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sa.nLength)) ||
+	if ((!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL, SDDL_REVISION_1, &sa.lpSecurityDescriptor, &sd_len)) ||
 	    sshkey_to_blob(key, &pubkey_blob, &pubkey_blob_len) != 0 ||
 	    convert_blob(con, blob, blob_len, &eblob, &eblob_len, 1) != 0 ||
 	    ((thumbprint = sshkey_fingerprint(key, SSH_FP_HASH_DEFAULT, SSH_FP_DEFAULT)) == NULL) ||
 	    get_user_root(con, &user_root) != 0 ||
-	    RegCreateKeyExW(user_root, SSH_KEYS_ROOT, 0, 0, 0, KEY_WRITE | KEY_WOW64_64KEY, &sa, &reg, NULL) != 0 ||
-	    RegCreateKeyExA(reg, thumbprint, 0, 0, 0, KEY_WRITE | KEY_WOW64_64KEY, &sa, &sub, NULL) != 0 ||
-	    RegSetValueExW(sub, NULL, 0, REG_BINARY, eblob, eblob_len) != 0 ||
-	    RegSetValueExW(sub, L"pub", 0, REG_BINARY, pubkey_blob, (DWORD)pubkey_blob_len) != 0 ||
-	    RegSetValueExW(sub, L"type", 0, REG_DWORD, (BYTE*)&key->type, 4) != 0 ||
-	    RegSetValueExW(sub, L"comment", 0, REG_BINARY, comment, (DWORD)comment_len) != 0 ||
-	    /* a software key does not belong to a PKCS#11 provider */
-	    ((status = RegDeleteValueW(sub, L"provider")) != ERROR_SUCCESS &&
-	    status != ERROR_FILE_NOT_FOUND)) {
-		error("failed to add key to store");
+	    RegCreateKeyExW(user_root, SSH_KEYS_ROOT, 0, 0, 0, KEY_WRITE | KEY_WOW64_64KEY, &sa, &reg, NULL) != 0) {
+		error("failed to open key store");
+		goto done;
+	}
+	if (sshkey_is_cert(key)) {
+		if ((cert_name = pkcs11_identity_name(key, pubkey_blob,
+		    pubkey_blob_len)) == NULL)
+			goto done;
+		status = RegOpenKeyExA(reg, cert_name, 0,
+		    KEY_QUERY_VALUE | KEY_WOW64_64KEY, &token);
+		if (status != ERROR_FILE_NOT_FOUND && (status != ERROR_SUCCESS ||
+		    read_agent_identity(token, con, &stored_cert, &association) != 0 ||
+		    association == NULL || !sshkey_equal(key, stored_cert) ||
+		    RegQueryInfoKeyW(token, NULL, NULL, NULL, &children, NULL,
+		    NULL, NULL, NULL, NULL, NULL, NULL) != ERROR_SUCCESS ||
+		    children != 0)) {
+			error("invalid existing token certificate");
+			goto done;
+		}
+	}
+	if (RegCreateKeyExA(reg, thumbprint, 0, 0, 0,
+	    KEY_WRITE | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sa, &sub,
+	    &disposition) != ERROR_SUCCESS)
+		goto done;
+	if (disposition == REG_OPENED_EXISTING_KEY) {
+		for (i = 0; i < 5; i++) {
+			if (read_optional_reg_value(sub, names[i], &present[i],
+			    &saved_type[i], &saved[i], &saved_len[i]) != 0)
+				goto done;
+		}
+	}
+	for (i = 0; i < 4; i++) {
+		switch (i) {
+		case 0: value = (BYTE *)eblob; value_len = eblob_len; break;
+		case 1: value = pubkey_blob; value_len = (DWORD)pubkey_blob_len; break;
+		case 2: value = (BYTE *)&key->type; value_len = sizeof(key->type); break;
+		default: value = (BYTE *)comment; value_len = (DWORD)comment_len; break;
+		}
+		if (RegSetValueExW(sub, names[i], 0,
+		    i == 2 ? REG_DWORD : REG_BINARY, value, value_len) != ERROR_SUCCESS) {
+			error("failed to add key to store");
+			goto done;
+		}
+		changed++;
+	}
+	/* A software key does not belong to a PKCS#11 provider. */
+	status = RegDeleteValueW(sub, L"provider");
+	if (status != ERROR_SUCCESS && status != ERROR_FILE_NOT_FOUND)
+		goto done;
+	changed = 5;
+	/* Atomic deletion: a failing delete must leave the token entry intact. */
+	if (token != NULL && RegDeleteKeyExA(reg, cert_name,
+	    KEY_WOW64_64KEY, 0) != ERROR_SUCCESS) {
+		error("failed to detach token certificate");
 		goto done;
 	}
 
@@ -168,11 +224,34 @@ done:
 		r = -1;
 
 	/* delete created reg key if not succeeded*/
-	if ((success == 0) && reg && thumbprint)
-		RegDeleteKeyExA(reg, thumbprint, KEY_WOW64_64KEY, 0);
+	if (!success && sub != NULL) {
+		if (disposition == REG_CREATED_NEW_KEY) {
+			if (RegDeleteKeyExA(reg, thumbprint, KEY_WOW64_64KEY, 0) != ERROR_SUCCESS)
+				error("failed to remove incomplete software identity");
+		} else {
+			for (i = 0; i < changed; i++) {
+				if (restore_optional_reg_value(sub, names[i], present[i],
+				    saved_type[i], saved[i], saved_len[i]) != 0)
+					error("failed to restore software identity value %d", i);
+			}
+		}
+	}
 
-	if (eblob)
+	if (eblob) {
+		SecureZeroMemory(eblob, eblob_len);
 		free(eblob);
+	}
+	for (i = 0; i < 5; i++) {
+		if (saved[i] != NULL)
+			SecureZeroMemory(saved[i], saved_len[i]);
+		free(saved[i]);
+	}
+	free(comment);
+	free(cert_name);
+	free(association);
+	sshkey_free(stored_cert);
+	if (token != NULL)
+		RegCloseKey(token);
 	if (sa.lpSecurityDescriptor)
 		LocalFree(sa.lpSecurityDescriptor);
 	if (key)

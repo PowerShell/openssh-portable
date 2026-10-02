@@ -6,7 +6,9 @@ $script:RequiredTests = @(
     'PKCS11 RSA add/list/sign', 'PKCS11 ECDSA add/list/sign',
     'PKCS11 associated certificate lifecycle',
     'PKCS11 software identity preservation',
-    'PKCS11 software identity detachment', 'PKCS11 stale provider isolation'
+    'PKCS11 software identity detachment', 'PKCS11 stale provider isolation',
+    'PKCS11 software certificate preservation',
+    'PKCS11 software certificate detachment'
 )
 
 function Get-Pkcs11RequiredTests { return $script:RequiredTests }

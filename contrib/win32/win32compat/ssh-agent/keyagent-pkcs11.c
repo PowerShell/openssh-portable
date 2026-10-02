@@ -143,19 +143,55 @@ pkcs11_identity_reusable(HKEY sub, const struct pkcs11_identity_change *change,
 }
 
 static int
-store_pkcs11_identity(HKEY user_root, const struct sshkey *key,
+existing_pkcs11_certificate(HKEY root, struct agent_connection *con,
+    const struct sshkey *key, const char *name, const char *provider,
+    int exact, int *foundp, int *neededp)
+{
+	HKEY sub = NULL;
+	struct sshkey *stored = NULL;
+	char *association = NULL;
+	LSTATUS status;
+	int r = -1;
+
+	status = RegOpenKeyExA(root, name, 0,
+	    KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub);
+	if (status == ERROR_FILE_NOT_FOUND)
+		return 0;
+	if (status != ERROR_SUCCESS ||
+	    read_agent_identity(sub, con, &stored, &association) != 0)
+		goto out;
+	if (sshkey_equal(key, stored)) {
+		*foundp = 1;
+		if (association != NULL && pkcs11_provider_equal(
+		    (u_char *)association, strlen(association), provider))
+			*neededp = 1;
+	} else if (exact)
+		goto out;
+	r = 0;
+ out:
+	if (sub != NULL)
+		RegCloseKey(sub);
+	sshkey_free(stored);
+	free(association);
+	return r;
+}
+
+/* 0: stored, 1: already present, -1: error. */
+static int
+store_pkcs11_identity(HKEY user_root, struct agent_connection *con,
+    const struct sshkey *key,
     const char *provider, const char *comment,
-    struct pkcs11_identity_change **changep)
+    struct pkcs11_identity_change **changep, int *neededp)
 {
 	SECURITY_ATTRIBUTES sa = { 0, NULL, 0 };
 	HKEY reg = NULL, sub = NULL;
 	u_char *blob = NULL;
 	size_t blob_len;
-	char *thumbprint = NULL;
+	char *thumbprint = NULL, *fingerprint = NULL;
 	struct pkcs11_identity_change *change = NULL;
 	DWORD disposition = 0;
 	ULONG sd_len = 0;
-	int success = 0;
+	int success = 0, found = 0, result = -1;
 
 	if (changep == NULL || provider == NULL || comment == NULL)
 		return -1;
@@ -167,8 +203,24 @@ store_pkcs11_identity(HKEY user_root, const struct sshkey *key,
 	    blob_len == 0 || blob_len > MAX_MESSAGE_SIZE ||
 	    (thumbprint = pkcs11_identity_name(key, blob, blob_len)) == NULL ||
 	    RegCreateKeyExW(user_root, SSH_KEYS_ROOT, 0, NULL, 0,
-	    KEY_WRITE | KEY_WOW64_64KEY, &sa, &reg, NULL) != ERROR_SUCCESS ||
-	    RegCreateKeyExA(reg, thumbprint, 0, NULL, 0,
+	    KEY_WRITE | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sa, &reg, NULL) != ERROR_SUCCESS) {
+		error_f("failed to open PKCS11 identities");
+		goto out;
+	}
+	if (sshkey_is_cert(key)) {
+		if ((fingerprint = sshkey_fingerprint(key, SSH_FP_HASH_DEFAULT,
+		    SSH_FP_DEFAULT)) == NULL ||
+		    existing_pkcs11_certificate(reg, con, key, fingerprint,
+		    provider, 0, &found, neededp) != 0 ||
+		    existing_pkcs11_certificate(reg, con, key, thumbprint,
+		    provider, 1, &found, neededp) != 0)
+			goto out;
+		if (found) {
+			result = 1;
+			goto out;
+		}
+	}
+	if (RegCreateKeyExA(reg, thumbprint, 0, NULL, 0,
 	    KEY_WRITE | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sa, &sub,
 	    &disposition) != ERROR_SUCCESS) {
 		error_f("failed to persist PKCS11 identity");
@@ -224,6 +276,8 @@ store_pkcs11_identity(HKEY user_root, const struct sshkey *key,
 	*changep = change;
 	change = NULL;
 	success = 1;
+	*neededp = 1;
+	result = 0;
  out:
 	if (sub != NULL) {
 		RegCloseKey(sub);
@@ -238,8 +292,9 @@ store_pkcs11_identity(HKEY user_root, const struct sshkey *key,
 		LocalFree(sa.lpSecurityDescriptor);
 	free_pkcs11_identity_change(change);
 	free(thumbprint);
+	free(fingerprint);
 	free(blob);
-	return success ? 0 : -1;
+	return result;
 }
 
 static int
@@ -252,7 +307,10 @@ store_pkcs11_provider(HKEY user_root, struct agent_connection *con,
 	DWORD epin_len = 0;
 	DWORD disposition = 0;
 	ULONG sd_len = 0;
-	int success = 0;
+	int success = 0, i, changed = 0, present[2] = { 0 };
+	const wchar_t *names[] = { L"provider", L"pin" };
+	u_char *saved[2] = { NULL };
+	DWORD saved_type[2] = { 0 }, saved_len[2] = { 0 };
 
 	sa.nLength = sizeof(sa);
 	if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(REG_KEY_SDDL,
@@ -261,17 +319,43 @@ store_pkcs11_provider(HKEY user_root, struct agent_connection *con,
 	    RegCreateKeyExW(user_root, SSH_PKCS11_PROVIDERS_ROOT, 0, NULL, 0,
 	    KEY_WRITE | KEY_WOW64_64KEY, &sa, &reg, NULL) != ERROR_SUCCESS ||
 	    RegCreateKeyExA(reg, provider, 0, NULL, 0,
-	    KEY_WRITE | KEY_WOW64_64KEY, &sa, &sub,
-	    &disposition) != ERROR_SUCCESS ||
-	    RegSetValueExW(sub, L"provider", 0, REG_BINARY,
-	    (const BYTE *)provider, (DWORD)strlen(provider)) != ERROR_SUCCESS ||
-	    RegSetValueExW(sub, L"pin", 0, REG_BINARY, (const BYTE *)epin,
-	    epin_len) != ERROR_SUCCESS) {
+	    KEY_WRITE | KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sa, &sub,
+	    &disposition) != ERROR_SUCCESS) {
 		error_f("failed to persist PKCS11 provider");
 		goto out;
 	}
+	if (disposition == REG_OPENED_EXISTING_KEY) {
+		for (i = 0; i < 2; i++) {
+			if (read_optional_reg_value(sub, names[i], &present[i],
+			    &saved_type[i], &saved[i], &saved_len[i]) != 0 ||
+			    !present[i] || saved_type[i] != REG_BINARY ||
+			    saved_len[i] == 0)
+				goto out;
+		}
+		if (!pkcs11_provider_equal(saved[0], saved_len[0], provider))
+			goto out;
+	}
+	for (i = 0; i < 2; i++) {
+		if (RegSetValueExW(sub, names[i], 0, REG_BINARY,
+		    (const BYTE *)(i == 0 ? provider : epin),
+		    i == 0 ? (DWORD)strlen(provider) : epin_len) != ERROR_SUCCESS)
+			goto out;
+		changed++;
+	}
 	success = 1;
  out:
+	if (!success && disposition == REG_OPENED_EXISTING_KEY) {
+		for (i = 0; i < changed; i++) {
+			if (restore_optional_reg_value(sub, names[i], present[i],
+			    saved_type[i], saved[i], saved_len[i]) != 0)
+				error_f("failed to restore PKCS11 provider metadata");
+		}
+	}
+	for (i = 0; i < 2; i++) {
+		if (saved[i] != NULL)
+			SecureZeroMemory(saved[i], saved_len[i]);
+		free(saved[i]);
+	}
 	if (epin != NULL) {
 		SecureZeroMemory(epin, epin_len);
 		free(epin);
@@ -671,15 +755,18 @@ canonicalize_provider_path(const char *provider, char *canonical,
  * in *changesp, which is grown by one entry on success.
  */
 static int
-store_and_track_pkcs11_identity(HKEY user_root, const struct sshkey *key,
+store_and_track_pkcs11_identity(HKEY user_root, struct agent_connection *con,
+    const struct sshkey *key,
     const char *provider, const char *comment,
-    struct pkcs11_identity_change ***changesp, size_t *nchangesp)
+    struct pkcs11_identity_change ***changesp, size_t *nchangesp,
+    int *neededp)
 {
 	struct pkcs11_identity_change *change = NULL;
+	int r;
 
-	if (store_pkcs11_identity(user_root, key, provider, comment,
-	    &change) != 0)
-		return -1;
+	if ((r = store_pkcs11_identity(user_root, con, key, provider, comment,
+	    &change, neededp)) != 0)
+		return r;
 	*changesp = xrecallocarray(*changesp, *nchangesp, *nchangesp + 1,
 	    sizeof(**changesp));
 	(*changesp)[(*nchangesp)++] = change;
@@ -694,7 +781,7 @@ process_add_smartcard_key(struct sshbuf *request, struct sshbuf *response,
 	char allowed_provider[PATH_MAX], **labels = NULL;
 	const char *comment;
 	int i, j, count = 0, r = 0, request_invalid = 0, success = 0;
-	int cert_only = 0, identities_stored = 0;
+	int cert_only = 0, identities_stored = 0, provider_needed = 0;
 	struct sshkey **keys = NULL, **certs = NULL, *cert = NULL;
 	struct pkcs11_identity_change **identity_changes = NULL;
 	size_t k, pin_len = 0, ncerts = 0, nidentity_changes = 0;
@@ -761,10 +848,10 @@ process_add_smartcard_key(struct sshbuf *request, struct sshbuf *response,
 			    !sshkey_equal_public(keys[i], certs[j]))
 				continue;
 			if (pkcs11_make_cert(keys[i], certs[j], &cert) != 0)
-				continue;
-			if (store_and_track_pkcs11_identity(user_root, cert,
+				goto done;
+			if (store_and_track_pkcs11_identity(user_root, con, cert,
 			    canonical_provider, comment, &identity_changes,
-			    &nidentity_changes) != 0)
+			    &nidentity_changes, &provider_needed) < 0)
 				goto done;
 			sshkey_free(cert);
 			cert = NULL;
@@ -772,15 +859,16 @@ process_add_smartcard_key(struct sshbuf *request, struct sshbuf *response,
 		}
 		if (cert_only)
 			continue;
-		if (store_and_track_pkcs11_identity(user_root, keys[i],
+		if (store_and_track_pkcs11_identity(user_root, con, keys[i],
 		    canonical_provider, comment, &identity_changes,
-		    &nidentity_changes) != 0)
+		    &nidentity_changes, &provider_needed) < 0)
 			goto done;
 		identities_stored++;
 	}
 
-	if (identities_stored == 0 || store_pkcs11_provider(user_root, con,
-	    canonical_provider, pin, pin_len) != 0)
+	if (identities_stored == 0 || (provider_needed &&
+	    store_pkcs11_provider(user_root, con, canonical_provider, pin,
+	    pin_len) != 0))
 		goto done;
 	debug("added PKCS11 provider and identities to store");
 	success = 1;

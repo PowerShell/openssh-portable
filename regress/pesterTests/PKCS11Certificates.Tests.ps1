@@ -51,6 +51,69 @@ Describe 'Windows PKCS11 certificate integration' -Tags 'PKCS11' {
             ssh-keygen -q -t $type -N $keypassphrase -f (Join-Path $testDir "id_$type")
             $LASTEXITCODE | Should Be 0
         }
+        function New-SoftwareCertificateFixture($Algorithm) {
+            if ($Mode -eq 'SoftHSM') {
+                $publicPath = @($config.PublicKeys | Where-Object {
+                    (Get-Content -LiteralPath $_) -match $(if ($Algorithm -eq 'rsa') { '^ssh-rsa ' } else { '^ecdsa-sha2-nistp256 ' })
+                })
+                $publicPath.Count | Should Be 1 | Out-Null
+                $source = $publicPath[0] -replace '\.pub$', ''
+            } else { $source = $config.SoftwareKey }
+            $key = Join-Path $testDir "software-certificate-$Algorithm"
+            Copy-Item -LiteralPath $source -Destination $key -Force
+            Repair-UserKeyPermission $key -Confirm:$false | Out-Null
+            $public = ssh-keygen -y -f $key
+            $LASTEXITCODE | Should Be 0 | Out-Null
+            Set-Content -LiteralPath "$key.pub" -Value $public
+            $ca = Join-Path $testDir "software-certificate-ca-$Algorithm"
+            Remove-Item "$ca*" -Force -ErrorAction SilentlyContinue
+            ssh-keygen -q -t ed25519 -N '' -f $ca
+            $LASTEXITCODE | Should Be 0 | Out-Null
+            ssh-keygen -q -s $ca -I "software-$Algorithm" -n $env:USERNAME -z 41 "$key.pub"
+            $LASTEXITCODE | Should Be 0 | Out-Null
+            $cert = "$key-cert.pub"
+            return @{ Key=$key; Cert=$cert; CA=$ca; Blob=(Get-Content $cert).Split(' ')[1] }
+        }
+        function New-RelatedCertificate($Fixture, $Serial = 42) {
+            $public = "$($Fixture.Key)-$Serial.pub"
+            Copy-Item -LiteralPath "$($Fixture.Key).pub" -Destination $public
+            ssh-keygen -q -s $Fixture.CA -I "certificate-$Serial" -n $env:USERNAME -z $Serial $public | Out-Null
+            $LASTEXITCODE | Should Be 0 | Out-Null
+            return $public.Replace('.pub','-cert.pub')
+        }
+        function Open-CertificateRegistryKey($Fixture, [switch]$Software) {
+            $root = [Microsoft.Win32.Registry]::Users.OpenSubKey("$currentUserSid\Software\OpenSSH\Agent\Keys",$true)
+            try {
+                foreach ($name in $root.GetSubKeyNames()) {
+                    if ($Software -and $name -match '^cert-') { continue }
+                    $key = $root.OpenSubKey($name,[Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree,[Security.AccessControl.RegistryRights]::FullControl)
+                    if ([Convert]::ToBase64String($key.GetValue('pub')) -eq $Fixture.Blob) { return @{ Root=$root; Key=$key; Name=$name } }
+                    $key.Dispose()
+                }
+                throw 'Certificate Registry identity missing'
+            } catch { $root.Dispose(); throw }
+        }
+        function Get-IdentityValues($Key) {
+            return (@($Key.GetValueNames() | Sort-Object | ForEach-Object {
+                $kind=$Key.GetValueKind($_)
+                $value=$Key.GetValue($_,$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+                $data=if($value -is [byte[]]){[Convert]::ToBase64String($value)}else{[string]$value}
+                "$_/$kind/$data"
+            }) -join "`n")
+        }
+        function Assert-SoftwareCertificate($Fixture, $Comment) {
+            $entries = @((ssh-add -L) | Where-Object { ($_ -split ' ')[1] -eq $Fixture.Blob })
+            $entries.Count | Should Be 1
+            ($entries[0] -split ' ', 3)[2] | Should Be $Comment
+            ssh-add -T $Fixture.Cert
+            $LASTEXITCODE | Should Be 0
+            $identity=Open-CertificateRegistryKey $Fixture
+            try {
+                $identity.Name | Should Not Match '^cert-'
+                $identity.Key.GetValue('provider',$null) | Should Be $null
+                [Convert]::ToBase64String($identity.Key.GetValue('')) | Should Not Be $Fixture.Blob
+            } finally { $identity.Key.Dispose(); $identity.Root.Dispose() }
+        }
     }
     BeforeEach {
         if (-not $skipReason) {
@@ -63,6 +126,183 @@ Describe 'Windows PKCS11 certificate integration' -Tags 'PKCS11' {
         if (-not $skipReason) {
             ssh-add -D | Out-Null
             Remove-PasswordSetting
+        }
+    }
+
+    It (Get-Pkcs11CaseName 'PKCS11 software certificate preservation' $softwareSkipReason) -Skip:([bool]$softwareSkipReason) {
+        $algorithms = if ($Mode -eq 'SoftHSM') { @('rsa','ecdsa') } else { @('hardware') }
+        foreach ($algorithm in $algorithms) {
+            ssh-add -D | Out-Null
+            $fixture = New-SoftwareCertificateFixture $algorithm
+            ssh-add $fixture.Key
+            $LASTEXITCODE | Should Be 0
+            $comment = (@((ssh-add -L) | Where-Object { ($_ -split ' ')[1] -eq $fixture.Blob })[0] -split ' ',3)[2]
+            $identity=Open-CertificateRegistryKey $fixture
+            try { $original=Get-IdentityValues $identity.Key } finally { $identity.Key.Dispose(); $identity.Root.Dispose() }
+            Add-PasswordSetting -Pass $pkcs11Pin
+            $env:SSH_ASKPASS_REQUIRE = 'force'
+            # A no-op still validates the affected software Registry entry.
+            $identity=Open-CertificateRegistryKey $fixture
+            $storedType=$identity.Key.GetValue('type')
+            $storedBlob=$identity.Key.GetValue('')
+            try {
+                $identity.Key.SetValue('type',[long]$storedType,[Microsoft.Win32.RegistryValueKind]::QWord)
+                ssh-add -s $config.Provider -C $fixture.Cert
+                $LASTEXITCODE | Should Not Be 0
+                $identity.Key.SetValue('type',$storedType,[Microsoft.Win32.RegistryValueKind]::DWord)
+                $identity.Key.SetValue('',[byte[]]@(1,2,3),[Microsoft.Win32.RegistryValueKind]::Binary)
+                ssh-add -s $config.Provider -C $fixture.Cert
+                $LASTEXITCODE | Should Not Be 0
+            } finally {
+                $identity.Key.SetValue('type',$storedType,[Microsoft.Win32.RegistryValueKind]::DWord)
+                $identity.Key.SetValue('',$storedBlob,[Microsoft.Win32.RegistryValueKind]::Binary)
+                $identity.Key.Dispose(); $identity.Root.Dispose()
+            }
+            foreach ($repeat in 1..2) {
+                ssh-add -s $config.Provider -C $fixture.Cert
+                $LASTEXITCODE | Should Be 0
+                Assert-SoftwareCertificate $fixture $comment
+            }
+            Restart-Service ssh-agent
+            Assert-SoftwareCertificate $fixture $comment
+            $identity=Open-CertificateRegistryKey $fixture
+            try { (Get-IdentityValues $identity.Key) | Should Be $original } finally { $identity.Key.Dispose(); $identity.Root.Dispose() }
+            # No provider record is needed when every requested cert is software.
+            $root = [Microsoft.Win32.Registry]::Users.OpenSubKey("$currentUserSid\Software\OpenSSH\Agent\PKCS11_Providers")
+            try { if ($root) { $root.GetSubKeyNames().Count | Should Be 0 } } finally { if ($root) { $root.Dispose() } }
+            ssh-add -e $config.Provider
+            $LASTEXITCODE | Should Not Be 0
+            Assert-SoftwareCertificate $fixture $comment
+            # One no-op and one new certificate of the same public key.
+            $second=New-RelatedCertificate $fixture
+            foreach ($repeat in 1..2) {
+                ssh-add -s $config.Provider -C $fixture.Cert $second
+                $LASTEXITCODE | Should Be 0
+                Assert-SoftwareCertificate $fixture $comment
+                $secondBlob=(Get-Content $second).Split(' ')[1]
+                @((ssh-add -L) | Where-Object { ($_ -split ' ')[1] -eq $secondBlob }).Count | Should Be 1
+                ssh-add -T $second
+                $LASTEXITCODE | Should Be 0
+            }
+            $third=New-RelatedCertificate $fixture 43
+            $providers=[Microsoft.Win32.Registry]::Users.OpenSubKey("$currentUserSid\Software\OpenSSH\Agent\PKCS11_Providers",$true)
+            $provider=$providers.OpenSubKey($config.Provider.Replace('\','/'),[Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree,[Security.AccessControl.RegistryRights]::FullControl)
+            $acl=$provider.GetAccessControl()
+            $originalAcl=$acl.GetSecurityDescriptorSddlForm('Access')
+            $blocked=$provider.GetAccessControl()
+            $blocked.AddAccessRule([Security.AccessControl.RegistryAccessRule]::new($systemSid,[Security.AccessControl.RegistryRights]::SetValue,[Security.AccessControl.AccessControlType]::Deny))
+            try {
+                $before=@(ssh-add -L | Sort-Object)
+                $provider.SetAccessControl($blocked)
+                ssh-add -s $config.Provider -C $fixture.Cert $third
+                $LASTEXITCODE | Should Not Be 0
+                @(Compare-Object $before @(ssh-add -L | Sort-Object)).Count | Should Be 0
+                Assert-SoftwareCertificate $fixture $comment
+            } finally {
+                $acl.SetSecurityDescriptorSddlForm($originalAcl)
+                $provider.SetAccessControl($acl)
+                $provider.Dispose(); $providers.Dispose()
+            }
+            if ($Mode -eq 'SoftHSM') {
+                # A different provider cannot take over an existing token cert.
+                $alternate=Join-Path (Split-Path $config.Provider) "alternate-$algorithm.dll"
+                Copy-Item -LiteralPath $config.Provider -Destination $alternate
+                $tokenFixture=@{Blob=$secondBlob}
+                $token=Open-CertificateRegistryKey $tokenFixture
+                try { $before=Get-IdentityValues $token.Key } finally { $token.Key.Dispose(); $token.Root.Dispose() }
+                ssh-add -s $alternate -C $fixture.Cert $second
+                $LASTEXITCODE | Should Be 0
+                $token=Open-CertificateRegistryKey $tokenFixture
+                try { (Get-IdentityValues $token.Key) | Should Be $before } finally { $token.Key.Dispose(); $token.Root.Dispose() }
+                $providers=[Microsoft.Win32.Registry]::Users.OpenSubKey("$currentUserSid\Software\OpenSSH\Agent\PKCS11_Providers")
+                try { $providers.GetSubKeyNames().Count | Should Be 1 } finally { $providers.Dispose() }
+            }
+            Restart-Service ssh-agent
+            Assert-SoftwareCertificate $fixture $comment
+            ssh-add -e $config.Provider
+            $LASTEXITCODE | Should Be 0
+            Assert-SoftwareCertificate $fixture $comment
+            @((ssh-add -L) | Where-Object { ($_ -split ' ')[1] -eq $secondBlob }).Count | Should Be 0
+            ssh-add -d $fixture.Cert
+            $LASTEXITCODE | Should Be 0
+            @((ssh-add -L) | Where-Object { ($_ -split ' ')[1] -eq $fixture.Blob }).Count | Should Be 0
+        }
+    }
+
+    It (Get-Pkcs11CaseName 'PKCS11 software certificate detachment' $softwareSkipReason) -Skip:([bool]$softwareSkipReason) {
+        $algorithms = if ($Mode -eq 'SoftHSM') { @('rsa','ecdsa') } else { @('hardware') }
+        foreach ($algorithm in $algorithms) {
+            ssh-add -D | Out-Null
+            $fixture = New-SoftwareCertificateFixture $algorithm
+            Add-PasswordSetting -Pass $pkcs11Pin
+            $env:SSH_ASKPASS_REQUIRE = 'force'
+            ssh-add -s $config.Provider -C $fixture.Cert
+            $LASTEXITCODE | Should Be 0
+            $token=Open-CertificateRegistryKey $fixture
+            $tokenValues=@($token.Key.GetValueNames() | ForEach-Object { @{ Name=$_; Kind=$token.Key.GetValueKind($_); Data=$token.Key.GetValue($_) } })
+            $acl=$token.Key.GetAccessControl()
+            $originalAcl=$acl.GetSecurityDescriptorSddlForm('Access')
+            $blocked=$token.Key.GetAccessControl()
+            $deny=[Security.AccessControl.RegistryAccessRule]::new($systemSid,[Security.AccessControl.RegistryRights]::Delete,[Security.AccessControl.AccessControlType]::Deny)
+            $blocked.AddAccessRule($deny)
+            try {
+                $before=Get-IdentityValues $token.Key
+                $token.Key.SetAccessControl($blocked)
+                ssh-add -C $fixture.Key
+                $LASTEXITCODE | Should Not Be 0
+                (Get-IdentityValues $token.Key) | Should Be $before
+                @((ssh-add -L) | Where-Object { ($_ -split ' ')[1] -eq $fixture.Blob }).Count | Should Be 1
+                $token.Name | Should Match '^cert-'
+            } finally {
+                $acl.SetSecurityDescriptorSddlForm($originalAcl)
+                $token.Key.SetAccessControl($acl)
+                # SetSecurityInfo may add the auto-inherited control flag.
+                ($token.Key.GetAccessControl().GetSecurityDescriptorSddlForm('Access') -replace '^D:PAI\(', 'D:P(') | Should Be $originalAcl
+                $token.Key.Dispose()
+            }
+            # Keep a second certificate while transferring the first.
+            $second=New-RelatedCertificate $fixture
+            ssh-add -s $config.Provider -C $second
+            $LASTEXITCODE | Should Be 0
+            ssh-add $fixture.Key
+            $LASTEXITCODE | Should Be 0
+            $comment = (@((ssh-add -L) | Where-Object { ($_ -split ' ')[1] -eq $fixture.Blob })[0] -split ' ',3)[2]
+            Assert-SoftwareCertificate $fixture $comment
+            # Recreate an old duplicate and prove software re-add repairs it.
+            $duplicate=$token.Root.CreateSubKey($token.Name)
+            try {
+                $duplicate.SetAccessControl($acl)
+                foreach ($value in $tokenValues) { $duplicate.SetValue($value.Name,$value.Data,$value.Kind) }
+            } finally { $duplicate.Dispose(); $token.Root.Dispose() }
+            $software=Open-CertificateRegistryKey $fixture -Software
+            $softwareAcl=$software.Key.GetAccessControl()
+            $originalSoftwareAcl=$softwareAcl.GetSecurityDescriptorSddlForm('Access')
+            $blocked=$software.Key.GetAccessControl()
+            $blocked.AddAccessRule([Security.AccessControl.RegistryAccessRule]::new($systemSid,[Security.AccessControl.RegistryRights]::SetValue,[Security.AccessControl.AccessControlType]::Deny))
+            try {
+                $before=Get-IdentityValues $software.Key
+                $software.Key.SetAccessControl($blocked)
+                ssh-add -C $fixture.Key
+                $LASTEXITCODE | Should Not Be 0
+                (Get-IdentityValues $software.Key) | Should Be $before
+            } finally {
+                $softwareAcl.SetSecurityDescriptorSddlForm($originalSoftwareAcl)
+                $software.Key.SetAccessControl($softwareAcl)
+                $software.Key.Dispose(); $software.Root.Dispose()
+            }
+            ssh-add $fixture.Key
+            $LASTEXITCODE | Should Be 0
+            Assert-SoftwareCertificate $fixture $comment
+            Restart-Service ssh-agent
+            Assert-SoftwareCertificate $fixture $comment
+            ssh-add -e $config.Provider
+            $LASTEXITCODE | Should Be 0
+            Assert-SoftwareCertificate $fixture $comment
+            Restart-Service ssh-agent
+            Assert-SoftwareCertificate $fixture $comment
+            ssh-add -d $fixture.Cert
+            $LASTEXITCODE | Should Be 0
+            @((ssh-add -L) | Where-Object { ($_ -split ' ')[1] -eq $fixture.Blob }).Count | Should Be 0
         }
     }
 

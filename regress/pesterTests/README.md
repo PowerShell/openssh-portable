@@ -113,7 +113,7 @@ in the service and test user's environments: the helper's user environment can
 override the service value. Both take effect before the service starts.
 Restart/reload is exercised during tests.
 
-All six expected cases must pass. Missing prerequisites, failed setup,
+All expected cases must pass. Missing prerequisites, failed setup,
 missing/duplicate results, skips, pending cases and timeouts fail the required
 run. Native commands have a 30-second limit, service transitions 60 seconds,
 and the Pester subprocess 10 minutes. Only download transport errors retry.
@@ -158,7 +158,8 @@ Optional hardware runs use `-Mode Hardware` with these environment variables:
   An empty item expects the canonical provider path fallback.
 * `OPENSSH_TEST_PKCS11_SOFTWARE_KEY` (optional): unencrypted private key whose
   public key equals the first public-key entry, for the software identity
-  preservation/detachment cases. Never export a production hardware key.
+  and software certificate preservation/detachment cases. Never export a
+  production hardware key.
 
 Absent hardware prerequisites produce actual Pester skips with the missing
 prerequisite in the case name. Incorrect configured paths or failed hardware
@@ -170,3 +171,30 @@ identities, unmatched certificates, individual deletion, provider removal,
 service restart/reload, comments and Registry compatibility, rollback after a
 Registry write failure, software identity preservation/detachment, and stale
 or corrupt provider records. The existing encrypted-PIN model is unchanged.
+
+Certificate adds are idempotent by exact certificate blob. Re-adding a
+certificate already held by software or another token provider succeeds
+without changing its private key, comment or signing source. Different
+certificates of the same public key remain separate identities. A request
+containing only existing software certificates does not create a provider
+record. Constraints, allowlists and remote-provider restrictions still apply.
+Unreadable or inconsistent affected Registry entries fail the request.
+
+Adding a software certificate takes over the identical token certificate:
+the software identity is saved at its usual fingerprint before that one token
+entry is deleted. Other keys, certificates and the provider record remain.
+Write or delete failures restore the original software values and types.
+A successful software re-add also removes an identical pre-existing token
+duplicate; existing stores are not migrated in bulk. The two certificate
+preservation/detachment cases cover both load orders, repeats, comments,
+signing sources, distinct certificates of one key, Registry failures,
+provider removal, individual deletion and restart, for RSA and ECDSA in
+SoftHSM mode. Hardware mode uses only the configured software key.
+
+The Bash runner installs `SOFTHSM2_CONF` in the test agent's service
+environment before starting it, including when `p11_setup` automatically
+discovers a default SoftHSM DLL. It preserves unrelated environment entries
+in their original order and restores the original value at cleanup (or
+removes the value it created). An already running test agent is restarted
+to apply the configuration; foreign service executables are rejected.
+Missing SoftHSM or OpenSSL does not prevent unrelated Bash regressions.

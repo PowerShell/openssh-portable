@@ -270,4 +270,72 @@ delete_matching_identity(HKEY root, const char *name, const u_char *blob,
 	return status;
 }
 
+int
+read_agent_identity(HKEY sub, struct agent_connection *con,
+    struct sshkey **keyp, char **providerp)
+{
+	u_char *data[5] = { NULL };
+	DWORD len[5] = { 0 }, kind[5] = { 0 }, private_len = 0;
+	int present[5] = { 0 }, i, r = -1;
+	const wchar_t *names[] = { L"pub", NULL, L"type", L"comment",
+	    L"provider" };
+	struct sshkey *key = NULL, *private_key = NULL;
+	struct sshbuf *private_buf = NULL;
+	char *private_blob = NULL, *provider = NULL;
+	DWORD type;
+
+	*keyp = NULL;
+	*providerp = NULL;
+	for (i = 0; i < 5; i++) {
+		if (read_optional_reg_value(sub, names[i], &present[i],
+		    &kind[i], &data[i], &len[i]) != 0)
+			goto out;
+		if ((i != 4 && !present[i]) ||
+		    (present[i] && kind[i] != (i == 2 ? REG_DWORD : REG_BINARY)))
+			goto out;
+	}
+	if (len[2] != sizeof(type) || len[0] == 0 || len[1] == 0 ||
+	    memchr(data[3], '\0', len[3]) != NULL ||
+	    sshkey_from_blob(data[0], len[0], &key) != 0)
+		goto out;
+	memcpy(&type, data[2], sizeof(type));
+	if (type != (DWORD)key->type)
+		goto out;
+	if (len[1] == len[0] && memcmp(data[1], data[0], len[0]) == 0) {
+		/* Old token entries use the comment as provider association. */
+		i = present[4] ? 4 : 3;
+		if (len[i] == 0 || memchr(data[i], '\0', len[i]) != NULL)
+			goto out;
+		provider = xmalloc((size_t)len[i] + 1);
+		memcpy(provider, data[i], len[i]);
+		provider[len[i]] = '\0';
+		if (!pkcs11_provider_equal(data[i], len[i], provider))
+			goto out;
+	} else {
+		if (present[4] || convert_blob(con, (char *)data[1], len[1],
+		    &private_blob, &private_len, FALSE) != 0 ||
+		    (private_buf = sshbuf_from(private_blob, private_len)) == NULL ||
+		    sshkey_private_deserialize(private_buf, &private_key) != 0 ||
+		    sshbuf_len(private_buf) != 0 || !sshkey_equal(key, private_key))
+			goto out;
+	}
+	*keyp = key;
+	key = NULL;
+	*providerp = provider;
+	provider = NULL;
+	r = 0;
+ out:
+	for (i = 0; i < 5; i++)
+		free(data[i]);
+	if (private_blob != NULL) {
+		SecureZeroMemory(private_blob, private_len);
+		free(private_blob);
+	}
+	sshbuf_free(private_buf);
+	sshkey_free(private_key);
+	sshkey_free(key);
+	free(provider);
+	return r;
+}
+
 #pragma warning(pop)

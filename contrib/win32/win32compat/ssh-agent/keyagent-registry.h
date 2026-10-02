@@ -10,6 +10,7 @@
 #include "sshbuf.h"
 
 struct agent_connection;
+struct sshkey;
 
 #define MAX_KEY_LENGTH 255
 #define MAX_VALUE_NAME_LENGTH 16383
@@ -29,3 +30,7 @@ int read_optional_reg_value(HKEY, const wchar_t *, int *, DWORD *,
 int restore_optional_reg_value(HKEY, const wchar_t *, int, DWORD,
     const u_char *, DWORD);
 LSTATUS delete_matching_identity(HKEY, const char *, const u_char *, size_t);
+
+/* Validate a persisted identity, including its encrypted software key. */
+int read_agent_identity(HKEY, struct agent_connection *, struct sshkey **,
+    char **);
