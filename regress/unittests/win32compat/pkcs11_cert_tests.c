@@ -1,0 +1,461 @@
+/*
+ * Copyright (c) 2026 Sebastian Ott.  All rights reserved.
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+#include "includes.h"
+
+#include "authfd.h"
+#include "sshbuf.h"
+#include "ssherr.h"
+#include "sshkey.h"
+#include "xmalloc.h"
+
+#include "contrib/win32/win32compat/pkcs11-cert.h"
+#include "../test_helper/test_helper.h"
+#include "tests.h"
+
+#define TEST_CERT \
+    "ecdsa-sha2-nistp256-cert-v01@openssh.com " \
+    "AAAAKGVjZHNhLXNoYTItbmlzdHAyNTYtY2VydC12MDFAb3BlbnNzaC5jb20AAAAg" \
+    "OtFRnMigkGliaYfPmX5IidVWfV3tRH6lqRXv0l8bvKoAAAAIbmlzdHAyNTYAAABB" \
+    "BAxZW5ZDq1vcnSlYbTPvQGN3PbGgRO0ht5Rcd/JwWr5AAw2iPY4d/5Lxvybfb6" \
+    "ZttqsKJJUwhg38wpF5CCmlpQcAAAAAAAAABwAAAAIAAAAGanVsaXVzAAAAEgAAAA" \
+    "Vob3N0MQAAAAVob3N0MgAAAAA2jAHwAAAAAE0eYHAAAAAAAAAAAAAAAAAAAABoAA" \
+    "AAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBAxZW5ZDq1vcnS" \
+    "lYbTPvQGN3PbGgRO0ht5Rcd/JwWr5AAw2iPY4d/5Lxvybfb6ZttqsKJJUwhg38w" \
+    "pF5CCmlpQcAAABkAAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAABJAAAAIHbxGwTnu" \
+    "e7KxhHXGFvRcxBnekhQ3Qx84vV/Vs4oVCrpAAAAIQC7vk2+d14aS7td7kVXLQn3" \
+    "92oALjEBzMZoDvT1vT/zOA== test"
+
+static struct sshkey *
+load_test_cert(void)
+{
+	struct sshkey *key = NULL;
+	char *line = NULL, *cp;
+
+	line = xstrdup(TEST_CERT);
+	cp = line;
+	key = sshkey_new(KEY_UNSPEC);
+	if (key == NULL || sshkey_read(key, &cp) != 0) {
+		sshkey_free(key);
+		key = NULL;
+	}
+	free(line);
+	return key;
+}
+
+static int
+put_associated_certs(struct sshbuf *m, int cert_only,
+    struct sshkey *cert, size_t ncerts)
+{
+	struct sshbuf *b = NULL;
+	size_t i;
+	int r;
+
+	if ((b = sshbuf_new()) == NULL)
+		return SSH_ERR_ALLOC_FAIL;
+	for (i = 0; i < ncerts; i++) {
+		if ((r = sshkey_puts(cert, b)) != 0)
+			goto out;
+	}
+	if ((r = sshbuf_put_u8(m, SSH_AGENT_CONSTRAIN_EXTENSION)) != 0 ||
+	    (r = sshbuf_put_cstring(m,
+	    "associated-certs-v00@openssh.com")) != 0 ||
+	    (r = sshbuf_put_u8(m, cert_only != 0)) != 0 ||
+	    (r = sshbuf_put_stringb(m, b)) != 0)
+		goto out;
+	r = 0;
+ out:
+	sshbuf_free(b);
+	return r;
+}
+
+static void
+test_pkcs11_cert_constraints_valid(void)
+{
+	struct sshbuf *m = NULL;
+	struct sshkey *cert = NULL, **certs = NULL;
+	size_t ncerts = 0;
+	int cert_only = 0, mode;
+
+	TEST_START("PKCS11 associated certificate constraint");
+	ASSERT_PTR_NE(cert = load_test_cert(), NULL);
+	for (mode = 0; mode < 2; mode++) {
+		certs = NULL;
+		ncerts = 0;
+		ASSERT_PTR_NE(m = sshbuf_new(), NULL);
+		ASSERT_INT_EQ(put_associated_certs(m, mode, cert, 1), 0);
+		ASSERT_INT_EQ(parse_pkcs11_add_constraints(m, &cert_only,
+		    &certs, &ncerts), 0);
+		ASSERT_INT_EQ(cert_only, mode);
+		ASSERT_SIZE_T_EQ(ncerts, 1);
+		ASSERT_INT_EQ(sshkey_equal(cert, certs[0]), 1);
+		free_pkcs11_certs(certs, ncerts);
+		sshbuf_free(m);
+	}
+	sshkey_free(cert);
+	TEST_DONE();
+}
+
+static void
+test_pkcs11_cert_constraints_empty(void)
+{
+	struct sshbuf *m = NULL;
+	struct sshkey **certs = NULL;
+	size_t ncerts = 0;
+	int cert_only = 1;
+
+	TEST_START("PKCS11 empty constraints");
+	ASSERT_PTR_NE(m = sshbuf_new(), NULL);
+	ASSERT_INT_EQ(parse_pkcs11_add_constraints(m, &cert_only,
+	    &certs, &ncerts), 0);
+	ASSERT_INT_EQ(cert_only, 0);
+	ASSERT_PTR_EQ(certs, NULL);
+	ASSERT_SIZE_T_EQ(ncerts, 0);
+	sshbuf_free(m);
+	TEST_DONE();
+}
+
+static void
+test_pkcs11_cert_constraints_unsupported(void)
+{
+	static const struct {
+		const char *name;
+		u_char type;
+		u_int lifetime;
+		const char *destinations;
+	} cases[] = {
+		{ "PKCS11 lifetime rejected", SSH_AGENT_CONSTRAIN_LIFETIME,
+		    60, NULL },
+		{ "PKCS11 zero lifetime rejected", SSH_AGENT_CONSTRAIN_LIFETIME,
+		    0, NULL },
+		{ "PKCS11 confirm rejected", SSH_AGENT_CONSTRAIN_CONFIRM,
+		    0, NULL },
+		{ "PKCS11 empty destinations rejected",
+		    SSH_AGENT_CONSTRAIN_EXTENSION, 0, "" },
+		{ "PKCS11 unparsed destinations rejected",
+		    SSH_AGENT_CONSTRAIN_EXTENSION, 0, "bad" }
+	};
+	struct sshbuf *m = NULL;
+	struct sshkey *cert = NULL, **certs = NULL;
+	size_t i, ncerts;
+	int mode, cert_only;
+	char name[128];
+
+	ASSERT_PTR_NE(cert = load_test_cert(), NULL);
+	for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+		/* Alone, before/after a certificate, with cert-only off/on. */
+		for (mode = 0; mode < 5; mode++) {
+			snprintf(name, sizeof(name), "%s (mode %d)",
+			    cases[i].name, mode);
+			TEST_START(name);
+			certs = NULL;
+			ncerts = 0;
+			cert_only = 0;
+			ASSERT_PTR_NE(m = sshbuf_new(), NULL);
+			if (mode == 2 || mode == 4)
+				ASSERT_INT_EQ(put_associated_certs(m,
+				    mode >= 3, cert, 1), 0);
+			ASSERT_INT_EQ(sshbuf_put_u8(m, cases[i].type), 0);
+			if (cases[i].type == SSH_AGENT_CONSTRAIN_LIFETIME)
+				ASSERT_INT_EQ(sshbuf_put_u32(m,
+				    cases[i].lifetime), 0);
+			if (cases[i].type == SSH_AGENT_CONSTRAIN_EXTENSION) {
+				ASSERT_INT_EQ(sshbuf_put_cstring(m,
+				    "restrict-destination-v00@openssh.com"), 0);
+				ASSERT_INT_EQ(sshbuf_put_cstring(m,
+				    cases[i].destinations), 0);
+			}
+			if (mode == 1 || mode == 3)
+				ASSERT_INT_EQ(put_associated_certs(m,
+				    mode >= 3, cert, 1), 0);
+			ASSERT_INT_EQ(parse_pkcs11_add_constraints(m,
+			    &cert_only, &certs, &ncerts),
+			    SSH_ERR_FEATURE_UNSUPPORTED);
+			ASSERT_SIZE_T_EQ(ncerts,
+			    mode == 2 || mode == 4 ? 1 : 0);
+			if (ncerts != 0)
+				ASSERT_INT_EQ(sshkey_equal(cert, certs[0]), 1);
+			free_pkcs11_certs(certs, ncerts);
+			sshbuf_free(m);
+			TEST_DONE();
+		}
+	}
+	sshkey_free(cert);
+}
+
+static void
+test_pkcs11_cert_constraints_unsupported_truncated(void)
+{
+	struct sshbuf *m = NULL;
+	struct sshkey **certs = NULL;
+	size_t ncerts = 0;
+	int cert_only = 0;
+
+	TEST_START("PKCS11 rejects unsupported lifetime before payload parsing");
+	ASSERT_PTR_NE(m = sshbuf_new(), NULL);
+	ASSERT_INT_EQ(sshbuf_put_u8(m, SSH_AGENT_CONSTRAIN_LIFETIME), 0);
+	ASSERT_INT_EQ(parse_pkcs11_add_constraints(m, &cert_only,
+	    &certs, &ncerts), SSH_ERR_FEATURE_UNSUPPORTED);
+	sshbuf_free(m);
+	TEST_DONE();
+}
+
+static void
+test_pkcs11_cert_identity_name(void)
+{
+	struct sshkey *cert = NULL, *plain = NULL;
+	u_char *cert_blob = NULL, *plain_blob = NULL;
+	size_t cert_blob_len = 0, plain_blob_len = 0;
+	char *cert_name = NULL, *cert_name_again = NULL, *plain_name = NULL;
+
+	TEST_START("distinct PKCS11 certificate registry identity");
+	ASSERT_PTR_NE(cert = load_test_cert(), NULL);
+	ASSERT_INT_EQ(sshkey_from_private(cert, &plain), 0);
+	ASSERT_INT_EQ(sshkey_drop_cert(plain), 0);
+	ASSERT_INT_EQ(sshkey_to_blob(cert, &cert_blob, &cert_blob_len), 0);
+	ASSERT_INT_EQ(sshkey_to_blob(plain, &plain_blob, &plain_blob_len), 0);
+	ASSERT_PTR_NE(cert_name = pkcs11_identity_name(cert, cert_blob,
+	    cert_blob_len), NULL);
+	ASSERT_PTR_NE(cert_name_again = pkcs11_identity_name(cert, cert_blob,
+	    cert_blob_len), NULL);
+	ASSERT_PTR_NE(plain_name = pkcs11_identity_name(plain, plain_blob,
+	    plain_blob_len), NULL);
+	ASSERT_INT_EQ(strncmp(cert_name, "cert-", 5), 0);
+	ASSERT_STRING_EQ(cert_name, cert_name_again);
+	ASSERT_STRING_NE(cert_name, plain_name);
+	free(plain_name);
+	free(cert_name_again);
+	free(cert_name);
+	free(plain_blob);
+	free(cert_blob);
+	sshkey_free(plain);
+	sshkey_free(cert);
+	TEST_DONE();
+}
+
+static void
+test_pkcs11_identity_comment(void)
+{
+	const char *provider = "C:/provider.dll";
+
+	TEST_START("PKCS11 identity comment fallback");
+	ASSERT_STRING_EQ(pkcs11_identity_comment(provider, "token label"),
+	    "token label");
+	ASSERT_STRING_EQ(pkcs11_identity_comment(provider, ""), provider);
+	ASSERT_STRING_EQ(pkcs11_identity_comment(provider, NULL), provider);
+	TEST_DONE();
+}
+
+static void
+test_pkcs11_cert_constraints_duplicate(void)
+{
+	struct sshbuf *m = NULL;
+	struct sshkey *cert = NULL, **certs = NULL;
+	size_t ncerts = 0;
+	int cert_only = 0;
+
+	TEST_START("duplicate PKCS11 certificate constraint");
+	ASSERT_PTR_NE(cert = load_test_cert(), NULL);
+	ASSERT_PTR_NE(m = sshbuf_new(), NULL);
+	ASSERT_INT_EQ(put_associated_certs(m, 0, cert, 1), 0);
+	ASSERT_INT_EQ(put_associated_certs(m, 0, cert, 1), 0);
+	ASSERT_INT_NE(parse_pkcs11_add_constraints(m, &cert_only,
+	    &certs, &ncerts), 0);
+	free_pkcs11_certs(certs, ncerts);
+	sshkey_free(cert);
+	sshbuf_free(m);
+	TEST_DONE();
+}
+
+static void
+test_pkcs11_cert_constraints_truncated(void)
+{
+	struct sshbuf *m = NULL;
+	struct sshkey **certs = NULL;
+	size_t ncerts = 0;
+	int cert_only = 0;
+
+	TEST_START("truncated PKCS11 certificate constraint");
+	ASSERT_PTR_NE(m = sshbuf_new(), NULL);
+	ASSERT_INT_EQ(sshbuf_put_u8(m, SSH_AGENT_CONSTRAIN_EXTENSION), 0);
+	ASSERT_INT_EQ(sshbuf_put_cstring(m,
+	    "associated-certs-v00@openssh.com"), 0);
+	ASSERT_INT_NE(parse_pkcs11_add_constraints(m, &cert_only,
+	    &certs, &ncerts), 0);
+	free_pkcs11_certs(certs, ncerts);
+	sshbuf_free(m);
+	TEST_DONE();
+}
+
+static void
+test_pkcs11_cert_constraints_malformed(void)
+{
+	struct sshbuf *m = NULL, *b = NULL;
+	struct sshkey **certs = NULL;
+	size_t ncerts = 0;
+	int cert_only = 0;
+
+	TEST_START("malformed PKCS11 certificate constraint");
+	ASSERT_PTR_NE(m = sshbuf_new(), NULL);
+	ASSERT_PTR_NE(b = sshbuf_new(), NULL);
+	ASSERT_INT_EQ(sshbuf_put_string(b, "bad", 3), 0);
+	ASSERT_INT_EQ(sshbuf_put_u8(m, SSH_AGENT_CONSTRAIN_EXTENSION), 0);
+	ASSERT_INT_EQ(sshbuf_put_cstring(m,
+	    "associated-certs-v00@openssh.com"), 0);
+	ASSERT_INT_EQ(sshbuf_put_u8(m, 0), 0);
+	ASSERT_INT_EQ(sshbuf_put_stringb(m, b), 0);
+	ASSERT_INT_NE(parse_pkcs11_add_constraints(m, &cert_only,
+	    &certs, &ncerts), 0);
+	free_pkcs11_certs(certs, ncerts);
+	sshbuf_free(b);
+	sshbuf_free(m);
+	TEST_DONE();
+}
+
+static void
+test_pkcs11_cert_constraints_oversized(void)
+{
+	struct sshbuf *m = NULL;
+	struct sshkey *cert = NULL, **certs = NULL;
+	size_t ncerts = 0;
+	int cert_only = 0;
+
+	TEST_START("oversized PKCS11 certificate constraint");
+	ASSERT_PTR_NE(cert = load_test_cert(), NULL);
+	ASSERT_PTR_NE(m = sshbuf_new(), NULL);
+	ASSERT_INT_EQ(put_associated_certs(m, 0, cert,
+	    AGENT_MAX_EXT_CERTS + 1), 0);
+	ASSERT_INT_NE(parse_pkcs11_add_constraints(m, &cert_only,
+	    &certs, &ncerts), 0);
+	free_pkcs11_certs(certs, ncerts);
+	sshkey_free(cert);
+	sshbuf_free(m);
+	TEST_DONE();
+}
+
+static void
+test_pkcs11_provider_equal(void)
+{
+	/* Registry data is not NUL terminated. */
+	const u_char stored[] = { 'C', ':', '\\', 'T', 'o', 'k', 'e', 'n',
+	    '.', 'd', 'l', 'l' };
+
+	TEST_START("PKCS11 provider comparison");
+	ASSERT_INT_EQ(pkcs11_provider_equal(stored, sizeof(stored),
+	    "C:\\Token.dll"), 1);
+	ASSERT_INT_EQ(pkcs11_provider_equal(stored, sizeof(stored),
+	    "c:\\TOKEN.DLL"), 1);
+	/* The whole value must match, not a prefix of either side. */
+	ASSERT_INT_EQ(pkcs11_provider_equal(stored, sizeof(stored),
+	    "C:\\Token.dll.old"), 0);
+	ASSERT_INT_EQ(pkcs11_provider_equal(stored, sizeof(stored) - 1,
+	    "C:\\Token.dll"), 0);
+	ASSERT_INT_EQ(pkcs11_provider_equal(stored, sizeof(stored),
+	    "C:\\Other.dll"), 0);
+	ASSERT_INT_EQ(pkcs11_provider_equal(NULL, 0, "C:\\Token.dll"), 0);
+	ASSERT_INT_EQ(pkcs11_provider_equal(stored, sizeof(stored), NULL), 0);
+	ASSERT_INT_EQ(pkcs11_provider_equal(stored, 0, ""), 0);
+	TEST_DONE();
+}
+
+static void
+test_pkcs11_identity_entry_matches(void)
+{
+	const u_char blob[] = "public-key-blob";
+	const u_char other[] = "other-key-blob";
+	const u_char encrypted[] = "encrypted-private-key";
+	const char *provider = "C:\\Token.dll";
+	struct pkcs11_identity_entry e;
+
+	TEST_START("existing PKCS11 registry identity validation");
+	memset(&e, 0, sizeof(e));
+	e.pub = blob; e.pub_len = sizeof(blob);
+	e.dflt = blob; e.dflt_len = sizeof(blob);
+	e.has_type = 1; e.type = KEY_RSA;
+	e.provider = (const u_char *)provider; e.provider_len = strlen(provider);
+	e.comment = (const u_char *)"token label"; e.comment_len = 11;
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 1);
+	/* The provider path is case insensitive. */
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, "c:\\TOKEN.DLL"), 1);
+	/* Another provider must not take over the identity. */
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, "C:\\Other.dll"), 0);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_ECDSA, provider), 0);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, other, sizeof(other),
+	    KEY_RSA, provider), 0);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(NULL, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, NULL, 0,
+	    KEY_RSA, provider), 0);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, NULL), 0);
+
+	/* A software key keeps its encrypted private key as default value. */
+	e.dflt = encrypted; e.dflt_len = sizeof(encrypted);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	e.dflt = blob; e.dflt_len = sizeof(blob);
+
+	/* Stored public key, type, or default value missing or different. */
+	e.pub = other; e.pub_len = sizeof(other);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	e.pub = NULL; e.pub_len = 0;
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	e.pub = blob; e.pub_len = sizeof(blob);
+	e.dflt = NULL; e.dflt_len = 0;
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	e.dflt = blob; e.dflt_len = sizeof(blob);
+	e.has_type = 0;
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	e.has_type = 1;
+
+	/* Entries from before the provider value existed use the comment. */
+	e.provider = NULL; e.provider_len = 0;
+	e.comment = (const u_char *)provider; e.comment_len = strlen(provider);
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 1);
+	e.comment = (const u_char *)"user comment"; e.comment_len = 12;
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	e.comment = NULL; e.comment_len = 0;
+	ASSERT_INT_EQ(pkcs11_identity_entry_matches(&e, blob, sizeof(blob),
+	    KEY_RSA, provider), 0);
+	TEST_DONE();
+}
+
+void
+pkcs11_cert_tests(void)
+{
+	test_pkcs11_cert_constraints_valid();
+	test_pkcs11_cert_constraints_empty();
+	test_pkcs11_cert_constraints_unsupported();
+	test_pkcs11_cert_constraints_unsupported_truncated();
+	test_pkcs11_cert_identity_name();
+	test_pkcs11_identity_comment();
+	test_pkcs11_provider_equal();
+	test_pkcs11_identity_entry_matches();
+	test_pkcs11_cert_constraints_duplicate();
+	test_pkcs11_cert_constraints_truncated();
+	test_pkcs11_cert_constraints_malformed();
+	test_pkcs11_cert_constraints_oversized();
+}

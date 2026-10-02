@@ -36,6 +36,15 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\pkcs11-cert.c">
+      <ExcludedFromBuild Condition="$(UseOpenSSL)=='false'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="$(OpenSSH-Src-Path)ssh-sk-client.c">
+      <ExcludedFromBuild Condition="$(UseOpenSSL)=='false'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="$(OpenSSH-Src-Path)regress\unittests\win32compat\pkcs11_cert_tests.c">
+      <ExcludedFromBuild Condition="$(UseOpenSSL)=='false'">true</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)regress\unittests\win32compat\file_tests.c">
       <ExcludedFromBuild Condition="$(UseOpenSSL)=='false'">true</ExcludedFromBuild>
     </ClCompile>
@@ -65,6 +74,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="$(OpenSSH-Src-Path)contrib\win32\win32compat\pkcs11-cert.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)regress\unittests\win32compat\tests.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

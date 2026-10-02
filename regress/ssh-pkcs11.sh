@@ -17,6 +17,15 @@ check_all() {
 	for k in $ED25519 $RSA $EC; do
 		kshort=`basename "$k"`
 		verbose "$tag: $kshort"
+		if test "x$TEST_WINDOWS_SSH" = "x1"; then
+			if test "$expect_success" = "y"; then
+				ASKPASS_PASSWORD="$TEST_SSH_PIN"
+			else
+				ASKPASS_PASSWORD="0000"
+			fi
+			export ASKPASS_PASSWORD
+			pinsh="$TEST_SSH_ASKPASS"
+		fi
 		pub="$k.pub"
 		cp $pub $OBJ/key.pub
 		chmod 0600 $OBJ/key.pub

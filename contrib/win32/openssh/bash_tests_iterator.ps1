@@ -17,6 +17,7 @@ $ErrorActionPreference = 'Continue'
 # Resolve the relative paths
 $OpenSSHBinPath = Resolve-Path $OpenSSHBinPath -ErrorAction Stop | select -ExpandProperty Path
 $BashTestsPath = Resolve-Path $BashTestsPath -ErrorAction Stop | select -ExpandProperty Path
+$BashTestsWindowsPath = $BashTestsPath
 $ShellPath = Resolve-Path $ShellPath -ErrorAction Stop | select -ExpandProperty Path
 $ArtifactsDirectoryPath = Resolve-Path $ArtifactsDirectoryPath -ErrorAction Stop | select -ExpandProperty Path
 if ($TestFilePath) {
@@ -25,6 +26,29 @@ if ($TestFilePath) {
 	$TestFilePath = $TestFilePath -replace "\\","/"
 }
 $OriginalSystemPath = [System.Environment]::GetEnvironmentVariable('Path', [System.EnvironmentVariableTarget]::Machine)
+$AgentServiceRegistryPath = 'HKLM:\SYSTEM\CurrentControlSet\Services\ssh-agent'
+$AgentEnvironmentConfigured = $false
+$OriginalAgentEnvironmentPresent = $false
+$OriginalAgentEnvironment = $null
+$OriginalAgentRunning = $false
+
+function Assert-TestServicePath([string]$Name) {
+	$service = Get-CimInstance Win32_Service -Filter "Name='$Name'" -ErrorAction Stop
+	if ($service) {
+		$image = if ($service.PathName -match '^"([^"]+)"(?:\s|$)') {
+			$Matches[1]
+		} elseif ($service.PathName -match '^(\S+)(?:\s|$)') {
+			$Matches[1]
+		} else { throw "Invalid executable path for $Name" }
+		if ([IO.Path]::GetFullPath($image) -ne (Join-Path $OpenSSHBinPath "$Name.exe")) {
+			throw "Refusing to change foreign $Name service"
+		}
+	}
+}
+
+# The installer replaces existing services; verify ownership before calling it.
+Assert-TestServicePath 'ssh-agent'
+if (!$SkipInstallSSHD) { Assert-TestServicePath 'sshd' }
 
 # Make sure config.h exists. It is used in some bashstests (Ex - sftp-glob.sh, cfgparse.sh)
 # first check in $BashTestsPath folder. If not then it's parent folder. If not then in the $OpenSSHBinPath
@@ -62,6 +86,12 @@ if(!$SkipInstallSSHD) {
 
 	# We need ssh-agent to be installed as service to run some bash tests.
 	& "$OpenSSHBinPath\install-sshd.ps1"
+	if (-not [string]::IsNullOrEmpty($env:TEST_SSH_PKCS11_PROVIDER)) {
+		$testProvider = (& $ShellPath -c "cygpath -w '$env:TEST_SSH_PKCS11_PROVIDER'").Trim()
+		$agentImagePath = '"{0}" -P "{1}"' -f (Join-Path $OpenSSHBinPath 'ssh-agent.exe'), $testProvider
+		Set-ItemProperty -Path $AgentServiceRegistryPath `
+			-Name ImagePath -Value $agentImagePath -Force
+	}
 }
 
 try
@@ -147,6 +177,7 @@ try
 	$env:TEST_SSH_SFTP = $OpenSSHBinPath_shell_fmt+"/sftp.exe"
 	$env:TEST_SSH_SFTPSERVER = $OpenSSHBinPath_shell_fmt+"/sftp-server.exe"
 	$env:TEST_SSH_SCP = $OpenSSHBinPath_shell_fmt+"/scp.exe"
+	$env:TEST_SSH_OPENSSL = ([string](&$ShellPath -c "command -v openssl")).Trim()
 	$env:BUILDDIR = $BUILDDIR
 	$env:TEST_WINDOWS_SSH = 1
 	$env:TEST_SSH_ASKPASS = $TEST_SSH_ASKPASS
@@ -173,6 +204,36 @@ try
 	$temp_test_path = "temp_test"
 	$null = Remove-Item -Recurse -Force $temp_test_path -ErrorAction SilentlyContinue
 	$null = New-Item -ItemType directory -Path $temp_test_path -Force -ErrorAction Stop
+	# p11_setup also discovers default SoftHSM DLLs without an explicit provider.
+	Assert-TestServicePath 'ssh-agent'
+	$testSoftHsmConf = Join-Path $BashTestsWindowsPath "$temp_test_path\SOFTHSM\softhsm2.conf"
+	$agentEnvironmentProperty = Get-ItemProperty -Path $AgentServiceRegistryPath `
+		-Name Environment -ErrorAction SilentlyContinue
+	if ($null -ne $agentEnvironmentProperty) {
+		$OriginalAgentEnvironmentPresent = $true
+		$OriginalAgentEnvironment = @($agentEnvironmentProperty.Environment)
+	}
+	$softHsmEnvironmentFound = $false
+	$agentEnvironment = @(foreach ($entry in $OriginalAgentEnvironment) {
+		if (([string]$entry).StartsWith('SOFTHSM2_CONF=',
+			[StringComparison]::OrdinalIgnoreCase)) {
+			$softHsmEnvironmentFound = $true
+			"SOFTHSM2_CONF=$testSoftHsmConf"
+		} else { $entry }
+	})
+	if (-not $softHsmEnvironmentFound) {
+		$agentEnvironment += "SOFTHSM2_CONF=$testSoftHsmConf"
+	}
+	New-ItemProperty -Path $AgentServiceRegistryPath -Name Environment `
+		-PropertyType MultiString -Value $agentEnvironment -Force `
+		-ErrorAction Stop | Out-Null
+	$AgentEnvironmentConfigured = $true
+	$agent = Get-Service ssh-agent -ErrorAction Stop
+	$OriginalAgentRunning = $agent.Status -eq 'Running'
+	if ($OriginalAgentRunning) {
+		Restart-Service ssh-agent -ErrorAction Stop
+		(Get-Service ssh-agent).WaitForStatus('Running', [TimeSpan]::FromSeconds(60))
+	}
 
 	# remove the summary, output files.
 	$bash_test_summary = "$ArtifactsDirectoryPath\bash_tests_summary.txt"
@@ -271,6 +332,24 @@ finally
 {
 	# Restore User Path variable in the registry once the tests finish running.
 	[System.Environment]::SetEnvironmentVariable('Path', $OriginalSystemPath, [System.EnvironmentVariableTarget]::Machine)
+	if ($AgentEnvironmentConfigured) {
+		Assert-TestServicePath 'ssh-agent'
+		if ($OriginalAgentEnvironmentPresent) {
+			New-ItemProperty -Path $AgentServiceRegistryPath -Name Environment `
+				-PropertyType MultiString -Value $OriginalAgentEnvironment `
+				-Force -ErrorAction Stop | Out-Null
+		} else {
+			Remove-ItemProperty -Path $AgentServiceRegistryPath -Name Environment `
+				-ErrorAction Stop
+		}
+		if ($SkipInstallSSHD -and $OriginalAgentRunning) {
+			Restart-Service ssh-agent -ErrorAction Stop
+			(Get-Service ssh-agent).WaitForStatus('Running', [TimeSpan]::FromSeconds(60))
+		} elseif ($SkipInstallSSHD) {
+			Stop-Service ssh-agent -ErrorAction Stop
+			(Get-Service ssh-agent).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(60))
+		}
+	}
 	# remove temp test directory
 	if (!$SkipCleanup)
 	{
@@ -279,6 +358,8 @@ finally
 
 		if(!$SkipInstallSSHD) {
 			# Uninstall the sshd, ssh-agent service
+			Assert-TestServicePath 'ssh-agent'
+			Assert-TestServicePath 'sshd'
 			& "$PSScriptRoot\uninstall-sshd.ps1"
 		}
 

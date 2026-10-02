@@ -215,6 +215,7 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             }
         }
         AfterAll{$tC++}
+        AfterEach { Remove-PasswordSetting }
 
         # Executing ssh-agent will start agent service
         # This is to support typical Unix scenarios where
@@ -300,32 +301,96 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             ValidateRegistryACL -count $allkeys.count
         }
 
-        It "$tC.$tI - ssh-add - pkcs11 library (if available)" {
-            $pkcs11Path = "C:\\Program Files\\OpenSC Project\\OpenSC\\pkcs11\\opensc-pkcs11.dll"
-            if (Test-Path $pkcs11Path) {
-                #set up SSH_ASKPASS
-                Add-PasswordSetting -Pass $pkcs11Pin
-
-                ssh-add -s "$pkcs11Path"
-                $LASTEXITCODE | Should Be 0
-                #remove SSH_ASKPASS
-                Remove-PasswordSetting
-
-                #ensure added keys are listed
-                $allkeys = ssh-add -L
-                $allKeys -notmatch "The agent has no identities." | Should Be $True
-
-                #delete added keys
-                iex "cmd /c `"ssh-add -D 2> nul `""
-
-                #check keys are deleted
-                $allkeys = ssh-add -L
-                $allKeys -match "The agent has no identities." | Should Be $True
+        It "$tC.$tI - ssh-add - remove software certificates" {
+            if ($NoLibreSSL) {
+                Write-Host "skipping software certificate removal test without LibreSSL"
+                return
             }
-            else {
-                Write-Host "skipping pkcs11 test because provider not found"
+
+            $ca = Join-Path $testDir "software-cert-ca"
+            $nullFile = Join-Path $testDir "$tC.$tI.nullfile"
+            $null > $nullFile
+            Remove-Item "$ca*" -Force -ErrorAction SilentlyContinue
+            & ssh-keygen -q -t ed25519 -N $keypassphrase -f $ca
+            $LASTEXITCODE | Should Be 0
+
+            # Other core suites use the SSO identity loaded by the test harness.
+            $ssoKeyPath = Join-Path $OpenSSHTestInfo["TestDataPath"] sshtest_userssokey_ed25519
+            $ssoWasLoaded = $false
+            if (Test-Path $ssoKeyPath) {
+                $ssoPublicKey = & ssh-keygen -y -f $ssoKeyPath
+                $LASTEXITCODE | Should Be 0
+                $ssoBlob = ($ssoPublicKey -split ' ')[1]
+                $ssoWasLoaded = @((ssh-add -L 2>$null) | Where-Object {
+                    ($_ -split ' ')[1] -eq $ssoBlob
+                }).Count -ne 0
+            }
+
+            try {
+                ssh-add -D
+                $LASTEXITCODE | Should Be 0
+                Add-PasswordSetting -Pass $keypassphrase
+                $env:SSH_ASKPASS_REQUIRE = "force"
+
+                foreach ($type in @("rsa", "ecdsa")) {
+                    $keyPath = Join-Path $testDir "id_$type"
+                    & ssh-keygen -q -s $ca -P $keypassphrase `
+                        -I "software-$type" -n $env:USERNAME "$keyPath.pub"
+                    $LASTEXITCODE | Should Be 0
+                    $certPath = "$keyPath-cert.pub"
+
+                    cmd /c "ssh-add `"$keyPath`" < `"$nullFile`""
+                    $LASTEXITCODE | Should Be 0
+                    & ssh-add -T $certPath
+                    $LASTEXITCODE | Should Be 0
+
+                    $certBlob = (Get-Content $certPath).Split(' ')[1]
+                    @((ssh-add -L) | Where-Object { $_.Contains($certBlob) }).Count |
+                        Should Be 1
+                    & ssh-add -d $certPath
+                    $LASTEXITCODE | Should Be 0
+                    @((ssh-add -L) | Where-Object { $_.Contains($certBlob) }).Count |
+                        Should Be 0
+                }
+            }
+            finally {
+                ssh-add -D | Out-Null
+                if ($ssoWasLoaded) {
+                    & ssh-add $ssoKeyPath
+                    $LASTEXITCODE | Should Be 0
+                }
+                Remove-Item "$ca*" -Force -ErrorAction SilentlyContinue
+                foreach ($type in @("rsa", "ecdsa")) {
+                    Remove-Item (Join-Path $testDir "id_$type-cert.pub") `
+                        -Force -ErrorAction SilentlyContinue
+                }
             }
         }
+
+        $hardwarePrerequisitesMissing = -not $env:OPENSSH_TEST_PKCS11_PROVIDER -or
+            -not $env:OPENSSH_TEST_PKCS11_PIN
+        It "$tC.$tI - ssh-add - pkcs11 library [requires OPENSSH_TEST_PKCS11_PROVIDER and OPENSSH_TEST_PKCS11_PIN]" -Skip:$hardwarePrerequisitesMissing {
+            $pkcs11Path = $env:OPENSSH_TEST_PKCS11_PROVIDER
+            Test-Path -LiteralPath $pkcs11Path | Should Be $true
+            #set up SSH_ASKPASS
+            $testPin = $env:OPENSSH_TEST_PKCS11_PIN
+            Add-PasswordSetting -Pass $testPin
+            $env:SSH_ASKPASS_REQUIRE = "force"
+            ssh-add -s "$pkcs11Path"
+            $LASTEXITCODE | Should Be 0
+
+            #ensure added keys are listed
+            $allkeys = ssh-add -L
+            $allKeys -notmatch "The agent has no identities." | Should Be $True
+
+            #delete added keys
+            iex "cmd /c `"ssh-add -D 2> nul `""
+
+            #check keys are deleted
+            $allkeys = ssh-add -L
+            $allKeys -match "The agent has no identities." | Should Be $True
+        }
+
     }
 
     Context "$tC ssh-keygen known_hosts operations" {
