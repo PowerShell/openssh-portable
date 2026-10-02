@@ -114,6 +114,15 @@ free_pkcs11_certs(struct sshkey **certs, size_t ncerts)
 	free(certs);
 }
 
+/*
+ * Parse the constraints of a PKCS#11 add request. Only the
+ * associated-certs-v00@openssh.com extension is accepted; any other
+ * constraint type or extension is rejected with SSH_ERR_FEATURE_UNSUPPORTED.
+ *
+ * *certsp and *ncertsp are updated as each certificate is parsed, so after a
+ * failure they describe the certificates read so far. The caller owns them on
+ * every return path and releases them with free_pkcs11_certs().
+ */
 int
 parse_pkcs11_add_constraints(struct sshbuf *m, int *cert_onlyp,
     struct sshkey ***certsp, size_t *ncertsp)

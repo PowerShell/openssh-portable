@@ -176,7 +176,12 @@ existing_pkcs11_certificate(HKEY root, struct agent_connection *con,
 	return r;
 }
 
-/* 0: stored, 1: already present, -1: error. */
+/*
+ * 0: stored, 1: already present, -1: error.
+ * *neededp is only ever set, never cleared: the caller accumulates it over
+ * all identities of a provider to learn whether the provider record (and
+ * PIN) must be persisted for at least one of them.
+ */
 static int
 store_pkcs11_identity(HKEY user_root, struct agent_connection *con,
     const struct sshkey *key,

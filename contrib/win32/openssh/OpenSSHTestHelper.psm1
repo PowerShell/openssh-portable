@@ -228,7 +228,15 @@ WARNING: Following changes will be made to OpenSSH configuration
     $Global:OpenSSHTestInfo.Add("NonAdminUserProfile", $NonAdminUserProfile)
 
     #make $AdminUser admin; use the well-known SID so this works on localized Windows
-    Add-LocalGroupMember -SID "S-1-5-32-544" -Member $AdminUser
+    try
+    {
+        Add-LocalGroupMember -SID "S-1-5-32-544" -Member $AdminUser
+    }
+    catch
+    {
+        #a repeated setup finds $AdminUser already in the group, which is not an error
+        if ($_.Exception.GetType().Name -ne 'MemberExistsException') { throw }
+    }
 
     New-Item -ItemType Directory -Path (Join-Path $ssouserProfile .ssh) -Force -ErrorAction SilentlyContinue  | out-null
     $authorizedKeyPath = Join-Path $ssouserProfile .ssh\authorized_keys
