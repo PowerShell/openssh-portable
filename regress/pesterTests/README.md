@@ -1,4 +1,4 @@
-﻿Run OpenSSH Pester Tests:
+Run OpenSSH Pester Tests:
 ==================================
 
 #### To setup the test environment before test run:
@@ -80,25 +80,93 @@ unchanged identities and Registry subkey names, and continued use of the same
 connection. It requires the test agent to be running and permission to read
 the test user's agent Registry keys; missing prerequisites fail the test.
 
-The PKCS#11 certificate scenario in `KeyUtils.Tests.ps1` is enabled when the
-following environment variables are set before running the E2E tests:
+`PKCS11Certificates.Tests.ps1` runs through the dedicated runner, which is
+mandatory in the x64 Azure core job and in local `Invoke-OpenSSHTests.ps1`
+E2E runs for x64/x86. ARM/ARM64 retain the core tests and report a warning
+that SoftHSM certificate coverage is unavailable. Core Pester runs first;
+the software-certificate removal test restores
+the harness's previously loaded SSO key so later authentication suites can use
+it. The managed harness then removes its remaining
+SSO identity before starting the isolated certificate fixture. Do not invoke
+this suite directly without its fixture.
+
+Run from an elevated 64-bit PowerShell 7.2 or newer, including for x86 builds,
+with Pester 3 or 4 installed (maximum 4.9.9; Pester 5 is incompatible).
+The runner uses the repository's OpenSSHUtils module in its private fixture;
+no machine-wide OpenSSHUtils installation is required.
+
+```powershell
+./.github/tools/Invoke-PKCS11CertificateTests.ps1 -OpenSSHBinPath ./bin/x64/Release
+./.github/tools/Invoke-PKCS11CertificateTests.ps1 -OpenSSHBinPath ./bin/Win32/Release -Architecture x86
+```
+
+The runner downloads the public Disig SoftHSM 2.5.0 portable Windows package
+and requires SHA256
+`85273BCC1A6B90E877F7BB4F7E90221D57103D8F5241D154A79DD730A135B910`.
+A verified cache supports subsequent offline runs. Both provider architectures
+are checked against the selected OpenSSH executables; the bundled 32-bit
+import utility always uses the 32-bit DLL. This package supports ECDSA P-256.
+Fresh RSA-2048 and ECDSA-P-256 keys and random token PINs are created for each
+run. The DLL stays under Program Files, preserving the agent's provider
+allowlist (Program Files (x86) for the 32-bit agent). `SOFTHSM2_CONF` is installed
+in the service and test user's environments: the helper's user environment can
+override the service value. Both take effect before the service starts.
+Restart/reload is exercised during tests.
+
+All six expected cases must pass. Missing prerequisites, failed setup,
+missing/duplicate results, skips, pending cases and timeouts fail the required
+run. Native commands have a 30-second limit, service transitions 60 seconds,
+and the Pester subprocess 10 minutes. Only download transport errors retry.
+The NUnit report and summary contain no PIN, private key or token contents.
+
+Local mode is the default. It requires an empty test agent Registry and an
+absent service or one installed from the selected build. It journals the
+original service configuration before mutation, restores it in `finally`,
+and removes the owned fixture and test Registry entries. Journal version 3
+records the original user's SID, the agent executable path and the cleanup
+phase. A service Registry value, `OpenSSHPkcs11TestRunId`, ties the service to
+the journal's run ID. Recovery checks the user, executable path and marker
+before changing the service, Registry or user environment. Concurrent local
+runs are rejected. After an interrupted process, recover as the original
+test user with:
+
+```powershell
+./.github/tools/Invoke-PKCS11CertificateTests.ps1 -CleanupOnly
+```
+
+The next local run also recovers stale journals. Foreign users, changed or
+unmarked services, and old version-2 journals are rejected and require manual
+recovery; there is no automatic ownership inference or migration. A running
+agent with a disabled startup type is restarted temporarily as Manual before
+restoring Disabled. Restore failures retain the fixture and journal. Once
+restoration is journalled, repeated cleanup only finalizes the owned fixture,
+service marker and journal; it does not reset identities or environments again.
+The RSA/ECDSA certificate integration tests remain mandatory for x64/x86.
+Protected fixture/journal directories stay on the local machine; no external
+VM snapshot is needed.
+Azure uses `-CleanupMode None` on its disposable worker. No additional Azure
+cleanup step is added. A maintainer with repository write access can trigger
+`/azp run`; local validation does not establish that the remote job passed.
+
+Optional hardware runs use `-Mode Hardware` with these environment variables:
 
 * `OPENSSH_TEST_PKCS11_PROVIDER`: absolute path to a PKCS#11 provider DLL.
 * `OPENSSH_TEST_PKCS11_PIN`: token PIN.
-* `OPENSSH_TEST_PKCS11_PUBLIC_KEYS`: semicolon-separated public-key files whose
-  corresponding private keys are present on the token.
-* `OPENSSH_TEST_PKCS11_LABELS`: semicolon-separated labels corresponding
-  positionally to `OPENSSH_TEST_PKCS11_PUBLIC_KEYS`. An empty item expects the
-  canonical provider path fallback.
-* `OPENSSH_TEST_PKCS11_SOFTWARE_KEY` (optional): unencrypted private key file
-  whose public key equals the first entry of `OPENSSH_TEST_PKCS11_PUBLIC_KEYS`,
-  for example the key that was imported into a SoftHSM token. It enables the
-  scenario that a provider must not adopt a software identity with the same
-  public key.
+* `OPENSSH_TEST_PKCS11_PUBLIC_KEYS`: semicolon-separated public-key files for
+  both RSA and ECDSA P-256 private keys present on the token.
+* `OPENSSH_TEST_PKCS11_LABELS`: corresponding semicolon-separated labels.
+  An empty item expects the canonical provider path fallback.
+* `OPENSSH_TEST_PKCS11_SOFTWARE_KEY` (optional): unencrypted private key whose
+  public key equals the first public-key entry, for the software identity
+  preservation/detachment cases. Never export a production hardware key.
 
-The test creates short-lived OpenSSH certificates for the supplied public
-keys. It verifies plain and certificate identities, signing, agent service
-restart, individual certificate deletion, cert-only loading, an unmatched
-certificate, and provider removal. Never use production token credentials in
-CI. PKCS#11 PIN input is forced through the test askpass helper so an
-unattended run cannot block on an interactive prompt.
+Absent hardware prerequisites produce actual Pester skips with the missing
+prerequisite in the case name. Incorrect configured paths or failed hardware
+operations fail. PIN input always uses the test askpass helper with forced
+noninteractive input. Real YubiKey validation remains a separate hardware run.
+
+The suite covers add/list/sign for both algorithms, mixed and certificate-only
+identities, unmatched certificates, individual deletion, provider removal,
+service restart/reload, comments and Registry compatibility, rollback after a
+Registry write failure, software identity preservation/detachment, and stale
+or corrupt provider records. The existing encrypted-PIN model is unchanged.

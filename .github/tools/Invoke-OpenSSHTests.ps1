@@ -136,7 +136,7 @@ if (-not $PSBoundParameters.ContainsKey('Architecture') -or [string]::IsNullOrEm
 # ──────────────────────────────────────────────────────────────────────────────
 $scriptRoot     = Split-Path -Parent $PSCommandPath
 $repoRoot       = Split-Path -Parent (Split-Path -Parent $scriptRoot)
-$binPath        = Join-Path $repoRoot "bin\$Architecture\$Configuration"
+$binPath        = Join-Path $repoRoot "bin\$(if ($Architecture -eq 'x86') { 'Win32' } else { $Architecture })\$Configuration"
 $helperModule   = Join-Path $repoRoot "contrib\win32\openssh\OpenSSHTestHelper.psm1"
 $bashIterator   = Join-Path $repoRoot "contrib\win32\openssh\bash_tests_iterator.ps1"
 $regressPath    = Join-Path $repoRoot "regress"
@@ -293,6 +293,19 @@ try {
             $e2eOutput = Invoke-OpenSSHE2ETest *>&1 | Tee-Object -Variable e2eCapture
             $e2eText = $e2eCapture | Out-String
             $result.E2ETestOutput = $e2eText
+            if ($Architecture -in @('x64', 'x86')) {
+                # Setup/core Pester may leave the harness's SSO identity in the agent.
+                Import-Module (Join-Path $scriptRoot 'PKCS11TestHelpers.psm1') -Force
+                $null = Invoke-Pkcs11Command (Join-Path $binPath 'ssh-add.exe') @('-D')
+                & (Join-Path $scriptRoot 'Invoke-PKCS11CertificateTests.ps1') `
+                    -OpenSSHBinPath $binPath -Architecture $Architecture `
+                    -ResultsDirectory $Global:OpenSSHTestInfo['TestDataPath'] -CleanupMode Local
+            }
+            else {
+                $warning = "PKCS11 SoftHSM certificate coverage is unavailable for $Architecture; core E2E tests still run."
+                $result.Warnings += $warning
+                Write-Warning $warning
+            }
 
             if ($e2eText -match 'Failed\s*:\s*[1-9]|Tests failed') {
                 $result.E2ETestsPassed = $false
