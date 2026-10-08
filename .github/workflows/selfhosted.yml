@@ -105,7 +105,7 @@ jobs:
     - name: shutdown VM if running
       if: env.VM == 'true'
       run: vmshutdown
-    - uses: actions/checkout@main
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - name: autoreconf
       run: autoreconf
     - name: startup VM
@@ -132,7 +132,7 @@ jobs:
       timeout-minutes: 600
     - name: save logs
       if: failure()
-      uses: actions/upload-artifact@main
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: ${{ matrix.target }}-${{ matrix.config }}-logs
         path: |
@@ -181,7 +181,7 @@ jobs:
 
     - name: bigendian interop - save logs
       if: failure() && env.BIGENDIAN == 'true'
-      uses: actions/upload-artifact@main
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: ${{ matrix.target }}-${{ matrix.config }}-interop-logs
         path: |

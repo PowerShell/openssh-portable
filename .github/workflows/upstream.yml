@@ -36,7 +36,7 @@ jobs:
     - name: shutdown VM if running
       run: vmshutdown
       working-directory: ${{ runner.temp }}
-    - uses: actions/checkout@main
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - name: startup VM
       run: vmstartup
       working-directory: ${{ runner.temp }}
@@ -61,7 +61,7 @@ jobs:
       run: vmrun 'for i in /usr/src/regress/usr.bin/ssh/obj/*.log; do echo ====; echo logfile $i; echo =====; cat $i; done'
     - name: save logs
       if: failure()
-      uses: actions/upload-artifact@main
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: ${{ matrix.target }}-${{ matrix.config }}-logs
         path: |
