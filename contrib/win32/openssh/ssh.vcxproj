@@ -515,6 +515,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="$(OpenSSH-Src-Path)clientloop.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)mux.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)readconf.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssh.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sshconnect.c" />

@@ -2717,7 +2717,7 @@ client_send_env(struct ssh *ssh, int id, const char *name, const char *val)
 void
 client_session2_setup(struct ssh *ssh, int id, int want_tty, int want_subsystem,
     const char *term, struct termios *tiop, int in_fd, struct sshbuf *cmd,
-    char **env)
+    char **env, const struct winsize *wsp)
 {
 	size_t i, j, len;
 	int matched, r;
@@ -2733,7 +2733,9 @@ client_session2_setup(struct ssh *ssh, int id, int want_tty, int want_subsystem,
 		struct winsize ws;
 
 		/* Store window size in the packet. */
-		if (ioctl(in_fd, TIOCGWINSZ, &ws) == -1)
+		if (wsp != NULL)
+			ws = *wsp;
+		else if (ioctl(in_fd, TIOCGWINSZ, &ws) == -1)
 			memset(&ws, 0, sizeof(ws));
 
 		channel_request_start(ssh, id, "pty-req", 1);
@@ -2868,7 +2870,7 @@ void
 client_stop_mux(void)
 {
 	if (options.control_path != NULL && muxserver_sock != -1)
-		unlink(options.control_path);
+		unix_unlink(options.control_path);
 	/*
 	 * If we are in persist mode, or don't have a shell, signal that we
 	 * should close when all active channels are closed.
@@ -2885,7 +2887,7 @@ cleanup_exit(int i)
 {
 	leave_raw_mode(options.request_tty == REQUEST_TTY_FORCE);
 	if (options.control_path != NULL && muxserver_sock != -1)
-		unlink(options.control_path);
+		unix_unlink(options.control_path);
 	ssh_kill_proxy_command();
 	_exit(i);
 }

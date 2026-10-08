@@ -9,12 +9,17 @@
 #include <sys/select.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/un.h>
+#include "misc.h"
+#include "monitor_fdpass.h"
 #include "../test_helper/test_helper.h"
 #include "tests.h"
 
 #define PORT "34912"  
 #define BACKLOG 2  
 #define SMALL_RECV_BUF_SIZE 128
+
+int w32_close_mux_pipe(int, int);
 
 #pragma warning(disable:4267)
 
@@ -700,6 +705,144 @@ socket_typical_ssh_payload_tests() {
 	freeaddrinfo(servinfo);
 }
 
+static int
+mux_test_bind(const char *path)
+{
+	struct sockaddr_un addr;
+	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+
+	ASSERT_INT_NE(fd, -1);
+	memset(&addr, 0, sizeof(addr));
+	addr.sun_family = AF_UNIX;
+	ASSERT_INT_LT(strlcpy(addr.sun_path, path, sizeof(addr.sun_path)),
+	    sizeof(addr.sun_path));
+	ASSERT_INT_EQ(bind(fd, (struct sockaddr *)&addr, sizeof(addr)), 0);
+	return fd;
+}
+
+static void
+mux_pipe_tests(void)
+{
+	char path[128], other[128], absolute[PATH_MAX];
+	struct sockaddr_un addr;
+	int listener, second, client, peer, p[2], received, i, sentinel;
+	uid_t uid;
+	gid_t gid;
+	char byte;
+	/* Same packed layout as the descriptor-transfer wire record. */
+	unsigned char invalid[20] = { 0 };
+	unsigned int magic = 0x77465044, bad_pid = 0, type = 2;
+	unsigned __int64 handle = 1;
+
+	TEST_START("mux pipe path boundaries and absolute normalization");
+	snprintf(path, sizeof(path), "mux-%lu/a/b-c", GetCurrentProcessId());
+	snprintf(other, sizeof(other), "mux-%lu/a-b/c", GetCurrentProcessId());
+	listener = mux_test_bind(path);
+	second = mux_test_bind(other);
+	ASSERT_INT_EQ(close(second), 0);
+	ASSERT_INT_EQ(close(listener), 0);
+
+	snprintf(path, sizeof(path), "mux-%lu-ctl", GetCurrentProcessId());
+	ASSERT_INT_NE(GetFullPathNameA(path, sizeof(absolute), absolute, NULL), 0);
+	listener = mux_test_bind(path);
+	ASSERT_INT_EQ(listen(listener, 1), 0);
+	memset(&addr, 0, sizeof(addr));
+	addr.sun_family = AF_UNIX;
+	strlcpy(addr.sun_path, absolute, sizeof(addr.sun_path));
+	client = socket(AF_UNIX, SOCK_STREAM, 0);
+	ASSERT_INT_NE(client, -1);
+	ASSERT_INT_EQ(connect(client, (struct sockaddr *)&addr, sizeof(addr)), 0);
+	peer = accept(listener, NULL, NULL);
+	ASSERT_INT_NE(peer, -1);
+	ASSERT_INT_EQ(getpeereid(client, &uid, &gid), 0);
+	ASSERT_INT_EQ(uid, geteuid());
+	ASSERT_INT_EQ(getpeereid(peer, &uid, &gid), 0);
+	TEST_DONE();
+
+	TEST_START("mux descriptor transfer and forged sender rejection");
+	ASSERT_INT_EQ(pipe(p), 0);
+	ASSERT_INT_EQ(mm_send_fd(client, p[0]), 0);
+	received = mm_receive_fd(peer);
+	ASSERT_INT_NE(received, -1);
+	ASSERT_INT_EQ(write(p[1], "x", 1), 1);
+	ASSERT_INT_EQ(read(received, &byte, 1), 1);
+	ASSERT_CHAR_EQ(byte, 'x');
+	ASSERT_INT_EQ(close(received), 0);
+	ASSERT_INT_EQ(close(p[0]), 0);
+	ASSERT_INT_EQ(close(p[1]), 0);
+	memcpy(invalid, &magic, 4);
+	memcpy(invalid + 4, &bad_pid, 4);
+	memcpy(invalid + 8, &handle, 8);
+	memcpy(invalid + 16, &type, 4);
+	ASSERT_INT_EQ(write(client, invalid, sizeof(invalid)), sizeof(invalid));
+	ASSERT_INT_EQ(mm_receive_fd(peer), -1);
+	ASSERT_INT_EQ(errno, EPERM);
+	ASSERT_INT_EQ(close(peer), 0);
+	ASSERT_INT_EQ(close(client), 0);
+	ASSERT_INT_EQ(close(listener), 0);
+	TEST_DONE();
+
+	TEST_START("mux endpoint cleanup preserves filesystem data");
+	sentinel = open(path, O_CREAT | O_EXCL | O_RDWR, 0600);
+	ASSERT_INT_NE(sentinel, -1);
+	ASSERT_INT_EQ(write(sentinel, "s", 1), 1);
+	listener = mux_test_bind(path);
+	ASSERT_INT_EQ(listen(listener, 1), 0);
+	ASSERT_INT_EQ(close(listener), 0);
+	ASSERT_INT_EQ(unix_unlink(path), 0);
+	ASSERT_INT_EQ(lseek(sentinel, 0, SEEK_SET), 0);
+	ASSERT_INT_EQ(read(sentinel, &byte, 1), 1);
+	ASSERT_CHAR_EQ(byte, 's');
+	ASSERT_INT_EQ(getpeereid(sentinel, &uid, &gid), -1);
+	ASSERT_INT_EQ(close(sentinel), 0);
+	ASSERT_INT_EQ(unlink(path), 0);
+	TEST_DONE();
+
+	TEST_START("mux identical relative paths in different working directories");
+	{
+		wchar_t cwd[PATH_MAX];
+		/* w32_getcwd lowercases; preserve the case used by path hashing. */
+		ASSERT_INT_NE(GetCurrentDirectoryW(PATH_MAX, cwd), 0);
+		listener = mux_test_bind(path);
+		ASSERT_INT_EQ(chdir(".."), 0);
+		second = mux_test_bind(path);
+		ASSERT_INT_NE(SetCurrentDirectoryW(cwd), 0);
+		ASSERT_INT_EQ(close(second), 0);
+		ASSERT_INT_EQ(close(listener), 0);
+	}
+	TEST_DONE();
+
+	TEST_START("mux pending listener cancellation and reconnect");
+	for (i = 0; i < 100; i++) {
+		listener = mux_test_bind(path);
+		ASSERT_INT_EQ(listen(listener, 1), 0);
+		if (i & 1) {
+			client = socket(AF_UNIX, SOCK_STREAM, 0);
+			ASSERT_INT_NE(client, -1);
+			ASSERT_INT_EQ(connect(client, (struct sockaddr *)&addr,
+			    sizeof(addr)), 0);
+			ASSERT_INT_EQ(close(client), 0);
+		}
+		ASSERT_INT_EQ(close(listener), 0);
+	}
+	TEST_DONE();
+
+	TEST_START("mux relay shutdown cancels a backpressured pipe write");
+	{
+		char buf[65536] = { 0 };
+		ULONGLONG started;
+		ASSERT_INT_EQ(pipe(p), 0);
+		ASSERT_INT_EQ(fcntl(p[1], F_SETFL, O_NONBLOCK), 0);
+		ASSERT_INT_EQ(write(p[1], buf, sizeof(buf)), sizeof(buf));
+		ASSERT_INT_EQ(w32_close_mux_pipe(p[1], 0), 1);
+		started = GetTickCount64();
+		ASSERT_INT_EQ(w32_close_mux_pipe(p[1], 1), 0);
+		ASSERT_INT_LT(GetTickCount64() - started, 2000);
+		ASSERT_INT_EQ(close(p[0]), 0);
+	}
+	TEST_DONE();
+}
+
 void
 socket_tests()
 {
@@ -708,4 +851,5 @@ socket_tests()
 	socket_nonblocking_io_tests();
 	socket_select_tests();
 	socket_typical_ssh_payload_tests();
+	mux_pipe_tests();
 }
