@@ -1778,5 +1778,9 @@
 
 /* Definitions to enable mlkem768-x25519 */
 #define USE_MLKEM768X25519 1
+
+/* Definitions to enable mldsa44-ed25519 */
+#define USE_MLDSA 1
+#define HAVE_DECL_HTOBE32 0
 #define HAVE_DECL_HTOLE64 0
 #define HAVE_DECL_LE64TOH 0

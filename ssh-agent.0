@@ -4,12 +4,15 @@ NAME
      ssh-agent M-bM-^@M-^S OpenSSH authentication agent
 
 SYNOPSIS
-     ssh-agent [-c | -s] [-DdTU] [-a bind_address] [-E fingerprint_hash]
-               [-O option] [-P allowed_providers] [-t life]
-     ssh-agent [-TU] [-a bind_address] [-E fingerprint_hash] [-O option]
-               [-P allowed_providers] [-t life] command [arg ...]
+     ssh-agent [-c | -s] [-DdU] [-T | -A directory | -a bind_address]
+               [-E fingerprint_hash] [-O option] [-P allowed_providers]
+               [-t life]
+     ssh-agent [-U] [-T | -A directory | -a bind_address]
+               [-E fingerprint_hash] [-O option] [-P allowed_providers]
+               [-t life] command [arg ...]
      ssh-agent [-c | -s] -k
      ssh-agent -u
+     ssh-agent -V
 
 DESCRIPTION
      ssh-agent is a program to hold private keys used for public key
@@ -21,8 +24,25 @@ DESCRIPTION
 
      -a bind_address
              Bind the agent to the Unix-domain socket bind_address.  The
-             default is to create a socket at a random path matching
-             $HOME/.ssh/agent/s.*.
+             default is to create a socket in the $HOME/.ssh/agent directory
+             using a random path matching s.*.
+
+     -A socket_path
+             Specify a different directory path under which to create the
+             socket.  Sockets may be created in either a shared location or a
+             user-specific directory.  User-specific directories are specified
+             by prefixing the path name with user:.  ssh-agent will ensure the
+             directory exists and create the listening socket directly in it.
+             Relative user-specific directory paths will be created to the
+             user's $HOME.
+
+             Shared directories may be specified by prefixing an absolute path
+             name with shared:.  In this case, a temporary subdirectory will
+             be created under the specified directory and the listening agent
+             socket will be created in that.
+
+             This option accepts the tokens described in the sshd_config(5)
+             TOKENS section.
 
      -c      Generate C-shell commands on standard output.  This is the
              default if SHELL looks like it's a csh style of shell.
@@ -108,6 +128,8 @@ DESCRIPTION
              as a subprocess of the agent.  The agent exits automatically when
              the command given on the command line terminates.
 
+     -V      Display the version number and exit.
+
      There are three main ways to get an agent set up.  The first is at the
      start of an X session, where all other windows or programs are started as
      children of the ssh-agent program.  The agent starts a command under
@@ -174,4 +196,4 @@ AUTHORS
      created OpenSSH.  Markus Friedl contributed the support for SSH protocol
      versions 1.5 and 2.0.
 
-OpenBSD 7.8                     October 4, 2025                   SSH-AGENT(1)
+OpenBSD 8.0                   September 18, 2026                  SSH-AGENT(1)

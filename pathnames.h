@@ -1,4 +1,4 @@
-/* $OpenBSD: pathnames.h,v 1.36 2025/08/29 03:50:38 djm Exp $ */
+/* $OpenBSD: pathnames.h,v 1.38 2026/09/16 00:25:50 djm Exp $ */
 
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
@@ -39,6 +39,7 @@
 #define _PATH_HOST_ECDSA_KEY_FILE	SSHDIR "/ssh_host_ecdsa_key"
 #define _PATH_HOST_RSA_KEY_FILE		SSHDIR "/ssh_host_rsa_key"
 #define _PATH_HOST_ED25519_KEY_FILE	SSHDIR "/ssh_host_ed25519_key"
+#define _PATH_HOST_MLDSA44_ED25519_KEY_FILE SSHDIR "/ssh_host_mldsa44_ed25519_key"
 #define _PATH_DH_MODULI			SSHDIR "/moduli"
 
 #ifndef _PATH_SSH_PROGRAM
@@ -75,10 +76,13 @@
 
 
 /*
- * The directory in which ssh-agent sockets and agent sockets forwarded by
+ * Directory spec for ssh-agent sockets and agent sockets forwarded by
  * sshd reside. This directory should not be world-readable.
  */
-#define _PATH_SSH_AGENT_SOCKET_DIR _PATH_SSH_USER_DIR "/agent"
+#define _PATH_SSH_AGENT_SOCKET_DIR	"user:" _PATH_SSH_USER_DIR "/agent"
+
+/* Directory spec for ssh-agent sockets in /tmp */
+#define _PATH_SSH_AGENT_SOCKET_TMPDIR	"shared:/tmp"
 
 /*
  * Per-user file containing host keys of known hosts.  This file need not be
@@ -98,6 +102,7 @@
 #define _PATH_SSH_CLIENT_ID_ED25519	_PATH_SSH_USER_DIR "/id_ed25519"
 #define _PATH_SSH_CLIENT_ID_ECDSA_SK	_PATH_SSH_USER_DIR "/id_ecdsa_sk"
 #define _PATH_SSH_CLIENT_ID_ED25519_SK	_PATH_SSH_USER_DIR "/id_ed25519_sk"
+#define _PATH_SSH_CLIENT_ID_MLDSA44_ED25519 _PATH_SSH_USER_DIR "/id_mldsa44_ed25519"
 
 /*
  * Configuration file in user's home directory.  This file need not be

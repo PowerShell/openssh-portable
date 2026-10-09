@@ -1,4 +1,4 @@
-/* $OpenBSD: ssh-agent.c,v 1.324 2026/03/10 07:27:14 djm Exp $ */
+/* $OpenBSD: ssh-agent.c,v 1.333 2026/09/22 22:30:27 djm Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -63,6 +63,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <util.h>
+#include <pwd.h>
 
 #include "xmalloc.h"
 #include "ssh.h"
@@ -80,6 +81,7 @@
 #include "ssh-pkcs11.h"
 #include "sk-api.h"
 #include "myproposal.h"
+#include "version.h"
 
 #ifndef DEFAULT_ALLOWED_PROVIDERS
 # define DEFAULT_ALLOWED_PROVIDERS "/usr/lib*/*,/usr/local/lib*/*"
@@ -100,6 +102,8 @@
 #define AGENT_MAX_DEST_CONSTRAINTS	1024
 /* Maximum number of associated certificate constraints to accept on a key */
 #define AGENT_MAX_EXT_CERTS		1024
+/* Max length of username constraint */
+#define AGENT_USER_CONSTRAINT_MAX_LEN	256
 
 /* XXX store hostkey_sid in a refcounted tree */
 
@@ -163,7 +167,8 @@ pid_t cleanup_pid = 0;
 
 /* pathname and directory for AUTH_SOCKET */
 static char *socket_name;
-static char socket_dir[PATH_MAX];
+static char *socket_dir;
+static char *socket_dirspec;
 
 /* Pattern-list of allowed PKCS#11/Security key paths */
 static char *allowed_providers;
@@ -610,7 +615,7 @@ send_status_generic(SocketEntry *e, u_int code)
 static void
 send_status(SocketEntry *e, int success)
 {
-	return send_status_generic(e,
+	send_status_generic(e,
 	    success ? SSH_AGENT_SUCCESS : SSH_AGENT_FAILURE);
 }
 
@@ -1077,13 +1082,13 @@ static int
 parse_dest_constraint_hop(struct sshbuf *b, struct dest_constraint_hop *dch)
 {
 	u_char key_is_ca;
-	size_t elen = 0;
+	size_t elen = 0, userlen = 0;
 	int r;
 	struct sshkey *k = NULL;
 	char *fp;
 
 	memset(dch, '\0', sizeof(*dch));
-	if ((r = sshbuf_get_cstring(b, &dch->user, NULL)) != 0 ||
+	if ((r = sshbuf_get_cstring(b, &dch->user, &userlen)) != 0 ||
 	    (r = sshbuf_get_cstring(b, &dch->hostname, NULL)) != 0 ||
 	    (r = sshbuf_get_string_direct(b, NULL, &elen)) != 0) {
 		error_fr(r, "parse");
@@ -1101,6 +1106,10 @@ parse_dest_constraint_hop(struct sshbuf *b, struct dest_constraint_hop *dch)
 	if (*dch->user == '\0') {
 		free(dch->user);
 		dch->user = NULL;
+	} else if (userlen > AGENT_USER_CONSTRAINT_MAX_LEN) {
+		error_f("user match pattern too long");
+		r = SSH_ERR_INVALID_FORMAT;
+		goto out;
 	}
 	while (sshbuf_len(b) != 0) {
 		dch->keys = xrecallocarray(dch->keys, dch->nkeys,
@@ -1785,7 +1794,7 @@ process_ext_query(SocketEntry *e)
 static void
 process_extension(SocketEntry *e)
 {
-	int r, success = 0;
+	int r, replied = 0, success = 0;
 	char *name;
 
 	debug2_f("entering");
@@ -1795,20 +1804,32 @@ process_extension(SocketEntry *e)
 		return;
 	}
 
-	if (strcmp(name, "query") == 0)
-		success = process_ext_query(e);
-	else if (strcmp(name, "session-bind@openssh.com") == 0)
+	/*
+	 * This function can be called while the agent is locked to allow
+	 * session binds to be processed for new channels.
+	 * Other operations should be refused when locked.
+	 */
+
+	if (strcmp(name, "session-bind@openssh.com") == 0) {
 		success = process_ext_session_bind(e);
-	else {
+	} else if (locked) {
+		debug_f("attempt to use extension \"%s\" while locked", name);
+		goto generic_fail;
+	} else if (strcmp(name, "query") == 0) {
+		replied = success = process_ext_query(e);
+	} else {
 		debug_f("unsupported extension \"%s\"", name);
+ generic_fail:
 		free(name);
 		send_status(e, 0);
 		return;
 	}
 	free(name);
 	/* Agent failures are signalled with a different error code */
-	send_status_generic(e,
-	    success ? SSH_AGENT_SUCCESS : SSH_AGENT_EXTENSION_FAILURE);
+	if (!replied) {
+		send_status_generic(e,
+		    success ? SSH_AGENT_SUCCESS : SSH_AGENT_EXTENSION_FAILURE);
+	}
 }
 
 /*
@@ -1856,16 +1877,19 @@ process_message(u_int socknum)
 
 	/* check whether agent is locked */
 	if (locked && type != SSH_AGENTC_UNLOCK) {
-		sshbuf_reset(e->request);
 		switch (type) {
 		case SSH2_AGENTC_REQUEST_IDENTITIES:
 			/* send empty lists */
 			no_identities(e);
 			break;
+		case SSH_AGENTC_EXTENSION:
+			process_extension(e);
+			break;
 		default:
 			/* send a fail message for all other request types */
 			send_status(e, 0);
 		}
+		sshbuf_reset(e->request);
 		return 1;
 	}
 
@@ -2168,12 +2192,12 @@ cleanup_socket(void)
 		return;
 	debug_f("cleanup");
 	if (socket_name != NULL) {
-		unlink(socket_name);
+		agent_listener_cleanup(socket_dirspec, socket_name, socket_dir);
 		free(socket_name);
 		socket_name = NULL;
+		free(socket_dir);
+		socket_dir = NULL;
 	}
-	if (socket_dir[0])
-		rmdir(socket_dir);
 }
 
 void
@@ -2216,12 +2240,15 @@ static void
 usage(void)
 {
 	fprintf(stderr,
-	    "usage: ssh-agent [-c | -s] [-DdTU] [-a bind_address] [-E fingerprint_hash]\n"
-	    "                 [-O option] [-P allowed_providers] [-t life]\n"
-	    "       ssh-agent [-TU] [-a bind_address] [-E fingerprint_hash] [-O option]\n"
+	    "usage: ssh-agent [-c | -s] [-DdU] [-T | -A directory | -a bind_address]\n"
+	    "                 [-E fingerprint_hash] [-O option]\n"
+	    "                 [-P allowed_providers] [-t life]\n"
+	    "       ssh-agent [-U] [-T | -A directory | -a bind_address]\n"
+	    "                 [-E fingerprint_hash] [-O option]\n"
 	    "                 [-P allowed_providers] [-t life] command [arg ...]\n"
 	    "       ssh-agent [-c | -s] -k\n"
-	    "       ssh-agent -u\n");
+	    "       ssh-agent -u\n"
+	    "       ssh-agent -V\n");
 	exit(1);
 }
 
@@ -2250,6 +2277,7 @@ main(int ac, char **av)
 	u_int maxfds;
 	sigset_t nsigset, osigset;
 	int socket_activated = 0;
+	struct passwd *pw;
 
 	/* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */
 	sanitise_stdfd();
@@ -2260,6 +2288,10 @@ main(int ac, char **av)
 
 	platform_disable_tracing(0);	/* strict=no */
 
+	if ((pw = getpwuid(getuid())) == NULL)
+		fatal("No user exists for uid %lu", (u_long)getuid());
+	pw = pwcopy(pw);
+
 #ifdef RLIMIT_NOFILE
 	if (getrlimit(RLIMIT_NOFILE, &rlim) == -1)
 		fatal("%s: getrlimit: %s", __progname, strerror(errno));
@@ -2268,7 +2300,7 @@ main(int ac, char **av)
 	__progname = ssh_get_progname(av[0]);
 	seed_rng();
 
-	while ((ch = getopt(ac, av, "cDdksTuUE:a:O:P:t:")) != -1) {
+	while ((ch = getopt(ac, av, "cDdksTuUVA:E:a:O:P:t:")) != -1) {
 		switch (ch) {
 		case 'E':
 			fingerprint_hash = ssh_digest_alg_by_name(optarg);
@@ -2319,6 +2351,9 @@ main(int ac, char **av)
 		case 'a':
 			agentsocket = optarg;
 			break;
+		case 'A':
+			socket_dirspec = xstrdup(optarg);
+			break;
 		case 't':
 			if ((lifetime = convtime(optarg)) == -1) {
 				fprintf(stderr, "Invalid lifetime\n");
@@ -2334,6 +2369,10 @@ main(int ac, char **av)
 		case 'U':
 			U_flag++;
 			break;
+		case 'V':
+			fprintf(stderr, "%s, %s\n",
+			    SSH_VERSION, SSH_OPENSSL_VERSION);
+			exit(0);
 		default:
 			usage();
 		}
@@ -2344,6 +2383,9 @@ main(int ac, char **av)
 	if (ac > 0 &&
 	    (c_flag || k_flag || s_flag || d_flag || D_flag || u_flag))
 		usage();
+	/* only one of -a, -A and -T allowed */
+	if (((socket_dirspec != NULL) + (agentsocket != NULL) + T_flag) > 1)
+		usage();
 
 	log_init(__progname,
 	    d_flag ? SYSLOG_LEVEL_DEBUG3 : SYSLOG_LEVEL_INFO,
@@ -2353,6 +2395,11 @@ main(int ac, char **av)
 		allowed_providers = xstrdup(DEFAULT_ALLOWED_PROVIDERS);
 	if (websafe_allowlist == NULL)
 		websafe_allowlist = xstrdup(DEFAULT_WEBSAFE_ALLOWLIST);
+
+	if (T_flag)
+		socket_dirspec = xstrdup(_PATH_SSH_AGENT_SOCKET_TMPDIR);
+	else if (socket_dirspec == NULL && agentsocket == NULL)
+		socket_dirspec = xstrdup(_PATH_SSH_AGENT_SOCKET_DIR);
 
 	if (ac == 0 && !c_flag && !s_flag) {
 		shell = getenv("SHELL");
@@ -2387,7 +2434,8 @@ main(int ac, char **av)
 	if (u_flag) {
 		if ((homedir = get_homedir()) == NULL)
 			fatal("Couldn't determine home directory");
-		agent_cleanup_stale(homedir, u_flag > 1);
+		agent_cleanup_stale(socket_dirspec,
+		    pw->pw_name, pw->pw_uid, homedir, u_flag > 1);
 		printf("Deleted stale agent sockets in ~/%s\n",
 		    _PATH_SSH_AGENT_SOCKET_DIR);
 		exit(0);
@@ -2426,38 +2474,27 @@ main(int ac, char **av)
 		socket_activated = 1;
 	}
 
-	if (sock == -1 && agentsocket == NULL && !T_flag) {
-		/* Default case: ~/.ssh/agent/[socket] */
+	if (sock == -1 && agentsocket == NULL) {
+		/* Listen on a socket in/under a given directory */
 		if ((homedir = get_homedir()) == NULL)
 			fatal("Couldn't determine home directory");
-		if (!U_flag)
-			agent_cleanup_stale(homedir, 0);
-		if (agent_listener(homedir, "agent", &sock, &socket_name) != 0)
+		if (!U_flag) {
+			agent_cleanup_stale(socket_dirspec,
+			    pw->pw_name, pw->pw_uid, homedir, 0);
+		}
+		if (agent_listener(socket_dirspec, pw->pw_name, pw->pw_uid,
+		    homedir, getpid(), "local", &sock, &socket_name,
+		    &socket_dir) != 0)
 			fatal_f("Couldn't prepare agent socket");
 		free(homedir);
 	} else if (sock == -1) {
-		if (T_flag) {
-			/*
-			 * Create private directory for agent socket
-			 * in $TMPDIR.
-			 */
-			mktemp_proto(socket_dir, sizeof(socket_dir));
-			if (mkdtemp(socket_dir) == NULL) {
-				perror("mkdtemp: private socket dir");
-				exit(1);
-			}
-			xasprintf(&socket_name, "%s/agent.%ld",
-			    socket_dir, (long)parent_pid);
-		} else {
-			/* Try to use specified agent socket */
-			socket_dir[0] = '\0';
-			socket_name = xstrdup(agentsocket);
-		}
-		/* Listen on socket */
+		/* Listen on explicit socket path */
 		prev_mask = umask(0177);
+		socket_name = xstrdup(agentsocket);
 		if ((sock = unix_listener(socket_name,
 		    SSH_LISTEN_BACKLOG, 0)) < 0) {
-			*socket_name = '\0'; /* Don't unlink existing file */
+			free(socket_name);
+			socket_name = NULL; /* Don't unlink existing file */
 			cleanup_exit(1);
 		}
 		umask(prev_mask);
@@ -2572,6 +2609,14 @@ skip:
 	sigaddset(&nsigset, SIGTERM);
 	sigaddset(&nsigset, SIGUSR1);
 
+	if (socket_name != NULL && unveil(socket_name, "c") == -1) {
+		fatal("%s: unveil %s %s", __progname, socket_name,
+		    strerror(errno));
+	}
+	if (socket_dir != NULL && unveil(socket_dir, "c") == -1) {
+		fatal("%s: unveil %s %s", __progname, socket_dir,
+		    strerror(errno));
+	}
 	if (unveil("/", "r") == -1)
 		fatal("%s: unveil /: %s", __progname, strerror(errno));
 	if ((ccp = getenv("SSH_SK_HELPER")) == NULL || *ccp == '\0')

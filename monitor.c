@@ -1,4 +1,4 @@
-/* $OpenBSD: monitor.c,v 1.255 2026/03/28 05:06:16 djm Exp $ */
+/* $OpenBSD: monitor.c,v 1.259 2026/09/16 00:37:07 djm Exp $ */
 /*
  * Copyright 2002 Niels Provos <provos@citi.umich.edu>
  * Copyright 2002 Markus Friedl <markus@openbsd.org>
@@ -628,34 +628,26 @@ monitor_reset_key_state(void)
 int
 mm_answer_state(struct ssh *ssh, int sock, struct sshbuf *unused)
 {
-	struct sshbuf *m = NULL, *inc = NULL, *hostkeys = NULL;
+	struct sshbuf *m = NULL, *config = NULL, *hostkeys = NULL;
 	struct sshbuf *opts = NULL, *confdata = NULL;
-	struct include_item *item = NULL;
 	int postauth;
 	int r;
 
 	debug_f("config len %zu", sshbuf_len(cfg));
 
 	if ((m = sshbuf_new()) == NULL ||
-	    (inc = sshbuf_new()) == NULL ||
+	    (config = sshbuf_new()) == NULL ||
 	    (opts = sshbuf_new()) == NULL ||
 	    (confdata = sshbuf_new()) == NULL)
 		fatal_f("sshbuf_new failed");
 
-	/* XXX unnecessary? */
-	/* pack includes into a string */
-	TAILQ_FOREACH(item, &includes, entry) {
-		if ((r = sshbuf_put_cstring(inc, item->selector)) != 0 ||
-		    (r = sshbuf_put_cstring(inc, item->filename)) != 0 ||
-		    (r = sshbuf_put_stringb(inc, item->contents)) != 0)
-			fatal_fr(r, "compose includes");
-	}
-
 	hostkeys = pack_hostkeys();
+	if ((r = serialise_server_options(&options, &config)) != 0)
+		fatal_fr(r, "serialise_server_options");
 
 	/*
 	 * Protocol from monitor to unpriv privsep process:
-	 *	string	configuration
+	 *	string	configuration_blob
 	 *	uint64	timing_secret	XXX move delays to monitor and remove
 	 *	string	host_keys[] {
 	 *		string public_key
@@ -663,23 +655,17 @@ mm_answer_state(struct ssh *ssh, int sock, struct sshbuf *unused)
 	 *	}
 	 *	string  server_banner
 	 *	string  client_banner
-	 *	string	included_files[] {
-	 *		string	selector
-	 *		string	filename
-	 *		string	contents
-	 *	}
 	 *	string	configuration_data (postauth)
 	 *	string  keystate (postauth)
 	 *	string  authenticated_user (postauth)
 	 *	string  session_info (postauth)
 	 *	string  authopts (postauth)
 	 */
-	if ((r = sshbuf_put_stringb(m, cfg)) != 0 ||
+	if ((r = sshbuf_put_stringb(m, config)) != 0 ||
 	    (r = sshbuf_put_u64(m, options.timing_secret)) != 0 ||
 	    (r = sshbuf_put_stringb(m, hostkeys)) != 0 ||
 	    (r = sshbuf_put_stringb(m, ssh->kex->server_version)) != 0 ||
-	    (r = sshbuf_put_stringb(m, ssh->kex->client_version)) != 0 ||
-	    (r = sshbuf_put_stringb(m, inc)) != 0)
+	    (r = sshbuf_put_stringb(m, ssh->kex->client_version)) != 0)
 		fatal_fr(r, "compose config");
 
 	postauth = (authctxt && authctxt->pw && authctxt->authenticated);
@@ -688,7 +674,7 @@ mm_answer_state(struct ssh *ssh, int sock, struct sshbuf *unused)
 		fatal_f("internal error: called in postauth");
 	}
 
-	sshbuf_free(inc);
+	sshbuf_free(config);
 	sshbuf_free(opts);
 	sshbuf_free(confdata);
 	sshbuf_free(hostkeys);
@@ -766,6 +752,7 @@ mm_answer_sign(struct ssh *ssh, int sock, struct sshbuf *m)
 	int r, is_proof = 0, keyid;
 	u_int compat;
 	const char proof_req[] = "hostkeys-prove-00@openssh.com";
+	static int nhostkey_proofs_done, *hostkey_proofs_done;
 
 	debug3_f("entering");
 
@@ -804,6 +791,17 @@ mm_answer_sign(struct ssh *ssh, int sock, struct sshbuf *m)
 			fatal_f("bad data length: %zu", datlen);
 		if ((key = get_hostkey_public_by_index(keyid, ssh)) == NULL)
 			fatal_f("no hostkey for index %d", keyid);
+		if (keyid >= nhostkey_proofs_done) {
+			hostkey_proofs_done = xrecallocarray(
+			    hostkey_proofs_done, nhostkey_proofs_done,
+			    keyid + 1, sizeof(*hostkey_proofs_done));
+			nhostkey_proofs_done = keyid + 1;
+		}
+		if (hostkey_proofs_done[keyid]) {
+			fatal_f("hostkeys proof requested for %s key %d "
+			    "multiple times", sshkey_type(key), keyid);
+		}
+		hostkey_proofs_done[keyid] = 1;
 		if ((sigbuf = sshbuf_new()) == NULL)
 			fatal_f("sshbuf_new");
 		if ((r = sshbuf_put_cstring(sigbuf, proof_req)) != 0 ||
@@ -868,27 +866,15 @@ void
 mm_encode_server_options(struct sshbuf *m)
 {
 	int r;
-	u_int i;
+	struct sshbuf *config;
 
-	/* XXX this leaks raw pointers to the unpriv child processes */
-	if ((r = sshbuf_put_string(m, &options, sizeof(options))) != 0)
+	if ((config = sshbuf_new()) == NULL)
+		fatal_f("sshbuf_new failed");
+	if ((r = serialise_server_options(&options, &config)) != 0)
+		fatal_fr(r, "serialise_server_options");
+	if ((r = sshbuf_put_stringb(m, config)) != 0)
 		fatal_fr(r, "assemble options");
-
-#define M_CP_STROPT(x) do { \
-		if (options.x != NULL && \
-		    (r = sshbuf_put_cstring(m, options.x)) != 0) \
-			fatal_fr(r, "assemble %s", #x); \
-	} while (0)
-#define M_CP_STRARRAYOPT(x, nx, clobber) do { \
-		for (i = 0; i < options.nx; i++) { \
-			if ((r = sshbuf_put_cstring(m, options.x[i])) != 0) \
-				fatal_fr(r, "assemble %s", #x); \
-		} \
-	} while (0)
-	/* See comment in servconf.h */
-	COPY_MATCH_STRING_OPTS();
-#undef M_CP_STROPT
-#undef M_CP_STRARRAYOPT
+	sshbuf_free(config);
 }
 
 /* Retrieves the password entry and also checks if the user is permitted */
@@ -2019,10 +2005,9 @@ monitor_apply_keystate(struct ssh *ssh, struct monitor *pmonitor)
 	kex->kex[KEX_DH_GRP18_SHA512] = kex_gen_server;
 	kex->kex[KEX_DH_GEX_SHA1] = kexgex_server;
 	kex->kex[KEX_DH_GEX_SHA256] = kexgex_server;
-# ifdef OPENSSL_HAS_ECC
 	kex->kex[KEX_ECDH_SHA2] = kex_gen_server;
-# endif
-#endif /* WITH_OPENSSL */
+	kex->kex[KEX_KEM_MLKEM768ECDH_SHA256] = kex_gen_server;
+#endif
 	kex->kex[KEX_C25519_SHA256] = kex_gen_server;
 	kex->kex[KEX_KEM_SNTRUP761X25519_SHA512] = kex_gen_server;
 	kex->kex[KEX_KEM_MLKEM768X25519_SHA256] = kex_gen_server;
@@ -2130,6 +2115,8 @@ mm_answer_gss_setup_ctx(struct ssh *ssh, int sock, struct sshbuf *m)
 
 	if (!options.gss_authentication)
 		fatal_f("GSSAPI authentication not enabled");
+
+	ssh_gssapi_cleanup_global_client();
 
 	if ((r = sshbuf_get_string(m, &p, &len)) != 0)
 		fatal_fr(r, "parse");

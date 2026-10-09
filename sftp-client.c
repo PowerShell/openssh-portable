@@ -1,4 +1,4 @@
-/* $OpenBSD: sftp-client.c,v 1.185 2026/03/03 09:57:25 dtucker Exp $ */
+/* $OpenBSD: sftp-client.c,v 1.188 2026/10/01 03:11:49 djm Exp $ */
 /*
  * Copyright (c) 2001-2004 Damien Miller <djm@openbsd.org>
  *
@@ -796,7 +796,8 @@ sftp_lsreaddir(struct sftp_conn *conn, const char *path, int print_flag,
 			 * These can be used to attack recursive ops
 			 * (e.g. send '../../../../etc/passwd')
 			 */
-			if (strpbrk(filename, SFTP_DIRECTORY_CHARS) != NULL) {
+			if (*filename == '\0' ||
+			    strpbrk(filename, SFTP_DIRECTORY_CHARS) != NULL) {
 				error("Server sent suspect path \"%s\" "
 				    "during readdir of \"%s\"", filename, path);
 			} else if (dir) {
@@ -883,6 +884,39 @@ sftp_mkdir(struct sftp_conn *conn, const char *path, Attrib *a, int print_flag)
 		error("remote mkdir \"%s\": %s", path, fx2txt(status));
 
 	return status == SSH2_FX_OK ? 0 : -1;
+}
+
+int
+sftp_mkpath(struct sftp_conn *conn, const char *path, Attrib *a, int print_flag)
+{
+	char *slash, *tmp_path;
+	int done;
+
+	tmp_path = xstrdup(path);
+	slash = tmp_path;
+
+	for (;;) {
+		slash += strspn(slash, "/");
+		slash += strcspn(slash, "/");
+
+		done = (*slash == '\0');
+		*slash = '\0';
+
+		if (!sftp_remote_is_dir(conn, tmp_path)) {
+			if (sftp_mkdir(conn, tmp_path, a, print_flag) != 0) {
+				free(tmp_path);
+				return -1;
+			}
+		}
+
+		if (done)
+			break;
+
+		*slash = '/';
+	}
+
+	free(tmp_path);
+	return 0;
 }
 
 int
@@ -1590,7 +1624,7 @@ sftp_download(struct sftp_conn *conn, const char *remote_path,
 {
 	struct sshbuf *msg;
 	u_char *handle;
-	int local_fd = -1, write_error;
+	int local_fd = -1, write_error, seen_zerolen = 0;
 	int read_error, write_errno, lmodified = 0, reordered = 0, r;
 	uint64_t offset = 0, size, highwater = 0, maxack = 0;
 	u_int mode, id, buflen, num_req, max_req, status = SSH2_FX_OK;
@@ -1743,6 +1777,11 @@ sftp_download(struct sftp_conn *conn, const char *remote_path,
 			if (len > req->len)
 				fatal("Received more data than asked for "
 				    "%zu > %zu", len, req->len);
+			if (len == 0) {
+				if (seen_zerolen)
+					fatal_f("server sent zero data length");
+				seen_zerolen = 1;
+			}
 			lmodified = 1;
 			if ((lseek(local_fd, req->offset, SEEK_SET) == -1 ||
 			    atomicio(vwrite, local_fd, data, len) != len) &&
@@ -2460,7 +2499,7 @@ sftp_crossload(struct sftp_conn *from, struct sftp_conn *to,
     Attrib *a, int preserve_flag)
 {
 	struct sshbuf *msg;
-	int write_error, read_error, r;
+	int write_error, read_error, r, seen_zerolen = 0;
 	uint64_t offset = 0, size;
 	u_int id, buflen, num_req, max_req, status = SSH2_FX_OK;
 	u_int num_upload_req;
@@ -2590,6 +2629,11 @@ sftp_crossload(struct sftp_conn *from, struct sftp_conn *to,
 			if (len > req->len)
 				fatal("Received more data than asked for "
 				    "%zu > %zu", len, req->len);
+			if (len == 0) {
+				if (seen_zerolen)
+					fatal_f("server sent zero data length");
+				seen_zerolen = 1;
+			}
 
 			/* Write this chunk out to the destination */
 			sshbuf_reset(msg);

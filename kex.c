@@ -1,4 +1,4 @@
-/* $OpenBSD: kex.c,v 1.193 2026/03/05 05:40:35 djm Exp $ */
+/* $OpenBSD: kex.c,v 1.196 2026/09/22 00:24:47 dtucker Exp $ */
 /*
  * Copyright (c) 2000, 2001 Markus Friedl.  All rights reserved.
  *
@@ -293,6 +293,40 @@ kex_set_server_sig_algs(struct ssh *ssh, const char *allowed_algs)
 		ssh->kex->server_sig_algs = xstrdup("");
 }
 
+void
+kex_set_warn_weak_crypto(struct ssh *ssh, int warn_weak_crypto)
+{
+	if (ssh != NULL && ssh->kex != NULL)
+		ssh->kex->warn_weak_crypto = warn_weak_crypto != 0;
+}
+
+void
+kex_check_warn_weak_crypto(struct ssh *ssh)
+{
+	char remote_id[512];
+	int rekeyed = 0;
+
+	if (ssh == NULL || ssh->kex == NULL || ssh->kex->name == NULL ||
+	    !ssh->kex->warn_weak_crypto || ssh->kex->non_pq_kex_warned)
+		return;
+	if (kex_is_pq_from_name(ssh->kex->name)) {
+		ssh->kex->pq_kex_negotiated = 1;
+		return;
+	}
+
+	if (ssh->kex->pq_kex_negotiated)
+		rekeyed = 1;
+	if (!rekeyed && !ssh->kex->server)
+		return; /* client logs initial KEX warning separately */
+
+	sshpkt_fmt_connection_id(ssh, remote_id, sizeof(remote_id));
+	logit("WARNING: %sconnection%s%s is not using a post-quantum "
+	    "key exchange algorithm: \"%s\"", rekeyed ? "rekeyed " : "",
+	    ssh->kex->server ? " from " : "",
+	    ssh->kex->server ? remote_id : "", ssh->kex->name);
+	ssh->kex->non_pq_kex_warned = 1;
+}
+
 static int
 kex_compose_ext_info_server(struct ssh *ssh, struct sshbuf *m)
 {
@@ -570,7 +604,8 @@ kex_input_newkeys(int type, uint32_t seq, struct ssh *ssh)
 	kex->done = 1;
 	kex->flags &= ~KEX_INITIAL;
 	sshbuf_reset(kex->peer);
-	kex->flags &= ~KEX_INIT_SENT;
+	kex->flags &= ~(KEX_INIT_SENT|KEX_INIT_RECVD);
+	kex_check_warn_weak_crypto(ssh);
 	return 0;
 }
 
@@ -628,6 +663,11 @@ kex_input_kexinit(int type, uint32_t seq, struct ssh *ssh)
 	}
 	free(kex->name);
 	kex->name = NULL;
+	if ((kex->flags & KEX_INIT_RECVD) != 0) {
+		ssh_packet_disconnect(ssh,
+		    "multiple KEXINIT received from peer");
+	}
+	kex->flags |= KEX_INIT_RECVD;
 	ssh_dispatch_set(ssh, SSH2_MSG_KEXINIT, &kex_protocol_error);
 	ptr = sshpkt_ptr(ssh, &dlen);
 	if (ptr == NULL) { // fix CodeQL SM02313
@@ -735,9 +775,7 @@ kex_free(struct kex *kex)
 
 #ifdef WITH_OPENSSL
 	DH_free(kex->dh);
-#ifdef OPENSSL_HAS_ECC
 	EC_KEY_free(kex->ec_client_key);
-#endif /* OPENSSL_HAS_ECC */
 #endif /* WITH_OPENSSL */
 	for (mode = 0; mode < MODE_MAX; mode++) {
 		kex_free_newkeys(kex->newkeys[mode]);
@@ -1466,7 +1504,7 @@ kex_exchange_identification(struct ssh *ssh, int timeout_ms,
  out:
 	free(our_version_string);
 	free(peer_version_string);
-	free(remote_version);
+	ssh->remote_version = remote_version;  /* transferred */
 	if (r == SSH_ERR_SYSTEM_ERROR)
 		errno = oerrno;
 	return r;

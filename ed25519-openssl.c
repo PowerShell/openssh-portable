@@ -1,4 +1,4 @@
-/* $OpenBSD: ed25519-openssl.c,v 1.1 2025/10/30 20:49:10 djm Exp $ */
+/* $OpenBSD: ed25519-openssl.c,v 1.4 2026/09/16 00:43:00 djm Exp $ */
 /*
  * Copyright (c) 2025 OpenSSH
  *
@@ -16,8 +16,8 @@
  */
 
 /*
- * OpenSSL-based implementation of Ed25519 crypto_sign API
- * Alternative to the internal SUPERCOP-based implementation in ed25519.c
+ * OpenSSL-based implementation of the Ed25519 crypto_sign API.
+ * Alternative to the internal libsodium-based implementation in ed25519.c.
  */
 
 #include "includes.h"
@@ -96,7 +96,39 @@ out:
 }
 
 int
-crypto_sign_ed25519(unsigned char *sm, unsigned long long *smlen,
+crypto_sign_ed25519_seed_keypair(unsigned char *pk, unsigned char *sk,
+    const unsigned char *seed)
+{
+	EVP_PKEY *pkey = NULL;
+	size_t pklen;
+	int ret = -1;
+
+	if ((pkey = EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, NULL,
+	    seed, SSH_ED25519_RAW_SECRET_KEY_LEN)) == NULL) {
+		debug3_f("EVP_PKEY_new_raw_private_key failed");
+		goto out;
+	}
+
+	/* Extract public key */
+	pklen = crypto_sign_ed25519_PUBLICKEYBYTES;
+	if (!EVP_PKEY_get_raw_public_key(pkey, pk, &pklen)) {
+		debug3_f("EVP_PKEY_get_raw_public_key failed");
+		goto out;
+	}
+
+	/* Build sk = seed || pk */
+	memcpy(sk, seed, SSH_ED25519_RAW_SECRET_KEY_LEN);
+	memcpy(sk + SSH_ED25519_RAW_SECRET_KEY_LEN, pk,
+	    crypto_sign_ed25519_PUBLICKEYBYTES);
+
+	ret = 0;
+out:
+	EVP_PKEY_free(pkey);
+	return ret;
+}
+
+int
+crypto_sign_ed25519_detached(unsigned char *sig, unsigned long long *siglenp,
     const unsigned char *m, unsigned long long mlen,
     const unsigned char *sk)
 {
@@ -122,7 +154,7 @@ crypto_sign_ed25519(unsigned char *sm, unsigned long long *smlen,
 		goto out;
 	}
 	siglen = crypto_sign_ed25519_BYTES;
-	if (EVP_DigestSign(mdctx, sm, &siglen, m, mlen) != 1) {
+	if (EVP_DigestSign(mdctx, sig, &siglen, m, mlen) != 1) {
 		debug3_f("EVP_DigestSign failed");
 		goto out;
 	}
@@ -131,14 +163,8 @@ crypto_sign_ed25519(unsigned char *sm, unsigned long long *smlen,
 		goto out;
 	}
 
-	/* Append message after signature (SUPERCOP format) */
-	if (mlen > ULLONG_MAX - siglen) {
-		debug3_f("message length overflow: siglen=%zu mlen=%llu",
-		    siglen, mlen);
-		goto out;
-	}
-	memmove(sm + siglen, m, mlen);
-	*smlen = siglen + mlen;
+	if (siglenp != NULL)
+		*siglenp = siglen;
 
 	ret = 0;
 out:
@@ -148,27 +174,16 @@ out:
 }
 
 int
-crypto_sign_ed25519_open(unsigned char *m, unsigned long long *mlen,
-    const unsigned char *sm, unsigned long long smlen,
+crypto_sign_ed25519_verify_detached(const unsigned char *sig,
+    const unsigned char *m, unsigned long long mlen,
     const unsigned char *pk)
 {
 	EVP_PKEY *pkey = NULL;
 	EVP_MD_CTX *mdctx = NULL;
 	int ret = -1;
-	const unsigned char *msg;
-	size_t msglen;
 
-	if (smlen < crypto_sign_ed25519_BYTES) {
-		debug3_f("signed message bad length: %llu", smlen);
-		return -1;
-	}
-	/* Signature is first crypto_sign_ed25519_BYTES, message follows */
-	msg = sm + crypto_sign_ed25519_BYTES;
-	msglen = smlen - crypto_sign_ed25519_BYTES;
-
-	/* Make sure the message buffer is big enough. */
-	if (*mlen < msglen) {
-		debug_f("message bad length: %llu", *mlen);
+	if (mlen > SIZE_MAX) {
+		debug3_f("message too long: %llu", mlen);
 		return -1;
 	}
 
@@ -187,15 +202,11 @@ crypto_sign_ed25519_open(unsigned char *m, unsigned long long *mlen,
 		debug3_f("EVP_DigestVerifyInit failed");
 		goto out;
 	}
-	if (EVP_DigestVerify(mdctx, sm, crypto_sign_ed25519_BYTES,
-	    msg, msglen) != 1) {
+	if (EVP_DigestVerify(mdctx, sig, crypto_sign_ed25519_BYTES,
+	    m, (size_t)mlen) != 1) {
 		debug3_f("EVP_DigestVerify failed");
 		goto out;
 	}
-
-	/* Copy message out */
-	*mlen = msglen;
-	memmove(m, msg, msglen);
 
 	ret = 0;
 out:

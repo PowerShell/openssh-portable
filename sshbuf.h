@@ -1,4 +1,4 @@
-/*	$OpenBSD: sshbuf.h,v 1.35 2026/03/03 09:57:25 dtucker Exp $	*/
+/*	$OpenBSD: sshbuf.h,v 1.36 2026/04/07 07:40:40 djm Exp $	*/
 /*
  * Copyright (c) 2011 Damien Miller
  *
@@ -21,13 +21,19 @@
 #include <sys/types.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #ifdef WITH_OPENSSL
-# include <openssl/bn.h>
-# include <openssl/evp.h>
-# ifdef OPENSSL_HAS_ECC
-#  include <openssl/ec.h>
-# endif /* OPENSSL_HAS_ECC */
+#include <openssl/bn.h>
+#include <openssl/ec.h>
+#include <openssl/ecdsa.h>
+#include <openssl/evp.h>
+#else /* OPENSSL */
+#define BIGNUM		void
+#define EC_KEY		void
+#define EC_GROUP	void
+#define EC_POINT	void
+#define EVP_PKEY	void
 #endif /* WITH_OPENSSL */
 
 #define SSHBUF_SIZE_MAX		0x8000000	/* Hard maximum size */
@@ -233,20 +239,16 @@ int	sshbuf_peek_string_direct(const struct sshbuf *buf, const u_char **valp,
  * Functions to extract or store SSH wire encoded bignums and elliptic
  * curve points.
  */
-int	sshbuf_put_bignum2_bytes(struct sshbuf *buf, const void *v, size_t len);
+int	sshbuf_get_bignum2(struct sshbuf *buf, BIGNUM **valp);
 int	sshbuf_get_bignum2_bytes_direct(struct sshbuf *buf,
 	    const u_char **valp, size_t *lenp);
-#ifdef WITH_OPENSSL
-int	sshbuf_get_bignum2(struct sshbuf *buf, BIGNUM **valp);
 int	sshbuf_put_bignum2(struct sshbuf *buf, const BIGNUM *v);
-# ifdef OPENSSL_HAS_ECC
+int	sshbuf_put_bignum2_bytes(struct sshbuf *buf, const void *v, size_t len);
 int	sshbuf_get_ec(struct sshbuf *buf, EC_POINT *v, const EC_GROUP *g);
 int	sshbuf_get_eckey(struct sshbuf *buf, EC_KEY *v);
 int	sshbuf_put_ec(struct sshbuf *buf, const EC_POINT *v, const EC_GROUP *g);
 int	sshbuf_put_eckey(struct sshbuf *buf, const EC_KEY *v);
 int	sshbuf_put_ec_pkey(struct sshbuf *buf, EVP_PKEY *pkey);
-# endif /* OPENSSL_HAS_ECC */
-#endif /* WITH_OPENSSL */
 
 /* Functions to extract or store various non-SSH wire encoded values */
 int	sshbuf_get_nulterminated_string(struct sshbuf *buf, size_t maxlen,
@@ -432,5 +434,15 @@ u_int	sshbuf_refcount(const struct sshbuf *buf);
 #  define SSHBUF_DBG(x)
 # endif
 #endif /* SSHBUF_INTERNAL */
+
+#ifndef WITH_OPENSSL
+#undef BIGNUM
+#undef DH
+#undef RSA
+#undef EC_KEY
+#undef EC_GROUP
+#undef EC_POINT
+#undef EVP_PKEY
+#endif /* !WITH_OPENSSL */
 
 #endif /* _SSHBUF_H */

@@ -95,7 +95,7 @@ enum
 # define	IPTOS_DSCP_CS7		0xe0
 #endif /* IPTOS_DSCP_CS0 */
 #ifndef IPTOS_DSCP_VA
-# define	IPTOS_DSCP_VA		0x2c
+# define	IPTOS_DSCP_VA		0xb0
 #endif /* IPTOS_DSCP_VA */
 #ifndef IPTOS_DSCP_EF
 # define	IPTOS_DSCP_EF		0xb8
@@ -663,7 +663,8 @@ struct winsize {
 
 #if (defined(HAVE_DECL_LE32TOH) && HAVE_DECL_LE32TOH == 0) || \
     (defined(HAVE_DECL_LE64TOH) && HAVE_DECL_LE64TOH == 0) || \
-    (defined(HAVE_DECL_HTOLE64) && HAVE_DECL_HTOLE64 == 0)
+    (defined(HAVE_DECL_HTOLE64) && HAVE_DECL_HTOLE64 == 0) || \
+    (defined(HAVE_DECL_HTOBE32) && HAVE_DECL_HTOBE32 == 0)
 # define openssh_swap32(v)					\
 	(uint32_t)(((uint32_t)(v) & 0xff) << 24 |		\
 	((uint32_t)(v) & 0xff00) << 8 |				\
@@ -687,7 +688,10 @@ struct winsize {
 #  endif
 #  if defined(HAVE_DECL_HTOLE64) && HAVE_DECL_HTOLE64 == 0
 #   define htole64(v) (openssh_swap64(v))
-# endif
+#  endif
+#  if defined(HAVE_DECL_HTOBE32) && HAVE_DECL_HTOBE32 == 0
+#   define htobe32(v) ((uint32_t)v)
+#  endif
 # else
 #  if defined(HAVE_DECL_LE32TOH) && HAVE_DECL_LE32TOH == 0
 #   define le32toh(v) ((uint32_t)v)
@@ -697,6 +701,9 @@ struct winsize {
 #  endif
 #  if defined(HAVE_DECL_HTOLE64) && HAVE_DECL_HTOLE64 == 0
 #   define htole64(v) ((uint64_t)v)
+#  endif
+#  if defined(HAVE_DECL_HTOBE32) && HAVE_DECL_HTOBE32 == 0
+#   define htobe32(v) (openssh_swap32(v))
 #  endif
 # endif
 #endif
@@ -989,14 +996,31 @@ struct winsize {
  */
 #if defined(VARIABLE_LENGTH_ARRAYS) && defined(VARIABLE_DECLARATION_AFTER_CODE)
 # define USE_SNTRUP761X25519	1
-/* The ML-KEM768 implementation also uses C89 features */
+/* The ML-KEM768 and ML-DSA implementations also uses C89 features */
 # define USE_MLKEM768X25519	1
+# define USE_MLDSA		1
 #endif
 
 #if defined(HAVE_DECL_INFINITY) && HAVE_DECL_INFINITY == 0
 # if defined(HAVE_DECL___BUILTIN_INFF) && HAVE_DECL___BUILTIN_INFF == 1
 #  define INFINITY __builtin_inff()
 # endif
+#endif
+
+/*
+ * Hack for systems that don't support FD passing: retain privileges
+ * in the post-auth privsep process so it can allocate PTYs directly.
+ *
+ * Instead of doing what we did <= 9.7, which was to disable post-auth
+ * privsep entirely, we run with temporarily_use_uid, restoring root
+ * only to allocate ptys or in the child to permanently change UID.
+ *
+ * Cygwin doesn't need to drop privs here although it doesn't support
+ * fd passing, as AFAIK PTY allocation on this platform doesn't require
+ * special privileges to begin with.
+ */
+#if defined(DISABLE_FD_PASSING) && !defined(HAVE_CYGWIN) && !defined(WINDOWS)
+# define SKIP_PRIVDROP 1
 #endif
 
 #endif /* _DEFINES_H */

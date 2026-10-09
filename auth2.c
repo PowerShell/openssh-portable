@@ -1,4 +1,4 @@
-/* $OpenBSD: auth2.c,v 1.173 2026/03/03 09:57:25 dtucker Exp $ */
+/* $OpenBSD: auth2.c,v 1.176 2026/09/16 00:37:07 djm Exp $ */
 /*
  * Copyright (c) 2000 Markus Friedl.  All rights reserved.
  *
@@ -268,6 +268,12 @@ ensure_minimum_time_since(double start, double seconds)
 	nanosleep(&ts, NULL);
 }
 
+void
+auth_failure_delay(Authctxt *authctxt, double tstart)
+{
+	ensure_minimum_time_since(tstart, user_specific_delay(authctxt->user));
+}
+
 static int
 input_userauth_request(int type, uint32_t seq, struct ssh *ssh)
 {
@@ -333,6 +339,7 @@ input_userauth_request(int type, uint32_t seq, struct ssh *ssh)
 	auth2_challenge_stop(ssh);
 
 #ifdef GSSAPI
+	ssh_gssapi_cleanup_global_client();
 	/* XXX move to auth2_gssapi_stop() */
 	ssh_dispatch_set(ssh, SSH2_MSG_USERAUTH_GSSAPI_TOKEN, NULL);
 	ssh_dispatch_set(ssh, SSH2_MSG_USERAUTH_GSSAPI_EXCHANGE_COMPLETE, NULL);
@@ -341,6 +348,7 @@ input_userauth_request(int type, uint32_t seq, struct ssh *ssh)
 	auth2_authctxt_reset_info(authctxt);
 	authctxt->postponed = 0;
 	authctxt->server_caused_failure = 0;
+	authctxt->auth_failure_already_counted = 0;
 
 	/* try to authenticate user */
 	m = authmethod_lookup(authctxt, method);
@@ -349,8 +357,8 @@ input_userauth_request(int type, uint32_t seq, struct ssh *ssh)
 		authenticated =	m->userauth(ssh, method);
 	}
 	if (!authctxt->authenticated && strcmp(method, "none") != 0)
-		ensure_minimum_time_since(tstart,
-		    user_specific_delay(authctxt->user));
+		auth_failure_delay(authctxt, tstart);
+
 	userauth_finish(ssh, authenticated, method, NULL);
 	r = 0;
  out:
@@ -445,6 +453,7 @@ userauth_finish(struct ssh *ssh, int authenticated, const char *packet_method,
 	} else {
 		/* Allow initial try of "none" auth without failure penalty */
 		if (!partial && !authctxt->server_caused_failure &&
+		    !authctxt->auth_failure_already_counted &&
 		    (authctxt->attempt > 1 || strcmp(method, "none") != 0))
 			authctxt->failures++;
 		if (authctxt->failures >= options.max_authtries) {

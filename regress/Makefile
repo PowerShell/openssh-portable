@@ -1,4 +1,4 @@
-#	$OpenBSD: Makefile,v 1.144 2026/03/30 07:19:02 djm Exp $
+#	$OpenBSD: Makefile,v 1.146 2026/08/04 02:48:00 djm Exp $
 
 tests:		prep file-tests t-exec unit
 
@@ -308,6 +308,9 @@ unit unit-bench:
 			-d ${.CURDIR}/unittests/hostkeys/testdata $${ARGS}; \
 		$$V ${.OBJDIR}/unittests/match/test_match $${ARGS}; \
 		$$V ${.OBJDIR}/unittests/misc/test_misc $${ARGS}; \
+		$$V ${.OBJDIR}/unittests/servconf/test_servconf $${ARGS}; \
+		$$V ${.OBJDIR}/unittests/crypto/test_crypto \
+			-d ${.CURDIR}/unittests/crypto/testdata $${ARGS}; \
 		if test "x${TEST_SSH_UTF8}" = "xyes"  ; then \
 			$$V ${.OBJDIR}/unittests/utf8/test_utf8 $${ARGS}; \
 		fi \

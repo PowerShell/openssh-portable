@@ -50,10 +50,6 @@
 /* Can't do comparisons on readv */
 #undef BROKEN_READV_COMPARISON
 
-/* NetBSD read function is sometimes redirected, breaking atomicio comparisons
-   against it */
-#undef BROKEN_READ_COMPARISON
-
 /* Needed for NeXT */
 #undef BROKEN_SAVED_UIDS
 
@@ -366,6 +362,10 @@
    don't. */
 #undef HAVE_DECL_HOWMANY
 
+/* Define to 1 if you have the declaration of `htobe32', and to 0 if you
+   don't. */
+#undef HAVE_DECL_HTOBE32
+
 /* Define to 1 if you have the declaration of `htole64', and to 0 if you
    don't. */
 #undef HAVE_DECL_HTOLE64
@@ -377,6 +377,10 @@
 /* Define to 1 if you have the declaration of `INFINITY', and to 0 if you
    don't. */
 #undef HAVE_DECL_INFINITY
+
+/* Define to 1 if you have the declaration of `kSBXProfilePureComputation',
+   and to 0 if you don't. */
+#undef HAVE_DECL_KSBXPROFILEPURECOMPUTATION
 
 /* Define to 1 if you have the declaration of `le32toh', and to 0 if you
    don't. */
@@ -686,6 +690,9 @@
 
 /* Define to 1 if you have the `getentropy' function. */
 #undef HAVE_GETENTROPY
+
+/* Define to 1 if you have the `getexecpath' function. */
+#undef HAVE_GETEXECPATH
 
 /* Define to 1 if you have the `getgrouplist' function. */
 #undef HAVE_GETGROUPLIST
@@ -1049,11 +1056,20 @@
    pam_strerror */
 #undef HAVE_OLD_PAM
 
+/* Define to 1 if you have the `openat' function. */
+#undef HAVE_OPENAT
+
 /* Define to 1 if you have the `openlog_r' function. */
 #undef HAVE_OPENLOG_R
 
 /* Define to 1 if you have the `openpty' function. */
 #undef HAVE_OPENPTY
+
+/* Define to 1 if you have the <openssl/configuration.h> header file. */
+#undef HAVE_OPENSSL_CONFIGURATION_H
+
+/* Define to 1 if you have the <openssl/opensslconf.h> header file. */
+#undef HAVE_OPENSSL_OPENSSLCONF_H
 
 /* Define to 1 if you have the `OpenSSL_version' function. */
 #undef HAVE_OPENSSL_VERSION
@@ -1807,23 +1823,8 @@
 /* Define if EVP_DigestUpdate returns void */
 #undef OPENSSL_EVP_DIGESTUPDATE_VOID
 
-/* OpenSSL has ECC */
-#undef OPENSSL_HAS_ECC
-
 /* libcrypto has ed25519 support */
 #undef OPENSSL_HAS_ED25519
-
-/* libcrypto has NID_X9_62_prime256v1 */
-#undef OPENSSL_HAS_NISTP256
-
-/* libcrypto has NID_secp384r1 */
-#undef OPENSSL_HAS_NISTP384
-
-/* libcrypto has NID_secp521r1 */
-#undef OPENSSL_HAS_NISTP521
-
-/* libcrypto is missing AES 192 and 256 bit functions */
-#undef OPENSSL_LOBOTOMISED_AES
 
 /* Define if you want the OpenSSL internally seeded PRNG only */
 #undef OPENSSL_PRNG_ONLY
@@ -1987,6 +1988,9 @@
 
 /* Define this if you want to use libkafs' AFS support */
 #undef USE_AFS
+
+/* Enable brainpool */
+#undef USE_BRAINPOOLP256R1
 
 /* Use BSM audit module */
 #undef USE_BSM_AUDIT
