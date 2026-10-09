@@ -224,27 +224,24 @@ mm_is_monitor(void)
 static struct sshbuf*
 pack_hostkeys_for_child(void)
 {
-	/* copied from pack_hostkeys() in sshd.c, used in send_config_state() */
-	struct sshbuf* m = NULL, * keybuf = NULL, * hostkeys = NULL;
+	/* copied from pack_hostkeys() in sshd.c,
+	   except for packing private keys, 
+	   used in send_config_state()
+	*/
+	struct sshbuf* m = NULL, * hostkeys = NULL;
 	int r;
 	u_int i;
 	size_t len;
 
 	if ((m = sshbuf_new()) == NULL ||
-		(keybuf = sshbuf_new()) == NULL ||
 		(hostkeys = sshbuf_new()) == NULL)
 		fatal_f("sshbuf_new failed");
 
 	/* pack hostkeys into a string. Empty key slots get empty strings */
 	for (i = 0; i < options.num_host_key_files; i++) {
-		/* private key */
-		sshbuf_reset(keybuf);
-		if (sensitive_data.host_keys[i] != NULL &&
-			(r = sshkey_private_serialize(sensitive_data.host_keys[i],
-				keybuf)) != 0)
-			fatal_fr(r, "serialize hostkey private");
-		if ((r = sshbuf_put_stringb(hostkeys, keybuf)) != 0)
-			fatal_fr(r, "compose hostkey private");
+		/* private keys not sent as they should only remain in the privileged monitor */
+		if ((r = sshbuf_put_string(hostkeys, NULL, 0)) != 0)
+			fatal_fr(r, "compose hostkey empty private");
 		/* public key */
 		if (sensitive_data.host_pubkeys[i] != NULL) {
 			if ((r = sshkey_puts(sensitive_data.host_pubkeys[i],
@@ -276,7 +273,6 @@ pack_hostkeys_for_child(void)
 		fatal_f("bad length %zu", len);
 	POKE_U32(sshbuf_mutable_ptr(m), len - 4);
 
-	sshbuf_free(keybuf);
 	sshbuf_free(hostkeys);
 	return m;
 }
@@ -1568,6 +1564,9 @@ main(int ac, char **av)
 
 	for (i = 0; i < options.num_host_key_files; i++) {
 		if (sensitive_data.host_keys[i] != NULL ||
+#ifdef WINDOWS
+			(privsep_auth_child && sensitive_data.host_pubkeys[i] != NULL) ||
+#endif
 		    (have_agent && sensitive_data.host_pubkeys[i] != NULL)) {
 			have_key = 1;
 			break;
