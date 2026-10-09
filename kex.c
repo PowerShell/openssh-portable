@@ -1,4 +1,4 @@
-/* $OpenBSD: kex.c,v 1.193 2026/03/05 05:40:35 djm Exp $ */
+/* $OpenBSD: kex.c,v 1.194 2026/05/31 04:44:38 djm Exp $ */
 /*
  * Copyright (c) 2000, 2001 Markus Friedl.  All rights reserved.
  *
@@ -570,7 +570,7 @@ kex_input_newkeys(int type, uint32_t seq, struct ssh *ssh)
 	kex->done = 1;
 	kex->flags &= ~KEX_INITIAL;
 	sshbuf_reset(kex->peer);
-	kex->flags &= ~KEX_INIT_SENT;
+	kex->flags &= ~(KEX_INIT_SENT|KEX_INIT_RECVD);
 	return 0;
 }
 
@@ -628,6 +628,11 @@ kex_input_kexinit(int type, uint32_t seq, struct ssh *ssh)
 	}
 	free(kex->name);
 	kex->name = NULL;
+	if ((kex->flags & KEX_INIT_RECVD) != 0) {
+		ssh_packet_disconnect(ssh,
+		    "multiple KEXINIT received from peer");
+	}
+	kex->flags |= KEX_INIT_RECVD;
 	ssh_dispatch_set(ssh, SSH2_MSG_KEXINIT, &kex_protocol_error);
 	ptr = sshpkt_ptr(ssh, &dlen);
 	if (ptr == NULL) { // fix CodeQL SM02313
@@ -735,9 +740,7 @@ kex_free(struct kex *kex)
 
 #ifdef WITH_OPENSSL
 	DH_free(kex->dh);
-#ifdef OPENSSL_HAS_ECC
 	EC_KEY_free(kex->ec_client_key);
-#endif /* OPENSSL_HAS_ECC */
 #endif /* WITH_OPENSSL */
 	for (mode = 0; mode < MODE_MAX; mode++) {
 		kex_free_newkeys(kex->newkeys[mode]);

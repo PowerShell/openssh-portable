@@ -1,4 +1,4 @@
-/* $OpenBSD: sshd-session.c,v 1.23 2026/03/11 09:10:59 dtucker Exp $ */
+/* $OpenBSD: sshd-session.c,v 1.25 2026/07/09 02:20:19 djm Exp $ */
 /*
  * SSH2 implementation:
  * Privilege Separation:
@@ -888,6 +888,7 @@ get_hostkey_by_type(int type, int nid, int need_private, struct ssh *ssh)
 		case KEY_ED25519_CERT:
 		case KEY_ECDSA_SK_CERT:
 		case KEY_ED25519_SK_CERT:
+		case KEY_MLDSA44_ED25519_CERT:
 			key = sensitive_data.host_certificates[i];
 			break;
 		default:
@@ -1754,6 +1755,8 @@ idexch_done:
 		fatal("privsep_preauth failed");
 
 	/* Now user is authenticated */
+
+	setproctitle("%s [postauth]", authctxt->user);
 
 	/*
 	 * Cancel the alarm we set to limit the time taken for

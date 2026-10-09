@@ -136,7 +136,7 @@
     <ClInclude Include="$(OpenSSH-Src-Path)openbsd-compat\port-uw.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)openbsd-compat\readpassphrase.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)openbsd-compat\sha1.h" />
-    <ClInclude Include="$(OpenSSH-Src-Path)openbsd-compat\sha2.h" />
+    <ClInclude Include="$(OpenSSH-Src-Path)openbsd-compat\bsd-sha2.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)openbsd-compat\sys-queue.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)openbsd-compat\sys-tree.h" />
     <ClInclude Include="$(OpenSSH-Src-Path)openbsd-compat\vis.h" />

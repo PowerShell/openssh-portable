@@ -1,4 +1,4 @@
-#	$OpenBSD: Makefile,v 1.21 2026/02/06 23:39:14 dtucker Exp $
+#	$OpenBSD: Makefile,v 1.23 2026/07/28 09:55:44 markus Exp $
 
 PROG=test_kex
 SRCS=tests.c test_kex.c test_proposal.c
@@ -12,6 +12,7 @@ SRCS+=addr.c addrmatch.c bitmap.c packet.c dispatch.c canohost.c ssh_api.c
 SRCS+=compat.c
 SRCS+=cipher-chachapoly.c chacha.c poly1305.c ssh-ecdsa-sk.c ssh-sk.c
 SRCS+=ssh-ed25519-sk.c sk-usbhid.c ssh-pkcs11-client.c ssherr-libcrypto.c
+SRCS+=libcrux-mlkem-mldsa.c ssh-mldsa-eddsa.c
 
 SRCS+=	kex.c
 SRCS+=	kex-names.c
@@ -26,6 +27,7 @@ SRCS+=	smult_curve25519_ref.c
 SRCS+=	kexgen.c
 SRCS+=	kexsntrup761x25519.c
 SRCS+=	kexmlkem768x25519.c
+SRCS+=	kexmlkem768ecdh.c
 SRCS+=	sntrup761.c
 SRCS+=	utf8.c
 

@@ -221,7 +221,8 @@ DESCRIPTION
                    ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                    sk-ssh-ed25519@openssh.com,
                    sk-ecdsa-sha2-nistp256@openssh.com,
-                   rsa-sha2-512,rsa-sha2-256
+                   rsa-sha2-512,rsa-sha2-256,
+                   ssh-mldsa44-ed25519@openssh.com
 
              If the specified list begins with a M-bM-^@M-^X+M-bM-^@M-^Y character, then the
              specified algorithms will be appended to the default set instead
@@ -379,6 +380,13 @@ DESCRIPTION
              authenticated successfully.  The argument must be yes, delayed (a
              legacy synonym for yes) or no.  The default is yes.
 
+             Compression applies to all traffic that flows over the SSH
+             connection.  If untrusted traffic (such as an open port-forward)
+             is permitted over the connection alongside trusted traffic, then
+             compression may leak information about session contents.  For
+             this reason, it is not recommended to enable compression for
+             connections that share trusted and untrusted traffic.
+
      DenyGroups
              This keyword can be followed by a list of group name patterns,
              separated by spaces.  Login is disallowed for users whose primary
@@ -473,7 +481,8 @@ DESCRIPTION
              hostname.  If set to no then the client may authenticate against
              any service key stored in the machine's default store.  This
              facility is provided to assist with operation on multi homed
-             machines.  The default is yes.
+             machines.  The default is yes.  This option may not be effective
+             in Windows Active Directory environments.
 
      HostbasedAcceptedAlgorithms
              Specifies the signature algorithms that will be accepted for
@@ -497,12 +506,14 @@ DESCRIPTION
                 webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
+                ssh-mldsa44-ed25519-cert-v01@openssh.com,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ssh-ed25519@openssh.com,
                 sk-ecdsa-sha2-nistp256@openssh.com,
                 webauthn-sk-ecdsa-sha2-nistp256@openssh.com,
-                rsa-sha2-512,rsa-sha2-256
+                rsa-sha2-512,rsa-sha2-256,
+                ssh-mldsa44-ed25519@openssh.com
 
              The list of available signature algorithms may also be obtained
              using "ssh -Q HostbasedAcceptedAlgorithms".  This was formerly
@@ -531,7 +542,9 @@ DESCRIPTION
      HostKey
              Specifies a file containing a private host key used by SSH.  The
              defaults are /etc/ssh/ssh_host_ecdsa_key,
-             /etc/ssh/ssh_host_ed25519_key and /etc/ssh/ssh_host_rsa_key.
+             /etc/ssh/ssh_host_ed25519_key,
+             /etc/ssh/ssh_host_mldsa44_ed25519_key and
+             /etc/ssh/ssh_host_rsa_key.
 
              Note that sshd(8) will refuse to use a file if it is group/world-
              accessible and that the HostKeyAlgorithms option restricts which
@@ -561,12 +574,14 @@ DESCRIPTION
                 webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
+                ssh-mldsa44-ed25519-cert-v01@openssh.com,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ssh-ed25519@openssh.com,
                 sk-ecdsa-sha2-nistp256@openssh.com,
                 webauthn-sk-ecdsa-sha2-nistp256@openssh.com,
-                rsa-sha2-512,rsa-sha2-256
+                rsa-sha2-512,rsa-sha2-256,
+                ssh-mldsa44-ed25519@openssh.com
 
              The list of available signature algorithms may also be obtained
              using "ssh -Q HostKeyAlgorithms".
@@ -663,6 +678,7 @@ DESCRIPTION
                    ecdh-sha2-nistp256
                    ecdh-sha2-nistp384
                    ecdh-sha2-nistp521
+                   mlkem768nistp256-sha256
                    mlkem768x25519-sha256
                    sntrup761x25519-sha512
                    sntrup761x25519-sha512@openssh.com
@@ -1092,12 +1108,14 @@ DESCRIPTION
                 webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
+                ssh-mldsa44-ed25519-cert-v01@openssh.com,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ssh-ed25519@openssh.com,
                 sk-ecdsa-sha2-nistp256@openssh.com,
                 webauthn-sk-ecdsa-sha2-nistp256@openssh.com,
-                rsa-sha2-512,rsa-sha2-256
+                rsa-sha2-512,rsa-sha2-256,
+                ssh-mldsa44-ed25519@openssh.com
 
              The list of available signature algorithms may also be obtained
              using "ssh -Q PubkeyAcceptedAlgorithms".
@@ -1448,4 +1466,4 @@ AUTHORS
      versions 1.5 and 2.0.  Niels Provos and Markus Friedl contributed support
      for privilege separation.
 
-OpenBSD 7.8                     March 28, 2026                  SSHD_CONFIG(5)
+OpenBSD 8.0                     August 8, 2026                  SSHD_CONFIG(5)
