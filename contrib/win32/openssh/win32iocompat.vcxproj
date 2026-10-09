@@ -328,6 +328,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\signal_wait.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\win32_pty.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\gss-sspi.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)\contrib\win32\win32compat\lxss.c" />
     <ClCompile Include="sshTelemetry.c" />
   </ItemGroup>
   <ItemGroup>

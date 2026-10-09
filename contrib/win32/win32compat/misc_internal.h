@@ -12,6 +12,8 @@
 #define NULL_DEVICE "/dev/null"
 #define NULL_DEVICE_WIN "NUL"
 
+#define TMP_DIR "/tmp/"
+
 #define IsWin7OrLess() (!IsWindows8OrGreater())
 
 #define IS_INVALID_HANDLE(h) ( ((NULL == h) || (INVALID_HANDLE_VALUE == h)) ? 1 : 0 )
