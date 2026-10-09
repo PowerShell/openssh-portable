@@ -53,7 +53,11 @@ DESCRIPTION
              request with a failure.  The -Q flag can be used to determine the
              supported request types.  If both denied and allowed lists are
              specified, then the denied list is applied before the allowed
-             list.
+             list.  This flag, along with the -p flag, may be used to disable
+             operations that are irrelevant or undesirable for the server.
+             For example, a sftp-server that accepts connections from
+             untrusted clients may wish to disable the M-bM-^@M-^\copy-dataM-bM-^@M-^] or
+             M-bM-^@M-^\users-groups-by-idM-bM-^@M-^] operations.
 
      -p allowed_requests
              Specifies a comma-separated list of SFTP protocol requests that
@@ -95,4 +99,4 @@ HISTORY
 AUTHORS
      Markus Friedl <markus@openbsd.org>
 
-OpenBSD 7.8                      July 27, 2021                  SFTP-SERVER(8)
+OpenBSD 7.9                      May 21, 2026                   SFTP-SERVER(8)

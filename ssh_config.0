@@ -11,24 +11,28 @@ DESCRIPTION
            2.   user's configuration file (~/.ssh/config)
            3.   system-wide configuration file (/etc/ssh/ssh_config)
 
-     Unless noted otherwise, for each parameter, the first obtained value will
-     be used.  The configuration files contain sections separated by Host
-     specifications, and that section is only applied for hosts that match one
-     of the patterns given in the specification.  The matched host name is
-     usually the one given on the command line (see the CanonicalizeHostname
-     option for exceptions).
+     Unless noted otherwise, for each configuration directive, the first
+     specified value will be used.
 
-     Since the first obtained value for each parameter is used, more host-
+     The configuration files may contain sections separated by conditional
+     Host or Match directives.  Configuration in these sections is only
+     applied if the conditional directive that started the section matches.
+
+     Since the first obtained value for each directive is used, more host-
      specific declarations should be given near the beginning of the file, and
      general defaults at the end.
 
-     The file contains keyword-argument pairs, one per line.  Lines starting
-     with M-bM-^@M-^X#M-bM-^@M-^Y and empty lines are interpreted as comments.  Arguments may
+     The file contains directive/values pairs, one per line.  Lines starting
+     with M-bM-^@M-^X#M-bM-^@M-^Y and empty lines are interpreted as comments.  M-bM-^@M-^X#M-bM-^@M-^Y outside of a
+     quoted string may be used to add a comment to the end of a line.
+     Whitespace at the beginning or end of lines is ignored.  Values may
      optionally be enclosed in double quotes (") in order to represent
-     arguments containing spaces.  Configuration options may be separated by
-     whitespace or optional whitespace and exactly one M-bM-^@M-^X=M-bM-^@M-^Y; the latter format
-     is useful to avoid the need to quote whitespace when specifying
-     configuration options using the ssh, scp, and sftp -o option.
+     arguments containing spaces.
+
+     Configuration directives are separated from their values by whitespace or
+     exactly one M-bM-^@M-^X=M-bM-^@M-^Y character (which may be surrounded by whitespace); the
+     latter format is useful to avoid the need to quote whitespace when
+     specifying configuration options using the ssh, scp, and sftp -o option.
 
      The possible keywords and their meanings are as follows (note that
      keywords are case-insensitive and arguments are case-sensitive):
@@ -115,6 +119,18 @@ DESCRIPTION
              for command execution sessions, subsystem for subsystem
              invocations such as sftp(1), or none for transport-only sessions,
              such as when ssh(1) is started with the -N flag.
+
+     Include
+             Include the specified configuration file(s).  Multiple pathnames
+             may be specified and each pathname may contain glob(7) wildcards,
+             tokens as described in the TOKENS section, environment variables
+             as described in the ENVIRONMENT VARIABLES section and, for user
+             configurations, shell-like M-bM-^@M-^X~M-bM-^@M-^Y references to user home
+             directories.  Wildcards will be expanded and processed in lexical
+             order.  Files without absolute paths are assumed to be in ~/.ssh
+             if included in a user configuration file or /etc/ssh if included
+             from the system configuration file.  Include directive may appear
+             inside a Match or Host block to perform conditional inclusion.
 
      AddKeysToAgent
              Specifies whether keys should be automatically added to a running
@@ -350,6 +366,13 @@ DESCRIPTION
      Compression
              Specifies whether to use compression.  The argument must be yes
              or no (the default).
+
+             Compression applies to all traffic that flows over the SSH
+             connection.  If untrusted traffic (such as an open port-forward)
+             is permitted over the connection alongside trusted traffic, then
+             compression may leak information about session contents.  For
+             this reason, it is not recommended to enable compression for
+             connections that share trusted and untrusted traffic.
 
      ConnectionAttempts
              Specifies the number of tries (one per second) to make before
@@ -720,18 +743,6 @@ DESCRIPTION
              unrecognised by ssh(1).  It is recommended that IgnoreUnknown be
              listed early in the configuration file as it will not be applied
              to unknown options that appear before it.
-
-     Include
-             Include the specified configuration file(s).  Multiple pathnames
-             may be specified and each pathname may contain glob(7) wildcards,
-             tokens as described in the TOKENS section, environment variables
-             as described in the ENVIRONMENT VARIABLES section and, for user
-             configurations, shell-like M-bM-^@M-^X~M-bM-^@M-^Y references to user home
-             directories.  Wildcards will be expanded and processed in lexical
-             order.  Files without absolute paths are assumed to be in ~/.ssh
-             if included in a user configuration file or /etc/ssh if included
-             from the system configuration file.  Include directive may appear
-             inside a Match or Host block to perform conditional inclusion.
 
      IPQoS   Specifies the Differentiated Services Field Codepoint (DSCP)
              value for connections.  Accepted values are af11, af12, af13,
@@ -1499,4 +1510,4 @@ AUTHORS
      created OpenSSH.  Markus Friedl contributed the support for SSH protocol
      versions 1.5 and 2.0.
 
-OpenBSD 7.8                     March 23, 2026                   SSH_CONFIG(5)
+OpenBSD 7.9                      July 1, 2026                    SSH_CONFIG(5)

@@ -5225,8 +5225,10 @@ printf "%s\n" "no" >&6; }
 fi
 
 
-# Extract the first word of "nroff awf", so it can be a program name with args.
-set dummy nroff awf; ac_word=$2
+for ac_prog in nroff awf
+do
+  # Extract the first word of "$ac_prog", so it can be a program name with args.
+set dummy $ac_prog; ac_word=$2
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
 printf %s "checking for $ac_word... " >&6; }
 if test ${ac_cv_path_NROFF+y}
@@ -5269,6 +5271,9 @@ else
 printf "%s\n" "no" >&6; }
 fi
 
+
+  test -n "$NROFF" && break
+done
 
 # Extract the first word of "mandoc", so it can be a program name with args.
 set dummy mandoc; ac_word=$2
@@ -11570,6 +11575,25 @@ else $as_nop
   ac_have_decl=0
 fi
 printf "%s\n" "#define HAVE_DECL_HTOLE64 $ac_have_decl" >>confdefs.h
+ac_fn_check_decl "$LINENO" "htobe32" "ac_cv_have_decl_htobe32" "
+#ifdef HAVE_SYS_TYPES_H
+# include <sys/types.h>
+#endif
+#ifdef HAVE_STDINT_H
+# include <stdint.h>
+#endif
+#ifdef HAVE_ENDIAN_H
+# include <endian.h>
+#endif
+
+" "$ac_c_undeclared_builtin_options" "CFLAGS"
+if test "x$ac_cv_have_decl_htobe32" = xyes
+then :
+  ac_have_decl=1
+else $as_nop
+  ac_have_decl=0
+fi
+printf "%s\n" "#define HAVE_DECL_HTOBE32 $ac_have_decl" >>confdefs.h
 
 
 # On some platforms (eg SunOS4) sys/audit.h requires sys/[time|types|label.h]
@@ -19568,7 +19592,7 @@ printf %s "checking if programs using OpenSSL functions will link... " >&6; }
 int
 main (void)
 {
- ERR_load_crypto_strings();
+ OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
   ;
   return 0;
 }
@@ -19592,7 +19616,7 @@ printf %s "checking if programs using OpenSSL need -ldl... " >&6; }
 int
 main (void)
 {
- ERR_load_crypto_strings();
+ OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS, NULL);
   ;
   return 0;
 }
@@ -19751,19 +19775,42 @@ fi
 
 
 	if test "x$openssl_engine" = "xyes" ; then
+		ac_fn_c_check_header_compile "$LINENO" "openssl/opensslconf.h" "ac_cv_header_openssl_opensslconf_h" "$ac_includes_default"
+if test "x$ac_cv_header_openssl_opensslconf_h" = xyes
+then :
+  printf "%s\n" "#define HAVE_OPENSSL_OPENSSLCONF_H 1" >>confdefs.h
+
+fi
+ac_fn_c_check_header_compile "$LINENO" "openssl/configuration.h" "ac_cv_header_openssl_configuration_h" "$ac_includes_default"
+if test "x$ac_cv_header_openssl_configuration_h" = xyes
+then :
+  printf "%s\n" "#define HAVE_OPENSSL_CONFIGURATION_H 1" >>confdefs.h
+
+fi
+
 		{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for OpenSSL ENGINE support" >&5
 printf %s "checking for OpenSSL ENGINE support... " >&6; }
 		cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
+	#ifdef HAVE_OPENSSL_OPENSSLCONF_H
+	# include <openssl/opensslconf.h>
+	#endif
+	#ifdef HAVE_OPENSSL_CONFIGURATION_H
+	# include <openssl/configuration.h>
+	#endif
 	#include <openssl/engine.h>
 
 int
 main (void)
 {
 
+				#ifndef OPENSSL_NO_ENGINE
 				ENGINE_load_builtin_engines();
 				ENGINE_register_all_complete();
+				#else
+				#error "OPENSSL_NO_ENGINE"
+				#endif
 
   ;
   return 0;
@@ -19783,45 +19830,6 @@ else $as_nop
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
 	fi
-
-	# Check for OpenSSL without EVP_aes_{192,256}_cbc
-	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether OpenSSL lacks support for AES 192/256" >&5
-printf %s "checking whether OpenSSL lacks support for AES 192/256... " >&6; }
-	cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-	#include <stdlib.h>
-	#include <string.h>
-	#include <openssl/evp.h>
-
-int
-main (void)
-{
-
-		exit(EVP_aes_192_cbc() == NULL || EVP_aes_256_cbc() == NULL);
-
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"
-then :
-
-			{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf "%s\n" "no" >&6; }
-
-else $as_nop
-
-			{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-printf "%s\n" "yes" >&6; }
-
-printf "%s\n" "#define OPENSSL_LOBOTOMISED_AES 1" >>confdefs.h
-
-
-
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.beam \
-    conftest$ac_exeext conftest.$ac_ext
 
 	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking if EVP_DigestUpdate returns an int" >&5
 printf %s "checking if EVP_DigestUpdate returns an int... " >&6; }

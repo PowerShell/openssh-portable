@@ -457,6 +457,8 @@
     <ClCompile Include="..\..\..\cipher-chachapoly-libcrypto.c" />
     <ClCompile Include="..\..\..\kex-names.c" />
     <ClCompile Include="..\..\..\kexmlkem768x25519.c" />
+    <ClCompile Include="..\..\..\libcrux-mlkem-mldsa.c" />
+    <ClCompile Include="..\..\..\ssh-mldsa-eddsa.c" />
     <ClCompile Include="..\win32compat\spawn-ext.c" />
   </ItemGroup>
   <ItemGroup>

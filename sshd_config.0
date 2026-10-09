@@ -379,6 +379,13 @@ DESCRIPTION
              authenticated successfully.  The argument must be yes, delayed (a
              legacy synonym for yes) or no.  The default is yes.
 
+             Compression applies to all traffic that flows over the SSH
+             connection.  If untrusted traffic (such as an open port-forward)
+             is permitted over the connection alongside trusted traffic, then
+             compression may leak information about session contents.  For
+             this reason, it is not recommended to enable compression for
+             connections that share trusted and untrusted traffic.
+
      DenyGroups
              This keyword can be followed by a list of group name patterns,
              separated by spaces.  Login is disallowed for users whose primary
@@ -473,7 +480,8 @@ DESCRIPTION
              hostname.  If set to no then the client may authenticate against
              any service key stored in the machine's default store.  This
              facility is provided to assist with operation on multi homed
-             machines.  The default is yes.
+             machines.  The default is yes.  This option may not be effective
+             in Windows Active Directory environments.
 
      HostbasedAcceptedAlgorithms
              Specifies the signature algorithms that will be accepted for
@@ -1448,4 +1456,4 @@ AUTHORS
      versions 1.5 and 2.0.  Niels Provos and Markus Friedl contributed support
      for privilege separation.
 
-OpenBSD 7.8                     March 28, 2026                  SSHD_CONFIG(5)
+OpenBSD 7.9                      June 24, 2026                  SSHD_CONFIG(5)

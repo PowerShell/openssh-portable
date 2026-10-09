@@ -10,6 +10,7 @@ SYNOPSIS
                [-P allowed_providers] [-t life] command [arg ...]
      ssh-agent [-c | -s] -k
      ssh-agent -u
+     ssh-agent -V
 
 DESCRIPTION
      ssh-agent is a program to hold private keys used for public key
@@ -108,6 +109,8 @@ DESCRIPTION
              as a subprocess of the agent.  The agent exits automatically when
              the command given on the command line terminates.
 
+     -V      Display the version number and exit.
+
      There are three main ways to get an agent set up.  The first is at the
      start of an X session, where all other windows or programs are started as
      children of the ssh-agent program.  The agent starts a command under
@@ -174,4 +177,4 @@ AUTHORS
      created OpenSSH.  Markus Friedl contributed the support for SSH protocol
      versions 1.5 and 2.0.
 
-OpenBSD 7.8                     October 4, 2025                   SSH-AGENT(1)
+OpenBSD 7.9                      May 27, 2026                     SSH-AGENT(1)

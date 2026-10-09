@@ -1,4 +1,4 @@
-/* $OpenBSD: readconf.c,v 1.411 2026/03/30 07:18:24 djm Exp $ */
+/* $OpenBSD: readconf.c,v 1.413 2026/06/29 08:16:46 djm Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -1876,7 +1876,7 @@ parse_pubkey_algos:
 
 	case oMatch:
 		if (cmdline) {
-			error("Host directive not supported as a command-line "
+			error("Match directive not supported as a command-line "
 			    "option");
 			goto out;
 		}
@@ -2876,8 +2876,12 @@ int
 fill_default_options(Options * options)
 {
 	char *all_cipher, *all_mac, *all_kex, *all_key, *all_sig;
-	char *def_cipher = NULL, *def_mac = NULL, *def_kex = NULL, *def_key = NULL, *def_sig = NULL;
-	int ret = 0, r;
+#ifdef WINDOWS
+	char* def_cipher = NULL, * def_mac = NULL, * def_kex = NULL, * def_key = NULL, * def_sig = NULL;
+#else
+	char* def_cipher, def_mac, def_kex, def_key, def_sig;
+#endif /* WINDOWS */
+	int ret = -1, r;
 
 	if (options->forward_agent == -1)
 		options->forward_agent = 0;
