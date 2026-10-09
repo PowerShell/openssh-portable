@@ -69,6 +69,7 @@ HANDLE get_user_token(const char* user, int impersonation);
 int load_user_profile(HANDLE user_token, char* user);
 int create_directory_withsddl(wchar_t *path, wchar_t *sddl, BOOL check_permissions);
 int is_absolute_path(const char *);
+char * resolve_configured_user_path(const char *, const char *, int);
 int file_in_chroot_jail(HANDLE);
 int file_in_chroot_jail_helper(wchar_t*);
 PSID lookup_sid(const wchar_t* name_utf16, PSID psid, DWORD * psid_len);
