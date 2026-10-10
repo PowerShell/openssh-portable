@@ -3,6 +3,7 @@ void signal_tests();
 void socket_tests();
 void file_tests();
 void miscellaneous_tests();
+void getifaddrs_tests();
 
 char *dup_str(char *inStr);
 void delete_dir_recursive(char *full_dir_path);
