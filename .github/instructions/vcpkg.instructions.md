@@ -20,7 +20,7 @@ All vcpkg-related files live under
 | Path | Purpose |
 |---|---|
 | `vcpkg.json` | Manifest. Declares `dependencies` (`zlib`, `libressl`, `libfido2`, `libcbor`), pins versions in `overrides`, and pins the registry baseline in `builtin-baseline`. |
-| `vcpkg_overlay_ports/libressl/` | Custom port for LibreSSL. Replaces upstream `openssl`. Contains `portfile.cmake`, `vcpkg.json`, six patches, and the `vcpkg-cmake-wrapper.cmake.in` template. |
+| `vcpkg_overlay_ports/libressl/` | Custom port for LibreSSL. Replaces upstream `openssl`. Contains `portfile.cmake`, `vcpkg.json`, five patches, and the `vcpkg-cmake-wrapper.cmake.in` template. |
 | `vcpkg_overlay_ports/libfido2/` | Custom port for libfido2 with two patches that fix CMake and DLL output naming on Windows. |
 | `vcpkg_triplets/{x64,x86,arm,arm64}-custom.cmake` | Custom triplets with the linkage and CRT settings the build expects. |
 | `vcpkg_installed/` | **Generated**. Output of `vcpkg install`. Gitignored. Consumed by [OpenSSHBuildHelper.psm1](../../contrib/win32/openssh/OpenSSHBuildHelper.psm1) (it copies `libcrypto.dll` from `vcpkg_installed/<triplet>-custom/<triplet>-custom/bin/`). |
@@ -33,8 +33,12 @@ relative to the repository root, or at `$env:VCPKG_ROOT`.
 - **LibreSSL replaces OpenSSL.** Upstream vcpkg ships an `openssl` port; we
   override with `libressl` plus a CMake wrapper so consuming targets that
   call `find_package(OpenSSL)` resolve to LibreSSL.
-- **ARM64 / aarch64 patches.** Upstream LibreSSL has open issues on
-  `aarch64-windows`; the overlay port carries `aarch64-windows.diff`.
+- **ARM64 / aarch64 support.** LibreSSL historically needed a fork-carried
+  `aarch64-windows.diff` to build on `aarch64-windows`. As of LibreSSL 4.3.3
+  that Windows ARM64 implementation
+  (`crypto/arch/aarch64/crypto_cpu_caps_windows.c`) ships upstream, so the
+  patch was dropped — do not look for it. The `modify-cmakelists.patch` still
+  wires in the ARM64/ARM standard-library link flags the Win32 build needs.
 - **Resource-file metadata.** `add-version-file.patch` and
   `add-resource-header-file.patch` embed version metadata in the LibreSSL
   DLLs so they pass Microsoft signing/compliance checks.
