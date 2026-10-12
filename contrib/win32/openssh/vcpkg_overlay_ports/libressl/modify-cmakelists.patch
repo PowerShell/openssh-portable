@@ -1,9 +1,9 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index a9a3dca..357c755 100644
+index 16c01dc..91bb81b 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -57,10 +57,8 @@ option(ENABLE_NC "Enable installing TLS-enabled nc(1)" OFF)
- set(OPENSSLDIR ${OPENSSLDIR} CACHE PATH "Set the default openssl directory" FORCE)
+@@ -60,10 +60,8 @@ set(OPENSSLDIR ${OPENSSLDIR} CACHE PATH "Set the default openssl directory" FORC
+ set(TLS_DEFAULT_CA_FILE ${TLS_DEFAULT_CA_FILE} CACHE PATH "Set the default CA file" FORCE)
  set(LIBRESSL_INSTALL_CMAKEDIR "${CMAKE_INSTALL_LIBDIR}/cmake/LibreSSL" CACHE STRING "Installation directory for the CMake targets")
  
 -option(USE_STATIC_MSVC_RUNTIMES "Use /MT instead of /MD in MSVC" OFF)
@@ -15,7 +15,7 @@ index a9a3dca..357c755 100644
  
  if(NOT LIBRESSL_SKIP_INSTALL)
  	set( ENABLE_LIBRESSL_INSTALL ON )
-@@ -172,26 +170,26 @@ if(MSVC)
+@@ -175,26 +173,26 @@ if(MSVC)
  
  	if(CMAKE_C_COMPILER_ID MATCHES "MSVC" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
  		set(MSVC_DISABLED_WARNINGS_LIST
@@ -30,7 +30,7 @@ index a9a3dca..357c755 100644
 +			# do not disable "C4146" # unary minus operator applied to unsigned type,
  			        # result still unsigned
  			"C4206" # nonstandard extension used : translation unit is empty
-- 			"C4244" # 'argument' : conversion from 'type1' to 'type2',
+-			"C4244" # 'argument' : conversion from 'type1' to 'type2',
 +			# do not disable "C4244" # 'argument' : conversion from 'type1' to 'type2',
  			        # possible loss of data
  			"C4245" # 'conversion' : conversion from 'type1' to 'type2',
@@ -47,7 +47,7 @@ index a9a3dca..357c755 100644
  			        # Instead, use the ISO C and C++ conformant name
  		)
  	elseif(CMAKE_C_COMPILER_ID MATCHES "Intel")
-@@ -411,8 +409,10 @@ if (WIN32 AND (NOT CMAKE_GENERATOR_PLATFORM STREQUAL ""))
+@@ -414,8 +412,10 @@ if (WIN32 AND (NOT CMAKE_GENERATOR_PLATFORM STREQUAL ""))
  endif()
  
  if(CMAKE_SYSTEM_PROCESSOR MATCHES "(aarch64|arm64|ARM64)")
