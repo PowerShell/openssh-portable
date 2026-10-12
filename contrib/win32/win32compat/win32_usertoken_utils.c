@@ -419,19 +419,19 @@ done:
 	return token;
 }
 
-int 
+HANDLE 
 load_user_profile(HANDLE user_token, char* user)
 {
 	wchar_t * user_utf16 = NULL;
 
 	if (!am_system()) {
 	    debug("Not running as SYSTEM: skipping loading user profile");
-	    return 0;
+	    return NULL;
 	}
 
 	if ((user_utf16 = utf8_to_utf16(user)) == NULL) {
 		fatal("out of memory");
-		return -1;
+		return NULL;
 	}
 
 	/* note: user string will normalized form output of get_passwd() */
@@ -457,6 +457,7 @@ load_user_profile(HANDLE user_token, char* user)
 	EnablePrivilege("SeRestorePrivilege", 1);
 	if (LoadUserProfileW(user_token, &profileInfo) == FALSE) {
 		debug3("%s: LoadUserProfileW() failed for user %S with error %d.", __FUNCTION__, user_name, GetLastError());
+		profileInfo.hProfile = NULL;
 	}
 	EnablePrivilege("SeBackupPrivilege", 0);
 	EnablePrivilege("SeRestorePrivilege", 0);
@@ -464,7 +465,22 @@ load_user_profile(HANDLE user_token, char* user)
 	if (user_utf16)
 		free(user_utf16);
 
-	return 0;
+	return profileInfo.hProfile;
+}
+
+/* unload the loaded user profile (if any) when the token can no longer be used */
+void
+unload_user_profile(HANDLE user_token, HANDLE profile)
+{
+	if (profile == NULL || profile == INVALID_HANDLE_VALUE)
+		return;
+
+	EnablePrivilege("SeBackupPrivilege", 1);
+	EnablePrivilege("SeRestorePrivilege", 1);
+	if (UnloadUserProfile(user_token, profile) == FALSE)
+		debug3("%s: UnloadUserProfile() failed with error %d.", __FUNCTION__, GetLastError());
+	EnablePrivilege("SeBackupPrivilege", 0);
+	EnablePrivilege("SeRestorePrivilege", 0);
 }
 
 

@@ -1,4 +1,4 @@
-/* $OpenBSD: sshd.c,v 1.617 2025/04/07 08:12:22 dtucker Exp $ */
+/* $OpenBSD: sshd.c,v 1.628 2026/06/29 07:36:37 djm Exp $ */
 /*
  * Copyright (c) 2000, 2001, 2002 Markus Friedl.  All rights reserved.
  * Copyright (c) 2002 Niels Provos.  All rights reserved.
@@ -29,14 +29,9 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
-#ifdef HAVE_SYS_STAT_H
-# include <sys/stat.h>
-#endif
-#ifdef HAVE_SYS_TIME_H
-# include <sys/time.h>
-#endif
-#include "openbsd-compat/sys-tree.h"
-#include "openbsd-compat/sys-queue.h"
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/queue.h>
 #include <sys/wait.h>
 #ifndef WINDOWS
 #include <sys/utsname.h>
@@ -49,9 +44,7 @@
 #include <paths.h>
 #endif
 #include <grp.h>
-#ifdef HAVE_POLL_H
 #include <poll.h>
-#endif
 #include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -61,12 +54,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <limits.h>
-
-#ifdef WITH_OPENSSL
-#include <openssl/evp.h>
-#include <openssl/rand.h>
-#include "openbsd-compat/openssl-compat.h"
-#endif
 
 #ifdef HAVE_SECUREWARE
 #include <sys/security.h>
@@ -100,6 +87,10 @@
 #include "addr.h"
 #include "srclimit.h"
 #include "atomicio.h"
+#ifdef GSSAPI
+#include "ssh-gss.h"
+#endif
+#include "monitor_wrap.h"
 
 /* Re-exec fds */
 #define REEXEC_DEVCRYPTO_RESERVED_FD	(STDERR_FILENO + 1)
@@ -304,8 +295,10 @@ child_finish(struct early_child *child)
 {
 	if (children_active == 0)
 		fatal_f("internal error: children_active underflow");
-	if (child->pipefd != -1)
+	if (child->pipefd != -1) {
+		srclimit_done(child->pipefd);
 		close(child->pipefd);
+	}
 	sshbuf_free(child->config);
 	sshbuf_free(child->keys);
 	free(child->id);
@@ -326,6 +319,7 @@ child_close(struct early_child *child, int force_final, int quiet)
 	if (!quiet)
 		debug_f("enter%s", force_final ? " (forcing)" : "");
 	if (child->pipefd != -1) {
+		srclimit_done(child->pipefd);
 		close(child->pipefd);
 		child->pipefd = -1;
 	}
@@ -413,6 +407,12 @@ child_reap(struct early_child *child)
 			penalty_type = SRCLIMIT_PENALTY_AUTHFAIL;
 			debug_f("preauth child %ld for %s exited "
 			    "after unsuccessful auth attempt%s",
+			    (long)child->pid, child->id, child_status);
+			break;
+		case EXIT_INVALID_USER:
+			penalty_type = SRCLIMIT_PENALTY_INVALIDUSER;
+			debug_f("preauth child %ld for %s exited "
+			    "after auth attempt by invalid user%s",
 			    (long)child->pid, child->id, child_status);
 			break;
 		case EXIT_CONFIG_REFUSED:
@@ -944,7 +944,6 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s,
 	struct early_child *child;
 	struct sshbuf *buf;
 	socklen_t fromlen;
-	u_char rnd[256];
 	sigset_t nsigset, osigset;
 
 	/* pipes connected to unauthenticated child sshd processes */
@@ -1059,7 +1058,6 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s,
 			if (ret <= 0) {
 				if (children[i].early)
 					listening--;
-				srclimit_done(children[i].pipefd);
 				child_close(&(children[i]), 0, 0);
 				continue;
 			}
@@ -1098,23 +1096,19 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s,
 				}
 				/* FALLTHROUGH */
 			case 0:
-				/* child exited preauth */
+				/* child closed pipe */
 				if (children[i].early)
 					listening--;
-				srclimit_done(children[i].pipefd);
+				debug3_f("child %lu for %s closed pipe",
+				    (long)children[i].pid, children[i].id);
 				child_close(&(children[i]), 0, 0);
 				break;
 			case 1:
 				if (children[i].config) {
 					error_f("startup pipe %d (fd=%d)"
-					    " early read", i, children[i].pipefd);
-					if (children[i].early)
-						listening--;
-					if (children[i].pid > 0)
-						kill(children[i].pid, SIGTERM);
-					srclimit_done(children[i].pipefd);
-					child_close(&(children[i]), 0, 0);
-					break;
+					    " early read",
+					    i, children[i].pipefd);
+					goto problem_child;
 				}
 				if (children[i].early && c == '\0') {
 					/* child has finished preliminaries */
@@ -1134,6 +1128,12 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s,
 					    "child %ld for %s in state %d",
 					    (int)c, (long)children[i].pid,
 					    children[i].id, children[i].early);
+ problem_child:
+					if (children[i].early)
+						listening--;
+					if (children[i].pid > 0)
+						kill(children[i].pid, SIGTERM);
+					child_close(&(children[i]), 0, 0);
 				}
 				break;
 			}
@@ -1192,6 +1192,7 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s,
 				close(config_s[0]);
 #endif /* !WINDOWS */
 				free(pfd);
+				free(startup_pollfd);
 				return;
 			}
 
@@ -1245,6 +1246,7 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s,
 				    log_stderr);
 				close(config_s[0]);
 				free(pfd);
+				free(startup_pollfd);
 				return;
 			}
 
@@ -1263,14 +1265,7 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s,
 			 * Ensure that our random state differs
 			 * from that of the child
 			 */
-			arc4random_stir();
-			arc4random_buf(rnd, sizeof(rnd));
-#ifdef WITH_OPENSSL
-			RAND_seed(rnd, sizeof(rnd));
-			if ((RAND_bytes((u_char *)rnd, 1)) != 1)
-				fatal("%s: RAND_bytes failed", __func__);
-#endif
-			explicit_bzero(rnd, sizeof(rnd));
+			reseed_prngs();
 		}
 	}
 }
@@ -1652,7 +1647,8 @@ main(int ac, char **av)
 		if (options.host_key_files[i] == NULL)
 			continue;
 		if ((r = sshkey_load_private(options.host_key_files[i], "",
-		    &key, NULL)) != 0 && r != SSH_ERR_SYSTEM_ERROR)
+		    &key, NULL)) != 0 &&
+		    r != SSH_ERR_SYSTEM_ERROR && !have_agent)
 			do_log2_r(r, ll, "Unable to load host key \"%s\"",
 			    options.host_key_files[i]);
 		if (sshkey_is_sk(key) &&
@@ -1712,12 +1708,11 @@ main(int ac, char **av)
 
 		switch (keytype) {
 		case KEY_RSA:
-		case KEY_DSA:
 		case KEY_ECDSA:
 		case KEY_ED25519:
+		case KEY_MLDSA44_ED25519:
 		case KEY_ECDSA_SK:
 		case KEY_ED25519_SK:
-		case KEY_XMSS:
 			if (have_agent || key != NULL)
 				sensitive_data.have_ssh2_key = 1;
 			break;
@@ -1806,6 +1801,12 @@ main(int ac, char **av)
 	if (test_flag > 1)
 		print_config(&connection_info);
 
+	config = pack_config(cfg);
+	if (sshbuf_len(config) > MONITOR_MAX_CFGLEN) {
+		fatal("Configuration file is too large (have %zu, max %d)",
+		    sshbuf_len(config), MONITOR_MAX_CFGLEN);
+	}
+
 	/* Configuration looks good, so exit if in test mode. */
 	if (test_flag)
 		exit(0);
@@ -1882,8 +1883,6 @@ main(int ac, char **av)
 
 	/* ignore SIGPIPE */
 	ssh_signal(SIGPIPE, SIG_IGN);
-
-	config = pack_config(cfg);
 
 	/* Get a connection, either from inetd or a listening TCP socket */
 	if (inetd_flag) {

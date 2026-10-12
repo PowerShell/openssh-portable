@@ -13,7 +13,6 @@ if [ ! -z "$SUDO" ] && [ ! -z "$TEST_SSH_HOSTBASED_AUTH" ]; then
     hostname | $SUDO tee $sshconf/shosts.equiv >/dev/null
     echo "EnableSSHKeysign yes" | $SUDO tee $sshconf/ssh_config >/dev/null
     $SUDO mkdir -p $sshconf
-    $SUDO cp -p /etc/ssh/ssh_host*key* $sshconf
     $SUDO make install
     for key in $sshconf/ssh_host*key*.pub; do
         echo `hostname` `cat $key` | \
@@ -51,6 +50,11 @@ if [ -z "${LTESTS}" ]; then
     ${env} make ${TEST_TARGET} SKIP_LTESTS="${SKIP_LTESTS}"
 else
     ${env} make ${TEST_TARGET} SKIP_LTESTS="${SKIP_LTESTS}" LTESTS="${LTESTS}"
+fi
+
+# Activate kbdint regression test for PAM
+if echo "${SSHD_CONFOPTS}" | grep -i usepam >/dev/null && [ -f regress/password ]; then
+	cp regress/password regress/kbdintpw
 fi
 
 if [ ! -z "${SSHD_CONFOPTS}" ]; then

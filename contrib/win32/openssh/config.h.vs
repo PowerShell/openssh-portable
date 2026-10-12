@@ -352,7 +352,9 @@
 /* #undef HAVE_DIRENT_H */
 
 /* Define to 1 if you have the `dirfd' function. */
-/* #undef HAVE_DIRFD */
+/* Defined on Windows to suppress upstream's dirfd() compat prototype which
+ * pulls in <dirent.h> and conflicts with the win32compat mkdir macro mapping. */
+#define HAVE_DIRFD 1
 
 /* Define to 1 if you have the `dirname' function. */
 /* #define HAVE_DIRNAME 1 */
@@ -1391,6 +1393,9 @@
  with an extra level of indirection */
 /* #undef PAM_SUN_CODEBASE */
 
+/* need inet in pledge for setsockopt IP_TOS; not required on Windows (pledge is a no-op) */
+#define PLEDGE_EXTRA_INET
+
 /* Work around problematic Linux PAM modules handling of PAM_TTY */
 /* #undef PAM_TTY_KLUDGE */
 
@@ -1773,5 +1778,9 @@
 
 /* Definitions to enable mlkem768-x25519 */
 #define USE_MLKEM768X25519 1
+
+/* Definitions to enable mldsa44-ed25519 */
+#define USE_MLDSA 1
+#define HAVE_DECL_HTOBE32 0
 #define HAVE_DECL_HTOLE64 0
 #define HAVE_DECL_LE64TOH 0

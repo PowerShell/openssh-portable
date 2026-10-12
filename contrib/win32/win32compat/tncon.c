@@ -183,11 +183,13 @@ ReadConsoleForTermEmulModern(HANDLE hInput, char *destin, int destinlen)
 		}
 	}
 
-	// Pop any lone lead surrogate from the input for later.
-	const wchar_t last_char = text[text_len - 1];
-	if (IS_HIGH_SURROGATE(last_char)) {
-		s_previous_lead = last_char;
-		text_len--;
+	if (text_len) {
+		// Pop any lone lead surrogate from the input for later.
+		const wchar_t last_char = text[text_len - 1];
+		if (IS_HIGH_SURROGATE(last_char)) {
+			s_previous_lead = last_char;
+			text_len--;
+		}
 	}
 
 	// ...and finally convert everything to UTF-8.

@@ -10,6 +10,7 @@
 # possible, but leave them commented.  Uncommented options override the
 # default value.
 
+PerSourcePenalties no
 Port 47002
 #AddressFamily any
 #ListenAddress 0.0.0.0

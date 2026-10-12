@@ -1,0 +1,24 @@
+{
+    "servers": {
+        "openssh-server": {
+            "type": "stdio",
+            "command": "pwsh",
+            "args": [
+                "-noprofile",
+                "-c",
+                "MCPServerPS\\Start-MyMCP -Name openssh-server -ScriptRoot ./.github/tools"
+            ],
+            "env": {
+                "GITHUB_TOKEN": "${input:github_token}"
+            }
+        }
+    },
+    "inputs": [
+        {
+            "id": "github_token",
+            "type": "promptString",
+            "description": "GitHub Personal Access Token (used for commit-group CI status queries)",
+            "password": true
+        }
+    ]
+}

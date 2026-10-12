@@ -46,6 +46,12 @@
 #define COMMA_SPACE_LEN			2
 #define BACKSLASH_LEN			1
 
+/* Access rights that are considered write-class for SSH file/folder security checks.
+ * No non-trusted principal may hold any of these rights on a secured path. */
+#define SSH_SECURE_WRITE_MASK \
+	(FILE_WRITE_DATA | FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA | FILE_APPEND_DATA | \
+	 WRITE_DAC | WRITE_OWNER | DELETE)
+
 extern int log_on_stderr;
 
 /*
@@ -133,7 +139,7 @@ check_secure_file_permission(const char *input_path, struct passwd * pw, int rea
 		    EqualSid(current_trustee_sid, user_sid) ||
 		    (ti_sid && EqualSid(current_trustee_sid, ti_sid))) {
 			continue;
-		} else if (read_ok && (current_access_mask & (FILE_WRITE_DATA | FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA | FILE_APPEND_DATA)) == 0 ) {
+		} else if (read_ok && (current_access_mask & SSH_SECURE_WRITE_MASK) == 0) {
 			/* if read is allowed, allow ACES that do not give write access*/
 			continue;
 		} else {
@@ -250,7 +256,7 @@ check_secure_folder_permission(const wchar_t* path_utf16, int read_ok)
 			IsWellKnownSid(current_trustee_sid, WinLocalSystemSid)) {
 			continue;
 		}
-		else if (read_ok && (current_access_mask & (FILE_WRITE_DATA | FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA | FILE_APPEND_DATA)) == 0) {
+		else if (read_ok && (current_access_mask & SSH_SECURE_WRITE_MASK) == 0) {
 			/* if read is allowed, allow ACES that do not give write access*/
 			continue;
 		}

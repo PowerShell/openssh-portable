@@ -25,6 +25,12 @@ DESCRIPTION
      network range (e.g. 192.168.16/28).  If a network range is specified,
      then all addresses in that range will be scanned.
 
+     ssh-keyscan cannot verify the authenticity of the host keys it obtains,
+     and an attacker on the network with the ability to intercept traffic
+     could substitute their own host keys to enable impersonation of servers.
+     Because of this, ssh-keyscan output should be verified out of band, or
+     only used directly for host authentication if the network is trusted.
+
      The options are as follows:
 
      -4      Force ssh-keyscan to use IPv4 addresses only.
@@ -34,7 +40,7 @@ DESCRIPTION
      -c      Request certificates from target hosts instead of plain keys.
 
      -D      Print keys found as SSHFP DNS records.  The default is to print
-             keys in a format usable as a ssh(1) known_hosts file.
+             keys in a format usable as an ssh(1) known_hosts file.
 
      -f file
              Read hosts or M-bM-^@M-^\addrlist namelistM-bM-^@M-^] pairs from file, one per line.
@@ -120,4 +126,4 @@ AUTHORS
      Davison <wayned@users.sourceforge.net> added support for protocol version
      2.
 
-OpenBSD 7.6                      June 17, 2024                     OpenBSD 7.6
+OpenBSD 7.9                      June 26, 2026                  SSH-KEYSCAN(1)

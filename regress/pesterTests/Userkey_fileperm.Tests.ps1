@@ -119,7 +119,7 @@ Describe "Tests for user Key file permission" -Tags "CI" {
             Repair-FilePermission -FilePath $keyFilePath -Owners $currentUserSid -FullAccessNeeded $currentUser,$adminsSid,$systemSid -ReadAccessNeeded $objUserSid -confirm:$false
 
             #Run
-            $o = ssh -p $port -i $keyFilePath -E $logPath $pubKeyUser@$server echo 1234
+            $o = ssh -p $port -i $keyFilePath -E $logPath -o "PasswordAuthentication=no" $pubKeyUser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
 
             $logPath | Should Contain "UNPROTECTED PRIVATE KEY FILE!"
@@ -129,9 +129,33 @@ Describe "Tests for user Key file permission" -Tags "CI" {
             #setup to have ssouser as owner and grant it full control
             Repair-FilePermission -FilePath $keyFilePath -Owners $objUserSid -FullAccessNeeded $objUserSid,$adminsSid,$systemSid -ReadAccessNeeded $objUserSid -confirm:$false
 
-            $o = ssh -p $port -i $keyFilePath -E $logPath $pubKeyUser@$server echo 1234
+            $o = ssh -p $port -i $keyFilePath -E $logPath -o "PasswordAuthentication=no" $pubKeyUser@$server echo 1234
             $LASTEXITCODE | Should Not Be 0
 
+            $logPath | Should Contain "UNPROTECTED PRIVATE KEY FILE!"
+        }
+
+        It "$tC.$tI-ssh with private key file -- negative(other account has ChangePermissions on private key file)" {
+            Repair-FilePermission -FilePath $keyFilePath -Owners $currentUserSid -FullAccessNeeded $adminsSid,$systemSid,$currentUserSid -confirm:$false
+            Set-FilePermission -FilePath $keyFilePath -UserSid $objUserSid -Perm "ChangePermissions"
+            $o = ssh -p $port -i $keyFilePath -E $logPath -o "PasswordAuthentication=no" $pubKeyUser@$server echo 1234
+            $LASTEXITCODE | Should Not Be 0
+            $logPath | Should Contain "UNPROTECTED PRIVATE KEY FILE!"
+        }
+
+        It "$tC.$tI-ssh with private key file -- negative(other account has TakeOwnership on private key file)" {
+            Repair-FilePermission -FilePath $keyFilePath -Owners $currentUserSid -FullAccessNeeded $adminsSid,$systemSid,$currentUserSid -confirm:$false
+            Set-FilePermission -FilePath $keyFilePath -UserSid $objUserSid -Perm "TakeOwnership"
+            $o = ssh -p $port -i $keyFilePath -E $logPath -o "PasswordAuthentication=no" $pubKeyUser@$server echo 1234
+            $LASTEXITCODE | Should Not Be 0
+            $logPath | Should Contain "UNPROTECTED PRIVATE KEY FILE!"
+        }
+
+        It "$tC.$tI-ssh with private key file -- negative(other account has Delete on private key file)" {
+            Repair-FilePermission -FilePath $keyFilePath -Owners $currentUserSid -FullAccessNeeded $adminsSid,$systemSid,$currentUserSid -confirm:$false
+            Set-FilePermission -FilePath $keyFilePath -UserSid $objUserSid -Perm "Delete"
+            $o = ssh -p $port -i $keyFilePath -E $logPath -o "PasswordAuthentication=no" $pubKeyUser@$server echo 1234
+            $LASTEXITCODE | Should Not Be 0
             $logPath | Should Contain "UNPROTECTED PRIVATE KEY FILE!"
         }
     }

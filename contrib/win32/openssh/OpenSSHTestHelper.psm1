@@ -15,8 +15,9 @@ $PubKeyUser = "sshtest_pubkeyuser"
 $PasswdUser = "sshtest_passwduser"
 $AdminUser = "sshtest_adminuser"
 $NonAdminUser = "sshtest_nonadminuser"
+$SshdUser = "sshd_user"
 $OpenSSHTestAccountsPassword = "Bulldog_123456"
-$OpenSSHTestAccounts = $Script:SSOUser, $Script:PubKeyUser, $Script:PasswdUser, $Script:AdminUser, $Script:NonAdminUser
+$OpenSSHTestAccounts = $Script:SSOUser, $Script:PubKeyUser, $Script:PasswdUser, $Script:AdminUser, $Script:NonAdminUser, $Script:SshdUser
 $SSHDTestSvcName = "sshdTestSvc"
 
 $Script:TestDataPath = "$env:SystemDrive\OpenSSHTests"
@@ -69,6 +70,7 @@ function Set-OpenSSHTestEnvironment
     $Global:OpenSSHTestInfo.Add("PasswdUser", $PasswdUser)                             # test user to be used for password auth
     $Global:OpenSSHTestInfo.Add("AdminUser", $AdminUser)                               # test user to be used for admin logging tests
     $Global:OpenSSHTestInfo.Add("NonAdminUser", $NonAdminUser)                         # test user to be used for non-admin logging tests
+    $Global:OpenSSHTestInfo.Add("SshdUser", $SshdUser)                                 # non-admin local user used by UserEnvironment tests
     $Global:OpenSSHTestInfo.Add("TestAccountPW", $OpenSSHTestAccountsPassword)         # common password for all test accounts
     $Global:OpenSSHTestInfo.Add("DebugMode", $DebugMode.IsPresent)                     # run openssh E2E in debug mode
     $Global:OpenSSHTestInfo.Add("DelayTime", 3)                                        # delay between stoppig sshd service and trying to access log files
@@ -224,6 +226,9 @@ WARNING: Following changes will be made to OpenSSH configuration
 
     $NonAdminUserProfile = Get-LocalUserProfile -User $NonAdminUser
     $Global:OpenSSHTestInfo.Add("NonAdminUserProfile", $NonAdminUserProfile)
+
+    $SshdUserProfile = Get-LocalUserProfile -User $SshdUser
+    $Global:OpenSSHTestInfo.Add("SshdUserProfile", $SshdUserProfile)
 
     #make $AdminUser admin
     net localgroup Administrators $AdminUser /add

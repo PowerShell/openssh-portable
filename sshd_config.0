@@ -45,8 +45,8 @@ DESCRIPTION
              users whose primary group or supplementary group list matches one
              of the patterns.  Only group names are valid; a numerical group
              ID is not recognized.  By default, login is allowed for all
-             groups.  The allow/deny groups directives are processed in the
-             following order: DenyGroups, AllowGroups.
+             groups.  AllowGroups is not consulted for groups matched by
+             DenyGroups.
 
              See PATTERNS in ssh_config(5) for more information on patterns.
              This keyword may appear multiple times in sshd_config with each
@@ -80,8 +80,8 @@ DESCRIPTION
              USER@HOST then USER and HOST are separately checked, restricting
              logins to particular users from particular hosts.  HOST criteria
              may additionally contain addresses to match in CIDR
-             address/masklen format.  The allow/deny users directives are
-             processed in the following order: DenyUsers, AllowUsers.
+             address/masklen format.  AllowUsers is not consulted for users
+             matched by DenyUsers.
 
              See PATTERNS in ssh_config(5) for more information on patterns.
              This keyword may appear multiple times in sshd_config with each
@@ -137,7 +137,8 @@ DESCRIPTION
              of authorized_keys output (see AUTHORIZED_KEYS in sshd(8)).
              AuthorizedKeysCommand is tried after the usual AuthorizedKeysFile
              files and will not be executed if a matching key is found there.
-             By default, no AuthorizedKeysCommand is run.
+             By default, no AuthorizedKeysCommand is run.  This command is
+             only executed for valid users.
 
      AuthorizedKeysCommandUser
              Specifies the user under whose account the AuthorizedKeysCommand
@@ -156,7 +157,8 @@ DESCRIPTION
              Multiple files may be listed, separated by whitespace.
              Alternately this option may be set to none to skip checking for
              user keys in files.  The default is ".ssh/authorized_keys
-             .ssh/authorized_keys2".
+             .ssh/authorized_keys2".  These files are only checked for valid
+             users.
 
      AuthorizedPrincipalsCommand
              Specifies a program to be used to generate the list of allowed
@@ -172,7 +174,8 @@ DESCRIPTION
              AuthorizedPrincipalsCommand or AuthorizedPrincipalsFile is
              specified, then certificates offered by the client for
              authentication must contain a principal that is listed.  By
-             default, no AuthorizedPrincipalsCommand is run.
+             default, no AuthorizedPrincipalsCommand is run.  This command is
+             only executed for valid users.
 
      AuthorizedPrincipalsCommandUser
              Specifies the user under whose account the
@@ -197,7 +200,8 @@ DESCRIPTION
              path or one relative to the user's home directory.  The default
              is none, i.e. not to use a principals file M-bM-^@M-^S in this case, the
              username of the user must appear in a certificate's principals
-             list for it to be accepted.
+             list for it to be accepted.  This file is only checked for valid
+             users.
 
              Note that AuthorizedPrincipalsFile is only used when
              authentication proceeds using a CA listed in TrustedUserCAKeys
@@ -254,13 +258,13 @@ DESCRIPTION
 
              direct-tcpip, direct-streamlocal@openssh.com
                      Open TCP or Unix socket (respectively) connections that
-                     have been established from a ssh(1) local forwarding,
+                     have been established from an ssh(1) local forwarding,
                      i.e. LocalForward or DynamicForward.
 
              forwarded-tcpip, forwarded-streamlocal@openssh.com
                      Open TCP or Unix socket (respectively) connections that
-                     have been established to a sshd(8) listening on behalf of
-                     a ssh(1) remote forwarding, i.e. RemoteForward.
+                     have been established to an sshd(8) listening on behalf
+                     of an ssh(1) remote forwarding, i.e. RemoteForward.
 
              session
                      The interactive main session, including shell session,
@@ -375,14 +379,20 @@ DESCRIPTION
              authenticated successfully.  The argument must be yes, delayed (a
              legacy synonym for yes) or no.  The default is yes.
 
+             Compression applies to all traffic that flows over the SSH
+             connection.  If untrusted traffic (such as an open port-forward)
+             is permitted over the connection alongside trusted traffic, then
+             compression may leak information about session contents.  For
+             this reason, it is not recommended to enable compression for
+             connections that share trusted and untrusted traffic.
+
      DenyGroups
              This keyword can be followed by a list of group name patterns,
              separated by spaces.  Login is disallowed for users whose primary
              group or supplementary group list matches one of the patterns.
              Only group names are valid; a numerical group ID is not
-             recognized.  By default, login is allowed for all groups.  The
-             allow/deny groups directives are processed in the following
-             order: DenyGroups, AllowGroups.
+             recognized.  By default, login is allowed for all groups.
+             AllowGroups is not consulted for groups matched by DenyGroups.
 
              See PATTERNS in ssh_config(5) for more information on patterns.
              This keyword may appear multiple times in sshd_config with each
@@ -397,8 +407,8 @@ DESCRIPTION
              then USER and HOST are separately checked, restricting logins to
              particular users from particular hosts.  HOST criteria may
              additionally contain addresses to match in CIDR address/masklen
-             format.  The allow/deny users directives are processed in the
-             following order: DenyUsers, AllowUsers.
+             format.  AllowUsers is not consulted for users matched by
+             DenyUsers.
 
              See PATTERNS in ssh_config(5) for more information on patterns.
              This keyword may appear multiple times in sshd_config with each
@@ -432,6 +442,12 @@ DESCRIPTION
              that requires no support files when used with ChrootDirectory.
              The default is none.
 
+             This directive does not limit other kinds of access that a client
+             may request via their connection, such as TCP, agent, socket or
+             X11 forwarding.  If these are not desired, then they must be
+             explicitly disabled, either individually via their respective
+             options or all together using the DisableForwarding option.
+
      GatewayPorts
              Specifies whether remote hosts are allowed to connect to ports
              forwarded for the client.  By default, sshd(8) binds remote port
@@ -453,6 +469,10 @@ DESCRIPTION
              Specifies whether to automatically destroy the user's credentials
              cache on logout.  The default is yes.
 
+     GSSAPIDelegateCredentials
+             Accept delegated credentials on the server side.  The default is
+             yes.
+
      GSSAPIStrictAcceptorCheck
              Determines whether to be strict about the identity of the GSSAPI
              acceptor a client authenticates against.  If set to yes then the
@@ -460,7 +480,8 @@ DESCRIPTION
              hostname.  If set to no then the client may authenticate against
              any service key stored in the machine's default store.  This
              facility is provided to assist with operation on multi homed
-             machines.  The default is yes.
+             machines.  The default is yes.  This option may not be effective
+             in Windows Active Directory environments.
 
      HostbasedAcceptedAlgorithms
              Specifies the signature algorithms that will be accepted for
@@ -481,12 +502,14 @@ DESCRIPTION
                 ecdsa-sha2-nistp521-cert-v01@openssh.com,
                 sk-ssh-ed25519-cert-v01@openssh.com,
                 sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
+                webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ssh-ed25519@openssh.com,
                 sk-ecdsa-sha2-nistp256@openssh.com,
+                webauthn-sk-ecdsa-sha2-nistp256@openssh.com,
                 rsa-sha2-512,rsa-sha2-256
 
              The list of available signature algorithms may also be obtained
@@ -543,12 +566,14 @@ DESCRIPTION
                 ecdsa-sha2-nistp521-cert-v01@openssh.com,
                 sk-ssh-ed25519-cert-v01@openssh.com,
                 sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
+                webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ssh-ed25519@openssh.com,
                 sk-ecdsa-sha2-nistp256@openssh.com,
+                webauthn-sk-ecdsa-sha2-nistp256@openssh.com,
                 rsa-sha2-512,rsa-sha2-256
 
              The list of available signature algorithms may also be obtained
@@ -577,18 +602,18 @@ DESCRIPTION
              directive may appear inside a Match block to perform conditional
              inclusion.
 
-     IPQoS   Specifies the IPv4 type-of-service or DSCP class for the
-             connection.  Accepted values are af11, af12, af13, af21, af22,
-             af23, af31, af32, af33, af41, af42, af43, cs0, cs1, cs2, cs3,
-             cs4, cs5, cs6, cs7, ef, le, lowdelay, throughput, reliability, a
-             numeric value, or none to use the operating system default.  This
-             option may take one or two arguments, separated by whitespace.
-             If one argument is specified, it is used as the packet class
-             unconditionally.  If two values are specified, the first is
-             automatically selected for interactive sessions and the second
-             for non-interactive sessions.  The default is af21 (Low-Latency
-             Data) for interactive sessions and cs1 (Lower Effort) for non-
-             interactive sessions.
+     IPQoS   Specifies the Differentiated Services Field Codepoint (DSCP)
+             value for the connection.  Accepted values are af11, af12, af13,
+             af21, af22, af23, af31, af32, af33, af41, af42, af43, cs0, cs1,
+             cs2, cs3, cs4, cs5, cs6, cs7, ef, le, a numeric value, or none to
+             use the operating system default.  This option may take one or
+             two arguments, separated by whitespace.  If one argument is
+             specified, it is used as the packet class unconditionally.  If
+             two values are specified, the first is automatically selected for
+             interactive sessions and the second for non-interactive sessions.
+             The default is ef (Expedited Forwarding) for interactive sessions
+             and none (the operating system default) for non-interactive
+             sessions.
 
      KbdInteractiveAuthentication
              Specifies whether to allow keyboard-interactive authentication.
@@ -818,15 +843,16 @@ DESCRIPTION
              Specifies the maximum number of concurrent unauthenticated
              connections to the SSH daemon.  Additional connections will be
              dropped until authentication succeeds or the LoginGraceTime
-             expires for a connection.  The default is 10:30:100.
+             expires for a connection.
 
              Alternatively, random early drop can be enabled by specifying the
              three colon separated values start:rate:full (e.g. "10:30:60").
-             sshd(8) will refuse connection attempts with a probability of
-             rate/100 (30%) if there are currently start (10) unauthenticated
-             connections.  The probability increases linearly and all
-             connection attempts are refused if the number of unauthenticated
-             connections reaches full (60).
+             The default is 10:30:100.  sshd(8) will refuse connection
+             attempts with a probability of rate/100 (30%) if there are
+             currently start (10) unauthenticated connections.  The
+             probability increases linearly and all connection attempts are
+             refused if the number of unauthenticated connections reaches full
+             (60).
 
      ModuliFile
              Specifies the moduli(5) file that contains the Diffie-Hellman
@@ -972,6 +998,10 @@ DESCRIPTION
                      after making one or more unsuccessful authentication
                      attempts (default: 5s).
 
+             invaliduser:duration
+                     Specifies how long to refuse clients that attempt to log
+                     in with an invalid user (default: 5s).
+
              refuseconnection:duration
                      Specifies how long to refuse clients that were
                      administratively prohibited connection via the
@@ -1067,12 +1097,14 @@ DESCRIPTION
                 ecdsa-sha2-nistp521-cert-v01@openssh.com,
                 sk-ssh-ed25519-cert-v01@openssh.com,
                 sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
+                webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ssh-ed25519@openssh.com,
                 sk-ecdsa-sha2-nistp256@openssh.com,
+                webauthn-sk-ecdsa-sha2-nistp256@openssh.com,
                 rsa-sha2-512,rsa-sha2-256
 
              The list of available signature algorithms may also be obtained
@@ -1136,8 +1168,12 @@ DESCRIPTION
              public key authentication will be refused for all users.  Keys
              may be specified as a text file, listing one public key per line,
              or as an OpenSSH Key Revocation List (KRL) as generated by
-             ssh-keygen(1).  For more information on KRLs, see the KEY
-             REVOCATION LISTS section in ssh-keygen(1).
+             ssh-keygen(1).  This file may be consulted for each public key
+             authentication attempt received by sshd(8) and its contents must
+             be consistent at all times, therefore it should only be
+             atomically replaced and never modified in place while the server
+             is running.  For more information on KRLs, see the KEY REVOCATION
+             LISTS section in ssh-keygen(1).
 
      RDomain
              Specifies an explicit routing domain that is applied after
@@ -1365,7 +1401,11 @@ TIME FORMATS
 
 TOKENS
      Arguments to some keywords can make use of tokens, which are expanded at
-     runtime:
+     runtime.  Tokens are expanded without quoting or escaping of shell
+     characters.  It is the administrator's responsibility to ensure they are
+     safe in the context of their use.
+
+     The supported tokens in sshd_config are:
 
            %%    A literal M-bM-^@M-^X%M-bM-^@M-^Y.
            %C    Identifies the connection endpoints, containing four space-
@@ -1416,4 +1456,4 @@ AUTHORS
      versions 1.5 and 2.0.  Niels Provos and Markus Friedl contributed support
      for privilege separation.
 
-OpenBSD 7.6                    February 15, 2025                   OpenBSD 7.6
+OpenBSD 7.9                      June 24, 2026                  SSHD_CONFIG(5)

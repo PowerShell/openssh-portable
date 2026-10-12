@@ -110,6 +110,31 @@ ssh_gss_sspi_init(_Out_ OM_uint32 * minor_status)
 	return 1;
 }
 
+static CredHandle *
+default_cred_handle(ULONG cred_usage, const gss_cred_id_t *in)
+{
+	static CredHandle default_inbound_cred_handle = { 0, 0 };
+	static CredHandle default_outbound_cred_handle = { 0, 0 };
+	TimeStamp cred_expiry;
+
+	if (*in != GSS_C_NO_CREDENTIAL)
+		return &(*in)->credHandle;
+
+	CredHandle *ret = &default_inbound_cred_handle;
+	if (cred_usage == SECPKG_CRED_OUTBOUND)
+		ret = &default_outbound_cred_handle;
+
+	if (ret->dwLower || ret->dwUpper)
+		return ret;
+
+	if (SecFunctions->AcquireCredentialsHandleW(NULL,
+	    MICROSOFT_KERBEROS_NAME_W, cred_usage, NULL, NULL, NULL,
+	    NULL, ret, &cred_expiry) != SEC_E_OK)
+		return NULL;
+
+	return ret;
+}
+
 /*
  * Allows an application to determine which underlying security mechanisms are
  * available.
@@ -532,20 +557,10 @@ gss_init_sec_context(
 	GetSystemTime(&current_time_system);
 
 	/* acquire default cred handler if none specified */
-	CredHandle *pCredHandle = NULL;
-	if (claimant_cred_handle != NULL)
-		pCredHandle = &(claimant_cred_handle->credHandle);
-	
-	if (pCredHandle == NULL) {
-		static CredHandle cred_handle = { 0, 0 };
-		pCredHandle = &cred_handle;
-		if (cred_handle.dwLower == 0 && cred_handle.dwUpper == 0) {
-			TimeStamp expiry_cred;
-			if (SecFunctions->AcquireCredentialsHandleW(NULL, MICROSOFT_KERBEROS_NAME_W, SECPKG_CRED_OUTBOUND,
-			    NULL, NULL, NULL, NULL, &cred_handle, &expiry_cred) != SEC_E_OK)
-				goto done;
-		}
-	}
+	CredHandle *pCredHandle = default_cred_handle(SECPKG_CRED_OUTBOUND,
+	    &claimant_cred_handle);
+	if (!pCredHandle)
+		goto done;
 
 	/* condition the string for windows */
 	if ((target_name_utf16 = utf8_to_utf16(target_name)) == NULL)
@@ -822,6 +837,11 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 	if (ssh_gss_sspi_init(minor_status) == 0) 
 		goto done;
 
+	CredHandle *p_acceptor_cred_handle = default_cred_handle(
+	    SECPKG_CRED_INBOUND, &acceptor_cred_handle);
+	if (!p_acceptor_cred_handle)
+		goto done;
+
 	/* setup input buffer */
 	SecBuffer input_buffer_token = { (unsigned long) input_token_buffer->length, 
 		SECBUFFER_TOKEN | SECBUFFER_READONLY, input_token_buffer->value };
@@ -842,7 +862,7 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 		ASC_REQ_DELEGATE | ASC_REQ_SEQUENCE_DETECT | ASC_REQ_ALLOCATE_MEMORY;
 
 	/* call sspi accept security context function */
-	const SECURITY_STATUS status = SecFunctions->AcceptSecurityContext(&acceptor_cred_handle->credHandle, 
+	const SECURITY_STATUS status = SecFunctions->AcceptSecurityContext(p_acceptor_cred_handle,
 		(*context_handle == GSS_C_NO_CONTEXT) ? NULL : *context_handle, &input_buffer,
 		sspi_req_flags, SECURITY_NATIVE_DREP, 
 		(*context_handle == GSS_C_NO_CONTEXT) ? &sspi_context_handle : *context_handle, 

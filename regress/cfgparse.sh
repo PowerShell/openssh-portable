@@ -1,4 +1,4 @@
-#	$OpenBSD: cfgparse.sh,v 1.7 2018/05/11 03:51:06 dtucker Exp $
+#	$OpenBSD: cfgparse.sh,v 1.9 2025/09/26 04:40:45 dtucker Exp $
 #	Placed in the Public Domain.
 
 tid="sshd config parse"
@@ -52,12 +52,12 @@ EOD
 if [ "$os" == "windows" ]; then
 	# Ignore the CR (carriage return) during diff
 	($SUDO ${SSHD} -T -f $OBJ/sshd_config.1 | \
-	 grep 'listenaddress ' >$OBJ/sshd_config.2 &&
+	 grep '^listenaddress ' >$OBJ/sshd_config.2 &&
 	 diff --strip-trailing-cr $OBJ/sshd_config.0 $OBJ/sshd_config.2) || \
 	 fail "listenaddress order 1"
 else
 	($SUDO ${SSHD} -T -f $OBJ/sshd_config.1 | \
-	 grep 'listenaddress ' >$OBJ/sshd_config.2 &&
+	 grep '^listenaddress ' >$OBJ/sshd_config.2 &&
 	 diff $OBJ/sshd_config.0 $OBJ/sshd_config.2) || \
 	 fail "listenaddress order 1"
 fi
@@ -75,14 +75,35 @@ EOD
 if [ "$os" == "windows" ]; then
 	# Ignore the CR (carriage return) during diff
 	($SUDO ${SSHD} -T -f $OBJ/sshd_config.1 | \
-	 grep 'listenaddress ' >$OBJ/sshd_config.2 &&
+	 grep '^listenaddress ' >$OBJ/sshd_config.2 &&
 	 diff --strip-trailing-cr $OBJ/sshd_config.0 $OBJ/sshd_config.2) || \
 	 fail "listenaddress order 2"
 else
 	($SUDO ${SSHD} -T -f $OBJ/sshd_config.1 | \
-	 grep 'listenaddress ' >$OBJ/sshd_config.2 &&
+	 grep '^listenaddress ' >$OBJ/sshd_config.2 &&
 	 diff $OBJ/sshd_config.0 $OBJ/sshd_config.2) || \
 	 fail "listenaddress order 2"
+fi
+
+# Check idempotence of MaxStartups
+verbose "maxstartups idempotent"
+echo "maxstartups 1:2:3" > $OBJ/sshd_config.0
+cat > $OBJ/sshd_config.1 <<EOD
+${SSHD_KEYS}
+MaxStartups 1:2:3
+MaxStartups 8:16:32
+EOD
+if [ "$os" == "windows" ]; then
+	# Ignore the CR (carriage return) during diff
+	($SUDO ${SSHD} -T -f $OBJ/sshd_config.1 | \
+	 grep '^maxstartups ' >$OBJ/sshd_config.2 &&
+	 diff --strip-trailing-cr $OBJ/sshd_config.0 $OBJ/sshd_config.2) || \
+	 fail "maxstartups idempotence"
+else
+	($SUDO ${SSHD} -T -f $OBJ/sshd_config.1 | \
+	 grep '^maxstartups ' >$OBJ/sshd_config.2 &&
+	 diff $OBJ/sshd_config.0 $OBJ/sshd_config.2) || \
+	 fail "maxstartups idempotence"
 fi
 
 # cleanup

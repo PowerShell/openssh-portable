@@ -6,6 +6,8 @@
     <OpenSSH-Lib-Path>$(SolutionDir)lib\</OpenSSH-Lib-Path>
     <UseOpenSSL>true</UseOpenSSL>
     <SSLLib>libcrypto.lib;</SSLLib>
+    <ZLibName Condition="'$(Configuration)' == 'Debug'">zsd.lib</ZLibName>
+    <ZLibName Condition="'$(Configuration)' != 'Debug'">zs.lib</ZLibName>
     <WindowsSDKVersion>10.0.22621.0</WindowsSDKVersion>
     <AdditionalDependentLibs>bcrypt.lib;Userenv.lib;Crypt32.lib;Ws2_32.lib;Secur32.lib;Shlwapi.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;Netapi32.lib;Rpcrt4.lib;ntdll.lib</AdditionalDependentLibs>
     <MinimalCoreWin>false</MinimalCoreWin>

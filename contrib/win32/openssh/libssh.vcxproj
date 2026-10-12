@@ -177,7 +177,7 @@
     <VcpkgTriplet Condition="'$(Platform)' == 'x64'">x64-custom</VcpkgTriplet>
     <VcpkgTriplet Condition="'$(Platform)' == 'ARM'">arm-custom</VcpkgTriplet>
     <VcpkgTriplet Condition="'$(Platform)' == 'ARM64'">arm64-custom</VcpkgTriplet>
-    <VcpkgAdditionalInstallOptions>--overlay-triplets=$(SolutionDir)vcpkg_triplets --overlay-ports=$(SolutionDir)vcpkg_overlay_ports</VcpkgAdditionalInstallOptions>
+    <VcpkgAdditionalInstallOptions>$(VcpkgAdditionalInstallOptions) --overlay-triplets=$(SolutionDir)vcpkg_triplets --overlay-ports=$(SolutionDir)vcpkg_overlay_ports</VcpkgAdditionalInstallOptions>
     <VcpkgEnableManifest>true</VcpkgEnableManifest>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -384,10 +384,10 @@
     <ClCompile Include="$(OpenSSH-Src-Path)dispatch.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)dns.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ed25519.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)ed25519-openssl.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)entropy.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)fatal.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)gss-genr.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)hash.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)hmac.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)hostfile.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)kex.c" />
@@ -422,9 +422,6 @@
     <ClCompile Include="$(OpenSSH-Src-Path)rijndael.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)smult_curve25519_ref.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sntrup761.c" />
-    <ClCompile Include="$(OpenSSH-Src-Path)ssh-dss.c">
-      <ExcludedFromBuild Condition="$(UseOpenSSL)==false">true</ExcludedFromBuild>
-    </ClCompile>
     <ClCompile Include="$(OpenSSH-Src-Path)ssh-ecdsa.c">
       <ExcludedFromBuild Condition="$(UseOpenSSL)==false">true</ExcludedFromBuild>
     </ClCompile>
@@ -438,6 +435,7 @@
     <ClCompile Include="$(OpenSSH-Src-Path)sshbuf-misc.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sshbuf.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssherr.c" />
+    <ClCompile Include="$(OpenSSH-Src-Path)ssherr-libcrypto.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)sshkey.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)ssh_api.c" />
     <ClCompile Include="$(OpenSSH-Src-Path)umac.c" />
@@ -459,6 +457,8 @@
     <ClCompile Include="..\..\..\cipher-chachapoly-libcrypto.c" />
     <ClCompile Include="..\..\..\kex-names.c" />
     <ClCompile Include="..\..\..\kexmlkem768x25519.c" />
+    <ClCompile Include="..\..\..\libcrux-mlkem-mldsa.c" />
+    <ClCompile Include="..\..\..\ssh-mldsa-eddsa.c" />
     <ClCompile Include="..\win32compat\spawn-ext.c" />
   </ItemGroup>
   <ItemGroup>

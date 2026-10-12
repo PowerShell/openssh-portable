@@ -148,5 +148,32 @@ Describe "Tests for host keys file permission" -Tags "CI" {
             $logPath | Should Contain "bad permissions"
         }
 
+        It "$tC.$tI-Host keys-negative (other account has ChangePermissions on private key file)" {
+            Repair-FilePermission -Filepath $hostKeyFilePath -Owners $adminsSid -FullAccessNeeded $systemSid,$adminsSid -confirm:$false
+            Repair-FilePermission -Filepath "$hostKeyFilePath.pub" -Owners $adminsSid -FullAccessNeeded $systemSid,$adminsSid -ReadAccessNeeded $everyOneSid -confirm:$false
+            Set-FilePermission -FilePath $hostKeyFilePath -UserSid $objUserSid -Perm "ChangePermissions"
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-h $hostKeyFilePath", "-E $logPath") -NoNewWindow
+            WaitForValidation -LogPath $logPath -Length 1100
+            $logPath | Should Contain "bad permissions"
+        }
+
+        It "$tC.$tI-Host keys-negative (other account has TakeOwnership on private key file)" {
+            Repair-FilePermission -Filepath $hostKeyFilePath -Owners $adminsSid -FullAccessNeeded $systemSid,$adminsSid -confirm:$false
+            Repair-FilePermission -Filepath "$hostKeyFilePath.pub" -Owners $adminsSid -FullAccessNeeded $systemSid,$adminsSid -ReadAccessNeeded $everyOneSid -confirm:$false
+            Set-FilePermission -FilePath $hostKeyFilePath -UserSid $objUserSid -Perm "TakeOwnership"
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-h $hostKeyFilePath", "-E $logPath") -NoNewWindow
+            WaitForValidation -LogPath $logPath -Length 1100
+            $logPath | Should Contain "bad permissions"
+        }
+
+        It "$tC.$tI-Host keys-negative (other account has Delete on private key file)" {
+            Repair-FilePermission -Filepath $hostKeyFilePath -Owners $adminsSid -FullAccessNeeded $systemSid,$adminsSid -confirm:$false
+            Repair-FilePermission -Filepath "$hostKeyFilePath.pub" -Owners $adminsSid -FullAccessNeeded $systemSid,$adminsSid -ReadAccessNeeded $everyOneSid -confirm:$false
+            Set-FilePermission -FilePath $hostKeyFilePath -UserSid $objUserSid -Perm "Delete"
+            Start-Process -FilePath sshd.exe -WorkingDirectory $($OpenSSHTestInfo['OpenSSHBinPath']) -ArgumentList @("-d", "-p $port", "-h $hostKeyFilePath", "-E $logPath") -NoNewWindow
+            WaitForValidation -LogPath $logPath -Length 1100
+            $logPath | Should Contain "bad permissions"
+        }
+
     }
 }

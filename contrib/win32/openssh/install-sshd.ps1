@@ -27,13 +27,13 @@ if (-not (Test-Path $sshdpath)) {
     throw "sshd.exe is not present in script path"
 }
 
-if (Get-Service sshd -ErrorAction SilentlyContinue) 
+if (Get-Service sshd -ErrorAction SilentlyContinue)
 {
    Stop-Service sshd
    sc.exe delete sshd 1>$null
 }
 
-if (Get-Service ssh-agent -ErrorAction SilentlyContinue) 
+if (Get-Service ssh-agent -ErrorAction SilentlyContinue)
 {
    Stop-Service ssh-agent
    sc.exe delete ssh-agent 1>$null
@@ -57,7 +57,7 @@ $streamWriter = $null
 $xmlWriter = $null
 try {
     $streamWriter = new-object System.IO.StreamWriter($etwman)
-    $xmlWriter = [System.Xml.XmlWriter]::Create($streamWriter)    
+    $xmlWriter = [System.Xml.XmlWriter]::Create($streamWriter)
     $xml.Save($xmlWriter)
 }
 finally {
@@ -121,26 +121,32 @@ if (-not $mitigationValue) {
     Write-Host "Created registry value for ssh-agent.exe to enable RedirectionGuard"
 }
 
+# if user calls .\install-sshd.ps1 with -confirm, use that
+# otherwise, need to preserve legacy behavior
+if (-not $PSBoundParameters.ContainsKey('confirm'))
+{
+    $PSBoundParameters.add('confirm', $false)
+}
+    
 #Fix permissions for moduli file
 $moduliPath = Join-Path $PSScriptRoot "moduli"
 if (Test-Path $moduliPath -PathType Leaf)
 {
-    # if user calls .\install-sshd.ps1 with -confirm, use that
-    # otherwise, need to preserve legacy behavior
-    if (-not $PSBoundParameters.ContainsKey('confirm'))
-    {
-        $PSBoundParameters.add('confirm', $false)
-    }
     Repair-ModuliFilePermission -FilePath $moduliPath @psBoundParameters
 }
 
-# If %programData%/ssh folder already exists, verify and, if necessary and approved by user, fix permissions 
+# Fix permissions for executables and DLLs in the script directory
+Get-ChildItem -Path (Join-Path $scriptdir '*') -Include *.exe, *.dll -File | ForEach-Object {
+    Repair-ApplicationFilePermission -FilePath $_.FullName @psBoundParameters
+}
+
+# If %programData%/ssh folder already exists, verify and, if necessary and approved by user, fix permissions
 $sshProgDataPath = Join-Path $env:ProgramData "ssh"
 if (Test-Path $sshProgDataPath)
 {
     # SSH Folder - owner: System or Admins; full access: System, Admins; read or readandexecute/synchronize permissible: Authenticated Users
     Repair-SSHFolderPermission -FilePath $sshProgDataPath @psBoundParameters
-    # Files in SSH Folder (excluding private key files) 
+    # Files in SSH Folder (excluding private key files)
     # owner: System or Admins; full access: System, Admins; read/readandexecute/synchronize permissable: Authenticated Users
     $privateKeyFiles = @("ssh_host_dsa_key", "ssh_host_ecdsa_key", "ssh_host_ed25519_key", "ssh_host_rsa_key")
     Get-ChildItem -Path (Join-Path $sshProgDataPath '*') -Recurse -Exclude ($privateKeyFiles) -Force | ForEach-Object {

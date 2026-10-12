@@ -4,11 +4,13 @@ NAME
      ssh-agent M-bM-^@M-^S OpenSSH authentication agent
 
 SYNOPSIS
-     ssh-agent [-c | -s] [-Dd] [-a bind_address] [-E fingerprint_hash]
+     ssh-agent [-c | -s] [-DdTU] [-a bind_address] [-E fingerprint_hash]
                [-O option] [-P allowed_providers] [-t life]
-     ssh-agent [-a bind_address] [-E fingerprint_hash] [-O option]
+     ssh-agent [-TU] [-a bind_address] [-E fingerprint_hash] [-O option]
                [-P allowed_providers] [-t life] command [arg ...]
      ssh-agent [-c | -s] -k
+     ssh-agent -u
+     ssh-agent -V
 
 DESCRIPTION
      ssh-agent is a program to hold private keys used for public key
@@ -19,8 +21,9 @@ DESCRIPTION
      The options are as follows:
 
      -a bind_address
-             Bind the agent to the UNIX-domain socket bind_address.  The
-             default is $TMPDIR/ssh-XXXXXXXXXX/agent.<ppid>.
+             Bind the agent to the Unix-domain socket bind_address.  The
+             default is to create a socket at a random path matching
+             $HOME/.ssh/agent/s.*.
 
      -c      Generate C-shell commands on standard output.  This is the
              default if SHELL looks like it's a csh style of shell.
@@ -54,8 +57,8 @@ DESCRIPTION
              signatures using FIDO keys that might be web authentication
              requests.  By default, ssh-agent refuses signature requests for
              FIDO keys where the key application string does not start with
-             M-bM-^@M-^\ssh:M-bM-^@M-^] and when the data to be signed does not appear to be a
-             ssh(1) user authentication request or a ssh-keygen(1) signature.
+             M-bM-^@M-^\ssh:M-bM-^@M-^] and when the data to be signed does not appear to be an
+             ssh(1) user authentication request or an ssh-keygen(1) signature.
              The default behaviour prevents forwarded access to a FIDO key
              from also implicitly forwarding the ability to authenticate to
              websites.
@@ -73,13 +76,18 @@ DESCRIPTION
              and FIDO authenticator middleware shared libraries that may be
              used with the -S or -s options to ssh-add(1).  Libraries that do
              not match the pattern list will be refused.  The default list is
-             M-bM-^@M-^\usr/lib*/*,/usr/local/lib*/*M-bM-^@M-^].
+             M-bM-^@M-^\/usr/lib*/*,/usr/local/lib*/*M-bM-^@M-^].
 
              See PATTERNS in ssh_config(5) for a description of pattern-list
              syntax.
 
      -s      Generate Bourne shell commands on standard output.  This is the
              default if SHELL does not look like it's a csh style of shell.
+
+     -T      Bind the agent socket in a randomised subdirectory of the form
+             $TMPDIR/ssh-XXXXXXXXXX/agent.<ppid>, instead of the default
+             behaviour of using a randomised name matching
+             $HOME/.ssh/agent/s.*.
 
      -t life
              Set a default value for the maximum lifetime of identities added
@@ -88,10 +96,20 @@ DESCRIPTION
              for an identity with ssh-add(1) overrides this value.  Without
              this option the default maximum lifetime is forever.
 
+     -U      Instructs ssh-agent not to clean up stale agent sockets under
+             $HOME/.ssh/agent/.
+
+     -u      Instructs ssh-agent to only clean up stale agent sockets under
+             $HOME/.ssh/agent/ and then exit immediately.  If this option is
+             given twice, ssh-agent will delete stale agent sockets regardless
+             of the host name that created them.
+
      command [arg ...]
              If a command (and optional arguments) is given, this is executed
              as a subprocess of the agent.  The agent exits automatically when
              the command given on the command line terminates.
+
+     -V      Display the version number and exit.
 
      There are three main ways to get an agent set up.  The first is at the
      start of an X session, where all other windows or programs are started as
@@ -137,14 +155,14 @@ ENVIRONMENT
      SSH_AGENT_PID  When ssh-agent starts, it stores the name of the agent's
                     process ID (PID) in this variable.
 
-     SSH_AUTH_SOCK  When ssh-agent starts, it creates a UNIX-domain socket and
+     SSH_AUTH_SOCK  When ssh-agent starts, it creates a Unix-domain socket and
                     stores its pathname in this variable.  It is accessible
                     only to the current user, but is easily abused by root or
                     another instance of the same user.
 
 FILES
-     $TMPDIR/ssh-XXXXXXXXXX/agent.<ppid>
-             UNIX-domain sockets used to contain the connection to the
+     $HOME/.ssh/agent/s.*
+             Unix-domain sockets used to contain the connection to the
              authentication agent.  These sockets should only be readable by
              the owner.  The sockets should get automatically removed when the
              agent exits.
@@ -159,4 +177,4 @@ AUTHORS
      created OpenSSH.  Markus Friedl contributed the support for SSH protocol
      versions 1.5 and 2.0.
 
-OpenBSD 7.6                    February 9, 2025                    OpenBSD 7.6
+OpenBSD 7.9                      May 27, 2026                     SSH-AGENT(1)
