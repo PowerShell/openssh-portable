@@ -465,7 +465,7 @@
 /* #undef HAVE_GETPAGESIZE */
 
 /* Define to 1 if you have the `getpeereid' function. */
-/* #undef HAVE_GETPEEREID */
+#define HAVE_GETPEEREID 1
 
 /* Define to 1 if you have the `getpeerucred' function. */
 /* #undef HAVE_GETPEERUCRED */
