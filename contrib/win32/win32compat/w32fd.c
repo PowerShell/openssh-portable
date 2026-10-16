@@ -602,6 +602,31 @@ w32_fstat(int fd, struct w32_stat *buf)
 	return fileio_fstat(fd_table.w32_ios[fd], (struct _stat64*)buf);
 }
 
+int
+w32_same_file(int fd1, int fd2)
+{
+	BY_HANDLE_FILE_INFORMATION info1, info2;
+	HANDLE handle1, handle2;
+
+	CHECK_FD(fd1);
+	CHECK_FD(fd2);
+	handle1 = WINHANDLE(fd_table.w32_ios[fd1]);
+	handle2 = WINHANDLE(fd_table.w32_ios[fd2]);
+	if (!GetFileInformationByHandle(handle1, &info1) ||
+	    !GetFileInformationByHandle(handle2, &info2)) {
+		errno = EIO;
+		return -1;
+	}
+	if ((info1.nFileIndexHigh == 0 && info1.nFileIndexLow == 0) ||
+	    (info2.nFileIndexHigh == 0 && info2.nFileIndexLow == 0)) {
+		errno = EOPNOTSUPP;
+		return -1;
+	}
+	return info1.dwVolumeSerialNumber == info2.dwVolumeSerialNumber &&
+	    info1.nFileIndexHigh == info2.nFileIndexHigh &&
+	    info1.nFileIndexLow == info2.nFileIndexLow;
+}
+
 long
 w32_lseek(int fd, unsigned __int64 offset, int origin)
 {

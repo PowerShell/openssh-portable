@@ -24,6 +24,7 @@ FILES
 
      /etc/ssh/ssh_host_ecdsa_key
      /etc/ssh/ssh_host_ed25519_key
+     /etc/ssh/ssh_host_mldsa44_ed25519_key
      /etc/ssh/ssh_host_rsa_key
              These files contain the private parts of the host keys used to
              generate the digital signature.  They should be owned by root,
@@ -33,6 +34,7 @@ FILES
 
      /etc/ssh/ssh_host_ecdsa_key-cert.pub
      /etc/ssh/ssh_host_ed25519_key-cert.pub
+     /etc/ssh/ssh_host_mldsa44_ed25519_key-cert.pub
      /etc/ssh/ssh_host_rsa_key-cert.pub
              If these files exist, they are assumed to contain public
              certificate information corresponding with the private keys
@@ -47,4 +49,4 @@ HISTORY
 AUTHORS
      Markus Friedl <markus@openbsd.org>
 
-OpenBSD 7.9                      June 17, 2024                  SSH-KEYSIGN(8)
+OpenBSD 8.0                      July 10, 2026                  SSH-KEYSIGN(8)

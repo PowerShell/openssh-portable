@@ -1,4 +1,4 @@
-/* $OpenBSD: packet.c,v 1.339 2026/06/30 00:09:01 djm Exp $ */
+/* $OpenBSD: packet.c,v 1.341 2026/07/23 06:33:06 djm Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -69,9 +69,7 @@
 #ifdef WITH_OPENSSL
 # include <openssl/bn.h>
 # include <openssl/evp.h>
-# ifdef OPENSSL_HAS_ECC
-#  include <openssl/ec.h>
-# endif
+# include <openssl/ec.h>
 #endif
 
 #ifdef WITH_ZLIB
@@ -1580,7 +1578,7 @@ ssh_packet_read(struct ssh *ssh)
 	int r;
 
 	if ((r = ssh_packet_read_seqnr(ssh, &type, NULL)) != 0)
-		fatal_fr(r, "read");
+		sshpkt_fatal(ssh, r, "read");
 	return type;
 }
 
@@ -2051,7 +2049,7 @@ ssh_packet_send_debug(struct ssh *ssh, const char *fmt,...)
 	    (r = sshpkt_put_cstring(ssh, "")) != 0 ||
 	    (r = sshpkt_send(ssh)) != 0 ||
 	    (r = ssh_packet_write_wait(ssh)) != 0)
-		fatal_fr(r, "send DEBUG");
+		sshpkt_fatal(ssh, r, "send DEBUG");
 }
 
 void
@@ -2360,6 +2358,9 @@ ssh_packet_get_maxsize(struct ssh *ssh)
 void
 ssh_packet_set_rekey_limits(struct ssh *ssh, uint64_t bytes, uint32_t seconds)
 {
+	if (bytes == 0 && seconds == 0)
+		return;
+
 	debug3("rekey after %llu bytes, %u seconds", (unsigned long long)bytes,
 	    (unsigned int)seconds);
 	ssh->state->rekey_limit = bytes;
@@ -2747,7 +2748,6 @@ sshpkt_put_stringb(struct ssh *ssh, const struct sshbuf *v)
 }
 
 #ifdef WITH_OPENSSL
-#ifdef OPENSSL_HAS_ECC
 int
 sshpkt_put_ec(struct ssh *ssh, const EC_POINT *v, const EC_GROUP *g)
 {
@@ -2759,7 +2759,6 @@ sshpkt_put_ec_pkey(struct ssh *ssh, EVP_PKEY *pkey)
 {
 	return sshbuf_put_ec_pkey(ssh->state->outgoing_packet, pkey);
 }
-#endif /* OPENSSL_HAS_ECC */
 
 int
 sshpkt_put_bignum2(struct ssh *ssh, const BIGNUM *v)
@@ -2825,13 +2824,11 @@ sshpkt_getb_froms(struct ssh *ssh, struct sshbuf **valp)
 }
 
 #ifdef WITH_OPENSSL
-#ifdef OPENSSL_HAS_ECC
 int
 sshpkt_get_ec(struct ssh *ssh, EC_POINT *v, const EC_GROUP *g)
 {
 	return sshbuf_get_ec(ssh->state->incoming_packet, v, g);
 }
-#endif /* OPENSSL_HAS_ECC */
 
 int
 sshpkt_get_bignum2(struct ssh *ssh, BIGNUM **valp)

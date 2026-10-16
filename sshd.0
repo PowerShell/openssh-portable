@@ -85,7 +85,8 @@ DESCRIPTION
              Specifies a file from which a host key is read.  This option must
              be given if sshd is not run as root (as the normal host key files
              are normally not readable by anyone but root).  The default is
-             /etc/ssh/ssh_host_ecdsa_key, /etc/ssh/ssh_host_ed25519_key and
+             /etc/ssh/ssh_host_ecdsa_key, /etc/ssh/ssh_host_ed25519_key,
+             /etc/ssh/ssh_host_mldsa44_ed25519_key and
              /etc/ssh/ssh_host_rsa_key.  It is possible to have multiple host
              key files for the different host key algorithms.
 
@@ -257,6 +258,7 @@ AUTHORIZED_KEYS FILE FORMAT
            ecdsa-sha2-nistp521
            sk-ssh-ed25519@openssh.com
            ssh-ed25519
+           ssh-mldsa44-ed25519@openssh.com
            ssh-rsa
 
      The comment field is not used for anything (but may be convenient for the
@@ -266,7 +268,8 @@ AUTHORIZED_KEYS FILE FORMAT
      of the size of the public key encoding) up to a limit of 8 kilobytes,
      which permits RSA keys up to 16 kilobits.  You don't want to type them
      in; instead, copy the id_ecdsa.pub, id_ecdsa_sk.pub, id_ed25519.pub,
-     id_ed25519_sk.pub, or the id_rsa.pub file and edit it.
+     id_ed25519_sk.pub, id_mldsa44_ed25519, or the id_rsa.pub file and edit
+     it.
 
      sshd enforces a minimum RSA key modulus size of 1024 bits.
 
@@ -626,6 +629,7 @@ FILES
 
      /etc/ssh/ssh_host_ecdsa_key
      /etc/ssh/ssh_host_ed25519_key
+     /etc/ssh/ssh_host_mldsa44_ed25519_key
      /etc/ssh/ssh_host_rsa_key
              These files contain the private parts of the host keys.  These
              files should only be owned by root, readable only by root, and
@@ -634,6 +638,7 @@ FILES
 
      /etc/ssh/ssh_host_ecdsa_key.pub
      /etc/ssh/ssh_host_ed25519_key.pub
+     /etc/ssh/ssh_host_mldsa44_ed25519_key.pub
      /etc/ssh/ssh_host_rsa_key.pub
              These files contain the public parts of the host keys.  These
              files should be world-readable but writable only by root.  Their
@@ -684,4 +689,4 @@ AUTHORS
      versions 1.5 and 2.0.  Niels Provos and Markus Friedl contributed support
      for privilege separation.
 
-OpenBSD 7.9                     October 4, 2025                        SSHD(8)
+OpenBSD 8.0                      July 11, 2026                         SSHD(8)
