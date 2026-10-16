@@ -58,6 +58,15 @@ agent_connection_on_io(struct agent_connection* con, DWORD bytes, OVERLAPPED* ol
 	if (con->state == DONE)
 		debug_assert_internal();
 
+	/*
+	 * The client process could not be opened. The pipe identifies the client instead, which is
+	 * only possible after data was read from it and must happen before a request is processed.
+	 */
+	if (con->client_info_pending && bytes > 0 && (con->state == READING_HEADER || con->state == READING)) {
+		if (agent_get_con_client_info_from_pipe(con) == -1)
+			fatal("failed to retrieve client details");
+	}
+
 	switch (con->state) {		
 	case LISTENING:
 	case WRITING:
