@@ -5,22 +5,50 @@
 # identifies such a client through the pipe once the first request was read.
 Describe "ssh-agent identifies clients that deny access to their process" -Tags "CI" {
     BeforeAll {
+        $fixtureDirectory = $null
+        $fixtureKey = $null
+        $fixtureAdded = $false
+        $startedAgentService = $false
+        $oldAuthSock = $env:SSH_AUTH_SOCK
         $agentPipe = "\\.\pipe\openssh-ssh-agent"
         function Test-AgentPipe {
             try { return [System.IO.Directory]::GetFiles("\\.\pipe\") -contains $agentPipe } catch { return $false }
         }
 
         # make sure an agent is listening; remember if the service had to be started
-        $startedAgentService = $false
         $agentService = Get-Service ssh-agent -ErrorAction SilentlyContinue
         if ($agentService -and $agentService.Status -ne "Running") {
-            Start-Service ssh-agent
+            Start-Service ssh-agent -ErrorAction Stop
             $startedAgentService = $true
         }
         for ($i = 0; $i -lt 20 -and -not (Test-AgentPipe); $i++) {
             Start-Sleep -Milliseconds 500
         }
-        $skip = -not (Test-AgentPipe)
+        if (-not (Test-AgentPipe)) {
+            throw "The CI test requires a listening ssh-agent on $agentPipe"
+        }
+        $env:SSH_AUTH_SOCK = $agentPipe
+        $sshKeygen = (Get-Command ssh-keygen.exe -ErrorAction Stop).Source
+        $sshAdd = (Get-Command ssh-add.exe -ErrorAction Stop).Source
+
+        # A unique fixture belongs to this user; never clear unrelated agent identities.
+        $fixtureDirectory = Join-Path ([IO.Path]::GetTempPath()) ("agent-client-" + [Guid]::NewGuid().ToString("N"))
+        $fixtureKey = Join-Path $fixtureDirectory "identity"
+        $null = New-Item -ItemType Directory -Path $fixtureDirectory -ErrorAction Stop
+        # Start-Process preserves the empty passphrase argument in both Windows PowerShell and pwsh.
+        $keygenProcess = Start-Process -FilePath $sshKeygen -ArgumentList @(
+            '-q', '-t', 'ed25519', '-P', '""', '-f', ('"' + $fixtureKey + '"')
+        ) -WindowStyle Hidden -Wait -PassThru -ErrorAction Stop
+        try {
+            if ($keygenProcess.ExitCode -ne 0) { throw "Could not generate the agent client test key" }
+        } finally {
+            $keygenProcess.Dispose()
+        }
+        $expectedBlob = ((Get-Content "$fixtureKey.pub" -ErrorAction Stop) -split '\s+')[1]
+        # Mark the attempted add for cleanup even if ssh-add reports an error afterwards.
+        $fixtureAdded = $true
+        & $sshAdd $fixtureKey
+        if ($LASTEXITCODE -ne 0) { throw "Could not load the agent client test key" }
 
         # C# helper that replaces the access control list of the process it runs in
         $processAclType = @'
@@ -41,29 +69,34 @@ public static class AgentTestProcessAcl
     [DllImport("kernel32.dll")]
     private static extern IntPtr GetCurrentProcess();
 
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr LocalFree(IntPtr memory);
+
     public static void Set(string sddl)
     {
-        IntPtr descriptor, dacl;
+        IntPtr descriptor = IntPtr.Zero, dacl;
         bool present, defaulted;
-        if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, out descriptor, IntPtr.Zero) ||
-            !GetSecurityDescriptorDacl(descriptor, out present, out dacl, out defaulted))
-            throw new System.ComponentModel.Win32Exception();
-        // SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION
-        uint result = SetSecurityInfo(GetCurrentProcess(), 6, 4, IntPtr.Zero, IntPtr.Zero, dacl, IntPtr.Zero);
-        if (result != 0)
-            throw new System.ComponentModel.Win32Exception((int)result);
+        try
+        {
+            if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, out descriptor, IntPtr.Zero) ||
+                !GetSecurityDescriptorDacl(descriptor, out present, out dacl, out defaulted))
+                throw new System.ComponentModel.Win32Exception();
+            // SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION
+            uint result = SetSecurityInfo(GetCurrentProcess(), 6, 4, IntPtr.Zero, IntPtr.Zero, dacl, IntPtr.Zero);
+            if (result != 0)
+                throw new System.ComponentModel.Win32Exception((int)result);
+        }
+        finally
+        {
+            if (descriptor != IntPtr.Zero)
+                LocalFree(descriptor);
+        }
     }
 }
 '@
 
-        # The client runs in its own powershell.exe: only its own process is restricted, not the test host.
-        # It sends SSH2_AGENTC_REQUEST_IDENTITIES, which only reads, and reports the type of the answer.
-        $clientScript = @'
-$ErrorActionPreference = 'Stop'
-if ($restrictProcess) {
-    # deny every access to everybody, whatever account the agent runs as (the process itself keeps its handle)
-    [AgentTestProcessAcl]::Set("D:(D;;GA;;;WD)")
-}
+        # Share the response parser with the child and the malformed-response checks below.
+        $responseScript = @'
 function Read-Exactly($stream, [int]$count) {
     $buffer = New-Object byte[] $count
     $offset = 0
@@ -75,15 +108,57 @@ function Read-Exactly($stream, [int]$count) {
     }
     return ,$buffer
 }
-$pipe = New-Object System.IO.Pipes.NamedPipeClientStream(".", "openssh-ssh-agent", [System.IO.Pipes.PipeDirection]::InOut)
+function Read-AgentUInt32($stream) {
+    $bytes = Read-Exactly $stream 4
+    if ([BitConverter]::IsLittleEndian) { [Array]::Reverse($bytes) }
+    return [BitConverter]::ToUInt32($bytes, 0)
+}
+function Read-AgentString($stream) {
+    $length = Read-AgentUInt32 $stream
+    if ($length -gt ($stream.Length - $stream.Position)) { throw "truncated agent string" }
+    return ,(Read-Exactly $stream ([int]$length))
+}
+function Read-AgentIdentities($stream, [string]$expectedBlob) {
+    $length = Read-AgentUInt32 $stream
+    # MAX_MESSAGE_SIZE in the Windows agent is 256 KiB.
+    if ($length -lt 5 -or $length -gt 256 * 1024) { throw "invalid agent response length" }
+    $payload = Read-Exactly $stream ([int]$length)
+    $response = New-Object IO.MemoryStream(,$payload)
+    try {
+        if ($response.ReadByte() -ne 12) { throw "expected SSH2_AGENT_IDENTITIES_ANSWER" }
+        $count = Read-AgentUInt32 $response
+        if ($count -gt ($response.Length - $response.Position) / 8) { throw "invalid identity count" }
+        $found = $false
+        for ($i = 0; $i -lt $count; $i++) {
+            $blob = Read-AgentString $response
+            $null = Read-AgentString $response # comment
+            if ([Convert]::ToBase64String($blob) -ceq $expectedBlob) { $found = $true }
+        }
+        if ($response.Position -ne $response.Length) { throw "trailing agent response data" }
+        if (-not $found) { throw "the agent did not return the expected user's key" }
+        "EXPECTED-KEY:" + $expectedBlob
+    } finally {
+        $response.Dispose()
+    }
+}
+'@
+        . ([ScriptBlock]::Create($responseScript))
+
+        # Only the child process is restricted. Explicitly allow the fallback's required SQOS level.
+        $clientScript = @'
+$ErrorActionPreference = 'Stop'
+if ($restrictProcess) {
+    [AgentTestProcessAcl]::Set("D:(D;;GA;;;WD)")
+}
+$pipe = New-Object System.IO.Pipes.NamedPipeClientStream(".", "openssh-ssh-agent",
+    [System.IO.Pipes.PipeDirection]::InOut, [System.IO.Pipes.PipeOptions]::Asynchronous,
+    [System.Security.Principal.TokenImpersonationLevel]::Impersonation)
 try {
     $pipe.Connect(15000)
     $request = [byte[]](0, 0, 0, 1, 11)
     $pipe.Write($request, 0, $request.Length)
     $pipe.Flush()
-    $header = Read-Exactly $pipe 4
-    $type = Read-Exactly $pipe 1
-    "ANSWER-TYPE:" + $type[0]
+    Read-AgentIdentities $pipe $expectedBlob
 } catch {
     "FAILED:" + $_.Exception.Message
 } finally {
@@ -94,24 +169,66 @@ try {
         function Invoke-AgentClient {
             param([bool]$RestrictProcess)
             $script = "`$restrictProcess = `$$RestrictProcess`r`n" +
-                "Add-Type -TypeDefinition @'`r`n$processAclType`r`n'@`r`n" + $clientScript
+                "`$expectedBlob = '$expectedBlob'`r`n" +
+                "Add-Type -TypeDefinition @'`r`n$processAclType`r`n'@`r`n" + $responseScript + "`r`n" + $clientScript
             $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($script))
             (& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand $encoded 2>&1 | Out-String).Trim()
         }
     }
 
     AfterAll {
-        if ($startedAgentService) {
-            Stop-Service ssh-agent -Force
+        try {
+            if ($fixtureAdded) {
+                & $sshAdd -d "$fixtureKey.pub"
+                if ($LASTEXITCODE -ne 0) { throw "Could not remove the agent client test key" }
+            }
+        } finally {
+            try {
+                if ($fixtureDirectory) {
+                    foreach ($path in @($fixtureKey, "$fixtureKey.pub")) {
+                        if ($path -and (Test-Path -LiteralPath $path)) {
+                            Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+                        }
+                    }
+                    if (Test-Path -LiteralPath $fixtureDirectory) {
+                        Remove-Item -LiteralPath $fixtureDirectory -ErrorAction Stop
+                    }
+                }
+            } finally {
+                $env:SSH_AUTH_SOCK = $oldAuthSock
+                if ($startedAgentService) {
+                    Stop-Service ssh-agent -Force -ErrorAction Stop
+                }
+            }
         }
     }
 
-    # SSH2_AGENT_IDENTITIES_ANSWER is message type 12
-    It "answers a client whose process has no access entry for LocalSystem" -skip:$skip {
-        Invoke-AgentClient -RestrictProcess $true | Should Match "ANSWER-TYPE:12"
+    It "returns this user's key when the client process denies access" {
+        Invoke-AgentClient -RestrictProcess $true | Should Match ([regex]::Escape("EXPECTED-KEY:$expectedBlob"))
     }
 
-    It "still answers a client with the default process access" -skip:$skip {
-        Invoke-AgentClient -RestrictProcess $false | Should Match "ANSWER-TYPE:12"
+    It "still returns this user's key with the default process access" {
+        Invoke-AgentClient -RestrictProcess $false | Should Match ([regex]::Escape("EXPECTED-KEY:$expectedBlob"))
+    }
+
+    It "rejects empty, foreign, truncated and malformed identities responses" {
+        $invalidResponses = @(
+            [byte[]](0,0,0,5,12,0,0,0,0), # empty identities answer
+            [byte[]](0,0,0,16,12,0,0,0,1,0,0,0,3,1,2,3,0,0,0,0), # foreign key
+            [byte[]](0,0,0,5,12,0), # truncated payload
+            [byte[]](0,0,0,13,12,0,0,0,1,0,0,0,5,1,2,3,4), # invalid string length
+            [byte[]](0,0,0,6,12,0,0,0,0,0), # trailing payload data
+            [byte[]](0,0,0,5,12,255,255,255,255), # oversized key count
+            [byte[]](0,0,0,5,5,0,0,0,0), # incorrect message type
+            [byte[]](0,4,0,1) # response exceeds MAX_MESSAGE_SIZE
+        )
+        foreach ($bytes in $invalidResponses) {
+            $stream = New-Object IO.MemoryStream(,$bytes)
+            try {
+                { Read-AgentIdentities $stream $expectedBlob } | Should Throw
+            } finally {
+                $stream.Dispose()
+            }
+        }
     }
 }
