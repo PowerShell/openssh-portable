@@ -97,6 +97,7 @@ void ConEnterRawMode();
 void ConUnInitWithRestore();
 void ConExitRawMode();
 
+void GoToNextLine();
 BOOL ConSetScreenRect(int xSize, int ySize);
 BOOL ConSetScreenSize(int X, int Y);
 BOOL ConRestoreScreen();

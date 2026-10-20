@@ -73,8 +73,7 @@ extern int showprogress;
 # define SFTP_DIRECTORY_CHARS      "/\\"
 #else /* HAVE_CYGWIN */
 #ifdef WINDOWS
-// Win32-OpenSSH converts all '/' to '\\' so search for '\\' instead
-# define SFTP_DIRECTORY_CHARS      "\\"
+# define SFTP_DIRECTORY_CHARS      "/\\"
 #else
 # define SFTP_DIRECTORY_CHARS      "/"
 #endif /* WINDOWS */

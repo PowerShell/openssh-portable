@@ -17,7 +17,16 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             $null = New-Item $testDir -ItemType directory -Force -ErrorAction SilentlyContinue
         }
 
+        # NOTE: $pkcs11Pin is only used to answer the provider's PIN prompt (via
+        # SSH_ASKPASS); it does NOT set or change the PIN on the token/card. To
+        # run these tests locally, temporarily set this to the card's actual PIN.
         $pkcs11Pin = "testpin"
+
+        # Default targets the x64 OpenSC provider. When testing binaries of a
+        # different architecture (e.g. ARM64 OpenSC installed under
+        # "OpenSC Project\OpenSC_arm64"), update this path to the matching DLL.
+        $pkcs11Path = "C:\Program Files\OpenSC Project\OpenSC\pkcs11\opensc-pkcs11.dll"
+
         $keypassphrase = "testpassword"
         $NoLibreSSL = $OpenSSHTestInfo["NoLibreSSL"]
         if($NoLibreSSL)
@@ -301,7 +310,6 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
         }
 
         It "$tC.$tI - ssh-add - pkcs11 library (if available)" {
-            $pkcs11Path = "C:\\Program Files\\OpenSC Project\\OpenSC\\pkcs11\\opensc-pkcs11.dll"
             if (Test-Path $pkcs11Path) {
                 #set up SSH_ASKPASS
                 Add-PasswordSetting -Pass $pkcs11Pin
@@ -324,6 +332,29 @@ Describe "E2E scenarios for ssh key management" -Tags "CI" {
             }
             else {
                 Write-Host "skipping pkcs11 test because provider not found"
+            }
+        }
+
+        It "$tC.$tI - ssh-add - reject traversing pkcs11 provider path" {
+            if (Test-Path $pkcs11Path) {
+                $outsideProviderDir = Join-Path $env:PUBLIC "openssh-pkcs11-$PID"
+                $outsideProvider = Join-Path $outsideProviderDir "opensc-pkcs11.dll"
+                try {
+                    Copy-Item (Split-Path $pkcs11Path -Parent) $outsideProviderDir -Recurse -Force
+                    $relativeOutsideProvider = $outsideProvider.Substring(3)
+                    $traversingPath = Join-Path ${env:ProgramFiles} "..\\$relativeOutsideProvider"
+                    Add-PasswordSetting -Pass $pkcs11Pin
+
+                    ssh-add -s "$traversingPath"
+                    $LASTEXITCODE | Should Not Be 0
+                }
+                finally {
+                    Remove-PasswordSetting
+                    Remove-Item $outsideProviderDir -Recurse -Force -ErrorAction SilentlyContinue
+                }
+            }
+            else {
+                Write-Host "skipping pkcs11 traversal test because provider not found"
             }
         }
     }

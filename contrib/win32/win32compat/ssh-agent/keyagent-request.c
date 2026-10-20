@@ -457,7 +457,7 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 	int i, count = 0, index = 0;;
 	wchar_t sub_name[MAX_KEY_LENGTH];
 	DWORD sub_name_len = MAX_KEY_LENGTH;
-	DWORD pin_len, epin_len, provider_len;
+	DWORD epin_cap = 0, epin_len = 0, pin_len = 0, provider_len = 0;
 	char *pin = NULL, *npin = NULL, *epin = NULL, *provider = NULL;
 	HKEY root = 0, sub = 0, user_root = 0;
 	struct sshkey **keys = NULL;
@@ -482,8 +482,9 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 		if (RegEnumKeyExW(root, index++, sub_name, &sub_name_len, NULL, NULL, NULL, NULL) == 0) {
 			if (RegOpenKeyExW(root, sub_name, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &sub) == 0 &&
 				RegQueryValueExW(sub, L"provider", 0, NULL, NULL, &provider_len) == 0 &&
-				RegQueryValueExW(sub, L"pin", 0, NULL, NULL, &epin_len) == 0) {
-				if ((epin = malloc(epin_len + 1)) == NULL ||
+				RegQueryValueExW(sub, L"pin", 0, NULL, NULL, &epin_cap) == 0) {
+				epin_len = epin_cap;
+				if ((epin = malloc(epin_cap + 1)) == NULL ||
 					(provider = malloc(provider_len + 1)) == NULL ||
 					RegQueryValueExW(sub, L"provider", 0, NULL, provider, &provider_len) != 0 ||
 					RegQueryValueExW(sub, L"pin", 0, NULL, epin, &epin_len) != 0)
@@ -508,9 +509,10 @@ process_sign_request(struct sshbuf* request, struct sshbuf* response, struct age
 					free(pin);
 				}
 				if (epin) {
-					SecureZeroMemory(epin, (DWORD)epin_len);
+					SecureZeroMemory(epin, (DWORD)epin_cap);
 					free(epin);
 				}
+				keys = NULL;
 				provider = NULL;
 				pin = NULL;
 				epin = NULL;
@@ -562,7 +564,7 @@ done:
 		free(pin);
 	}
 	if (epin) {
-		SecureZeroMemory(epin, (DWORD)epin_len);
+		SecureZeroMemory(epin, (DWORD)epin_cap);
 		free(epin);
 	}
 	if (user_root)
@@ -644,6 +646,7 @@ done:
 int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, struct agent_connection* con)
 {
 	char *provider = NULL, *pin = NULL, canonical_provider[PATH_MAX];
+	char normalized_provider[PATH_MAX];
 	int i, count = 0, r = 0, request_invalid = 0, success = 0;
 	struct sshkey **keys = NULL;
 	struct sshkey* key = NULL;
@@ -677,18 +680,26 @@ int process_add_smartcard_key(struct sshbuf* request, struct sshbuf* response, s
 		goto done;
 	}
 
-	to_lower_case(provider);
-	verbose("provider realpath: \"%.100s\"", provider);
-	verbose("allowed provider paths: \"%.100s\"", allowed_providers);
-	if (match_pattern_list(provider, allowed_providers, 1) != 1) {
-		verbose("refusing PKCS#11 add of \"%.100s\": "
-			"provider not allowed", provider);
-		goto done;
-	}
-
 	// Remove 'drive root' if exists
 	if (canonical_provider[0] == '/')
 		memmove(canonical_provider, canonical_provider + 1, strlen(canonical_provider));
+
+	if (strcpy_s(normalized_provider, sizeof(normalized_provider),
+		canonical_provider) != 0) {
+		error("failed PKCS#11 add of \"%.100s\": path too long", provider);
+		request_invalid = 1;
+		goto done;
+	}
+	convertToBackslash(normalized_provider);
+	to_lower_case(normalized_provider);
+
+	verbose("provider realpath: \"%.100s\"", canonical_provider);
+	verbose("allowed provider paths: \"%.100s\"", allowed_providers);
+	if (match_pattern_list(normalized_provider, allowed_providers, 0) != 1) {
+		verbose("refusing PKCS#11 add of \"%.100s\": "
+			"provider not allowed", canonical_provider);
+		goto done;
+	}
 
 	count = pkcs11_add_provider(canonical_provider, pin, &keys, NULL);
 	if (count <= 0) {
@@ -763,22 +774,22 @@ done:
 			RegDeleteKeyExA(reg, canonical_provider, KEY_WOW64_64KEY, 0);
 	}
 
-	pkcs11_terminate();
-
-	if (sa.lpSecurityDescriptor)
-		LocalFree(sa.lpSecurityDescriptor);
+	/* Free keys before terminating their helper */
 	for (i = 0; i < count; i++)
 		sshkey_free(keys[i]);
 	if (keys)
 		free(keys);
+
+	pkcs11_terminate();
+
+	if (sa.lpSecurityDescriptor)
+		LocalFree(sa.lpSecurityDescriptor);
 	if (thumbprint)
 		free(thumbprint);
 	if (pubkey_blob)
 		free(pubkey_blob);
 	if (provider)
 		free(provider);
-	if (allowed_providers)
-		free(allowed_providers);
 	if (pin) {
 		SecureZeroMemory(pin, (DWORD)pin_len);
 		free(pin);

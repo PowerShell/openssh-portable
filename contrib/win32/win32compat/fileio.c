@@ -753,7 +753,7 @@ fileio_write(struct w32_io* pio, const void *buf, size_t max_bytes)
 	}
 
 	if (pio->write_details.buf == NULL) {
-		pio->write_details.buf = malloc(WRITE_BUFFER_SIZE);
+		pio->write_details.buf = malloc(WRITE_BUFFER_SIZE + 1);
 		if (pio->write_details.buf == NULL) {
 			errno = ENOMEM;
 			debug3("write - ERROR:%d, io:%p", errno, pio);

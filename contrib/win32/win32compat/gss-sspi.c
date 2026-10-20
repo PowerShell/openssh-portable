@@ -513,6 +513,7 @@ gss_init_sec_context(
 	OM_uint32 ret = GSS_S_FAILURE;
 	wchar_t * target_name_utf16 = NULL;
 	gss_ctx_id_t p_ctx_h = NULL;
+	int sspi_context_created = 0;
 
 	output_token->value = NULL;
 
@@ -581,11 +582,16 @@ gss_init_sec_context(
 	/* check if error occurred */
 	if (status != SEC_E_OK && status != SEC_I_CONTINUE_NEEDED)
 		goto done;
+
+	/* first leg created a fresh context in out_context; track it for cleanup */
+	sspi_context_created = (*context_handle == GSS_C_NO_CONTEXT);
 	
 	/* copy output token to output buffer */
 	output_token->length = output_buffer_token.cbBuffer;
-	if ((output_token->value = malloc(output_token->length)) == NULL)
+	if ((output_token->value = malloc(output_token->length)) == NULL) {
+		SecFunctions->FreeContextBuffer(output_buffer_token.pvBuffer);
 		goto done;
+	}
 
 	memcpy(output_token->value, output_buffer_token.pvBuffer, output_token->length);
 	SecFunctions->FreeContextBuffer(output_buffer_token.pvBuffer);
@@ -642,9 +648,13 @@ done:
 			free(output_token->value);
 			output_token->value = NULL;
 		}
-		if (p_ctx_h)
+		output_token->length = 0;
+		if (sspi_context_created)
+			SecFunctions->DeleteSecurityContext(&out_context);
+		if (p_ctx_h) {
 			free(p_ctx_h);
-		
+			*context_handle = GSS_C_NO_CONTEXT;
+		}
 	}
 
 	return ret;
@@ -828,8 +838,11 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 {
 	OM_uint32 ret = GSS_S_FAILURE;
 	gss_ctx_id_t p_ctx_h = NULL;
+	int sspi_context_created = 0;
 
 	*src_name = NULL;
+
+	output_token->value = NULL;
 
 	if (delegated_cred_handle != NULL)
 		*delegated_cred_handle = NULL;
@@ -876,6 +889,9 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 			ret = GSS_S_NO_CONTEXT;
 		goto done;
 	}
+
+	/* first leg created a fresh context in sspi_context_handle; track it for cleanup */
+	sspi_context_created = (*context_handle == GSS_C_NO_CONTEXT);
 
 	/* only do checks on the finalized context (no continue needed) */
 	if (status == SEC_E_OK) {
@@ -953,12 +969,15 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 
 	/* copy output token to output buffer */
 	output_token->length = output_buffer_token.cbBuffer;
-	output_token->value = malloc(output_token->length);
+	if ((output_token->value = malloc(output_token->length)) == NULL) {
+		SecFunctions->FreeContextBuffer(output_buffer_token.pvBuffer);
+		goto done;
+	}
 	memcpy(output_token->value, output_buffer_token.pvBuffer, output_token->length);
 	SecFunctions->FreeContextBuffer(output_buffer_token.pvBuffer);
 
-	/* get the user token for impersonation */
-	if (delegated_cred_handle != NULL) {
+	/* get the user token for impersonation (only on the finalized context) */
+	if (status == SEC_E_OK && delegated_cred_handle != NULL) {
 		if ((*delegated_cred_handle = malloc(sizeof(struct cred_st))) == NULL)
 			goto done;
 		if (SecFunctions->QuerySecurityContextToken(*context_handle, &sspi_auth_user) != SEC_E_OK)
@@ -971,12 +990,25 @@ gss_accept_sec_context(_Out_ OM_uint32 * minor_status, _Inout_opt_ gss_ctx_id_t 
 
 done:
 	if (ret != GSS_S_COMPLETE && ret != GSS_S_CONTINUE_NEEDED) {
-		if (p_ctx_h)
+		if (output_token->value) {
+			free(output_token->value);
+			output_token->value = NULL;
+		}
+		output_token->length = 0;
+		if (sspi_context_created)
+			SecFunctions->DeleteSecurityContext(&sspi_context_handle);
+		if (p_ctx_h) {
 			free(p_ctx_h);
-		if (*src_name)
+			*context_handle = GSS_C_NO_CONTEXT;
+		}
+		if (*src_name) {
 			free(*src_name);
-		if (delegated_cred_handle && *delegated_cred_handle)
+			*src_name = GSS_C_NO_NAME;
+		}
+		if (delegated_cred_handle && *delegated_cred_handle) {
 			free(*delegated_cred_handle);
+			*delegated_cred_handle = GSS_C_NO_CREDENTIAL;
+		}
 	}
 	return ret;
 }

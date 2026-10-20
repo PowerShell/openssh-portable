@@ -156,6 +156,10 @@ wmain(int argc, wchar_t **wargv)
 		agent_initialize_allow_list();
 	}
 
+	/* Normalize allow list for later comparison in process_add_smartcard_key. */
+	convertToBackslash(allowed_providers);
+	to_lower_case(allowed_providers);
+
 	if (!StartServiceCtrlDispatcherW(dispatch_table)) {
 		if (GetLastError() == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT) {
 			/* Ensure that fds 0, 1 and 2 are open or directed to /dev/null */

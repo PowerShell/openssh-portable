@@ -224,6 +224,34 @@
 #define CURSOR_REPORT_FORMAT_STRING "\x1b[%d;%dR"
 #define VT52_TERMINAL_ID            "\x1b/Z"
 
+#define ENUM_LF 1
+
+typedef struct _TelParams
+{
+	int fLogging;
+	FILE *fplogfile;
+
+	char *pInputFile;
+
+	char *szDebugInputFile;
+    BOOL fDebugWait;
+
+	int timeOut;
+	int fLocalEcho;
+	int fTreatLFasCRLF;
+	int	fSendCROnly;
+	int nReceiveCRLF;
+
+    char sleepChar;
+	char menuChar;
+
+	SOCKET Socket;
+	BOOL bVT100Mode;
+
+	char *pAltKey;
+
+} TelParams;
+
 int ReadConsoleForTermEmul(HANDLE hInput, char *destin, int destinlen);
 
 #endif

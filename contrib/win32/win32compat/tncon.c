@@ -37,12 +37,9 @@
 #include <ctype.h>
 #include <string.h>
 #include <windows.h>
-#include "ansiprsr.h"
 #include "tncon.h"
 #include "tnnet.h"
 
-extern bool gbVTAppMode;
-extern BOOL isAnsiParsingRequired;
 extern BOOL isConsoleVTSeqAvailable;
 char *glob_out = NULL;
 int glob_outlen = 0;
@@ -53,6 +50,7 @@ extern int ScreenX;
 extern int ScrollTop;
 extern int ScrollBottom;
 unsigned char tmp_buf[30];
+bool gbVTAppMode = false;
 
 /* terminal global switches*/
 TelParams Parameters = {
@@ -280,14 +278,6 @@ GetVTSeqFromKeyStroke(INPUT_RECORD inputRecord)
 	BOOL bCapsOn = FALSE;
 	BOOL bShift = FALSE;
 	int modKey = 0;
-	char *FN_KEY = NULL;
-	char *SHIFT_FN_KEY = NULL;
-	char *ALT_FN_KEY = NULL;
-	char *CTRL_FN_KEY = NULL;
-	char *SHIFT_ALT_FN_KEY = NULL;
-	char *SHIFT_CTRL_FN_KEY = NULL;
-	char *ALT_CTRL_FN_KEY = NULL;
-	char *SHIFT_ALT_CTRL_FN_KEY = NULL;
 	DWORD dwControlKeyState = 0;
 	DWORD dwAltGrFlags = LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED;
 
@@ -486,167 +476,127 @@ GetVTSeqFromKeyStroke(INPUT_RECORD inputRecord)
 		case VK_CAPITAL:
 			break; /* NOP on these */
 		case VK_F1:
-			/* If isAnsiParsingRequired is false then we use XTERM VT sequence */
-			FN_KEY = isAnsiParsingRequired ? PF1_KEY : XTERM_PF1_KEY;
-			SHIFT_FN_KEY = isAnsiParsingRequired ? SHIFT_PF1_KEY : XTERM_SHIFT_PF1_KEY;
-			ALT_FN_KEY = isAnsiParsingRequired ? ALT_PF1_KEY : XTERM_ALT_PF1_KEY;
-			CTRL_FN_KEY = isAnsiParsingRequired ? CTRL_PF1_KEY : XTERM_CTRL_PF1_KEY;
-			SHIFT_ALT_FN_KEY = isAnsiParsingRequired ? SHIFT_ALT_PF1_KEY : XTERM_SHIFT_ALT_PF1_KEY;
-			SHIFT_CTRL_FN_KEY = isAnsiParsingRequired ? SHIFT_CTRL_PF1_KEY : XTERM_SHIFT_CTRL_PF1_KEY;
-			ALT_CTRL_FN_KEY = isAnsiParsingRequired ? ALT_CTRL_PF1_KEY : XTERM_ALT_CTRL_PF1_KEY;
-			SHIFT_ALT_CTRL_FN_KEY = isAnsiParsingRequired ? SHIFT_ALT_CTRL_PF1_KEY : XTERM_SHIFT_ALT_CTRL_PF1_KEY;
-
 			if (dwControlKeyState == 0)
-				WriteToBuffer((char *)FN_KEY, strlen(FN_KEY));
+				WriteToBuffer((char *)XTERM_PF1_KEY, strlen(XTERM_PF1_KEY));
 
 			else if (dwControlKeyState == SHIFT_PRESSED)
-				WriteToBuffer((char *)SHIFT_FN_KEY, strlen(SHIFT_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_PF1_KEY, strlen(XTERM_SHIFT_PF1_KEY));
 
 			else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-				WriteToBuffer((char *)CTRL_FN_KEY, strlen(CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_CTRL_PF1_KEY, strlen(XTERM_CTRL_PF1_KEY));
 
 			else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-				WriteToBuffer((char *)ALT_FN_KEY, strlen(ALT_FN_KEY));
+				WriteToBuffer((char *)XTERM_ALT_PF1_KEY, strlen(XTERM_ALT_PF1_KEY));
 
 			else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
 				(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
 				(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-				WriteToBuffer((char *)SHIFT_ALT_CTRL_FN_KEY, strlen(SHIFT_ALT_CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_ALT_CTRL_PF1_KEY, strlen(XTERM_SHIFT_ALT_CTRL_PF1_KEY));
 
 			else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
 				((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-				WriteToBuffer((char *)ALT_CTRL_FN_KEY, strlen(ALT_CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_ALT_CTRL_PF1_KEY, strlen(XTERM_ALT_CTRL_PF1_KEY));
 
 			else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
 				(dwControlKeyState & LEFT_ALT_PRESSED)))
-				WriteToBuffer((char *)SHIFT_ALT_FN_KEY, strlen(SHIFT_ALT_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_ALT_PF1_KEY, strlen(XTERM_SHIFT_ALT_PF1_KEY));
 
 			else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
 				(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-				WriteToBuffer((char *)SHIFT_CTRL_FN_KEY, strlen(SHIFT_CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_CTRL_PF1_KEY, strlen(XTERM_SHIFT_CTRL_PF1_KEY));
 
 			break;
 		case VK_F2:
-			/* If isAnsiParsingRequired is false then we use XTERM VT sequence */
-			FN_KEY = isAnsiParsingRequired ? PF2_KEY : XTERM_PF2_KEY;
-			SHIFT_FN_KEY = isAnsiParsingRequired ? SHIFT_PF2_KEY : XTERM_SHIFT_PF2_KEY;
-			ALT_FN_KEY = isAnsiParsingRequired ? ALT_PF2_KEY : XTERM_ALT_PF2_KEY;
-			CTRL_FN_KEY = isAnsiParsingRequired ? CTRL_PF2_KEY : XTERM_CTRL_PF2_KEY;
-			SHIFT_ALT_FN_KEY = isAnsiParsingRequired ? SHIFT_ALT_PF2_KEY : XTERM_SHIFT_ALT_PF2_KEY;
-			SHIFT_CTRL_FN_KEY = isAnsiParsingRequired ? SHIFT_CTRL_PF2_KEY : XTERM_SHIFT_CTRL_PF2_KEY;
-			ALT_CTRL_FN_KEY = isAnsiParsingRequired ? ALT_CTRL_PF2_KEY : XTERM_ALT_CTRL_PF2_KEY;
-			SHIFT_ALT_CTRL_FN_KEY = isAnsiParsingRequired ? SHIFT_ALT_CTRL_PF2_KEY : XTERM_SHIFT_ALT_CTRL_PF2_KEY;
-
 			if (dwControlKeyState == 0)
-				WriteToBuffer((char *)FN_KEY, strlen(FN_KEY));
+				WriteToBuffer((char *)XTERM_PF2_KEY, strlen(XTERM_PF2_KEY));
 
 			else if (dwControlKeyState == SHIFT_PRESSED)
-				WriteToBuffer((char *)SHIFT_FN_KEY, strlen(SHIFT_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_PF2_KEY, strlen(XTERM_SHIFT_PF2_KEY));
 
 			else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-				WriteToBuffer((char *)CTRL_FN_KEY, strlen(CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_CTRL_PF2_KEY, strlen(XTERM_CTRL_PF2_KEY));
 
 			else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-				WriteToBuffer((char *)ALT_FN_KEY, strlen(ALT_FN_KEY));
+				WriteToBuffer((char *)XTERM_ALT_PF2_KEY, strlen(XTERM_ALT_PF2_KEY));
 
 			else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
 				(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
 				(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-				WriteToBuffer((char *)SHIFT_ALT_CTRL_FN_KEY, strlen(SHIFT_ALT_CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_ALT_CTRL_PF2_KEY, strlen(XTERM_SHIFT_ALT_CTRL_PF2_KEY));
 
 			else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
 				((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-				WriteToBuffer((char *)ALT_CTRL_FN_KEY, strlen(ALT_CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_ALT_CTRL_PF2_KEY, strlen(XTERM_ALT_CTRL_PF2_KEY));
 
 			else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
 				(dwControlKeyState & LEFT_ALT_PRESSED)))
-				WriteToBuffer((char *)SHIFT_ALT_FN_KEY, strlen(SHIFT_ALT_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_ALT_PF2_KEY, strlen(XTERM_SHIFT_ALT_PF2_KEY));
 
 			else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
 				(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-				WriteToBuffer((char *)SHIFT_CTRL_FN_KEY, strlen(SHIFT_CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_CTRL_PF2_KEY, strlen(XTERM_SHIFT_CTRL_PF2_KEY));
 
 			break;
 		case VK_F3:
-			/* If isAnsiParsingRequired is false then we use XTERM VT sequence */
-			FN_KEY = isAnsiParsingRequired ? PF3_KEY : XTERM_PF3_KEY;
-			SHIFT_FN_KEY = isAnsiParsingRequired ? SHIFT_PF3_KEY : XTERM_SHIFT_PF3_KEY;
-			ALT_FN_KEY = isAnsiParsingRequired ? ALT_PF3_KEY : XTERM_ALT_PF3_KEY;
-			CTRL_FN_KEY = isAnsiParsingRequired ? CTRL_PF3_KEY : XTERM_CTRL_PF3_KEY;
-			SHIFT_ALT_FN_KEY = isAnsiParsingRequired ? SHIFT_ALT_PF3_KEY : XTERM_SHIFT_ALT_PF3_KEY;
-			SHIFT_CTRL_FN_KEY = isAnsiParsingRequired ? SHIFT_CTRL_PF3_KEY : XTERM_SHIFT_CTRL_PF3_KEY;
-			ALT_CTRL_FN_KEY = isAnsiParsingRequired ? ALT_CTRL_PF3_KEY : XTERM_ALT_CTRL_PF3_KEY;
-			SHIFT_ALT_CTRL_FN_KEY = isAnsiParsingRequired ? SHIFT_ALT_CTRL_PF3_KEY : XTERM_SHIFT_ALT_CTRL_PF3_KEY;
-
 			if (dwControlKeyState == 0)
-				WriteToBuffer((char *)FN_KEY, strlen(FN_KEY));
+				WriteToBuffer((char *)XTERM_PF3_KEY, strlen(XTERM_PF3_KEY));
 
 			else if (dwControlKeyState == SHIFT_PRESSED)
-				WriteToBuffer((char *)SHIFT_FN_KEY, strlen(SHIFT_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_PF3_KEY, strlen(XTERM_SHIFT_PF3_KEY));
 
 			else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-				WriteToBuffer((char *)CTRL_FN_KEY, strlen(CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_CTRL_PF3_KEY, strlen(XTERM_CTRL_PF3_KEY));
 
 			else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-				WriteToBuffer((char *)ALT_FN_KEY, strlen(ALT_FN_KEY));
+				WriteToBuffer((char *)XTERM_ALT_PF3_KEY, strlen(XTERM_ALT_PF3_KEY));
 
 			else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
 				(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
 				(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-				WriteToBuffer((char *)SHIFT_ALT_CTRL_FN_KEY, strlen(SHIFT_ALT_CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_ALT_CTRL_PF3_KEY, strlen(XTERM_SHIFT_ALT_CTRL_PF3_KEY));
 
 			else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
 				((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-				WriteToBuffer((char *)ALT_CTRL_FN_KEY, strlen(ALT_CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_ALT_CTRL_PF3_KEY, strlen(XTERM_ALT_CTRL_PF3_KEY));
 
 			else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
 				(dwControlKeyState & LEFT_ALT_PRESSED)))
-				WriteToBuffer((char *)SHIFT_ALT_FN_KEY, strlen(SHIFT_ALT_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_ALT_PF3_KEY, strlen(XTERM_SHIFT_ALT_PF3_KEY));
 
 			else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
 				(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-				WriteToBuffer((char *)SHIFT_CTRL_FN_KEY, strlen(SHIFT_CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_CTRL_PF3_KEY, strlen(XTERM_SHIFT_CTRL_PF3_KEY));
 
 			break;
 		case VK_F4:
-			/* If isAnsiParsingRequired is false then we use XTERM VT sequence */
-			FN_KEY = isAnsiParsingRequired ? PF4_KEY : XTERM_PF4_KEY;
-			SHIFT_FN_KEY = isAnsiParsingRequired ? SHIFT_PF4_KEY : XTERM_SHIFT_PF4_KEY;
-			ALT_FN_KEY = isAnsiParsingRequired ? ALT_PF4_KEY : XTERM_ALT_PF4_KEY;
-			CTRL_FN_KEY = isAnsiParsingRequired ? CTRL_PF4_KEY : XTERM_CTRL_PF4_KEY;
-			SHIFT_ALT_FN_KEY = isAnsiParsingRequired ? SHIFT_ALT_PF4_KEY : XTERM_SHIFT_ALT_PF4_KEY;
-			SHIFT_CTRL_FN_KEY = isAnsiParsingRequired ? SHIFT_CTRL_PF4_KEY : XTERM_SHIFT_CTRL_PF4_KEY;
-			ALT_CTRL_FN_KEY = isAnsiParsingRequired ? ALT_CTRL_PF4_KEY : XTERM_ALT_CTRL_PF4_KEY;
-			SHIFT_ALT_CTRL_FN_KEY = isAnsiParsingRequired ? SHIFT_ALT_CTRL_PF4_KEY : XTERM_SHIFT_ALT_CTRL_PF4_KEY;
-
 			if (dwControlKeyState == 0)
-				WriteToBuffer((char *)FN_KEY, strlen(FN_KEY));
+				WriteToBuffer((char *)XTERM_PF4_KEY, strlen(XTERM_PF4_KEY));
 
 			else if (dwControlKeyState == SHIFT_PRESSED)
-				WriteToBuffer((char *)SHIFT_FN_KEY, strlen(SHIFT_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_PF4_KEY, strlen(XTERM_SHIFT_PF4_KEY));
 
 			else if (dwControlKeyState == LEFT_CTRL_PRESSED || dwControlKeyState == RIGHT_CTRL_PRESSED)
-				WriteToBuffer((char *)CTRL_FN_KEY, strlen(CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_CTRL_PF4_KEY, strlen(XTERM_CTRL_PF4_KEY));
 
 			else if (dwControlKeyState == LEFT_ALT_PRESSED || dwControlKeyState == RIGHT_ALT_PRESSED)
-				WriteToBuffer((char *)ALT_FN_KEY, strlen(ALT_FN_KEY));
+				WriteToBuffer((char *)XTERM_ALT_PF4_KEY, strlen(XTERM_ALT_PF4_KEY));
 
 			else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
 				(dwControlKeyState & LEFT_ALT_PRESSED)) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
 				(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-				WriteToBuffer((char *)SHIFT_ALT_CTRL_FN_KEY, strlen(SHIFT_ALT_CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_ALT_CTRL_PF4_KEY, strlen(XTERM_SHIFT_ALT_CTRL_PF4_KEY));
 
 			else if ((dwControlKeyState & RIGHT_ALT_PRESSED) || (dwControlKeyState & LEFT_ALT_PRESSED) &&
 				((dwControlKeyState & LEFT_CTRL_PRESSED) || (dwControlKeyState & RIGHT_CTRL_PRESSED)))
-				WriteToBuffer((char *)ALT_CTRL_FN_KEY, strlen(ALT_CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_ALT_CTRL_PF4_KEY, strlen(XTERM_ALT_CTRL_PF4_KEY));
 
 			else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & RIGHT_ALT_PRESSED) ||
 				(dwControlKeyState & LEFT_ALT_PRESSED)))
-				WriteToBuffer((char *)SHIFT_ALT_FN_KEY, strlen(SHIFT_ALT_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_ALT_PF4_KEY, strlen(XTERM_SHIFT_ALT_PF4_KEY));
 
 			else if ((dwControlKeyState & SHIFT_PRESSED) && ((dwControlKeyState & LEFT_CTRL_PRESSED) ||
 				(dwControlKeyState & RIGHT_CTRL_PRESSED)))
-				WriteToBuffer((char *)SHIFT_CTRL_FN_KEY, strlen(SHIFT_CTRL_FN_KEY));
+				WriteToBuffer((char *)XTERM_SHIFT_CTRL_PF4_KEY, strlen(XTERM_SHIFT_CTRL_PF4_KEY));
 
 			break;
 		case VK_F5:

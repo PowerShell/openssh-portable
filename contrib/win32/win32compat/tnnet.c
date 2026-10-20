@@ -34,7 +34,6 @@
 #include <ctype.h>
 #include <string.h>
 #include <windows.h>
-#include "ansiprsr.h"
 #include "inc\utf.h"
 #include "inc\string.h"
 #include "console.h"
@@ -42,7 +41,6 @@
 
 #define dwBuffer 4096
 
-extern BOOL isAnsiParsingRequired;
 extern BOOL isConsoleVTSeqAvailable;
 extern int track_view_port_no_pty_hack;
 extern bool gbVTAppMode;
@@ -55,11 +53,8 @@ BOOL isFirstPacket = TRUE;
  * are hardcoded in the server and will be transformed to Windows Console commands.
  */
 void
-processBuffer(HANDLE handle, char *buf, DWORD len, unsigned char **respbuf, size_t *resplen)
+processBuffer(HANDLE handle, char *buf, DWORD len)
 {
-	unsigned char *pszNewHead = NULL;
-	unsigned char *pszHead = NULL;
-	unsigned char *pszTail = NULL;
 	const char *applicationModeSeq = "\x1b[?1h";
 	const DWORD applicationModeSeqLen = (DWORD)strlen(applicationModeSeq);
 	const char *normalModeSeq = "\x1b[?1l";
@@ -71,63 +66,41 @@ processBuffer(HANDLE handle, char *buf, DWORD len, unsigned char **respbuf, size
 	if (len == 0)
 		return;
 
-	if (false == isAnsiParsingRequired) {
-		if(isFirstPacket) {
-			isFirstPacket = FALSE;
+	if(isFirstPacket) {
+		isFirstPacket = FALSE;
 
-			/* Windows server at first sends the "cls" after the connection is established.
-			 * There is a bug in the conhost which causes the visible window data to loose so to
-			 * mitigate that issue we need to first move the visible window so that the cursor is at the top of the visible window.
-			 */
-			if (strstr(buf, clsSeq))
-				ConMoveCursorTopOfVisibleWindow();
-		}
-
-		if (!isConsoleVTSeqAvailable) {
-			if (len >= applicationModeSeqLen && (appModePtr = strrstr(buf, applicationModeSeq)))
-				gbVTAppMode = true;
-
-			if (len >= normalModeSeqLen && (normalModePtr = strrstr(buf, normalModeSeq)))
-			{
-				if (appModePtr && (appModePtr > normalModePtr))
-					gbVTAppMode = true;
-				else
-					gbVTAppMode = false;
-			}
-		}
-
-		/* WriteFile() gets messy when user does scroll up/down so we need to restore the visible window. 
-		 * It's a conhost bug but we need to live with it as they are not going to back port the fix.
+		/* Windows server at first sends the "cls" after the connection is established.
+		 * There is a bug in the conhost which causes the visible window data to loose so to
+		 * mitigate that issue we need to first move the visible window so that the cursor is at the top of the visible window.
 		 */
-		if(track_view_port_no_pty_hack)
-			ConRestoreViewRect_NoPtyHack();
-				
-		/* Console has the capability to parse so pass the raw buffer to console directly */
-		WriteFile(handle, buf, len, 0, 0);
-
-		if (track_view_port_no_pty_hack)
-			ConSaveViewRect_NoPtyHack();
-
-		return;
+		if (strstr(buf, clsSeq))
+			ConMoveCursorTopOfVisibleWindow();
 	}
 
-	/* Transform a single carriage return into a single linefeed before continuing */
-	if ((len == 1) && (buf[0] == 13))
-		buf[0] = 10;
+	if (!isConsoleVTSeqAvailable) {
+		if (len >= applicationModeSeqLen && (appModePtr = strrstr(buf, applicationModeSeq)))
+			gbVTAppMode = true;
 
-	pszTail = (unsigned char *)buf;
-	pszHead = (unsigned char *)buf;
-	pszTail += len;
-	pszNewHead = pszHead;
+		if (len >= normalModeSeqLen && (normalModePtr = strrstr(buf, normalModeSeq)))
+		{
+			if (appModePtr && (appModePtr > normalModePtr))
+				gbVTAppMode = true;
+			else
+				gbVTAppMode = false;
+		}
+	}
 
-	/*
-	 * Loop through the network buffer transforming characters as necessary.
-	 * The buffer will be empty after the transformation
-	 * process since the buffer will contain only commands that are handled by the console API.
+	/* WriteFile() gets messy when user does scroll up/down so we need to restore the visible window.
+	 * It's a conhost bug but we need to live with it as they are not going to back port the fix.
 	 */
-	do {
-		pszHead = pszNewHead;
-		pszNewHead = ParseBuffer(pszHead, pszTail, respbuf, resplen);
+	if(track_view_port_no_pty_hack)
+		ConRestoreViewRect_NoPtyHack();
 
-	} while ((pszNewHead != pszHead) && (pszNewHead < pszTail) && (resplen == NULL || (resplen != NULL && *resplen == 0)));
+	/* Console has the capability to parse so pass the raw buffer to console directly */
+	WriteFile(handle, buf, len, 0, 0);
+
+	if (track_view_port_no_pty_hack)
+		ConSaveViewRect_NoPtyHack();
+
+	return;
 }

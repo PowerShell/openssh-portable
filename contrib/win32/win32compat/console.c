@@ -39,7 +39,6 @@
 
 #include "debug.h"
 #include "console.h"
-#include "ansiprsr.h"
 #include "misc_internal.h"
 
 DWORD	stdin_dwSavedAttributes = 0;
@@ -54,7 +53,6 @@ int ScrollTop;
 int ScrollBottom;
 int LastCursorX;
 int LastCursorY;
-BOOL isAnsiParsingRequired = FALSE;
 BOOL isConsoleVTSeqAvailable = FALSE;
 /* 1 - We track the viewport (visible window) and restore it back because
  * console renders badly when user scroll up/down. Only used if ConPTY not
@@ -166,21 +164,14 @@ ConEnterRawMode()
 	dwAttributes = stdout_dwSavedAttributes;
 	dwAttributes |= (DWORD)ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
 
-	char *envValue = NULL;
-	size_t len = 0;	
-	_dupenv_s(&envValue, &len, "SSH_TERM_CONHOST_PARSER");
-	
-	if (NULL != envValue) {
-		isConHostParserEnabled = atoi(envValue);
-		free(envValue);
-	}		
-
-	/* We use our custom ANSI parser when
-	 * a) User sets the environment variable "SSH_TERM_CONHOST_PARSER" to 0
-	 * b) or when the console doesn't have the inbuilt capability to parse the ANSI/Xterm raw buffer.
-	 */	 
-	if (FALSE == isConHostParserEnabled || !SetConsoleMode(GetConsoleOutputHandle(), dwAttributes)) /* Windows NT */
-		isAnsiParsingRequired = TRUE;
+	if (!SetConsoleMode(GetConsoleOutputHandle(), dwAttributes)) { /* Windows NT */
+		dwRet = GetLastError();
+		error("SetConsoleMode on GetConsoleOutputHandle() failed with %d", dwRet);
+		/* Restore the input console mode that was already changed above */
+		SetConsoleMode(GetConsoleInputHandle(), stdin_dwSavedAttributes);
+		isConsoleVTSeqAvailable = FALSE;
+		return;
+	}
 			
 	BOOL gcsbRet = GetConsoleScreenBufferInfo(GetConsoleOutputHandle(), &csbi);
 	
@@ -188,35 +179,21 @@ ConEnterRawMode()
 	if (!is_conpty_supported())
 		track_view_port_no_pty_hack= 1;
 
-	/* if we are passing rawbuffer to console then we need to move the cursor to top 
-	 *  so that the clearscreen will not erase any lines.
-	 */
-	if (TRUE == isAnsiParsingRequired) {
-		if (gcsbRet == 0)
-		{
-			dwRet = GetLastError();
-			error("GetConsoleScreenBufferInfo on GetConsoleOutputHandle() failed with %d", dwRet);
-			return;
-		}
-		SavedViewRect = csbi.srWindow;
-		debug("console doesn't support the ansi parsing");
-	} else {
-		debug("ENABLE_VIRTUAL_TERMINAL_PROCESSING is supported. Console supports the ansi parsing");
-		console_out_cp_saved = GetConsoleOutputCP();
-		console_in_cp_saved = GetConsoleCP();
-		if (SetConsoleOutputCP(CP_UTF8))
-			debug3("Successfully set console output code page from:%d to %d", console_out_cp_saved, CP_UTF8);
-		else
-			error("Failed to set console output code page from:%d to %d error:%d", console_out_cp_saved, CP_UTF8, GetLastError());
+	debug("ENABLE_VIRTUAL_TERMINAL_PROCESSING is supported. Console supports the ansi parsing");
+	console_out_cp_saved = GetConsoleOutputCP();
+	console_in_cp_saved = GetConsoleCP();
+	if (SetConsoleOutputCP(CP_UTF8))
+		debug3("Successfully set console output code page from:%d to %d", console_out_cp_saved, CP_UTF8);
+	else
+		error("Failed to set console output code page from:%d to %d error:%d", console_out_cp_saved, CP_UTF8, GetLastError());
 
-		if (SetConsoleCP(CP_UTF8))
-			debug3("Successfully set console input code page from:%d to %d", console_in_cp_saved, CP_UTF8);
-		else
-			error("Failed to set console input code page from:%d to %d error:%d", console_in_cp_saved, CP_UTF8, GetLastError());
+	if (SetConsoleCP(CP_UTF8))
+		debug3("Successfully set console input code page from:%d to %d", console_in_cp_saved, CP_UTF8);
+	else
+		error("Failed to set console input code page from:%d to %d error:%d", console_in_cp_saved, CP_UTF8, GetLastError());
 
-		if (track_view_port_no_pty_hack) {
-			ConSaveViewRect_NoPtyHack();
-		}
+	if (track_view_port_no_pty_hack) {
+		ConSaveViewRect_NoPtyHack();
 	}
 
 	ConSetScreenX();
@@ -238,23 +215,44 @@ ConExitRawMode()
 	SetConsoleMode(GetConsoleInputHandle(), stdin_dwSavedAttributes);
 	SetConsoleMode(GetConsoleOutputHandle(), stdout_dwSavedAttributes);
 
-	if (FALSE == isAnsiParsingRequired) {
-		if (console_out_cp_saved) {
-			if(SetConsoleOutputCP(console_out_cp_saved))
-				debug3("Successfully set console output code page from %d to %d", CP_UTF8, console_out_cp_saved);
-			else
-				error("Failed to set console output code page from %d to %d error:%d", CP_UTF8, console_out_cp_saved, GetLastError());
-		}
-
-		if (console_in_cp_saved) {
-			if (SetConsoleCP(console_in_cp_saved))
-				debug3("Successfully set console input code page from %d to %d", CP_UTF8, console_in_cp_saved);
-			else
-				error("Failed to set console input code page from %d to %d error:%d", CP_UTF8, console_in_cp_saved, GetLastError());
-		}
+	if (console_out_cp_saved) {
+		if(SetConsoleOutputCP(console_out_cp_saved))
+			debug3("Successfully set console output code page from %d to %d", CP_UTF8, console_out_cp_saved);
+		else
+			error("Failed to set console output code page from %d to %d error:%d", CP_UTF8, console_out_cp_saved, GetLastError());
 	}
-	
+
+	if (console_in_cp_saved) {
+		if (SetConsoleCP(console_in_cp_saved))
+			debug3("Successfully set console input code page from %d to %d", CP_UTF8, console_in_cp_saved);
+		else
+			error("Failed to set console input code page from %d to %d error:%d", CP_UTF8, console_in_cp_saved, GetLastError());
+	}
+
 	in_raw_mode = 0;
+}
+
+void
+GoToNextLine()
+{
+	int currentX = 0;
+	int currentY = 0;
+
+	ConGetCursorPosition(&currentX, &currentY);
+
+	/* If the cursor is the last line of the visible window */
+	if (is_cursor_at_lastline_of_visible_window()) {
+		if (currentY >= ConGetBufferHeight()) {
+			/* handle the max window buffer size */
+			ConScrollDown(0, currentY);
+			ConMoveCursorPosition(-currentX, 0);
+		} else {
+			/* max window buffer is not breached */
+			ConMoveVisibleWindow(1);
+			ConMoveCursorPosition(-currentX, 1);
+		}
+	} else /* If the cursor is NOT the last line of the visible window */
+		ConMoveCursorPosition(-currentX, 1);
 }
 
 /* Used to exit the raw mode */

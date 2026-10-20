@@ -193,8 +193,6 @@ static unsigned __stdcall
 WriteThread(_In_ LPVOID lpParameter)
 {
 	struct w32_io* pio = (struct w32_io*)lpParameter;
-	char *respbuf = NULL;
-	size_t resplen = 0;	
 	debug5("WriteThread thread, io:%p", pio);
 
 	if (FILETYPE(pio) == FILE_TYPE_CHAR) {
@@ -207,7 +205,7 @@ WriteThread(_In_ LPVOID lpParameter)
 				free(t);
 			}
 		} else {
-			processBuffer(WINHANDLE(pio), pio->write_details.buf, pio->sync_write_status.to_transfer, &respbuf, &resplen);
+			processBuffer(WINHANDLE(pio), pio->write_details.buf, pio->sync_write_status.to_transfer);
 			/* TODO - respbuf is not null in some cases, this needs to be returned back via read stream */
 		}
 		pio->sync_write_status.transferred = pio->sync_write_status.to_transfer;
