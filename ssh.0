@@ -4,7 +4,7 @@ NAME
      ssh M-bM-^@M-^S OpenSSH remote login client
 
 SYNOPSIS
-     ssh [-46AaCfGgKkMNnqsTtVvXxYy] [-B bind_interface] [-b bind_address]
+     ssh [-46AaCfGgKkMNnqsTtVvXxYyZ] [-B bind_interface] [-b bind_address]
          [-c cipher_spec] [-D [bind_address:]port] [-E log_file]
          [-e escape_char] [-F configfile] [-I pkcs11] [-i identity_file]
          [-J destination] [-L address] [-l login_name] [-m mac_spec]
@@ -145,14 +145,14 @@ DESCRIPTION
              file to use the corresponding private key that is loaded in
              ssh-agent(1) when the private key file is not present locally.
              The default is ~/.ssh/id_rsa, ~/.ssh/id_ecdsa,
-             ~/.ssh/id_ecdsa_sk, ~/.ssh/id_ed25519 and ~/.ssh/id_ed25519_sk.
-             Identity files may also be specified on a per-host basis in the
-             configuration file.  It is possible to have multiple -i options
-             (and multiple identities specified in configuration files).  If
-             no certificates have been explicitly specified by the
-             CertificateFile directive, ssh will also try to load certificate
-             information from the filename obtained by appending -cert.pub to
-             identity filenames.
+             ~/.ssh/id_ecdsa_sk, ~/.ssh/id_ed25519, ~/.ssh/id_ed25519_sk and
+             ~/.ssh/id_mldsa44_ed25519.  Identity files may also be specified
+             on a per-host basis in the configuration file.  It is possible to
+             have multiple -i options (and multiple identities specified in
+             configuration files).  If no certificates have been explicitly
+             specified by the CertificateFile directive, ssh will also try to
+             load certificate information from the filename obtained by
+             appending -cert.pub to identity filenames.
 
      -J destination
              Connect to the target host by first making an ssh connection to
@@ -244,114 +244,12 @@ DESCRIPTION
              Can be used to give options in the format used in the
              configuration file.  This is useful for specifying options for
              which there is no separate command-line flag.  For full details
-             of the options listed below, and their possible values, see
-             ssh_config(5).
-
-                   AddKeysToAgent
-                   AddressFamily
-                   BatchMode
-                   BindAddress
-                   BindInterface
-                   CASignatureAlgorithms
-                   CanonicalDomains
-                   CanonicalizeFallbackLocal
-                   CanonicalizeHostname
-                   CanonicalizeMaxDots
-                   CanonicalizePermittedCNAMEs
-                   CertificateFile
-                   ChannelTimeout
-                   CheckHostIP
-                   Ciphers
-                   ClearAllForwardings
-                   Compression
-                   ConnectTimeout
-                   ConnectionAttempts
-                   ControlMaster
-                   ControlPath
-                   ControlPersist
-                   DynamicForward
-                   EnableEscapeCommandline
-                   EnableSSHKeysign
-                   EscapeChar
-                   ExitOnForwardFailure
-                   FingerprintHash
-                   ForkAfterAuthentication
-                   ForwardAgent
-                   ForwardX11
-                   ForwardX11Timeout
-                   ForwardX11Trusted
-                   GSSAPIAuthentication
-                   GSSAPIDelegateCredentials
-                   GatewayPorts
-                   GlobalKnownHostsFile
-                   HashKnownHosts
-                   HostKeyAlgorithms
-                   HostKeyAlias
-                   HostbasedAcceptedAlgorithms
-                   HostbasedAuthentication
-                   Hostname
-                   IPQoS
-                   IdentitiesOnly
-                   IdentityAgent
-                   IdentityFile
-                   IgnoreUnknown
-                   KbdInteractiveAuthentication
-                   KbdInteractiveDevices
-                   KexAlgorithms
-                   KnownHostsCommand
-                   LocalCommand
-                   LocalForward
-                   LogLevel
-                   LogVerbose
-                   MACs
-                   NoHostAuthenticationForLocalhost
-                   NumberOfPasswordPrompts
-                   ObscureKeystrokeTiming
-                   PKCS11Provider
-                   PasswordAuthentication
-                   PermitLocalCommand
-                   PermitRemoteOpen
-                   Port
-                   PreferredAuthentications
-                   ProxyCommand
-                   ProxyJump
-                   ProxyUseFdpass
-                   PubkeyAcceptedAlgorithms
-                   PubkeyAuthentication
-                   RefuseConnection
-                   RekeyLimit
-                   RemoteCommand
-                   RemoteForward
-                   RequestTTY
-                   RequiredRSASize
-                   RevokedHostKeys
-                   SecurityKeyProvider
-                   SendEnv
-                   ServerAliveCountMax
-                   ServerAliveInterval
-                   SessionType
-                   SetEnv
-                   StdinNull
-                   StreamLocalBindMask
-                   StreamLocalBindUnlink
-                   StrictHostKeyChecking
-                   SyslogFacility
-                   TCPKeepAlive
-                   Tag
-                   Tunnel
-                   TunnelDevice
-                   UpdateHostKeys
-                   User
-                   UserKnownHostsFile
-                   VerifyHostKeyDNS
-                   VersionAddendum
-                   VisualHostKey
-                   WarnWeakCrypto
-                   XAuthLocation
+             of the options, and their values, see ssh_config(5).
 
      -P tag  Specify a tag name that may be used to select configuration in
              ssh_config(5).  Refer to the Tag and Match keywords in
              ssh_config(5) for more information.
+
      -p port
              Port to connect to on the remote host.  This can be specified on
              a per-host basis in the configuration file.
@@ -481,6 +379,9 @@ DESCRIPTION
      -y      Send log information using the syslog(3) system module.  By
              default this information is sent to stderr.
 
+     -Z      List the public keys that would be attempted for authentication
+             to the specified destination in preferred order and exit.
+
      ssh may additionally obtain configuration data from a per-user
      configuration file and a system-wide configuration file.  The file format
      and configuration options are described in ssh_config(5).
@@ -531,16 +432,18 @@ AUTHENTICATION
      The user creates their key pair by running ssh-keygen(1).  This stores
      the private key in ~/.ssh/id_ecdsa (ECDSA), ~/.ssh/id_ecdsa_sk
      (authenticator-hosted ECDSA), ~/.ssh/id_ed25519 (Ed25519),
-     ~/.ssh/id_ed25519_sk (authenticator-hosted Ed25519), or ~/.ssh/id_rsa
-     (RSA) and stores the public key in ~/.ssh/id_ecdsa.pub (ECDSA),
+     ~/.ssh/id_ed25519_sk (authenticator-hosted Ed25519),
+     ~/.ssh/id_mldsa44_ed25519 (MLDSA44-ED25519), or ~/.ssh/id_rsa (RSA) and
+     stores the public key in ~/.ssh/id_ecdsa.pub (ECDSA),
      ~/.ssh/id_ecdsa_sk.pub (authenticator-hosted ECDSA),
      ~/.ssh/id_ed25519.pub (Ed25519), ~/.ssh/id_ed25519_sk.pub (authenticator-
-     hosted Ed25519), or ~/.ssh/id_rsa.pub (RSA) in the user's home directory.
-     The user should then copy the public key to ~/.ssh/authorized_keys in
-     their home directory on the remote machine.  The authorized_keys file
-     corresponds to the conventional ~/.rhosts file, and has one key per line,
-     though the lines can be very long.  After this, the user can log in
-     without giving the password.
+     hosted Ed25519), ~/.ssh/id_mldsa44_ed25519.pub (MLDSA44-ED25519), or
+     ~/.ssh/id_rsa.pub (RSA) in the user's home directory.  The user should
+     then copy the public key to ~/.ssh/authorized_keys in their home
+     directory on the remote machine.  The authorized_keys file corresponds to
+     the conventional ~/.rhosts file, and has one key per line, though the
+     lines can be very long.  After this, the user can log in without giving
+     the password.
 
      A variation on public key authentication is available in the form of
      certificate authentication: instead of a set of public/private keys,
@@ -914,6 +817,7 @@ FILES
      ~/.ssh/id_ecdsa_sk
      ~/.ssh/id_ed25519
      ~/.ssh/id_ed25519_sk
+     ~/.ssh/id_mldsa44_ed25519
      ~/.ssh/id_rsa
              Contains the private key for authentication.  These files contain
              sensitive data and should be readable by the user but not
@@ -927,6 +831,7 @@ FILES
      ~/.ssh/id_ecdsa_sk.pub
      ~/.ssh/id_ed25519.pub
      ~/.ssh/id_ed25519_sk.pub
+     ~/.ssh/id_mldsa44_ed25519.pub
      ~/.ssh/id_rsa.pub
              Contains the public key for authentication.  These files are not
              sensitive and can (but need not) be readable by anyone.
@@ -957,6 +862,7 @@ FILES
 
      /etc/ssh/ssh_host_ecdsa_key
      /etc/ssh/ssh_host_ed25519_key
+     /etc/ssh/ssh_host_mldsa44_ed25519_key
      /etc/ssh/ssh_host_rsa_key
              These files contain the private parts of the host keys and are
              used for host-based authentication.
@@ -1031,4 +937,4 @@ AUTHORS
      created OpenSSH.  Markus Friedl contributed the support for SSH protocol
      versions 1.5 and 2.0.
 
-OpenBSD 7.9                      July 1, 2026                           SSH(1)
+OpenBSD 8.0                     August 4, 2026                          SSH(1)

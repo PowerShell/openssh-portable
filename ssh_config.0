@@ -228,7 +228,8 @@ DESCRIPTION
                    ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                    sk-ssh-ed25519@openssh.com,
                    sk-ecdsa-sha2-nistp256@openssh.com,
-                   rsa-sha2-512,rsa-sha2-256
+                   rsa-sha2-512,rsa-sha2-256,
+                   ssh-mldsa44-ed25519@openssh.com
 
              If the specified list begins with a M-bM-^@M-^X+M-bM-^@M-^Y character, then the
              specified algorithms will be appended to the default set instead
@@ -612,12 +613,14 @@ DESCRIPTION
                 webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
+                ssh-mldsa44-ed25519-cert-v01@openssh.com,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ssh-ed25519@openssh.com,
                 sk-ecdsa-sha2-nistp256@openssh.com,
                 webauthn-sk-ecdsa-sha2-nistp256@openssh.com,
-                rsa-sha2-512,rsa-sha2-256
+                rsa-sha2-512,rsa-sha2-256,
+                ssh-mldsa44-ed25519@openssh.com
 
              The -Q option of ssh(1) may be used to list supported signature
              algorithms.  This was formerly named HostbasedKeyTypes.
@@ -648,12 +651,14 @@ DESCRIPTION
                 webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
+                ssh-mldsa44-ed25519-cert-v01@openssh.com,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ecdsa-sha2-nistp256@openssh.com,
                 webauthn-sk-ecdsa-sha2-nistp256@openssh.com
                 sk-ssh-ed25519@openssh.com,
-                rsa-sha2-512,rsa-sha2-256
+                rsa-sha2-512,rsa-sha2-256,
+                ssh-mldsa44-ed25519@openssh.com
 
              If hostkeys are known for the destination host then this default
              is modified to prefer their algorithms.
@@ -711,13 +716,13 @@ DESCRIPTION
              key file to use the corresponding private key that is loaded in
              ssh-agent(1) when the private key file is not present locally.
              The default is ~/.ssh/id_rsa, ~/.ssh/id_ecdsa,
-             ~/.ssh/id_ecdsa_sk, ~/.ssh/id_ed25519 and ~/.ssh/id_ed25519_sk.
-             Additionally, any identities represented by the authentication
-             agent will be used for authentication unless IdentitiesOnly is
-             set.  If no certificates have been explicitly specified by
-             CertificateFile, ssh(1) will try to load certificate information
-             from the filename obtained by appending -cert.pub to the path of
-             a specified IdentityFile.
+             ~/.ssh/id_ecdsa_sk, ~/.ssh/id_ed25519, ~/.ssh/id_ed25519_sk and
+             ~/.ssh/id_mldsa44_ed25519.  Additionally, any identities
+             represented by the authentication agent will be used for
+             authentication unless IdentitiesOnly is set.  If no certificates
+             have been explicitly specified by CertificateFile, ssh(1) will
+             try to load certificate information from the filename obtained by
+             appending -cert.pub to the path of a specified IdentityFile.
 
              Arguments to IdentityFile may use the tilde syntax to refer to a
              user's home directory or the tokens described in the TOKENS
@@ -1034,12 +1039,14 @@ DESCRIPTION
                 webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
+                ssh-mldsa44-ed25519-cert-v01@openssh.com,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ssh-ed25519@openssh.com,
                 sk-ecdsa-sha2-nistp256@openssh.com,
                 webauthn-sk-ecdsa-sha2-nistp256@openssh.com,
-                rsa-sha2-512,rsa-sha2-256
+                rsa-sha2-512,rsa-sha2-256,
+                ssh-mldsa44-ed25519@openssh.com
 
              The list of available signature algorithms may also be obtained
              using "ssh -Q PubkeyAcceptedAlgorithms".
@@ -1510,4 +1517,4 @@ AUTHORS
      created OpenSSH.  Markus Friedl contributed the support for SSH protocol
      versions 1.5 and 2.0.
 
-OpenBSD 7.9                      July 1, 2026                    SSH_CONFIG(5)
+OpenBSD 8.0                      July 11, 2026                   SSH_CONFIG(5)

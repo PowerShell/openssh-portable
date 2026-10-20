@@ -1817,20 +1817,8 @@
 /* Define if EVP_DigestUpdate returns void */
 #undef OPENSSL_EVP_DIGESTUPDATE_VOID
 
-/* OpenSSL has ECC */
-#undef OPENSSL_HAS_ECC
-
 /* libcrypto has ed25519 support */
 #undef OPENSSL_HAS_ED25519
-
-/* libcrypto has NID_X9_62_prime256v1 */
-#undef OPENSSL_HAS_NISTP256
-
-/* libcrypto has NID_secp384r1 */
-#undef OPENSSL_HAS_NISTP384
-
-/* libcrypto has NID_secp521r1 */
-#undef OPENSSL_HAS_NISTP521
 
 /* Define if you want the OpenSSL internally seeded PRNG only */
 #undef OPENSSL_PRNG_ONLY
@@ -1994,6 +1982,9 @@
 
 /* Define this if you want to use libkafs' AFS support */
 #undef USE_AFS
+
+/* Enable brainpool */
+#undef USE_BRAINPOOLP256R1
 
 /* Use BSM audit module */
 #undef USE_BSM_AUDIT

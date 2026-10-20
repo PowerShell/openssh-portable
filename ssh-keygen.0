@@ -59,7 +59,7 @@ DESCRIPTION
      Normally each user wishing to use SSH with public key authentication runs
      this once to create the authentication key in ~/.ssh/id_ecdsa,
      ~/.ssh/id_ecdsa_sk, ~/.ssh/id_ed25519, ~/.ssh/id_ed25519_sk,
-     ~/.ssh/id_mldsa44-ed25519 or ~/.ssh/id_rsa.  Additionally, the system
+     ~/.ssh/id_mldsa44_ed25519 or ~/.ssh/id_rsa.  Additionally, the system
      administrator may use this to generate host keys, as seen in /etc/rc.
 
      Normally this program generates the key and asks for a file in which to
@@ -257,6 +257,9 @@ DESCRIPTION
              When generating FIDO authenticator-backed keys, the options
              listed in the FIDO AUTHENTICATOR section may be specified.
 
+             When changing the passphrase for an existing key, the options
+             listed in the documentation for the -p flag may be used.
+
              When performing signature-related options using the -Y flag, the
              following options are accepted:
 
@@ -295,6 +298,25 @@ DESCRIPTION
              creating a new private key.  The program will prompt for the file
              containing the private key, for the old passphrase, and twice for
              the new passphrase.
+
+             Updating the passphrase will cause encrypted keys to be
+             reencrypted, allowing the cipher and/or number of KDF rounds (the
+             -Z and -a options respectively) to be changed.
+
+             This option may also be used to set or clear FIDO related options
+             via the -O flag.  The following FIDO options may be modified:
+
+             touch-required
+             no-touch-required
+                     Add or remove the requirement that signatures made using
+                     this key include demonstration of user presence (e.g. by
+                     having the user touch the authenticator).
+
+             verify-required
+             no-verify-required
+                     Add or remove the requirement for signatures made using
+                     this key to first verify the user identity, e.g. by PIN
+                     or on-token biometrics.
 
      -Q      Test whether keys have been revoked in a KRL.  If the -l option
              is also specified then the contents of the KRL will be printed.
@@ -870,7 +892,7 @@ FILES
      ~/.ssh/id_ecdsa_sk
      ~/.ssh/id_ed25519
      ~/.ssh/id_ed25519_sk
-     ~/.ssh/id_mldsa44-ed25519
+     ~/.ssh/id_mldsa44_ed25519
      ~/.ssh/id_rsa
              Contains the ECDSA, authenticator-hosted ECDSA, Ed25519,
              authenticator-hosted Ed25519 or RSA authentication identity of
@@ -886,7 +908,7 @@ FILES
      ~/.ssh/id_ecdsa_sk.pub
      ~/.ssh/id_ed25519.pub
      ~/.ssh/id_ed25519_sk.pub
-     ~/.ssh/id_mldsa44-ed25519.pub
+     ~/.ssh/id_mldsa44_ed25519.pub
      ~/.ssh/id_rsa.pub
              Contains the ECDSA, authenticator-hosted ECDSA, Ed25519,
              authenticator-hosted Ed25519 or RSA public key for
@@ -911,4 +933,4 @@ AUTHORS
      created OpenSSH.  Markus Friedl contributed the support for SSH protocol
      versions 1.5 and 2.0.
 
-OpenBSD 7.9                      July 1, 2026                    SSH-KEYGEN(1)
+OpenBSD 8.0                     August 7, 2026                   SSH-KEYGEN(1)

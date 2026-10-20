@@ -79,4 +79,56 @@ Describe "E2E scenarios for rekeying" -Tags "CI" {
             ($rekeys -ge 1) | Should Be $true
         }
     }
+
+    Context "Server Match block rekeying" {
+
+        It "$tI - Match User RekeyLimit causes a rekey during a file transfer" {
+            $port = 47005
+            $sshdConfigSource = Join-Path $OpenSSHTestInfo["ServiceConfigDir"] "sshd_config"
+            $sshdConfigPath = Join-Path $OpenSSHTestInfo["ServiceConfigDir"] "sshd_config_rekey"
+            $sshdLog = Join-Path $testDir "sshd_rekey.log"
+            $clientLog = Join-Path $testDir "ssh_rekey.log"
+            $sourceFile = Join-Path $testDir "rekey_match_src.bin"
+            $destFile = Join-Path $testDir "rekey_match_dst.bin"
+            $cleanupBatch = Join-Path $testDir "rekey_match_cleanup.sftp"
+            $testUser = $OpenSSHTestInfo["SSOUser"]
+            $testKey = Join-Path $OpenSSHTestInfo["TestDataPath"] "sshtest_userssokey_ed25519"
+            $connectionOptions = "-i `"$testKey`" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -P $port"
+            $remoteFileCreated = $false
+
+            try {
+                Remove-Item $sshdConfigPath, $sshdLog, $clientLog, $sourceFile, $destFile, $cleanupBatch -Force -ErrorAction SilentlyContinue
+                Copy-Item $sshdConfigSource $sshdConfigPath -Force
+                Get-Acl $sshdConfigSource | Set-Acl $sshdConfigPath
+                Add-Content -Path $sshdConfigPath -Value "`r`nMatch User *`r`n`tRekeyLimit 256k"
+
+                $sshdPath = Join-Path $OpenSSHTestInfo["OpenSSHBinPath"] "sshd.exe"
+                $matchContext = "user=$($OpenSSHTestInfo['SSOUser']),host=localhost,addr=127.0.0.1"
+                $effectiveConfig = & $sshdPath -T -f $sshdConfigPath -C $matchContext
+                $LASTEXITCODE | Should Be 0
+                (($effectiveConfig -join "`n") -match '(?im)^rekeylimit 262144(?:\s|$)') | Should Be $true
+
+                Start-SSHDTestDaemon -WorkDir $OpenSSHTestInfo["OpenSSHBinPath"] -Arguments "-D -f $sshdConfigPath -E $sshdLog" -Port $port
+                $null = fsutil file createNew $sourceFile 4194304
+
+                $remoteFileCreated = $true
+                cmd /c "scp $connectionOptions `"$sourceFile`" ${testUser}@localhost:rekey_match_src.bin"
+                $LASTEXITCODE | Should Be 0
+
+                cmd /c "scp -vv $connectionOptions ${testUser}@localhost:rekey_match_src.bin `"$destFile`" 2> `"$clientLog`""
+                $LASTEXITCODE | Should Be 0
+                (Get-FileHash $sourceFile -Algorithm SHA256).Hash | Should Be (Get-FileHash $destFile -Algorithm SHA256).Hash
+                $rekeys = Get-RekeyCount $clientLog
+                ($rekeys -ge 1) | Should Be $true
+            }
+            finally {
+                if ($remoteFileCreated) {
+                    "rm rekey_match_src.bin" | Set-Content -Path $cleanupBatch -Encoding ASCII
+                    cmd /c "sftp $connectionOptions -b `"$cleanupBatch`" ${testUser}@localhost" | Out-Null
+                }
+                Stop-SSHDTestDaemon -Port $port
+                Remove-Item $sshdConfigPath, $sshdLog, $clientLog, $sourceFile, $destFile, $cleanupBatch -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
 }

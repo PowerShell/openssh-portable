@@ -22,7 +22,7 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/time.h>
- 
+
 #include <assert.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -63,7 +63,7 @@
 #ifndef CLOCK_REALTIME
 # define CLOCK_REALTIME 0
 #endif
- 
+
 #define TEST_CHECK_INT(r, pred) do {		\
 		switch (pred) {			\
 		case TEST_EQ:			\

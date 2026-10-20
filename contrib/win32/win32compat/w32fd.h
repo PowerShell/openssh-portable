@@ -128,6 +128,7 @@ extern HANDLE main_thread;
 BOOL w32_io_is_blocking(struct w32_io*);
 BOOL w32_io_is_io_available(struct w32_io* pio, BOOL rd);
 int wait_for_any_event(HANDLE* events, int num_events, DWORD milli_seconds);
+int w32_same_file(int fd1, int fd2);
 
 /*POSIX mimic'ing socket API and socket helper API*/
 int socketio_initialize();

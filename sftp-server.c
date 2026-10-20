@@ -48,6 +48,9 @@
 
 #include "sftp.h"
 #include "sftp-common.h"
+#ifdef WINDOWS
+#include "w32fd.h"
+#endif
 
 char *sftp_realpath(const char *, char *); /* sftp-realpath.c */
 
@@ -1672,11 +1675,22 @@ process_extended_copy_data(uint32_t id)
 		error_f("fstat write_fd failed: %s", strerror(errno));
 		goto out;
 	}
+#ifdef WINDOWS
+	if ((r = w32_same_file(read_fd, write_fd)) == -1) {
+		status = errno_to_portable(errno);
+		error_f("file identity query failed: %s", strerror(errno));
+		goto out;
+	}
+#endif
 	if (read_handle == write_handle ||
 	    !strcmp(handle_to_name(read_handle), handle_to_name(write_handle)) ||
+#ifdef WINDOWS
+	    r != 0) {
+#else
 	    (st_read.st_dev != 0 && st_read.st_ino != 0 &&
 	    st_read.st_dev == st_write.st_dev &&
 	    st_read.st_ino == st_write.st_ino)) {
+#endif
 		error_f("refusing to read/write same file: "
 		    "read \"%s\" dev %lu ino %lu, write \"%s\" dev %lu ino %lu",
 		    handle_to_name(read_handle),

@@ -19480,8 +19480,9 @@ then :
 			100*|10100*) # 1.0.x, 1.1.0x
 				as_fn_error $? "OpenSSL >= 1.1.1 required (have \"$ssl_showver\")" "$LINENO" 5
 				;;
-			101*)   ;; # 1.1.x
-			200*)   # LibreSSL
+			101*)   openssl_impl="openssl" # 1.1.x
+				;;
+			200*)   openssl_impl="libressl"
 				lver=`echo "$sslver" | sed 's/.*libressl-//'`
 				case "$lver" in
 				2*|300*) # 2.x, 3.0.0
@@ -19490,7 +19491,7 @@ then :
 				*) ;;	# Assume all other versions are good.
 				esac
 				;;
-			30*|40*)
+			30*|40*) openssl_impl="openssl"
 				# OpenSSL 3 & 4; we use the 1.1x API
 				# https://openssl.org/policies/general/versioning-policy.html
 				CPPFLAGS="$CPPFLAGS -DOPENSSL_API_COMPAT=0x10100000L"
@@ -19642,6 +19643,26 @@ rm -f core conftest.err conftest.$ac_objext conftest.beam \
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.beam \
     conftest$ac_exeext conftest.$ac_ext
+
+	ac_fn_check_decl "$LINENO" "OPENSSL_IS_AWSLC" "ac_cv_have_decl_OPENSSL_IS_AWSLC" "#include <openssl/base.h>
+
+" "$ac_c_undeclared_builtin_options" "CFLAGS"
+if test "x$ac_cv_have_decl_OPENSSL_IS_AWSLC" = xyes
+then :
+  openssl_impl="aws-lc"
+fi
+	ac_fn_check_decl "$LINENO" "OPENSSL_IS_BORINGSSL" "ac_cv_have_decl_OPENSSL_IS_BORINGSSL" "#include <openssl/base.h>
+
+" "$ac_c_undeclared_builtin_options" "CFLAGS"
+if test "x$ac_cv_have_decl_OPENSSL_IS_BORINGSSL" = xyes
+then :
+  openssl_impl="boringssl"
+fi
+
+	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking OpenSSL implementation" >&5
+printf %s "checking OpenSSL implementation... " >&6; }
+	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $openssl_impl" >&5
+printf "%s\n" "$openssl_impl" >&6; }
 
 	ac_fn_c_check_func "$LINENO" "BN_is_prime_ex" "ac_cv_func_BN_is_prime_ex"
 if test "x$ac_cv_func_BN_is_prime_ex" = xyes
@@ -19898,8 +19919,8 @@ fi
 
 
 	# Check complete ECC support in OpenSSL
-	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether OpenSSL has NID_X9_62_prime256v1" >&5
-printf %s "checking whether OpenSSL has NID_X9_62_prime256v1... " >&6; }
+	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether OpenSSL has ECC support" >&5
+printf %s "checking whether OpenSSL has ECC support... " >&6; }
 	cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -19915,6 +19936,8 @@ main (void)
 {
 
 		EC_KEY *e = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+		EC_KEY *f = EC_KEY_new_by_curve_name(NID_secp384r1);
+		EC_KEY *g = EC_KEY_new_by_curve_name(NID_secp521r1);
 		const EVP_MD *m = EVP_sha256(); /* We need this too */
 
   ;
@@ -19925,177 +19948,20 @@ if ac_fn_c_try_link "$LINENO"
 then :
    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 printf "%s\n" "yes" >&6; }
-		  enable_nistp256=1
 else $as_nop
-   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf "%s\n" "no" >&6; }
+   as_fn_error $? "libcrypto does not have required ECC support" "$LINENO" 5
 
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.beam \
     conftest$ac_exeext conftest.$ac_ext
-
-	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether OpenSSL has NID_secp384r1" >&5
-printf %s "checking whether OpenSSL has NID_secp384r1... " >&6; }
-	cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-	#include <openssl/ec.h>
-	#include <openssl/ecdh.h>
-	#include <openssl/ecdsa.h>
-	#include <openssl/evp.h>
-	#include <openssl/objects.h>
-	#include <openssl/opensslv.h>
-
-int
-main (void)
-{
-
-		EC_KEY *e = EC_KEY_new_by_curve_name(NID_secp384r1);
-		const EVP_MD *m = EVP_sha384(); /* We need this too */
-
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"
-then :
-   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-printf "%s\n" "yes" >&6; }
-		  enable_nistp384=1
-else $as_nop
-   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf "%s\n" "no" >&6; }
-
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.beam \
-    conftest$ac_exeext conftest.$ac_ext
-
-	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether OpenSSL has NID_secp521r1" >&5
-printf %s "checking whether OpenSSL has NID_secp521r1... " >&6; }
-	cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-	#include <openssl/ec.h>
-	#include <openssl/ecdh.h>
-	#include <openssl/ecdsa.h>
-	#include <openssl/evp.h>
-	#include <openssl/objects.h>
-	#include <openssl/opensslv.h>
-
-int
-main (void)
-{
-
-		EC_KEY *e = EC_KEY_new_by_curve_name(NID_secp521r1);
-		const EVP_MD *m = EVP_sha512(); /* We need this too */
-
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"
-then :
-   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-printf "%s\n" "yes" >&6; }
-		  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking if OpenSSL's NID_secp521r1 is functional" >&5
-printf %s "checking if OpenSSL's NID_secp521r1 is functional... " >&6; }
-		  if test "$cross_compiling" = yes
-then :
-   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: WARNING: cross-compiling: assuming yes" >&5
-printf "%s\n" "$as_me: WARNING: cross-compiling: assuming yes" >&2;}
-			  enable_nistp521=1
-
-else $as_nop
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-	#include <stdlib.h>
-	#include <openssl/ec.h>
-	#include <openssl/ecdh.h>
-	#include <openssl/ecdsa.h>
-	#include <openssl/evp.h>
-	#include <openssl/objects.h>
-	#include <openssl/opensslv.h>
-
-int
-main (void)
-{
-
-			EC_KEY *e = EC_KEY_new_by_curve_name(NID_secp521r1);
-			const EVP_MD *m = EVP_sha512(); /* We need this too */
-			exit(e == NULL || m == NULL);
-
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_run "$LINENO"
-then :
-   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-printf "%s\n" "yes" >&6; }
-			  enable_nistp521=1
-else $as_nop
-   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf "%s\n" "no" >&6; }
-fi
-rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
-  conftest.$ac_objext conftest.beam conftest.$ac_ext
-fi
-
-else $as_nop
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf "%s\n" "no" >&6; }
-
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.beam \
-    conftest$ac_exeext conftest.$ac_ext
-
-	if test x$enable_nistp256 = x1 || test x$enable_nistp384 = x1 || \
-	    test x$enable_nistp521 = x1; then
-
-printf "%s\n" "#define OPENSSL_HAS_ECC 1" >>confdefs.h
-
-		ac_fn_c_check_func "$LINENO" "EC_KEY_METHOD_new" "ac_cv_func_EC_KEY_METHOD_new"
+	# Check for EC_KEY_METHOD support for ECDSA PKCS#11
+	ac_fn_c_check_func "$LINENO" "EC_KEY_METHOD_new" "ac_cv_func_EC_KEY_METHOD_new"
 if test "x$ac_cv_func_EC_KEY_METHOD_new" = xyes
 then :
   printf "%s\n" "#define HAVE_EC_KEY_METHOD_NEW 1" >>confdefs.h
 
 fi
 
-		openssl_ecc=yes
-	else
-		openssl_ecc=no
-	fi
-	if test x$enable_nistp256 = x1; then
-
-printf "%s\n" "#define OPENSSL_HAS_NISTP256 1" >>confdefs.h
-
-	else
-		unsupported_algorithms="$unsupported_algorithms \
-			ecdsa-sha2-nistp256 \
-			ecdh-sha2-nistp256 \
-			ecdsa-sha2-nistp256-cert-v01@openssh.com"
-	fi
-	if test x$enable_nistp384 = x1; then
-
-printf "%s\n" "#define OPENSSL_HAS_NISTP384 1" >>confdefs.h
-
-	else
-		unsupported_algorithms="$unsupported_algorithms \
-			ecdsa-sha2-nistp384 \
-			ecdh-sha2-nistp384 \
-			ecdsa-sha2-nistp384-cert-v01@openssh.com"
-	fi
-	if test x$enable_nistp521 = x1; then
-
-printf "%s\n" "#define OPENSSL_HAS_NISTP521 1" >>confdefs.h
-
-	else
-		unsupported_algorithms="$unsupported_algorithms \
-			ecdh-sha2-nistp521 \
-			ecdsa-sha2-nistp521 \
-			ecdsa-sha2-nistp521-cert-v01@openssh.com"
-	fi
 
 	# Check libcrypto ED25519 support
 	ac_fn_c_check_func "$LINENO" "EVP_PKEY_get_raw_public_key" "ac_cv_func_EVP_PKEY_get_raw_public_key"
@@ -20155,18 +20021,33 @@ printf "%s\n" "no" >&6; }
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.beam \
     conftest$ac_exeext conftest.$ac_ext
+
+	case "$openssl_impl" in
+	aws-lc|boringssl)
+		# Brainpool does not work with AWC-LS or BoringSSL.
+		unsupported_algorithms="$unsupported_algorithms mlkem768brainpoolp256r1-sha256"
+		;;
+	*)
+		ac_fn_check_decl "$LINENO" "NID_brainpoolP256r1" "ac_cv_have_decl_NID_brainpoolP256r1" "#include <openssl/evp.h>
+
+" "$ac_c_undeclared_builtin_options" "CFLAGS"
+if test "x$ac_cv_have_decl_NID_brainpoolP256r1" = xyes
+then :
+
+printf "%s\n" "#define USE_BRAINPOOLP256R1 1" >>confdefs.h
+
+fi
+		;;
+	esac
+
 fi
 
 # PKCS11/U2F depend on OpenSSL and dlopen().
 enable_pkcs11=yes
 enable_sk=yes
 
-ac_fn_check_decl "$LINENO" "OPENSSL_IS_AWSLC" "ac_cv_have_decl_OPENSSL_IS_AWSLC" "#include <openssl/base.h>
-
-" "$ac_c_undeclared_builtin_options" "CFLAGS"
-if test "x$ac_cv_have_decl_OPENSSL_IS_AWSLC" = xyes
-then :
-  enable_pkcs11="disabled; PKCS#11 not supported with AWS-LC"
+if test "x$openssl_impl" = "xaws-lc"; then
+	enable_pkcs11="disabled; PKCS#11 not supported with AWS-LC"
 fi
 if test "x$ac_cv_func_dlopen" != "xyes" ; then
 	enable_pkcs11="disabled; missing dlopen(3)"
