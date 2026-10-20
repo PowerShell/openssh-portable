@@ -700,6 +700,62 @@ socket_typical_ssh_payload_tests() {
 	freeaddrinfo(servinfo);
 }
 
+/*
+ * Regression test: getsockopt(SO_ERROR) must report a failed non-blocking
+ * connect(). A failed asynchronous ConnectEx() stores its error in the
+ * w32_io details but leaves the raw socket SO_ERROR at 0; if getsockopt()
+ * does not surface it, ssh_connect_direct()'s connect loop mistakes the
+ * failed connect for success and never tries the next address (the
+ * IPv6 -> IPv4 fallback that lets dual-stack hosts connect). See
+ * socketio_getsockopt() in contrib/win32/win32compat/socketio.c.
+ */
+void
+socket_connect_error_tests()
+{
+	int so_error, optlen;
+
+	{
+		TEST_START("getsockopt SO_ERROR reports refused connect");
+
+		/* A loopback port with nothing listening -> connect is refused. */
+		memset(&hints, 0, sizeof(hints));
+		hints.ai_socktype = SOCK_STREAM;
+		retValue = getaddrinfo("127.0.0.1", "34999", &hints, &servinfo);
+		ASSERT_INT_EQ(retValue, 0);
+		connect_fd = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
+		ASSERT_INT_NE(connect_fd, -1);
+		ASSERT_INT_EQ(w32_set_nonblock(connect_fd), 0);
+
+		retValue = connect(connect_fd, servinfo->ai_addr, servinfo->ai_addrlen);
+		if (retValue == -1 && errno == EINPROGRESS) {
+			/* wait for the async connect to complete (with an error) */
+			FD_ZERO(&read_set);
+			FD_ZERO(&write_set);
+			FD_SET(connect_fd, &read_set);
+			FD_SET(connect_fd, &write_set);
+			time_val.tv_sec = 5;
+			time_val.tv_usec = 0;
+			retValue = select(connect_fd + 1, &read_set, &write_set, NULL, &time_val);
+			ASSERT_INT_NE(retValue, -1);
+		}
+
+		/*
+		 * The connect was refused, so SO_ERROR must be non-zero. Before the
+		 * fix this returned 0 because the ConnectEx error was not surfaced,
+		 * causing callers to treat the failed connect as a success.
+		 */
+		so_error = 0;
+		optlen = sizeof(so_error);
+		retValue = getsockopt(connect_fd, SOL_SOCKET, SO_ERROR, (char*)&so_error, &optlen);
+		ASSERT_INT_EQ(retValue, 0);
+		ASSERT_INT_NE(so_error, 0);
+
+		close(connect_fd);
+		freeaddrinfo(servinfo);
+		TEST_DONE();
+	}
+}
+
 void
 socket_tests()
 {
@@ -708,4 +764,5 @@ socket_tests()
 	socket_nonblocking_io_tests();
 	socket_select_tests();
 	socket_typical_ssh_payload_tests();
+	socket_connect_error_tests();
 }
