@@ -1,4 +1,4 @@
-#	$OpenBSD: channel-timeout.sh,v 1.2 2024/01/09 22:19:36 djm Exp $
+#	$OpenBSD: channel-timeout.sh,v 1.3 2026/07/21 06:18:23 djm Exp $
 #	Placed in the Public Domain.
 
 tid="channel timeout"
@@ -46,6 +46,22 @@ ${SSH} -F $OBJ/ssh_proxy somehost "sleep 5 ; exit 23"
 r=$?
 # return value is -1 which is being mapped back to 127 instead of 255 for some reason
 if [ $r -ne 127 ]; then
+	fail "ssh returned unexpected error code $r"
+fi
+
+verbose "match command timeout"
+(cat $OBJ/sshd_proxy.orig ;
+ echo "match user *" ;
+ echo "ChannelTimeout session:command=1") \
+	> $OBJ/sshd_proxy
+${SSH} -F $OBJ/ssh_proxy somehost "sleep 5 ; exit 23"
+r=$?
+if [ "$os" == "windows" ]; then
+	expected_status=127
+else
+	expected_status=255
+fi
+if [ $r -ne $expected_status ]; then
 	fail "ssh returned unexpected error code $r"
 fi
 
