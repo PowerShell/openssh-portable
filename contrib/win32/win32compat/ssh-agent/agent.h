@@ -50,6 +50,8 @@ struct agent_connection {
 		SYSTEM, /* client is running as System */
 		SERVICE, /* client is running as LS or NS */
 	} client_type;
+	/* the client process cannot be opened, the client is identified through the pipe once data was read */
+	BOOL client_info_pending;
 	
 	size_t nsession_ids;
 	struct hostkey_sid *session_ids;
@@ -63,4 +65,5 @@ void agent_start(BOOL);
 void agent_process_connection(HANDLE);
 void agent_shutdown();
 void agent_cleanup_connection(struct agent_connection*);
+int agent_get_con_client_info_from_pipe(struct agent_connection*);
 void agent_initialize_allow_list();
