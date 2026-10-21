@@ -10,6 +10,8 @@
 #AddressFamily any
 #ListenAddress 0.0.0.0
 #ListenAddress ::
+#Bind on a AF_HYPERV socket (must be explicitly enabled)
+#ListenAddress 00000000-0000-0000-0000-000000000000
 
 #HostKey __PROGRAMDATA__/ssh/ssh_host_rsa_key
 #HostKey __PROGRAMDATA__/ssh/ssh_host_ecdsa_key
