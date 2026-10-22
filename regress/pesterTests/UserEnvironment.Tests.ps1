@@ -105,27 +105,41 @@ Describe "E2E scenarios for user environment block" -Tags "CI" {
     Context "$tC - PATH variable" {
         BeforeAll {
             $tI = 1
-            $script:pathMarker = "C:\sshtestmarker_$([guid]::NewGuid().ToString('N'))"
+            # Shrinking expansions expose PATH truncation when registry sizes are used as string lengths.
+            $script:machineEnvKey = [Microsoft.Win32.Registry]::LocalMachine.OpenSubKey('SYSTEM\CurrentControlSet\Control\Session Manager\Environment', $true)
+            $script:origMachinePath = $script:machineEnvKey.GetValue('Path', $null, 'DoNotExpandEnvironmentNames')
+            $script:origMachinePathKind = $script:machineEnvKey.GetValueKind('Path')
+            $guid = [guid]::NewGuid().ToString('N')
+            $script:sysMarker = "%SystemDrive%\sshtestsys_$guid"
+            $script:sysMarkerExpanded = "$env:SystemDrive\sshtestsys_$guid"
+            $padding = (1..10 | ForEach-Object { "%SystemDrive%\sshtestpad_$_" }) -join ';'
+            $script:machineEnvKey.SetValue('Path', "$($script:origMachinePath.TrimEnd(';'));$($script:sysMarker);$padding;", [Microsoft.Win32.RegistryValueKind]::ExpandString)
+
+            $script:userMarker = "C:\sshtestuser_$guid"
             ssh -p $port -i $script:envTestKey "$($script:envTestUser)@$server" `
-                reg add HKCU\Environment /v Path /t REG_EXPAND_SZ /d $($script:pathMarker) /f | Out-Null
+                reg add HKCU\Environment /v Path /t REG_EXPAND_SZ /d $($script:userMarker) /f | Out-Null
         }
         AfterAll {
+            if ($script:machineEnvKey) {
+                $script:machineEnvKey.SetValue('Path', $script:origMachinePath, $script:origMachinePathKind)
+                $script:machineEnvKey.Close()
+            }
             ssh -p $port -i $script:envTestKey "$($script:envTestUser)@$server" `
                 reg delete HKCU\Environment /v Path /f | Out-Null
             $tC++
         }
 
-        It "$tC.$tI - contains both system and user entries" {
+        It "$tC.$tI - contains expanded system and user entries in order" {
             $o = ssh -p $port -i $script:envTestKey "$($script:envTestUser)@$server" echo %PATH%
-            $remote   = "$o".Trim()
-            $segments = $remote -split ';'
-            $sysMatches    = @($segments | Where-Object { $_ -match '[Ss]ystem32' })
-            $markerMatches = @($segments | Where-Object { $_ -eq $script:pathMarker })
-            $sysMatches.Count    | Should BeGreaterThan 0
-            $markerMatches.Count | Should BeGreaterThan 0
-            $sysIndex    = [array]::IndexOf($segments, $sysMatches[0])
-            $markerIndex = [array]::IndexOf($segments, $script:pathMarker)
-            $sysIndex    | Should BeLessThan $markerIndex
+            $segments = "$o".Trim() -split ';'
+            $sysMatches = @($segments | Where-Object { $_ -match '[Ss]ystem32' })
+            $sysMatches.Count | Should BeGreaterThan 0
+            $sysIndex  = [array]::IndexOf($segments, $script:sysMarkerExpanded)
+            $userIndex = [array]::IndexOf($segments, $script:userMarker)
+            $sysIndex  | Should BeGreaterThan -1
+            $userIndex | Should BeGreaterThan $sysIndex
+            [array]::IndexOf($segments, $sysMatches[0]) | Should BeLessThan $userIndex
+            "$o".Trim() | Should Match ([regex]::Escape("$env:SystemDrive\sshtestpad_10;$($script:userMarker)") + '$')
         }
     }
 }
