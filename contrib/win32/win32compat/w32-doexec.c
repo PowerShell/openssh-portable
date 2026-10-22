@@ -99,15 +99,17 @@ get_registry_operation_error_message(const LONG error_code)
 	return message;
 }
 
-wchar_t*
-get_registry_key_value(HKEY hKey, LPCWSTR lpSubKey, LPCWSTR lpValue, DWORD* required)
+static wchar_t*
+get_registry_key_value(HKEY hKey, LPCWSTR lpSubKey, LPCWSTR lpValue)
 {
 	wchar_t* data = NULL;
-	LSTATUS ret = RegGetValueW(hKey, lpSubKey, lpValue, RRF_RT_REG_SZ, NULL, NULL, required); /* RRF_RT_REG_SZ: automatically converts REG_EXPAND_SZ to REG_SZ. */
+	DWORD required = 0;
+	/* RRF_RT_REG_SZ also accepts REG_EXPAND_SZ values and returns them expanded (RRF_NOEXPAND is not set). */
+	LSTATUS ret = RegGetValueW(hKey, lpSubKey, lpValue, RRF_RT_REG_SZ, NULL, NULL, &required);
 	if (ret == ERROR_SUCCESS) {
-		data = malloc(*required);
+		data = malloc(required);
 		if (data) {
-			ret = RegGetValueW(hKey, lpSubKey, lpValue, RRF_RT_REG_SZ, NULL, (LPBYTE)data, required);
+			ret = RegGetValueW(hKey, lpSubKey, lpValue, RRF_RT_REG_SZ, NULL, (LPBYTE)data, &required);
 		}
 	}
 	if (ret != ERROR_SUCCESS) {
@@ -156,18 +158,24 @@ setup_session_user_vars(wchar_t* pw_dir_w)
 	}
 
 	/* PATH is a special case. The System Path value is prepended to the User Path value */
-	DWORD hklm_path_sz = 0;
-	DWORD hkcu_path_sz = 0;
 	wchar_t* user_path = NULL;
-	wchar_t* hklm_path = get_registry_key_value(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", L"PATH", &hklm_path_sz);
-	wchar_t* hkcu_path = get_registry_key_value(HKEY_CURRENT_USER, L"Environment", L"PATH", &hkcu_path_sz);
-	DWORD user_path_sz = hklm_path_sz + hkcu_path_sz;
+	wchar_t* hklm_path = get_registry_key_value(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", L"PATH");
+	wchar_t* hkcu_path = get_registry_key_value(HKEY_CURRENT_USER, L"Environment", L"PATH");
 	if (hklm_path && hkcu_path) {
-		user_path = malloc(user_path_sz);
+		/* Use string lengths rather than the byte count reported by RegGetValueW: for expanded
+		   REG_EXPAND_SZ values that count can exceed the actual string, leaving an embedded
+		   null that would truncate the merged PATH to the system portion. */
+		size_t hklm_path_len = wcslen(hklm_path);
+		size_t hkcu_path_len = wcslen(hkcu_path);
+		int add_separator = hklm_path_len && hkcu_path_len &&
+		    hklm_path[hklm_path_len - 1] != L';' && hkcu_path[0] != L';';
+		size_t user_path_len = hklm_path_len + add_separator + hkcu_path_len + 1;
+		user_path = malloc(user_path_len * sizeof(wchar_t));
 		if (user_path) {
-			memcpy_s(user_path, user_path_sz, hklm_path, hklm_path_sz);
-			user_path[hklm_path_sz / sizeof(wchar_t) - 1] = L';'; /* Replace trailing null with ';'. */
-			memcpy_s(user_path + hklm_path_sz / sizeof(wchar_t), user_path_sz - hklm_path_sz, hkcu_path, hkcu_path_sz);
+			wcscpy_s(user_path, user_path_len, hklm_path);
+			if (add_separator)
+				wcscat_s(user_path, user_path_len, L";");
+			wcscat_s(user_path, user_path_len, hkcu_path);
 			SetEnvironmentVariableW(L"PATH", user_path);
 			free(user_path);
 		}
