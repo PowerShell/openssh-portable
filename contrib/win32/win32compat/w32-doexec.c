@@ -330,15 +330,20 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		fcntl(s->ptyfd, F_SETFD, FD_CLOEXEC);
 		char *pty_cmd = NULL;
 		if (command) {
-			size_t len = strlen(shell) + 1 + strlen(shell_command_option_local) + 1 + strlen(command) + 1;
+			/* quote the command operand so shells whose -c takes a single
+			   argv operand (bash and other GNU-style shells) receive the
+			   whole command, not just its first word; matches the quoting
+			   the non-pty path below already applies */
+			size_t len = strlen(shell) + 1 + strlen(shell_command_option_local) + 1 + strlen(command) + 2 + 1;
 			pty_cmd_cp = pty_cmd = calloc(1, len);
 			if (pty_cmd != NULL)
 			{
 				strcpy_s(pty_cmd, len, shell);
 				strcat_s(pty_cmd, len, " ");
 				strcat_s(pty_cmd, len, shell_command_option_local);
-				strcat_s(pty_cmd, len, " ");
+				strcat_s(pty_cmd, len, " \"");
 				strcat_s(pty_cmd, len, command);
+				strcat_s(pty_cmd, len, "\"");
 			}
 		} else {
 			if (shell_arguments) {
