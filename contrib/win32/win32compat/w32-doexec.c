@@ -245,6 +245,46 @@ cleanup:
 	return ret;
 }
 
+/* Wrap an argument in double quotes with CommandLineToArgvW escaping:
+   a '"' is emitted as '\"' and a backslash run doubles only when it
+   directly precedes a '"' or the closing quote, so the operand always
+   lands as a single argv word with its bytes intact. Needed for shells
+   whose command option takes one operand (e.g. bash-style -c). */
+static char *
+quote_argv_operand(const char *arg)
+{
+	size_t i = 0, run;
+	char *out, *d;
+
+	if ((out = malloc(strlen(arg) * 2 + 3)) == NULL)
+		return NULL;
+	d = out;
+	*d++ = '"';
+	while (arg[i]) {
+		if (arg[i] == '\\') {
+			run = 0;
+			while (arg[i + run] == '\\')
+				run++;
+			i += run;
+			if (arg[i] == '"' || arg[i] == '\0')
+				run *= 2;
+			while (run--)
+				*d++ = '\\';
+		}
+		else if (arg[i] == '"') {
+			*d++ = '\\';
+			*d++ = '"';
+			i++;
+		}
+		else {
+			*d++ = arg[i++];
+		}
+	}
+	*d++ = '"';
+	*d = '\0';
+	return out;
+}
+
 int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	int pipein[2], pipeout[2], pipeerr[2], ret = -1;
 	char *exec_command = NULL, *posix_cmd_input = NULL, *shell = NULL, *pty_cmd_cp = NULL;;
@@ -330,21 +370,29 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		fcntl(s->ptyfd, F_SETFD, FD_CLOEXEC);
 		char *pty_cmd = NULL;
 		if (command) {
-			/* quote the command operand so shells whose -c takes a single
-			   argv operand (bash and other GNU-style shells) receive the
-			   whole command, not just its first word; matches the quoting
-			   the non-pty path below already applies */
-			size_t len = strlen(shell) + 1 + strlen(shell_command_option_local) + 1 + strlen(command) + 2 + 1;
+			/* Shells with a rest-of-line command option (cmd /c, powershell
+			   -c, ssh-shellhost) consume the raw command text verbatim, so it
+			   stays unquoted. Shells whose -c takes a single argv operand
+			   (bash and other GNU-style shells) need the command as one
+			   quoted, CommandLineToArgvW-escaped argument, or only its first
+			   word reaches -c. Matches the non-pty path's per-type dispatch. */
+			char *operand = NULL;
+			const char *operand_sp = command;
+			if (shell_type != SH_CMD && shell_type != SH_PS &&
+			    shell_type != SH_SHELLHOST &&
+			    (operand = quote_argv_operand(command)) != NULL)
+				operand_sp = operand;
+			size_t len = strlen(shell) + 1 + strlen(shell_command_option_local) + 1 + strlen(operand_sp) + 1;
 			pty_cmd_cp = pty_cmd = calloc(1, len);
 			if (pty_cmd != NULL)
 			{
 				strcpy_s(pty_cmd, len, shell);
 				strcat_s(pty_cmd, len, " ");
 				strcat_s(pty_cmd, len, shell_command_option_local);
-				strcat_s(pty_cmd, len, " \"");
-				strcat_s(pty_cmd, len, command);
-				strcat_s(pty_cmd, len, "\"");
+				strcat_s(pty_cmd, len, " ");
+				strcat_s(pty_cmd, len, operand_sp);
 			}
+			free(operand);
 		} else {
 			if (shell_arguments) {
 				size_t len = strlen(shell) + 1 + strlen(shell_arguments) + 1;
