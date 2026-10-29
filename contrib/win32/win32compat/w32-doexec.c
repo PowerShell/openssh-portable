@@ -138,7 +138,6 @@ get_registry_key_value(HKEY hKey, LPCWSTR lpSubKey, LPCWSTR lpValue)
 
 /* Build the user environment block. */
 /* Set the HOMEPATH variable (and optionally HOMEDRIVE) using the specified pw_dir_w profile path if they are not assigned. */
-/* Set the PATH environment variable with values from the registry. */
 static void
 setup_session_user_vars(wchar_t* pw_dir_w)
 {
@@ -156,7 +155,12 @@ setup_session_user_vars(wchar_t* pw_dir_w)
 			SetEnvironmentVariableW(L"HOMEPATH", pw_dir_w);
 		}
 	}
+}
 
+/* Set the PATH environment variable with values from the registry. */
+static void
+setup_session_user_path()
+{
 	/* PATH is a special case. The System Path value is prepended to the User Path value */
 	wchar_t* user_path = NULL;
 	wchar_t* hklm_path = get_registry_key_value(HKEY_LOCAL_MACHINE, L"SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment", L"PATH");
@@ -233,6 +237,8 @@ setup_session_env(struct ssh *ssh, Session* s)
 			SetEnvironmentVariableW(env_name_w, env_value_w);
 		}
 	}
+
+	setup_session_user_path(); /* load and expand HKLM_PATH + HKCU_PATH */
 	ret = 0;
 
 cleanup:

@@ -115,9 +115,10 @@ Describe "E2E scenarios for user environment block" -Tags "CI" {
             $padding = (1..10 | ForEach-Object { "%SystemDrive%\sshtestpad_$_" }) -join ';'
             $script:machineEnvKey.SetValue('Path', "$($script:origMachinePath.TrimEnd(';'));$($script:sysMarker);$padding;", [Microsoft.Win32.RegistryValueKind]::ExpandString)
 
-            $script:userMarker = "C:\sshtestuser_$guid"
+            $escapedUserMarker = "%HOME%\sshtestuser_$guid" -replace '%', '^%'
+            $script:userMarkerExpanded = "C:\Users\$script:envTestUser\sshtestuser_$guid"
             ssh -p $port -i $script:envTestKey "$($script:envTestUser)@$server" `
-                reg add HKCU\Environment /v Path /t REG_EXPAND_SZ /d $($script:userMarker) /f | Out-Null
+                reg add HKCU\Environment /v Path /t REG_EXPAND_SZ /d $($escapedUserMarker) /f | Out-Null
         }
         AfterAll {
             if ($script:machineEnvKey) {
@@ -135,11 +136,11 @@ Describe "E2E scenarios for user environment block" -Tags "CI" {
             $sysMatches = @($segments | Where-Object { $_ -match '[Ss]ystem32' })
             $sysMatches.Count | Should BeGreaterThan 0
             $sysIndex  = [array]::IndexOf($segments, $script:sysMarkerExpanded)
-            $userIndex = [array]::IndexOf($segments, $script:userMarker)
+            $userIndex = [array]::IndexOf($segments, $script:userMarkerExpanded)
             $sysIndex  | Should BeGreaterThan -1
             $userIndex | Should BeGreaterThan $sysIndex
             [array]::IndexOf($segments, $sysMatches[0]) | Should BeLessThan $userIndex
-            "$o".Trim() | Should Match ([regex]::Escape("$env:SystemDrive\sshtestpad_10;$($script:userMarker)") + '$')
+            "$o".Trim() | Should Match ([regex]::Escape("$env:SystemDrive\sshtestpad_10;$($script:userMarkerExpanded)") + '$')
         }
     }
 }
