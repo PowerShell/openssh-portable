@@ -736,7 +736,10 @@ socket_connect_error_tests()
 			time_val.tv_sec = 5;
 			time_val.tv_usec = 0;
 			retValue = select(connect_fd + 1, &read_set, &write_set, NULL, &time_val);
-			ASSERT_INT_NE(retValue, -1);
+			/* the connect must have completed, not timed out */
+			ASSERT_INT_GT(retValue, 0);
+			ASSERT_INT_EQ(FD_ISSET(connect_fd, &read_set) ||
+			    FD_ISSET(connect_fd, &write_set), 1);
 		}
 
 		/*
