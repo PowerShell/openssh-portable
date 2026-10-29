@@ -47,6 +47,36 @@ file_blocking_io_tests()
 	}
 
 	{
+		/*
+		 * the write end is handed to child processes as stdout/stderr.
+		 * Cygwin queries FilePipeLocalInformation on it before
+		 * non-blocking writes, which needs FILE_READ_ATTRIBUTES.
+		 */
+		typedef struct {
+			ULONG NamedPipeType, NamedPipeConfiguration, MaximumInstances,
+			    CurrentInstances, InboundQuota, ReadDataAvailable, OutboundQuota,
+			    WriteQuotaAvailable, NamedPipeState, NamedPipeEnd;
+		} pipe_local_info;
+		typedef LONG(WINAPI *query_info_file)(HANDLE, PVOID, PVOID, ULONG, ULONG);
+		query_info_file query;
+		ULONG_PTR iosb[2];
+		pipe_local_info info;
+
+		TEST_START("pipe write end allows FilePipeLocalInformation query");
+
+		query = (query_info_file)GetProcAddress(GetModuleHandleW(L"ntdll.dll"),
+		    "NtQueryInformationFile");
+		ASSERT_PTR_NE(query, NULL);
+		memset(&info, 0, sizeof(info));
+		retValue = query(w32_fd_to_handle(pipeio[1]), iosb, &info, sizeof(info),
+		    24 /* FilePipeLocalInformation */);
+		ASSERT_INT_EQ(retValue, 0);
+		ASSERT_INT_NE(info.WriteQuotaAvailable, 0);
+
+		TEST_DONE();
+	}
+
+	{
 		TEST_START("pipe read and write");
 		
 		r_pipe = pipeio[0];
