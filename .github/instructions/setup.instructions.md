@@ -67,6 +67,11 @@ The `Install-VcpkgDependencies.ps1` tool (Step 6) will also honor
 
 ### Step 6: Bootstrap vcpkg and Install Dependencies
 
+Install Visual Studio 2026 with the v145 C++ build tools and matching
+Spectre-mitigated libraries for x86, x64, or ARM64. ARM32 builds retain the
+v143 toolset and require Visual Studio 2022. The custom triplets select the
+same toolset as the corresponding solution configurations.
+
 The Win32-OpenSSH build links against vendored libraries (`libressl`,
 `libfido2`, `libcbor`, `zlib`) installed via vcpkg's manifest mode using
 custom triplets and overlay ports under
