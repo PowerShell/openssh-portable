@@ -116,7 +116,7 @@ Describe "E2E scenarios for user environment block" -Tags "CI" {
             $script:machineEnvKey.SetValue('Path', "$($script:origMachinePath.TrimEnd(';'));$($script:sysMarker);$padding;", [Microsoft.Win32.RegistryValueKind]::ExpandString)
 
             $escapedUserMarker = "%HOME%\sshtestuser_$guid" -replace '%', '^%'
-            $script:userMarkerExpanded = "C:\Users\$script:envTestUser\sshtestuser_$guid"
+            $script:userMarkerExpanded = Join-Path $script:envTestProfile "sshtestuser_$guid"
             ssh -p $port -i $script:envTestKey "$($script:envTestUser)@$server" `
                 reg add HKCU\Environment /v Path /t REG_EXPAND_SZ /d $($escapedUserMarker) /f | Out-Null
         }
