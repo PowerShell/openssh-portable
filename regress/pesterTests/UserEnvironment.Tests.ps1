@@ -115,9 +115,13 @@ Describe "E2E scenarios for user environment block" -Tags "CI" {
             $padding = (1..10 | ForEach-Object { "%SystemDrive%\sshtestpad_$_" }) -join ';'
             $script:machineEnvKey.SetValue('Path', "$($script:origMachinePath.TrimEnd(';'));$($script:sysMarker);$padding;", [Microsoft.Win32.RegistryValueKind]::ExpandString)
 
-            $script:userMarker = "C:\sshtestuser_$guid"
+            $escapedPnpmHome = "%LOCALAPPDATA%\pnpm" -replace '%', '^%'
+            $escapedUserPath = "%HOME%\sshtestuser_$guid;%PNPM_HOME%\bin" -replace '%', '^%'
+            $script:userMarkerExpanded = Join-Path $script:envTestProfile "sshtestuser_$guid"
+            $script:userPnpmHomeExpanded = Join-Path $script:envTestProfile "AppData\Local\pnpm\bin"
             ssh -p $port -i $script:envTestKey "$($script:envTestUser)@$server" `
-                reg add HKCU\Environment /v Path /t REG_EXPAND_SZ /d $($script:userMarker) /f | Out-Null
+                "reg add HKCU\Environment /v Path /t REG_EXPAND_SZ /d $($escapedUserPath) /f && " `
+                "reg add HKCU\Environment /v PNPM_HOME /t REG_EXPAND_SZ /d $($escapedPnpmHome) /f" | Out-Null
         }
         AfterAll {
             if ($script:machineEnvKey) {
@@ -125,7 +129,8 @@ Describe "E2E scenarios for user environment block" -Tags "CI" {
                 $script:machineEnvKey.Close()
             }
             ssh -p $port -i $script:envTestKey "$($script:envTestUser)@$server" `
-                reg delete HKCU\Environment /v Path /f | Out-Null
+                "reg delete HKCU\Environment /v Path /f && " `
+                "reg delete HKCU\Environment /v PNPM_HOME /f" | Out-Null
             $tC++
         }
 
@@ -135,11 +140,11 @@ Describe "E2E scenarios for user environment block" -Tags "CI" {
             $sysMatches = @($segments | Where-Object { $_ -match '[Ss]ystem32' })
             $sysMatches.Count | Should BeGreaterThan 0
             $sysIndex  = [array]::IndexOf($segments, $script:sysMarkerExpanded)
-            $userIndex = [array]::IndexOf($segments, $script:userMarker)
+            $userIndex = [array]::IndexOf($segments, $script:userMarkerExpanded)
             $sysIndex  | Should BeGreaterThan -1
             $userIndex | Should BeGreaterThan $sysIndex
             [array]::IndexOf($segments, $sysMatches[0]) | Should BeLessThan $userIndex
-            "$o".Trim() | Should Match ([regex]::Escape("$env:SystemDrive\sshtestpad_10;$($script:userMarker)") + '$')
+            "$o".Trim() | Should Match ([regex]::Escape("$env:SystemDrive\sshtestpad_10;$($script:userMarkerExpanded);$($script:userPnpmHomeExpanded)") + '$')
         }
     }
 }
