@@ -115,10 +115,13 @@ Describe "E2E scenarios for user environment block" -Tags "CI" {
             $padding = (1..10 | ForEach-Object { "%SystemDrive%\sshtestpad_$_" }) -join ';'
             $script:machineEnvKey.SetValue('Path', "$($script:origMachinePath.TrimEnd(';'));$($script:sysMarker);$padding;", [Microsoft.Win32.RegistryValueKind]::ExpandString)
 
-            $escapedUserMarker = "%HOME%\sshtestuser_$guid" -replace '%', '^%'
+            $escapedPnpmHome = "%LOCALAPPDATA%\pnpm" -replace '%', '^%'
+            $escapedUserMarker = "%HOME%\sshtestuser_$guid;%PNPM_HOME%\bin" -replace '%', '^%'
             $script:userMarkerExpanded = Join-Path $script:envTestProfile "sshtestuser_$guid"
+            $script:userPnpmHomeExpanded = Join-Path $script:envTestProfile "AppData\Local\pnpm\bin"
             ssh -p $port -i $script:envTestKey "$($script:envTestUser)@$server" `
-                reg add HKCU\Environment /v Path /t REG_EXPAND_SZ /d $($escapedUserMarker) /f | Out-Null
+                "reg add HKCU\Environment /v Path /t REG_EXPAND_SZ /d $($escapedUserMarker) /f && " `
+                "reg add HKCU\Environment /v PNPM_HOME /t REG_EXPAND_SZ /d $($escapedPnpmHome) /f" | Out-Null
         }
         AfterAll {
             if ($script:machineEnvKey) {
@@ -126,7 +129,8 @@ Describe "E2E scenarios for user environment block" -Tags "CI" {
                 $script:machineEnvKey.Close()
             }
             ssh -p $port -i $script:envTestKey "$($script:envTestUser)@$server" `
-                reg delete HKCU\Environment /v Path /f | Out-Null
+                "reg delete HKCU\Environment /v Path /f && " `
+                "reg delete HKCU\Environment /v PNPM_HOME /f" | Out-Null
             $tC++
         }
 
@@ -140,7 +144,7 @@ Describe "E2E scenarios for user environment block" -Tags "CI" {
             $sysIndex  | Should BeGreaterThan -1
             $userIndex | Should BeGreaterThan $sysIndex
             [array]::IndexOf($segments, $sysMatches[0]) | Should BeLessThan $userIndex
-            "$o".Trim() | Should Match ([regex]::Escape("$env:SystemDrive\sshtestpad_10;$($script:userMarkerExpanded)") + '$')
+            "$o".Trim() | Should Match ([regex]::Escape("$env:SystemDrive\sshtestpad_10;$($script:userMarkerExpanded);$($script:userPnpmHomeExpanded)") + '$')
         }
     }
 }
