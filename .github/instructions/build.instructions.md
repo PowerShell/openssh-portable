@@ -24,6 +24,19 @@ Get-ChildItem "C:\Program Files*\Windows Kits\10\bin" -Directory
 git --version
 ```
 
+### Visual Studio 2026
+
+The build helper supports standard and custom Visual Studio 2026 installation
+paths, using their `v180` C++ targets and `VS180COMNTOOLS`. Bootstrap follows
+the architecture-specific VS selection rather than inferring a version from
+directory names.
+The x86, x64, and ARM64 project configurations and custom vcpkg triplets use
+the `v145` toolset, including its matching Spectre-mitigated libraries. The
+build helper selects VS 2026 explicitly rather than an older installation.
+ARM32 remains on `v143` and selects VS 2022 because VS 2026 removed the ARM32
+compiler. Hosted images are used as provided; the build does not install
+legacy compiler components into VS 2026.
+
 ### vcpkg Dependencies
 The build links against vendored libraries (`libressl`, `libfido2`, `libcbor`,
 `zlib`) installed via vcpkg. The build will **fail** if

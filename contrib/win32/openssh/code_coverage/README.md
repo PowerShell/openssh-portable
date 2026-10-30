@@ -66,7 +66,7 @@ Cobertura report matches the summary.
 ## Usage
 
 Coverage normally runs in CI (see below). To reproduce locally you need
-Visual Studio 2022 **Enterprise** (17.3+) — for both the build tools and
+Visual Studio 2026 **Enterprise** — for both the v145 build tools and
 `Microsoft.CodeCoverage.Console.exe` — plus the test-suite prerequisites
 (Cygwin for the bash suite, Pester for E2E; the existing helpers install these).
 
@@ -177,7 +177,7 @@ The suites run the exact CI entry points (`Invoke-OpenSSHTests`,
 
 - A **Debug** build is used for coverage so line mapping is accurate; optimized
   Release builds can fold/reorder/strip lines and understate coverage.
-- Native C/C++ coverage requires **Visual Studio 2022 Enterprise** and binaries
+- Native C/C++ coverage requires **Visual Studio Enterprise** and binaries
   linked with `/PROFILE`; the coverage build job handles both.
 - Coverage is scoped to OpenSSH source files at report time (paths are
   normalized to the repository root), so third-party/system code is excluded.

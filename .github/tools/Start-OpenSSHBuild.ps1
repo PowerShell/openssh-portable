@@ -61,7 +61,8 @@
     Performs an incremental OneCore release build for ARM64.
 
 .NOTES
-    - Requires Visual Studio 2019 or later with C++ tools
+    - Requires Visual Studio 2026 with v145 C++ tools and Spectre libraries
+      (ARM32 uses Visual Studio 2022 with v143 tools)
     - Requires Windows SDK 10.0.17763.0 or later
     - Build artifacts output to: contrib\win32\openssh\{Architecture}\{Configuration}\
     - Build log written to: OpenSSH{Configuration}{Architecture}.log

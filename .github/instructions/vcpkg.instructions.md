@@ -46,6 +46,10 @@ relative to the repository root, or at `$env:VCPKG_ROOT`.
   DLL match what the OpenSSH build expects to link against.
 - **Custom triplets** pin CRT linkage and disable features that break the
   Win32 build.
+- **Compiler alignment.** x86, x64, and ARM64 custom triplets pin
+  `VCPKG_PLATFORM_TOOLSET` to `v145` (VS 2026). ARM32 retains `v143`
+  (VS 2022). These match the solution's per-architecture toolsets in both
+  dependency-only installs and MSBuild manifest-mode installs.
 
 ## Tools and Skills
 

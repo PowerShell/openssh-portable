@@ -196,7 +196,21 @@ function Start-OpenSSHBootstrap
     else {
         $MSBuildPath = Get-VS2015BuildToolPath
     }
-    if ($MSBuildPath | Select-String "2022")
+    # Discovery selects VS 2022 for ARM32 and VS 2026 for all other targets.
+    if ($NativeHostArch -ne 'arm')
+    {
+        $env:vctargetspath = Join-Path $VisualStudioPath "MSBuild\Microsoft\VC\v180\"
+        if ($null -eq $env:VS180COMNTOOLS)
+        {
+            $env:VS180COMNTOOLS = Get-BuildToolPath -VSInstallPath $VisualStudioPath -version "2026"
+        }
+        elseif (-not (Test-Path $env:VS180COMNTOOLS))
+        {
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "$env:VS180COMNTOOLS build tools path is invalid"
+        }
+        $VSBuildToolsPath = Get-Item(Join-Path $VisualStudioPath 'vc/auxiliary/build')
+    }
+    elseif ($NativeHostArch -eq 'arm')
     {
         $env:vctargetspath = Join-Path $VisualStudioPath "MSBuild\Microsoft\VC\v170\"
         if ($null -eq $env:VS170COMNTOOLS)
@@ -559,11 +573,8 @@ function Start-OpenSSHBuild
     $VisualStudioPath = Get-VisualStudioPath -NativeHostArch $NativeHostArch
     if ($null -ne $VisualStudioPath) {
         $msbuildCmd = Get-MSBuildPath -VSInstallPath $VisualStudioPath
-        # Pin vcpkg's CMake to the same VS install / toolset (v143) as the
-        # OpenSSH vcxproj files, so manifest-mode auto-install doesn't pick a
-        # newer VS (e.g. VS 2026) whose v14x toolset is unsupported here.
+        # Match the VS instance; custom triplets select v145 (v143 for ARM32).
         $env:VCPKG_VISUAL_STUDIO_PATH = $VisualStudioPath
-        $env:VCPKG_PLATFORM_TOOLSET = "v143"
     }
     else {
         $msbuildCmd = Get-VS2015BuildToolPath
@@ -606,6 +617,13 @@ function Get-VisualStudioPath {
         [ValidateSet('x86', 'x64', 'arm64', 'arm')]
         [string]$NativeHostArch
     )
+    $requiredVersion = '2026'
+    $versionRange = '[18.0,19.0)'
+    if ($NativeHostArch -eq 'arm') {
+        # ARM32 was removed from the VS 2026 toolset.
+        $requiredVersion = '2022'
+        $versionRange = '[17.0,18.0)'
+    }
     $vsWherePath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
     if (Test-Path $vsWherePath) {
         $requiredVCtools = 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64'
@@ -615,30 +633,24 @@ function Get-VisualStudioPath {
         elseif ($NativeHostArch -eq 'arm64') {
             $requiredVCtools = 'Microsoft.VisualStudio.Component.VC.Tools.ARM64'
         }
-        write-host "$vsWherePath -products * -requires $requiredVCtools -property installationPath"
-        $VSPaths = (& $vsWherePath -products * -requires $requiredVCtools -property installationPath)
+        write-host "$vsWherePath -products * -version $versionRange -requires $requiredVCtools -property installationPath"
+        $VSPaths = (& $vsWherePath -products * -version $versionRange -requires $requiredVCtools -property installationPath)
         # for some reason, VSWhere does not seem to find MSBuild so check manually
         if ($null -ne $VSPaths) {
-            # Prefer VS 2022 — the .vcxproj files pin <PlatformToolset>v143</PlatformToolset>,
-            # which ships with VS 2022. Older VS (2017=v141, 2019=v142) would need v143 build tools
-            # sideloaded; newer VS (e.g. 2026) defaults to v145 which isn't supported here.
-            $preferred = @($VSPaths | Where-Object { $_ -match '\\2022\\' })
-            $ordered = $preferred + @($VSPaths | Where-Object { $_ -notmatch '\\2022\\' })
-            foreach ($VSPath in $ordered) {
+            foreach ($VSPath in $VSPaths) {
                 if (Get-MSBuildPath -VSInstallPath $VSPath) {
                     return $VSPath
                 }
             }
             # if none of the VS installs have MSBuild, then build cannot proceed
-            Write-BuildMsg -AsError -ErrorAction Stop -Message "Visual Studio with required components not found, please ensure Microsoft.VisualStudio.Workload.MSBuildTools are installed"
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "Visual Studio $requiredVersion with MSBuild not found for $NativeHostArch; please ensure Microsoft.VisualStudio.Workload.MSBuildTools is installed"
         }
         else {
-            Write-BuildMsg -AsError -ErrorAction Stop -Message "Visual Studio with required components not found, please ensure $requiredVCtools are installed"
+            Write-BuildMsg -AsError -ErrorAction Stop -Message "Visual Studio $requiredVersion with required components not found for $NativeHostArch; please ensure $requiredVCtools is installed"
         }
     }
     else {
-        Write-BuildMsg -AsWarning -Message "VSWhere not found - please install VS 2017 Update 2, or newer, defaulting to Visual Studio 2015"
-        return $null
+        Write-BuildMsg -AsError -ErrorAction Stop -Message "VSWhere not found; please install Visual Studio $requiredVersion with C++ build tools for $NativeHostArch"
     }
 }
 function Get-MSBuildPath {
