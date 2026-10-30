@@ -116,11 +116,11 @@ Describe "E2E scenarios for user environment block" -Tags "CI" {
             $script:machineEnvKey.SetValue('Path', "$($script:origMachinePath.TrimEnd(';'));$($script:sysMarker);$padding;", [Microsoft.Win32.RegistryValueKind]::ExpandString)
 
             $escapedPnpmHome = "%LOCALAPPDATA%\pnpm" -replace '%', '^%'
-            $escapedUserMarker = "%HOME%\sshtestuser_$guid;%PNPM_HOME%\bin" -replace '%', '^%'
+            $escapedUserPath = "%HOME%\sshtestuser_$guid;%PNPM_HOME%\bin" -replace '%', '^%'
             $script:userMarkerExpanded = Join-Path $script:envTestProfile "sshtestuser_$guid"
             $script:userPnpmHomeExpanded = Join-Path $script:envTestProfile "AppData\Local\pnpm\bin"
             ssh -p $port -i $script:envTestKey "$($script:envTestUser)@$server" `
-                "reg add HKCU\Environment /v Path /t REG_EXPAND_SZ /d $($escapedUserMarker) /f && " `
+                "reg add HKCU\Environment /v Path /t REG_EXPAND_SZ /d $($escapedUserPath) /f && " `
                 "reg add HKCU\Environment /v PNPM_HOME /t REG_EXPAND_SZ /d $($escapedPnpmHome) /f" | Out-Null
         }
         AfterAll {
