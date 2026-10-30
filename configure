@@ -829,7 +829,6 @@ with_superuser_path
 with_4in6
 with_bsd_auth
 with_pid_dir
-enable_fd_passing
 enable_lastlog
 enable_utmp
 enable_utmpx
@@ -1476,7 +1475,6 @@ Optional Features:
   --disable-security-key  disable U2F/FIDO support code no
   --disable-strip         Disable calling strip(1) on install
   --disable-etc-default-login Disable using PATH from /etc/default/login no
-  --disable-fd-passing    disable file descriptor passsing no
   --disable-lastlog       disable use of lastlog even if detected no
   --disable-utmp          disable use of utmp even if detected no
   --disable-utmpx         disable use of utmpx even if detected no
@@ -6445,6 +6443,167 @@ eval ac_res=\$$ossh_cache_var
 printf "%s\n" "$ac_res" >&6; }
 }
 	{
+  ossh_cache_var=ossh_cv_cflag__Wno_error_discarded_qualifiers
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking if $CC supports compile flag -Wno-error=discarded-qualifiers" >&5
+printf %s "checking if $CC supports compile flag -Wno-error=discarded-qualifiers... " >&6; }
+if eval test \${$ossh_cache_var+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+
+	saved_CFLAGS="$CFLAGS"
+	CFLAGS="$CFLAGS $WERROR -Wno-error=discarded-qualifiers"
+	_define_flag=""
+	test "x$_define_flag" = "x" && _define_flag="-Wno-error=discarded-qualifiers"
+	cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+#include <stdlib.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+/* Trivial function to help test for -fzero-call-used-regs */
+int f(int n) {return rand() % n;}
+char *f2(char *s, ...) {
+	char ret[64];
+	va_list args;
+	va_start(args, s);
+	vsnprintf(ret, sizeof(ret), s, args);
+	va_end(args);
+	return strdup(ret);
+}
+int i;
+double d;
+const char *f3(int s) {
+	i = (int)d;
+	return s ? "good" : "gooder";
+}
+int main(int argc, char **argv) {
+	char b[256], *cp;
+	const char *s;
+	/* Some math to catch -ftrapv problems in the toolchain */
+	int i = 123 * argc, j = 456 + argc, k = 789 - argc;
+	float l = i * 2.1;
+	double m = l / 0.5;
+	long long int n = argc * 12345LL, o = 12345LL * (long long int)argc;
+	(void)argv;
+	f(1);
+	s = f3(f(2));
+	snprintf(b, sizeof b, "%d %d %d %f %f %lld %lld %s\n", i,j,k,l,m,n,o,s);
+	if (write(1, b, 0) == -1) exit(0);
+	cp = f2("%d %d %d %f %f %lld %lld %s\n", i,j,k,l,m,n,o,s);
+	if (write(1, cp, 0) == -1) exit(0);
+	free(cp);
+	/*
+	 * Test fallthrough behaviour.  clang 10's -Wimplicit-fallthrough does
+	 * not understand comments and we don't use the "fallthrough" attribute
+	 * that it's looking for.
+	 */
+	switch(i){
+	case 0: j += i;
+		/* FALLTHROUGH */
+	default: j += k;
+	}
+	exit(0);
+}
+
+
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+
+if $ac_cv_path_EGREP -i "unrecognized option|warning.*ignored" conftest.err >/dev/null
+then
+		eval "$ossh_cache_var=no"
+		CFLAGS="$saved_CFLAGS"
+else
+				if test "$cross_compiling" = yes
+then :
+   eval "$ossh_cache_var=yes"
+			  CFLAGS="$saved_CFLAGS $_define_flag"
+else $as_nop
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+#include <stdlib.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+/* Trivial function to help test for -fzero-call-used-regs */
+int f(int n) {return rand() % n;}
+char *f2(char *s, ...) {
+	char ret[64];
+	va_list args;
+	va_start(args, s);
+	vsnprintf(ret, sizeof(ret), s, args);
+	va_end(args);
+	return strdup(ret);
+}
+int i;
+double d;
+const char *f3(int s) {
+	i = (int)d;
+	return s ? "good" : "gooder";
+}
+int main(int argc, char **argv) {
+	char b[256], *cp;
+	const char *s;
+	/* Some math to catch -ftrapv problems in the toolchain */
+	int i = 123 * argc, j = 456 + argc, k = 789 - argc;
+	float l = i * 2.1;
+	double m = l / 0.5;
+	long long int n = argc * 12345LL, o = 12345LL * (long long int)argc;
+	(void)argv;
+	f(1);
+	s = f3(f(2));
+	snprintf(b, sizeof b, "%d %d %d %f %f %lld %lld %s\n", i,j,k,l,m,n,o,s);
+	if (write(1, b, 0) == -1) exit(0);
+	cp = f2("%d %d %d %f %f %lld %lld %s\n", i,j,k,l,m,n,o,s);
+	if (write(1, cp, 0) == -1) exit(0);
+	free(cp);
+	/*
+	 * Test fallthrough behaviour.  clang 10's -Wimplicit-fallthrough does
+	 * not understand comments and we don't use the "fallthrough" attribute
+	 * that it's looking for.
+	 */
+	switch(i){
+	case 0: j += i;
+		/* FALLTHROUGH */
+	default: j += k;
+	}
+	exit(0);
+}
+
+
+_ACEOF
+if ac_fn_c_try_run "$LINENO"
+then :
+   eval "$ossh_cache_var=yes"
+			  CFLAGS="$saved_CFLAGS $_define_flag"
+else $as_nop
+   eval "$ossh_cache_var='no, fails at run time'"
+			  CFLAGS="$saved_CFLAGS"
+fi
+rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
+  conftest.$ac_objext conftest.beam conftest.$ac_ext
+fi
+
+fi
+else $as_nop
+   eval "$ossh_cache_var=no"
+		  CFLAGS="$saved_CFLAGS"
+
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+
+fi
+eval ac_res=\$$ossh_cache_var
+	       { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
+printf "%s\n" "$ac_res" >&6; }
+}
+	{
   ossh_cache_var=ossh_cv_cflag__Wno_error_format_truncation
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking if $CC supports compile flag -Wno-error=format-truncation" >&5
 printf %s "checking if $CC supports compile flag -Wno-error=format-truncation... " >&6; }
@@ -9022,167 +9181,6 @@ printf "%s\n" "$ac_res" >&6; }
 }
     if test "x$use_toolchain_hardening" = "x1"; then
 	{
-  ossh_cache_var=ossh_cv_cflag__D_FORTIFY_SOURCE_2
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking if $CC supports compile flag -D_FORTIFY_SOURCE=2" >&5
-printf %s "checking if $CC supports compile flag -D_FORTIFY_SOURCE=2... " >&6; }
-if eval test \${$ossh_cache_var+y}
-then :
-  printf %s "(cached) " >&6
-else $as_nop
-
-	saved_CFLAGS="$CFLAGS"
-	CFLAGS="$CFLAGS $WERROR -D_FORTIFY_SOURCE=2"
-	_define_flag=""
-	test "x$_define_flag" = "x" && _define_flag="-D_FORTIFY_SOURCE=2"
-	cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-#include <stdlib.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-/* Trivial function to help test for -fzero-call-used-regs */
-int f(int n) {return rand() % n;}
-char *f2(char *s, ...) {
-	char ret[64];
-	va_list args;
-	va_start(args, s);
-	vsnprintf(ret, sizeof(ret), s, args);
-	va_end(args);
-	return strdup(ret);
-}
-int i;
-double d;
-const char *f3(int s) {
-	i = (int)d;
-	return s ? "good" : "gooder";
-}
-int main(int argc, char **argv) {
-	char b[256], *cp;
-	const char *s;
-	/* Some math to catch -ftrapv problems in the toolchain */
-	int i = 123 * argc, j = 456 + argc, k = 789 - argc;
-	float l = i * 2.1;
-	double m = l / 0.5;
-	long long int n = argc * 12345LL, o = 12345LL * (long long int)argc;
-	(void)argv;
-	f(1);
-	s = f3(f(2));
-	snprintf(b, sizeof b, "%d %d %d %f %f %lld %lld %s\n", i,j,k,l,m,n,o,s);
-	if (write(1, b, 0) == -1) exit(0);
-	cp = f2("%d %d %d %f %f %lld %lld %s\n", i,j,k,l,m,n,o,s);
-	if (write(1, cp, 0) == -1) exit(0);
-	free(cp);
-	/*
-	 * Test fallthrough behaviour.  clang 10's -Wimplicit-fallthrough does
-	 * not understand comments and we don't use the "fallthrough" attribute
-	 * that it's looking for.
-	 */
-	switch(i){
-	case 0: j += i;
-		/* FALLTHROUGH */
-	default: j += k;
-	}
-	exit(0);
-}
-
-
-_ACEOF
-if ac_fn_c_try_compile "$LINENO"
-then :
-
-if $ac_cv_path_EGREP -i "unrecognized option|warning.*ignored" conftest.err >/dev/null
-then
-		eval "$ossh_cache_var=no"
-		CFLAGS="$saved_CFLAGS"
-else
-				if test "$cross_compiling" = yes
-then :
-   eval "$ossh_cache_var=yes"
-			  CFLAGS="$saved_CFLAGS $_define_flag"
-else $as_nop
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-#include <stdlib.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-/* Trivial function to help test for -fzero-call-used-regs */
-int f(int n) {return rand() % n;}
-char *f2(char *s, ...) {
-	char ret[64];
-	va_list args;
-	va_start(args, s);
-	vsnprintf(ret, sizeof(ret), s, args);
-	va_end(args);
-	return strdup(ret);
-}
-int i;
-double d;
-const char *f3(int s) {
-	i = (int)d;
-	return s ? "good" : "gooder";
-}
-int main(int argc, char **argv) {
-	char b[256], *cp;
-	const char *s;
-	/* Some math to catch -ftrapv problems in the toolchain */
-	int i = 123 * argc, j = 456 + argc, k = 789 - argc;
-	float l = i * 2.1;
-	double m = l / 0.5;
-	long long int n = argc * 12345LL, o = 12345LL * (long long int)argc;
-	(void)argv;
-	f(1);
-	s = f3(f(2));
-	snprintf(b, sizeof b, "%d %d %d %f %f %lld %lld %s\n", i,j,k,l,m,n,o,s);
-	if (write(1, b, 0) == -1) exit(0);
-	cp = f2("%d %d %d %f %f %lld %lld %s\n", i,j,k,l,m,n,o,s);
-	if (write(1, cp, 0) == -1) exit(0);
-	free(cp);
-	/*
-	 * Test fallthrough behaviour.  clang 10's -Wimplicit-fallthrough does
-	 * not understand comments and we don't use the "fallthrough" attribute
-	 * that it's looking for.
-	 */
-	switch(i){
-	case 0: j += i;
-		/* FALLTHROUGH */
-	default: j += k;
-	}
-	exit(0);
-}
-
-
-_ACEOF
-if ac_fn_c_try_run "$LINENO"
-then :
-   eval "$ossh_cache_var=yes"
-			  CFLAGS="$saved_CFLAGS $_define_flag"
-else $as_nop
-   eval "$ossh_cache_var='no, fails at run time'"
-			  CFLAGS="$saved_CFLAGS"
-fi
-rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
-  conftest.$ac_objext conftest.beam conftest.$ac_ext
-fi
-
-fi
-else $as_nop
-   eval "$ossh_cache_var=no"
-		  CFLAGS="$saved_CFLAGS"
-
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
-
-fi
-eval ac_res=\$$ossh_cache_var
-	       { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
-printf "%s\n" "$ac_res" >&6; }
-}
-	{
   ossh_cache_var=ossh_cv_ldflag__Wl__z_relro
   { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking if $LD supports link flag -Wl,-z,relro" >&5
 printf %s "checking if $LD supports link flag -Wl,-z,relro... " >&6; }
@@ -11518,84 +11516,6 @@ for include in sys/queue.h sys/tree.h; do
 	esac >"$header"
 done
 
-ac_fn_check_decl "$LINENO" "le32toh" "ac_cv_have_decl_le32toh" "
-#ifdef HAVE_SYS_TYPES_H
-# include <sys/types.h>
-#endif
-#ifdef HAVE_STDINT_H
-# include <stdint.h>
-#endif
-#ifdef HAVE_ENDIAN_H
-# include <endian.h>
-#endif
-
-" "$ac_c_undeclared_builtin_options" "CFLAGS"
-if test "x$ac_cv_have_decl_le32toh" = xyes
-then :
-  ac_have_decl=1
-else $as_nop
-  ac_have_decl=0
-fi
-printf "%s\n" "#define HAVE_DECL_LE32TOH $ac_have_decl" >>confdefs.h
-ac_fn_check_decl "$LINENO" "le64toh" "ac_cv_have_decl_le64toh" "
-#ifdef HAVE_SYS_TYPES_H
-# include <sys/types.h>
-#endif
-#ifdef HAVE_STDINT_H
-# include <stdint.h>
-#endif
-#ifdef HAVE_ENDIAN_H
-# include <endian.h>
-#endif
-
-" "$ac_c_undeclared_builtin_options" "CFLAGS"
-if test "x$ac_cv_have_decl_le64toh" = xyes
-then :
-  ac_have_decl=1
-else $as_nop
-  ac_have_decl=0
-fi
-printf "%s\n" "#define HAVE_DECL_LE64TOH $ac_have_decl" >>confdefs.h
-ac_fn_check_decl "$LINENO" "htole64" "ac_cv_have_decl_htole64" "
-#ifdef HAVE_SYS_TYPES_H
-# include <sys/types.h>
-#endif
-#ifdef HAVE_STDINT_H
-# include <stdint.h>
-#endif
-#ifdef HAVE_ENDIAN_H
-# include <endian.h>
-#endif
-
-" "$ac_c_undeclared_builtin_options" "CFLAGS"
-if test "x$ac_cv_have_decl_htole64" = xyes
-then :
-  ac_have_decl=1
-else $as_nop
-  ac_have_decl=0
-fi
-printf "%s\n" "#define HAVE_DECL_HTOLE64 $ac_have_decl" >>confdefs.h
-ac_fn_check_decl "$LINENO" "htobe32" "ac_cv_have_decl_htobe32" "
-#ifdef HAVE_SYS_TYPES_H
-# include <sys/types.h>
-#endif
-#ifdef HAVE_STDINT_H
-# include <stdint.h>
-#endif
-#ifdef HAVE_ENDIAN_H
-# include <endian.h>
-#endif
-
-" "$ac_c_undeclared_builtin_options" "CFLAGS"
-if test "x$ac_cv_have_decl_htobe32" = xyes
-then :
-  ac_have_decl=1
-else $as_nop
-  ac_have_decl=0
-fi
-printf "%s\n" "#define HAVE_DECL_HTOBE32 $ac_have_decl" >>confdefs.h
-
-
 # On some platforms (eg SunOS4) sys/audit.h requires sys/[time|types|label.h]
 # to be included first.
 ac_fn_c_check_header_compile "$LINENO" "sys/audit.h" "ac_cv_header_sys_audit_h" "
@@ -12067,6 +11987,7 @@ printf "%s\n" "#define DISABLE_WTMP 1" >>confdefs.h
 
 	;;
 *-*-cygwin*)
+	is_cygwin=1
 	LIBS="$LIBS /usr/lib/textreadmode.o"
 
 printf "%s\n" "#define HAVE_CYGWIN 1" >>confdefs.h
@@ -12083,6 +12004,7 @@ printf "%s\n" "#define DISABLE_SHADOW 1" >>confdefs.h
 
 printf "%s\n" "#define NO_X11_UNIX_SOCKETS 1" >>confdefs.h
 
+	no_fd_passing=1
 
 printf "%s\n" "#define DISABLE_FD_PASSING 1" >>confdefs.h
 
@@ -12397,6 +12319,16 @@ then :
 	    SSHDLIBS="$SSHDLIBS -lsandbox"
 
 fi
+
+	ac_fn_check_decl "$LINENO" "kSBXProfilePureComputation" "ac_cv_have_decl_kSBXProfilePureComputation" "#include <sandbox.h>
+" "$ac_c_undeclared_builtin_options" "CFLAGS"
+if test "x$ac_cv_have_decl_kSBXProfilePureComputation" = xyes
+then :
+  ac_have_decl=1
+else $as_nop
+  ac_have_decl=0
+fi
+printf "%s\n" "#define HAVE_DECL_KSBXPROFILEPURECOMPUTATION $ac_have_decl" >>confdefs.h
 
 	# proc_pidinfo()-based closefrom() replacement.
 	ac_fn_c_check_header_compile "$LINENO" "libproc.h" "ac_cv_header_libproc_h" "$ac_includes_default"
@@ -12955,9 +12887,6 @@ fi
 printf "%s\n" "#define SSH_TUN_PREPEND_AF 1" >>confdefs.h
 
 	TEST_MALLOC_OPTIONS="AJRX"
-
-printf "%s\n" "#define BROKEN_READ_COMPARISON 1" >>confdefs.h
-
 	;;
 *-*-freebsd*)
 
@@ -13537,6 +13466,7 @@ fi
 
 	printf "%s\n" "#define DISABLE_SHADOW 1" >>confdefs.h
 
+	no_fd_passing=1
 	printf "%s\n" "#define DISABLE_FD_PASSING 1" >>confdefs.h
 
 	printf "%s\n" "#define SETEUID_BREAKS_SETUID 1" >>confdefs.h
@@ -13597,6 +13527,7 @@ printf "%s\n" "#define HAVE_OSF_SIA 1" >>confdefs.h
 
 printf "%s\n" "#define DISABLE_LOGIN 1" >>confdefs.h
 
+			no_fd_passing=1
 			printf "%s\n" "#define DISABLE_FD_PASSING 1" >>confdefs.h
 
 			LIBS="$LIBS -lsecurity -ldb -lm -laud"
@@ -13637,6 +13568,7 @@ printf "%s\n" "#define BROKEN_SHADOW_EXPIRE 1" >>confdefs.h
 	enable_etc_default_login=no	# has incompatible /etc/default/login
 	case "$host" in
 	*-*-nto-qnx6*)
+		no_fd_passing=1
 		printf "%s\n" "#define DISABLE_FD_PASSING 1" >>confdefs.h
 
 		;;
@@ -13658,6 +13590,7 @@ printf "%s\n" "#define DISABLE_UTMPX 1" >>confdefs.h
 
 	# DISABLE_FD_PASSING so that we call setpgrp as root, otherwise we
 	# don't get a controlling tty.
+	no_fd_passing=1
 
 printf "%s\n" "#define DISABLE_FD_PASSING 1" >>confdefs.h
 
@@ -13905,6 +13838,84 @@ fi
 fi
 
 done
+
+ac_fn_check_decl "$LINENO" "le32toh" "ac_cv_have_decl_le32toh" "
+#ifdef HAVE_SYS_TYPES_H
+# include <sys/types.h>
+#endif
+#ifdef HAVE_STDINT_H
+# include <stdint.h>
+#endif
+#ifdef HAVE_ENDIAN_H
+# include <endian.h>
+#endif
+
+" "$ac_c_undeclared_builtin_options" "CFLAGS"
+if test "x$ac_cv_have_decl_le32toh" = xyes
+then :
+  ac_have_decl=1
+else $as_nop
+  ac_have_decl=0
+fi
+printf "%s\n" "#define HAVE_DECL_LE32TOH $ac_have_decl" >>confdefs.h
+ac_fn_check_decl "$LINENO" "le64toh" "ac_cv_have_decl_le64toh" "
+#ifdef HAVE_SYS_TYPES_H
+# include <sys/types.h>
+#endif
+#ifdef HAVE_STDINT_H
+# include <stdint.h>
+#endif
+#ifdef HAVE_ENDIAN_H
+# include <endian.h>
+#endif
+
+" "$ac_c_undeclared_builtin_options" "CFLAGS"
+if test "x$ac_cv_have_decl_le64toh" = xyes
+then :
+  ac_have_decl=1
+else $as_nop
+  ac_have_decl=0
+fi
+printf "%s\n" "#define HAVE_DECL_LE64TOH $ac_have_decl" >>confdefs.h
+ac_fn_check_decl "$LINENO" "htole64" "ac_cv_have_decl_htole64" "
+#ifdef HAVE_SYS_TYPES_H
+# include <sys/types.h>
+#endif
+#ifdef HAVE_STDINT_H
+# include <stdint.h>
+#endif
+#ifdef HAVE_ENDIAN_H
+# include <endian.h>
+#endif
+
+" "$ac_c_undeclared_builtin_options" "CFLAGS"
+if test "x$ac_cv_have_decl_htole64" = xyes
+then :
+  ac_have_decl=1
+else $as_nop
+  ac_have_decl=0
+fi
+printf "%s\n" "#define HAVE_DECL_HTOLE64 $ac_have_decl" >>confdefs.h
+ac_fn_check_decl "$LINENO" "htobe32" "ac_cv_have_decl_htobe32" "
+#ifdef HAVE_SYS_TYPES_H
+# include <sys/types.h>
+#endif
+#ifdef HAVE_STDINT_H
+# include <stdint.h>
+#endif
+#ifdef HAVE_ENDIAN_H
+# include <endian.h>
+#endif
+
+" "$ac_c_undeclared_builtin_options" "CFLAGS"
+if test "x$ac_cv_have_decl_htobe32" = xyes
+then :
+  ac_have_decl=1
+else $as_nop
+  ac_have_decl=0
+fi
+printf "%s\n" "#define HAVE_DECL_HTOBE32 $ac_have_decl" >>confdefs.h
+
 
 ac_fn_c_check_func "$LINENO" "getspnam" "ac_cv_func_getspnam"
 if test "x$ac_cv_func_getspnam" = xyes
@@ -16741,6 +16752,12 @@ then :
   printf "%s\n" "#define HAVE_GETENTROPY 1" >>confdefs.h
 
 fi
+ac_fn_c_check_func "$LINENO" "getexecpath" "ac_cv_func_getexecpath"
+if test "x$ac_cv_func_getexecpath" = xyes
+then :
+  printf "%s\n" "#define HAVE_GETEXECPATH 1" >>confdefs.h
+
+fi
 ac_fn_c_check_func "$LINENO" "getgrouplist" "ac_cv_func_getgrouplist"
 if test "x$ac_cv_func_getgrouplist" = xyes
 then :
@@ -16925,6 +16942,12 @@ ac_fn_c_check_func "$LINENO" "ogetaddrinfo" "ac_cv_func_ogetaddrinfo"
 if test "x$ac_cv_func_ogetaddrinfo" = xyes
 then :
   printf "%s\n" "#define HAVE_OGETADDRINFO 1" >>confdefs.h
+
+fi
+ac_fn_c_check_func "$LINENO" "openat" "ac_cv_func_openat"
+if test "x$ac_cv_func_openat" = xyes
+then :
+  printf "%s\n" "#define HAVE_OPENAT 1" >>confdefs.h
 
 fi
 ac_fn_c_check_func "$LINENO" "openlog_r" "ac_cv_func_openlog_r"
@@ -21119,10 +21142,12 @@ fi
 
 if test "x$sandbox_arg" = "xdarwin" || \
      ( test -z "$sandbox_arg" && test "x$ac_cv_func_sandbox_init" = "xyes" && \
-       test "x$ac_cv_header_sandbox_h" = "xyes") ; then
+       test "x$ac_cv_header_sandbox_h" = "xyes" && \
+       test "x$ac_cv_have_decl_kSBXProfilePureComputation" = "xyes") ; then
 	test "x$ac_cv_func_sandbox_init" != "xyes" -o \
-	     "x$ac_cv_header_sandbox_h" != "xyes" && \
-		as_fn_error $? "Darwin seatbelt sandbox requires sandbox.h and sandbox_init function" "$LINENO" 5
+	     "x$ac_cv_header_sandbox_h" != "xyes" -o \
+	     "x$ac_cv_have_decl_kSBXProfilePureComputation" != "xyes" && \
+		as_fn_error $? "Darwin seatbelt sandbox requires sandbox.h, sandbox_init() and kSBXProfilePureComputation" "$LINENO" 5
 	SANDBOX_STYLE="darwin"
 
 printf "%s\n" "#define SANDBOX_DARWIN 1" >>confdefs.h
@@ -26110,20 +26135,6 @@ printf "%s\n" "#define _PATH_SSH_PIDDIR \"$piddir\"" >>confdefs.h
 
 
 
-
-# Check whether --enable-fd-passing was given.
-if test ${enable_fd_passing+y}
-then :
-  enableval=$enable_fd_passing;
-		if test "x$enableval" = "xno" ; then
-			printf "%s\n" "#define DISABLE_FD_PASSING 1" >>confdefs.h
-
-		fi
-
-
-fi
-
-
 # Check whether --enable-lastlog was given.
 if test ${enable_lastlog+y}
 then :
@@ -28325,3 +28336,10 @@ if test "$AUDIT_MODULE" = "bsm" ; then
 	echo "WARNING: BSM audit support is currently considered EXPERIMENTAL."
 	echo "See the Solaris section in README.platform for details."
 fi
+
+if test "x$no_fd_passing" = "x1" -a "x$is_cygwin" != "x1" ; then
+	echo "WARNING: support for platforms that lack file descriptor passing"
+	echo "and that also require root privileges for PTY allocation will be "
+	echo "deprecated in a future OpenSSH release."
+fi
+

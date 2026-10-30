@@ -4,7 +4,7 @@ NAME
      scp M-bM-^@M-^S OpenSSH secure file copy
 
 SYNOPSIS
-     scp [-346ABCOpqRrsTv] [-c cipher] [-D sftp_server_path] [-F ssh_config]
+     scp [-346ABCOpqRrTv] [-c cipher] [-D sftp_server_path] [-F ssh_config]
          [-i identity_file] [-J destination] [-l limit] [-o ssh_option]
          [-P port] [-S program] [-X sftp_option] source ... target
 
@@ -270,4 +270,4 @@ CAVEATS
      requires careful quoting of any characters that have special meaning to
      the remote shell, such as quote characters.
 
-OpenBSD 8.0                     October 4, 2025                         SCP(1)
+OpenBSD 8.0                    September 3, 2026                        SCP(1)

@@ -258,7 +258,7 @@ AUTHORIZED_KEYS FILE FORMAT
            ecdsa-sha2-nistp521
            sk-ssh-ed25519@openssh.com
            ssh-ed25519
-           ssh-mldsa44-ed25519@openssh.com
+           ssh-mldsa44-ed25519
            ssh-rsa
 
      The comment field is not used for anything (but may be convenient for the
@@ -268,8 +268,8 @@ AUTHORIZED_KEYS FILE FORMAT
      of the size of the public key encoding) up to a limit of 8 kilobytes,
      which permits RSA keys up to 16 kilobits.  You don't want to type them
      in; instead, copy the id_ecdsa.pub, id_ecdsa_sk.pub, id_ed25519.pub,
-     id_ed25519_sk.pub, id_mldsa44_ed25519, or the id_rsa.pub file and edit
-     it.
+     id_ed25519_sk.pub, id_mldsa44_ed25519.pub, or the id_rsa.pub file and
+     edit it.
 
      sshd enforces a minimum RSA key modulus size of 1024 bits.
 
@@ -689,4 +689,4 @@ AUTHORS
      versions 1.5 and 2.0.  Niels Provos and Markus Friedl contributed support
      for privilege separation.
 
-OpenBSD 8.0                      July 11, 2026                         SSHD(8)
+OpenBSD 8.0                    September 2, 2026                       SSHD(8)

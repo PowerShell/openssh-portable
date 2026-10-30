@@ -355,8 +355,10 @@ INTERACTIVE COMMANDS
              flags supported by the local system's ls(1) command.  path may
              contain glob(7) characters and may match multiple files.
 
-     lmkdir path
-             Create local directory specified by path.
+     lmkdir [-p] path
+             Create local directory specified by path.  If the -p flag is
+             specified create intermediate directories as required.  Do not
+             consider it an error if the argument directory already exists.
 
      ln [-s] oldpath newpath
              Create a link from oldpath to newpath.  If the -s flag is
@@ -401,8 +403,10 @@ INTERACTIVE COMMANDS
      lumask umask
              Set local umask to umask.
 
-     mkdir path
-             Create remote directory specified by path.
+     mkdir [-p] path
+             Create remote directory specified by path.  If the -p flag is
+             specified create intermediate directories as required.  Do not
+             consider it an error if the argument directory already exists.
 
      progress
              Toggle display of progress meter.
@@ -474,4 +478,4 @@ SEE ALSO
      T. Ylonen and S. Lehtinen, SSH File Transfer Protocol, draft-ietf-secsh-
      filexfer-00.txt, January 2001, work in progress material.
 
-OpenBSD 8.0                    December 6, 2024                        SFTP(1)
+OpenBSD 8.0                    September 7, 2026                       SFTP(1)

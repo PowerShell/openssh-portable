@@ -110,7 +110,7 @@ DESCRIPTION
              KDF (key derivation function, currently bcrypt_pbkdf(3)) rounds
              used.  Higher numbers result in slower passphrase verification
              and increased resistance to brute-force password cracking (should
-             the keys be stolen).  The default is 16 rounds.
+             the keys be stolen).  The default is 32 rounds.
 
      -B      Show the bubblebabble digest of specified private or public key
              file.
@@ -933,4 +933,4 @@ AUTHORS
      created OpenSSH.  Markus Friedl contributed the support for SSH protocol
      versions 1.5 and 2.0.
 
-OpenBSD 8.0                     August 7, 2026                   SSH-KEYGEN(1)
+OpenBSD 8.0                     October 1, 2026                  SSH-KEYGEN(1)

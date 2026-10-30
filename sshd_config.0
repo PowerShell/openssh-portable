@@ -33,6 +33,23 @@ DESCRIPTION
              arguments are any (the default), inet (use IPv4 only), or inet6
              (use IPv6 only).
 
+     AgentSocketPath
+             Specifies the filesystem path used for forwarded ssh-agent(1)
+             sockets.  Sockets may be created in either a shared location or a
+             user-specific directory.  User-specific directories are specified
+             by prefixing the path name with user:.  sshd(8) will ensure the
+             directory exists and create the listening socket directly in it.
+             Relative user-specific directory paths will be created relative
+             to the user's $HOME directory.
+
+             Shared directories may be specified by prefixing an absolute path
+             name with shared:.  In this case, a temporary subdirectory will
+             be created under the specified directory and the listening agent
+             socket will be created in that.
+
+             AgentSocketPath accepts the tokens described in the TOKENS
+             section.  The default path specification is user:.ssh/agent.
+
      AllowAgentForwarding
              Specifies whether ssh-agent(1) forwarding is permitted.  The
              default is yes.  Note that disabling agent forwarding does not
@@ -222,7 +239,7 @@ DESCRIPTION
                    sk-ssh-ed25519@openssh.com,
                    sk-ecdsa-sha2-nistp256@openssh.com,
                    rsa-sha2-512,rsa-sha2-256,
-                   ssh-mldsa44-ed25519@openssh.com
+                   ssh-mldsa44-ed25519
 
              If the specified list begins with a M-bM-^@M-^X+M-bM-^@M-^Y character, then the
              specified algorithms will be appended to the default set instead
@@ -378,7 +395,7 @@ DESCRIPTION
      Compression
              Specifies whether compression is enabled after the user has
              authenticated successfully.  The argument must be yes, delayed (a
-             legacy synonym for yes) or no.  The default is yes.
+             legacy synonym for yes), or no.  The default is yes.
 
              Compression applies to all traffic that flows over the SSH
              connection.  If untrusted traffic (such as an open port-forward)
@@ -506,14 +523,14 @@ DESCRIPTION
                 webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
-                ssh-mldsa44-ed25519-cert-v01@openssh.com,
+                ssh-mldsa44-ed25519-cert,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ssh-ed25519@openssh.com,
                 sk-ecdsa-sha2-nistp256@openssh.com,
                 webauthn-sk-ecdsa-sha2-nistp256@openssh.com,
                 rsa-sha2-512,rsa-sha2-256,
-                ssh-mldsa44-ed25519@openssh.com
+                ssh-mldsa44-ed2551
 
              The list of available signature algorithms may also be obtained
              using "ssh -Q HostbasedAcceptedAlgorithms".  This was formerly
@@ -543,7 +560,7 @@ DESCRIPTION
              Specifies a file containing a private host key used by SSH.  The
              defaults are /etc/ssh/ssh_host_ecdsa_key,
              /etc/ssh/ssh_host_ed25519_key,
-             /etc/ssh/ssh_host_mldsa44_ed25519_key and
+             /etc/ssh/ssh_host_mldsa44_ed25519_key, and
              /etc/ssh/ssh_host_rsa_key.
 
              Note that sshd(8) will refuse to use a file if it is group/world-
@@ -574,14 +591,14 @@ DESCRIPTION
                 webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
-                ssh-mldsa44-ed25519-cert-v01@openssh.com,
+                ssh-mldsa44-ed25519-cert,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ssh-ed25519@openssh.com,
                 sk-ecdsa-sha2-nistp256@openssh.com,
                 webauthn-sk-ecdsa-sha2-nistp256@openssh.com,
                 rsa-sha2-512,rsa-sha2-256,
-                ssh-mldsa44-ed25519@openssh.com
+                ssh-mldsa44-ed25519
 
              The list of available signature algorithms may also be obtained
              using "ssh -Q HostKeyAlgorithms".
@@ -830,7 +847,7 @@ DESCRIPTION
              PubkeyAuthentication, PubkeyAuthOptions, RefuseConnection,
              RekeyLimit, RevokedKeys, RDomain, SetEnv, StreamLocalBindMask,
              StreamLocalBindUnlink, TrustedUserCAKeys,
-             UnusedConnectionTimeout, X11DisplayOffset, X11Forwarding and
+             UnusedConnectionTimeout, X11DisplayOffset, X11Forwarding, and
              X11UseLocalhost.
 
      MaxAuthTries
@@ -1108,14 +1125,14 @@ DESCRIPTION
                 webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
-                ssh-mldsa44-ed25519-cert-v01@openssh.com,
+                ssh-mldsa44-ed25519-cert,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ssh-ed25519@openssh.com,
                 sk-ecdsa-sha2-nistp256@openssh.com,
                 webauthn-sk-ecdsa-sha2-nistp256@openssh.com,
                 rsa-sha2-512,rsa-sha2-256,
-                ssh-mldsa44-ed25519@openssh.com
+                ssh-mldsa44-ed25519
 
              The list of available signature algorithms may also be obtained
              using "ssh -Q PubkeyAcceptedAlgorithms".
@@ -1123,8 +1140,8 @@ DESCRIPTION
      PubkeyAuthOptions
              Sets one or more public key authentication options.  The
              supported keywords are: none (the default; indicating no
-             additional options are enabled), touch-required and
-             verify-required.
+             additional options are enabled), touch-required, verify-required,
+             and max-pk-ok.
 
              The touch-required option causes public key authentication using
              a FIDO authenticator algorithm (i.e. ecdsa-sk or ed25519-sk) to
@@ -1139,6 +1156,16 @@ DESCRIPTION
 
              Neither the touch-required or verify-required options have any
              effect for other, non-FIDO, public key types.
+
+             The max-pk-ok option takes a numeric argument separated by a
+             colon character, e.g. M-bM-^@M-^Xmax-pk-ok:4M-bM-^@M-^Y to specify the number of
+             public key query attempts are permitted before the attempts are
+             considered failed authentications that count against
+             MaxAuthTries.  Public key queries are a SSH protocol mechanism
+             that allow a client to test whether a server accepts a given
+             public key before an actual authentication attempt, to avoid the
+             need to enter PINs/key passphrases or touch FIDO authenticators
+             unnecessarily.  The default is 6.
 
      PubkeyAuthentication
              Specifies whether public key authentication is allowed.  The
@@ -1270,20 +1297,21 @@ DESCRIPTION
              default is AUTH.
 
      TCPKeepAlive
-             Specifies whether the system should send TCP keepalive messages
-             to the other side.  If they are sent, death of the connection or
-             crash of one of the machines will be properly noticed.  However,
-             this means that connections will die if the route is down
-             temporarily, and some people find it annoying.  On the other
-             hand, if TCP keepalives are not sent, sessions may hang
-             indefinitely on the server, leaving "ghost" users and consuming
-             server resources.
+             Specifies whether the system should send keepalive messages on
+             TCP sockets it has opened.  If they are sent, failure of the
+             connection or crash of one of the endpoints may be more promptly
+             detected.  However, this means that connections may terminate if
+             the connection is suffers a transient disruption.
 
-             The default is yes (to send TCP keepalive messages), and the
-             server will notice if the network goes down or the client host
-             crashes.  This avoids infinitely hanging sessions.
+             The argument must be transport to enable TCP keepalive messages
+             on the SSH transport connection to the client, yes which is an
+             alias for transport, all to enable TCP keepalive messages on all
+             sockets opened by sshd(8), including sockets created for X11 or
+             port forwarding, or no to disable TCP keepalive messages.  The
+             default is transport.
 
-             To disable TCP keepalive messages, the value should be set to no.
+             See also ClientAliveInterval for a more robust connection failure
+             detection mechanism that works at the SSH protocol level.
 
      TrustedUserCAKeys
              Specifies a file containing public keys of certificate
@@ -1344,6 +1372,15 @@ DESCRIPTION
              Optionally specifies additional text to append to the SSH
              protocol banner sent by the server upon connection.  The default
              is none.
+
+     WarnWeakCrypto
+             Controls whether warnings are logged when the cryptographic
+             algorithms negotiated for the connection are weak or otherwise
+             recommended against.  Warnings may be disabled by turning off a
+             specific warning or by disabling all warnings.  Warnings about
+             connections that don't use a post-quantum key exchange may be
+             disabled using the no-pq-kex flag.  no will disable all warnings.
+             The default, equivalent to yes, is to enable all warnings.
 
      X11DisplayOffset
              Specifies the first display number available for sshd(8)'s X11
@@ -1435,6 +1472,8 @@ TOKENS
            %U    The numeric user ID of the target user.
            %u    The username.
 
+     AgentSocketPath accepts the tokens %%, %h, %U, and %u.
+
      AuthorizedKeysCommand accepts the tokens %%, %C, %D, %f, %h, %k, %t, %U,
      and %u.
 
@@ -1461,9 +1500,9 @@ SEE ALSO
 AUTHORS
      OpenSSH is a derivative of the original and free ssh 1.2.12 release by
      Tatu Ylonen.  Aaron Campbell, Bob Beck, Markus Friedl, Niels Provos, Theo
-     de Raadt and Dug Song removed many bugs, re-added newer features and
+     de Raadt, and Dug Song removed many bugs, re-added newer features and
      created OpenSSH.  Markus Friedl contributed the support for SSH protocol
      versions 1.5 and 2.0.  Niels Provos and Markus Friedl contributed support
      for privilege separation.
 
-OpenBSD 8.0                     August 8, 2026                  SSHD_CONFIG(5)
+OpenBSD 8.0                   September 17, 2026                SSHD_CONFIG(5)

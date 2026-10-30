@@ -229,7 +229,7 @@ DESCRIPTION
                    sk-ssh-ed25519@openssh.com,
                    sk-ecdsa-sha2-nistp256@openssh.com,
                    rsa-sha2-512,rsa-sha2-256,
-                   ssh-mldsa44-ed25519@openssh.com
+                   ssh-mldsa44-ed25519
 
              If the specified list begins with a M-bM-^@M-^X+M-bM-^@M-^Y character, then the
              specified algorithms will be appended to the default set instead
@@ -613,14 +613,14 @@ DESCRIPTION
                 webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
-                ssh-mldsa44-ed25519-cert-v01@openssh.com,
+                ssh-mldsa44-ed25519-cert,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ssh-ed25519@openssh.com,
                 sk-ecdsa-sha2-nistp256@openssh.com,
                 webauthn-sk-ecdsa-sha2-nistp256@openssh.com,
                 rsa-sha2-512,rsa-sha2-256,
-                ssh-mldsa44-ed25519@openssh.com
+                ssh-mldsa44-ed25519
 
              The -Q option of ssh(1) may be used to list supported signature
              algorithms.  This was formerly named HostbasedKeyTypes.
@@ -651,14 +651,14 @@ DESCRIPTION
                 webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
-                ssh-mldsa44-ed25519-cert-v01@openssh.com,
+                ssh-mldsa44-ed25519-cert,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ecdsa-sha2-nistp256@openssh.com,
                 webauthn-sk-ecdsa-sha2-nistp256@openssh.com
                 sk-ssh-ed25519@openssh.com,
                 rsa-sha2-512,rsa-sha2-256,
-                ssh-mldsa44-ed25519@openssh.com
+                ssh-mldsa44-ed25519
 
              If hostkeys are known for the destination host then this default
              is modified to prefer their algorithms.
@@ -987,7 +987,8 @@ DESCRIPTION
              management will be done using the Hostname of the host being
              connected (defaulting to the name typed by the user).  Setting
              the command to none disables this option entirely.  Note that
-             CheckHostIP is not available for connects with a proxy command.
+             CheckHostIP is not available for connections using a proxy
+             command.
 
              This directive is useful in conjunction with nc(1) and its proxy
              support.  For example, the following directive would connect via
@@ -1039,14 +1040,14 @@ DESCRIPTION
                 webauthn-sk-ecdsa-sha2-nistp256-cert-v01@openssh.com,
                 rsa-sha2-512-cert-v01@openssh.com,
                 rsa-sha2-256-cert-v01@openssh.com,
-                ssh-mldsa44-ed25519-cert-v01@openssh.com,
+                ssh-mldsa44-ed25519-cert,
                 ssh-ed25519,
                 ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,
                 sk-ssh-ed25519@openssh.com,
                 sk-ecdsa-sha2-nistp256@openssh.com,
                 webauthn-sk-ecdsa-sha2-nistp256@openssh.com,
                 rsa-sha2-512,rsa-sha2-256,
-                ssh-mldsa44-ed25519@openssh.com
+                ssh-mldsa44-ed25519
 
              The list of available signature algorithms may also be obtained
              using "ssh -Q PubkeyAcceptedAlgorithms".
@@ -1279,18 +1280,21 @@ DESCRIPTION
              default is USER.
 
      TCPKeepAlive
-             Specifies whether the system should send TCP keepalive messages
-             to the other side.  If they are sent, death of the connection or
-             crash of one of the machines will be properly noticed.  However,
-             this means that connections will die if the route is down
-             temporarily, and some people find it annoying.
+             Specifies whether the system should send keepalive messages on
+             TCP sockets it has opened.  If they are sent, failure of the
+             connection or crash of one of the endpoints may be more promptly
+             detected.  However, this means that connections may terminate if
+             the connection is suffers a transient disruption.
 
-             The default is yes (to send TCP keepalive messages), and the
-             client will notice if the network goes down or the remote host
-             dies.  This is important in scripts, and many users want it too.
+             The argument must be transport to enable TCP keepalive messages
+             on the SSH transport connection to the server, yes which is an
+             alias for transport, all to enable TCP keepalive messages on all
+             sockets opened by ssh(1), including sockets created for X11 or
+             port forwarding, or no to disable TCP keepalive messages.  The
+             default is transport.
 
-             To disable TCP keepalive messages, the value should be set to no.
-             See also ServerAliveInterval for protocol-level keepalives.
+             See also ServerAliveInterval for a more robust connection failure
+             detection mechanism that works at the SSH protocol level.
 
      Tag     Specify a configuration tag name that may be later used by a
              Match directive to select a block of configuration.
@@ -1517,4 +1521,4 @@ AUTHORS
      created OpenSSH.  Markus Friedl contributed the support for SSH protocol
      versions 1.5 and 2.0.
 
-OpenBSD 8.0                      July 11, 2026                   SSH_CONFIG(5)
+OpenBSD 8.0                   September 20, 2026                 SSH_CONFIG(5)

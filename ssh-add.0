@@ -4,7 +4,7 @@ NAME
      ssh-add M-bM-^@M-^S adds private key identities to the OpenSSH authentication agent
 
 SYNOPSIS
-     ssh-add [-CcDdKkLlNqvXx] [-E fingerprint_hash] [-H hostkey_file]
+     ssh-add [-CcDdKkLlNPqvXx] [-E fingerprint_hash] [-H hostkey_file]
              [-h destination_constraint] [-S provider] [-t life] [file ...]
      ssh-add -s pkcs11 [-Cv] [certificate ...]
      ssh-add -e pkcs11
@@ -119,6 +119,11 @@ DESCRIPTION
      -L      Lists public key parameters of all identities currently
              represented by the agent.
 
+     -P      When loading PKCS#11 or FIDO keys from a token, do not request a
+             PIN.  This will cause the operation to fail if the token requires
+             additional authentication and has no other way to obtain it, such
+             as a keypad or biometric reader.
+
      -l      Lists fingerprints of all identities currently represented by the
              agent.
 
@@ -218,4 +223,4 @@ AUTHORS
      created OpenSSH.  Markus Friedl contributed the support for SSH protocol
      versions 1.5 and 2.0.
 
-OpenBSD 8.0                      July 11, 2026                      SSH-ADD(1)
+OpenBSD 8.0                   September 16, 2026                    SSH-ADD(1)

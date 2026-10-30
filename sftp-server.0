@@ -55,7 +55,7 @@ DESCRIPTION
              specified, then the denied list is applied before the allowed
              list.  This flag, along with the -p flag, may be used to disable
              operations that are irrelevant or undesirable for the server.
-             For example, a sftp-server that accepts connections from
+             For example, an sftp-server that accepts connections from
              untrusted clients may wish to disable the M-bM-^@M-^\copy-dataM-bM-^@M-^] or
              M-bM-^@M-^\users-groups-by-idM-bM-^@M-^] operations.
 
@@ -99,4 +99,4 @@ HISTORY
 AUTHORS
      Markus Friedl <markus@openbsd.org>
 
-OpenBSD 8.0                      May 21, 2026                   SFTP-SERVER(8)
+OpenBSD 8.0                     August 25, 2026                 SFTP-SERVER(8)
