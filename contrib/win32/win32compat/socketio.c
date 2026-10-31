@@ -271,6 +271,29 @@ socketio_setsockopt(struct w32_io* pio, int level, int optname, const char* optv
 int
 socketio_getsockopt(struct w32_io* pio, int level, int optname, char* optval, int* optlen)
 {
+	/*
+	 * A failed asynchronous ConnectEx() reports its error through the
+	 * overlapped completion, which socketio_is_io_available()/
+	 * socketio_finish_connect() capture into write_details.error /
+	 * read_details.error. Once that completion has been consumed the
+	 * underlying socket's SO_ERROR is left at 0, so a plain getsockopt()
+	 * would report success for a connect that actually failed. POSIX code
+	 * relies on getsockopt(SO_ERROR) after a non-blocking connect() to
+	 * detect failure and move on to the next address (e.g. the IPv6 -> IPv4
+	 * fallback loop in ssh_connect_direct()/timeout_connect()). Surface the
+	 * captured error here so that idiom keeps working on Windows.
+	 */
+	if (level == SOL_SOCKET && optname == SO_ERROR && optval != NULL &&
+	    optlen != NULL && *optlen >= (int)sizeof(int)) {
+		DWORD wsa_error = pio->write_details.error ?
+		    pio->write_details.error : pio->read_details.error;
+		if (wsa_error != 0) {
+			*(int*)optval = errno_from_WSAError(wsa_error);
+			*optlen = sizeof(int);
+			return 0;
+		}
+	}
+
 	SET_ERRNO_ON_ERROR(getsockopt(pio->sock, level, optname, optval, optlen));
 }
 
