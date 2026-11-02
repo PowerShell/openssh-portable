@@ -289,25 +289,126 @@ con_type_to_string(struct agent_connection* con)
 	}
 }
 
+static void
+log_client_token_error(const char* api, DWORD error_code)
+{
+	error("cannot retrieve client impersonation token: %s failed ERROR:%d", api, error_code);
+}
+
+/*
+ * Gets the tokens of the client from the pipe connection instead of from its process. The pipe does not
+ * depend on the access control list of the client process, which may grant the agent (LocalSystem, no
+ * SeDebugPrivilege) no access. ImpersonateNamedPipeClient fails with ERROR_CANNOT_IMPERSONATE until
+ * data was read from the pipe.
+ */
 static int
-get_con_client_info(struct agent_connection* con)
+get_pipe_client_tokens(HANDLE pipe_handle, HANDLE* client_primary_token, HANDLE* client_impersonation_token)
+{
+	int r = -1;
+	HANDLE pipe_token = NULL;
+	DWORD level = 0, len = 0, error_code = ERROR_SUCCESS;
+	BOOL got_token;
+
+	if (ImpersonateNamedPipeClient(pipe_handle) == FALSE) {
+		log_client_token_error("ImpersonateNamedPipeClient", GetLastError());
+		return -1;
+	}
+	got_token = OpenThreadToken(GetCurrentThread(), TOKEN_QUERY | TOKEN_DUPLICATE, TRUE, &pipe_token);
+	if (got_token == FALSE)
+		error_code = GetLastError();
+	/* never keep running with the identity of the client */
+	if (RevertToSelf() == FALSE)
+		fatal("cannot revert to the agent identity after impersonating the pipe client ERROR:%d", GetLastError());
+	if (got_token == FALSE) {
+		log_client_token_error("OpenThreadToken", error_code);
+		return -1;
+	}
+
+	if (GetTokenInformation(pipe_token, TokenImpersonationLevel, &level, sizeof(level), &len) == FALSE) {
+		log_client_token_error("GetTokenInformation(TokenImpersonationLevel)", GetLastError());
+		goto done;
+	}
+	if (level < SecurityImpersonation) {
+		error("cannot retrieve client impersonation token: the client opened the pipe with impersonation level %d, "
+		    "at least %d (SecurityImpersonation) is required", level, SecurityImpersonation);
+		goto done;
+	}
+	if (DuplicateTokenEx(pipe_token, TOKEN_QUERY | TOKEN_DUPLICATE, NULL, SecurityImpersonation, TokenPrimary, client_primary_token) == FALSE) {
+		log_client_token_error("DuplicateTokenEx", GetLastError());
+		goto done;
+	}
+	if (DuplicateToken(*client_primary_token, SecurityImpersonation, client_impersonation_token) == FALSE) {
+		log_client_token_error("DuplicateToken", GetLastError());
+		goto done;
+	}
+	r = 0;
+done:
+	CloseHandle(pipe_token);
+	return r;
+}
+
+/*
+ * The access control list of the client process may grant the agent no access to it. Such a client is
+ * identified through the pipe once its first request was read, see agent_connection_on_io.
+ * Returns TRUE if the identification was postponed.
+ */
+static BOOL
+postpone_client_info(struct agent_connection* con, const char* api, ULONG client_pid, DWORD error_code)
+{
+	if (error_code != ERROR_ACCESS_DENIED)
+		return FALSE;
+	verbose("%s failed for client pid %d ERROR:%d, the client is identified through the pipe after its first request",
+	    api, client_pid, error_code);
+	con->client_info_pending = TRUE;
+	return TRUE;
+}
+
+static int
+get_con_client_info(struct agent_connection* con, BOOL from_pipe)
 {
 	int r = -1;
 	char sid[SECURITY_MAX_SID_SIZE];
-	ULONG client_pid;
-	DWORD reg_dom_len = 0, info_len = 0, sid_size;
+	ULONG client_pid = 0;
+	DWORD reg_dom_len = 0, info_len = 0, sid_size, error_code;
 	DWORD sshd_sid_len = 0;
 	PSID sshd_sid = NULL;
 	HANDLE client_primary_token = NULL, client_impersonation_token = NULL, client_process_handle = NULL;
 	TOKEN_USER* info = NULL;
 	BOOL isMember = FALSE;
 
-	if (GetNamedPipeClientProcessId(con->pipe_handle, &client_pid) == FALSE ||
-		(client_process_handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_DUP_HANDLE, FALSE, client_pid)) == NULL ||
-		OpenProcessToken(client_process_handle, TOKEN_QUERY | TOKEN_DUPLICATE, &client_primary_token) == FALSE ||
-		DuplicateToken(client_primary_token, SecurityImpersonation, &client_impersonation_token) == FALSE) {
-		error("cannot retrieve client impersonation token");
-		goto done;
+	if (from_pipe) {
+		if (get_pipe_client_tokens(con->pipe_handle, &client_primary_token, &client_impersonation_token) == -1)
+			goto done;
+	} else {
+		if (GetNamedPipeClientProcessId(con->pipe_handle, &client_pid) == FALSE) {
+			log_client_token_error("GetNamedPipeClientProcessId", GetLastError());
+			goto done;
+		}
+
+		if ((client_process_handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_DUP_HANDLE, FALSE, client_pid)) == NULL) {
+			error_code = GetLastError();
+			if (postpone_client_info(con, "OpenProcess", client_pid, error_code))
+				r = 0;
+			else
+				log_client_token_error("OpenProcess", error_code);
+			goto done;
+		}
+
+		if (OpenProcessToken(client_process_handle, TOKEN_QUERY | TOKEN_DUPLICATE, &client_primary_token) == FALSE) {
+			error_code = GetLastError();
+			if (postpone_client_info(con, "OpenProcessToken", client_pid, error_code)) {
+				CloseHandle(client_process_handle);
+				client_process_handle = NULL;
+				r = 0;
+			} else
+				log_client_token_error("OpenProcessToken", error_code);
+			goto done;
+		}
+
+		if (DuplicateToken(client_primary_token, SecurityImpersonation, &client_impersonation_token) == FALSE) {
+			log_client_token_error("DuplicateToken", GetLastError());
+			goto done;
+		}
 	}
 
 	if (GetTokenInformation(client_primary_token, TokenUser, NULL, 0, &info_len) == TRUE ||
@@ -386,6 +487,14 @@ done:
 	return r;
 }
 
+/* Completes the client details that could not be retrieved from the client process. */
+int
+agent_get_con_client_info_from_pipe(struct agent_connection* con)
+{
+	con->client_info_pending = FALSE;
+	return get_con_client_info(con, TRUE);
+}
+
 void 
 agent_process_connection(HANDLE pipe) 
 {
@@ -404,7 +513,7 @@ agent_process_connection(HANDLE pipe)
 		fatal("failed to assign pipe to ioc_port");
 
 	/* get client details */
-	if (get_con_client_info(con) == -1)
+	if (get_con_client_info(con, FALSE) == -1)
 		fatal("failed to retrieve client details");
 
 	agent_connection_on_io(con, 0, &con->ol);
