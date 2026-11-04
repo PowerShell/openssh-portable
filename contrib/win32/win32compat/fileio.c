@@ -106,6 +106,77 @@ errno_from_Win32Error(int win32_error)
 	}
 }
 
+/* return 1 if the file is native a unix socket, 0 otherwise
+	detail = 1: AF_UNIX
+	detail = 2: PIPE - this may fail, so treat any value other than 1 and 3 as PIPE
+	detail = 3: FILE
+ */
+int fileio_is_afunix_socket(const char* name, int* detail)
+{
+	wchar_t* name_w = utf8_to_utf16(name);
+	int ret = 0;
+	int type;
+	HANDLE h;
+	FILE_ATTRIBUTE_TAG_INFO info;
+
+	if (name_w == NULL)
+		return 0;
+
+	if (detail != NULL)
+		*detail = 0;
+
+	h = CreateFileW(name_w,
+		0,
+		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_WRITE,
+		NULL, OPEN_EXISTING,
+		FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+		NULL);
+	if (h == INVALID_HANDLE_VALUE) {
+		ret = 0;
+		debug("fileio_is_afunix_socket - ERROR: CreateFileW failed, error: 0x%08x", GetLastError());
+		goto clean;
+	}
+
+	if (GetFileInformationByHandleEx(h, FileAttributeTagInfo, &info, sizeof(info)) != FALSE) {
+		if (info.ReparseTag == IO_REPARSE_TAG_AF_UNIX) {
+			ret = 1;
+			if (detail != NULL)
+				*detail = 1;
+			goto clean;
+		}
+	}else{
+		ret = 0;
+		debug("fileio_is_afunix_socket - ERROR: GetFileInformationByHandleEx failed, error: 0x%08x", GetLastError());
+	}
+
+	SetLastError(ERROR_SUCCESS);
+	type = GetFileType(h);
+	if(GetLastError() != ERROR_SUCCESS) {
+		ret = 0;
+		debug("fileio_is_afunix_socket - ERROR: GetFileType failed, error: 0x%08x", GetLastError());
+		goto clean;
+	}
+
+	if (type == FILE_TYPE_PIPE) {
+		ret = 0;
+		if (detail != NULL)
+			*detail = 2;
+		goto clean;
+	} else if (type == FILE_TYPE_DISK) {
+		ret = 0;
+		if (detail != NULL)
+			*detail = 3;
+		goto clean;
+	}
+
+clean:
+	if (name_w)
+		free(name_w);
+	if (h != INVALID_HANDLE_VALUE)
+		CloseHandle(h);
+	return ret;
+}
+
 struct w32_io*
 fileio_afunix_socket() 
 {
