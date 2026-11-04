@@ -31,6 +31,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <mswsock.h>
+#include <hvsocket.h>
 #include <errno.h>
 #include <VersionHelpers.h>
 #include <stddef.h>
@@ -118,7 +119,10 @@ socketio_acceptEx(struct w32_io* pio)
 	}
 
 	/* create accepting socket */
-	context->accept_socket = socket(addr.ss_family, SOCK_STREAM, IPPROTO_TCP);
+	if (addr.ss_family == AF_HYPERV)
+		context->accept_socket = socket(addr.ss_family, SOCK_STREAM, HV_PROTOCOL_RAW);
+	else
+		context->accept_socket = socket(addr.ss_family, SOCK_STREAM, IPPROTO_TCP);
 	if (context->accept_socket == INVALID_SOCKET) {
 		errno = errno_from_WSALastError();
 		debug3("acceptEx - socket() ERROR:%d, io:%p", WSAGetLastError(), pio);
