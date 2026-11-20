@@ -32,7 +32,7 @@
 #include <ws2tcpip.h>
 #include <mswsock.h>
 #include <errno.h>
-#include <VersionHelpers.h>
+#include <limits.h>
 #include <stddef.h>
 #include "w32fd.h"
 #include "inc\utf.h"
@@ -975,29 +975,39 @@ socketio_on_select(struct w32_io* pio, BOOL rd)
 int
 w32_gethostname(char *name_utf8, size_t len)
 {
-	char* tmp_name_utf8 = NULL;
+	wchar_t name_utf16[256];
+	DWORD size = ARRAYSIZE(name_utf16);
+	int needed;
 
-	if (IsWindows8OrGreater()) {
-		/* TODO - GetHostNameW not present in Win7, do GetProcAddr on Win8+*/
-	        /*
-		wchar_t name_utf16[256];
-		if (GetHostNameW(name_utf16, 256) == SOCKET_ERROR) {
-	                errno = errno_from_WSALastError();
-	                return -1;
-	        }
+	if (name_utf8 == NULL || len == 0) {
+		errno = EFAULT;
+		return -1;
+	}
 
-	        if ((tmp_name_utf8 = utf16_to_utf8(name_utf16)) == NULL ||
-	                strlen(tmp_name_utf8) >= len) {
-	                errno = EFAULT; //??
-	                return -1;
-	        }
+	/* Avoid loading Winsock namespace providers for a local hostname. */
+	if (!GetComputerNameExW(ComputerNameDnsHostname, name_utf16, &size)) {
+		if (gethostname(name_utf8, len > INT_MAX ? INT_MAX : (int)len) == 0)
+			return 0;
+		errno = errno_from_WSALastError();
+		return -1;
+	}
 
-	        memcpy(name_utf8, tmp_name_utf8, strlen(tmp_name_utf8) + 1);
-	        free(tmp_name_utf8);
-	        return 0; */
-		return gethostname(name_utf8, (int)len);
-	} else
-		return gethostname(name_utf8, (int)len);
+	needed = WideCharToMultiByte(CP_UTF8, 0, name_utf16, -1,
+	    NULL, 0, NULL, NULL);
+	if (needed == 0) {
+		errno = EINVAL;
+		return -1;
+	}
+	if ((size_t)needed > len) {
+		errno = EFAULT;
+		return -1;
+	}
+	if (WideCharToMultiByte(CP_UTF8, 0, name_utf16, -1,
+	    name_utf8, needed, NULL, NULL) == 0) {
+		errno = EINVAL;
+		return -1;
+	}
+	return 0;
 }
 
 void
