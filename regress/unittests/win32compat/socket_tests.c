@@ -703,6 +703,36 @@ socket_typical_ssh_payload_tests() {
 void
 socket_tests()
 {
+	wchar_t hostname_utf16[256];
+	char hostname[768], expected[768], exact[768];
+	DWORD size = ARRAYSIZE(hostname_utf16);
+	HMODULE dnsapi = GetModuleHandleW(L"dnsapi.dll");
+	int needed;
+
+	TEST_START("gethostname native Windows lookup");
+	ASSERT_INT_EQ(GetComputerNameExW(ComputerNameDnsHostname,
+	    hostname_utf16, &size), TRUE);
+	needed = WideCharToMultiByte(CP_UTF8, 0, hostname_utf16, -1,
+	    expected, sizeof(expected), NULL, NULL);
+	ASSERT_INT_GT(needed, 0);
+	ASSERT_INT_EQ(gethostname(hostname, sizeof(hostname)), 0);
+	ASSERT_STRING_EQ(hostname, expected);
+	ASSERT_INT_EQ(gethostname(exact, needed), 0);
+	ASSERT_STRING_EQ(exact, expected);
+	ASSERT_PTR_EQ(GetModuleHandleW(L"dnsapi.dll"), dnsapi);
+	TEST_DONE();
+
+	TEST_START("gethostname insufficient buffer");
+	memset(exact, 'x', sizeof(exact));
+	ASSERT_INT_EQ(gethostname(exact, needed - 1), -1);
+	ASSERT_INT_EQ(errno, EFAULT);
+	ASSERT_CHAR_EQ(exact[0], 'x');
+	ASSERT_INT_EQ(gethostname(exact, 0), -1);
+	ASSERT_INT_EQ(errno, EFAULT);
+	ASSERT_INT_EQ(gethostname(NULL, sizeof(hostname)), -1);
+	ASSERT_INT_EQ(errno, EFAULT);
+	TEST_DONE();
+
 	socket_fd_tests();
 	socket_blocking_io_tests();
 	socket_nonblocking_io_tests();
