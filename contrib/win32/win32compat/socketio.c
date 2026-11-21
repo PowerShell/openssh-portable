@@ -975,29 +975,50 @@ socketio_on_select(struct w32_io* pio, BOOL rd)
 int
 w32_gethostname(char *name_utf8, size_t len)
 {
-	char* tmp_name_utf8 = NULL;
+	wchar_t name_utf16[256];
+	DWORD name_utf16_len = ARRAYSIZE(name_utf16);
+	char *tmp_name_utf8 = NULL;
+	size_t tmp_len;
 
-	if (IsWindows8OrGreater()) {
-		/* TODO - GetHostNameW not present in Win7, do GetProcAddr on Win8+*/
-	        /*
-		wchar_t name_utf16[256];
-		if (GetHostNameW(name_utf16, 256) == SOCKET_ERROR) {
-	                errno = errno_from_WSALastError();
-	                return -1;
-	        }
+	if (name_utf8 == NULL) {
+		errno = EFAULT;
+		return -1;
+	}
 
-	        if ((tmp_name_utf8 = utf16_to_utf8(name_utf16)) == NULL ||
-	                strlen(tmp_name_utf8) >= len) {
-	                errno = EFAULT; //??
-	                return -1;
-	        }
+	/*
+	 * Winsock's gethostname() returns _CLUSTER_NETWORK_NAME_ when a
+	 * cluster resource sets it, and otherwise the TCP/IP host name, which
+	 * it gets by loading all the namespace providers and asking the DNS
+	 * client service. GetComputerNameExW(ComputerNamePhysicalDnsHostname)
+	 * reads the same host name directly, so only the cluster case still
+	 * goes through Winsock.
+	 */
+	if (GetEnvironmentVariableW(L"_CLUSTER_NETWORK_NAME_", NULL, 0) != 0 ||
+	    !GetComputerNameExW(ComputerNamePhysicalDnsHostname, name_utf16,
+	    &name_utf16_len) || name_utf16_len == 0) {
+		if (gethostname(name_utf8, (int)len) == SOCKET_ERROR) {
+			errno = errno_from_WSALastError();
+			return -1;
+		}
+		return 0;
+	}
 
-	        memcpy(name_utf8, tmp_name_utf8, strlen(tmp_name_utf8) + 1);
-	        free(tmp_name_utf8);
-	        return 0; */
-		return gethostname(name_utf8, (int)len);
-	} else
-		return gethostname(name_utf8, (int)len);
+	if ((tmp_name_utf8 = utf16_to_utf8(name_utf16)) == NULL) {
+		errno = ENOMEM;
+		return -1;
+	}
+
+	/* same contract as Winsock: fail with EFAULT if the name doesn't fit */
+	tmp_len = strlen(tmp_name_utf8);
+	if (tmp_len >= len) {
+		free(tmp_name_utf8);
+		errno = EFAULT;
+		return -1;
+	}
+
+	memcpy(name_utf8, tmp_name_utf8, tmp_len + 1);
+	free(tmp_name_utf8);
+	return 0;
 }
 
 void
