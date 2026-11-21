@@ -707,12 +707,24 @@ socket_gethostname_tests()
 {
 	char name[NI_MAXHOST], ws_name[NI_MAXHOST], buf[NI_MAXHOST];
 	winsock_gethostname_fn ws_gethostname;
+	wchar_t *cluster_name = NULL;
+	DWORD cluster_len;
 	size_t name_len, i;
 	BOOL nsp_loaded, ascii = TRUE;
 
 	ws_gethostname = (winsock_gethostname_fn)GetProcAddress(
 	    GetModuleHandleW(L"ws2_32.dll"), "gethostname");
 	ASSERT_PTR_NE((void *)ws_gethostname, NULL);
+
+	/* run the non-cluster checks without an inherited cluster name */
+	cluster_len = GetEnvironmentVariableW(L"_CLUSTER_NETWORK_NAME_", NULL, 0);
+	if (cluster_len != 0) {
+		cluster_name = malloc(cluster_len * sizeof(wchar_t));
+		ASSERT_PTR_NE(cluster_name, NULL);
+		GetEnvironmentVariableW(L"_CLUSTER_NETWORK_NAME_", cluster_name,
+		    cluster_len);
+		SetEnvironmentVariableW(L"_CLUSTER_NETWORK_NAME_", NULL);
+	}
 
 	{
 		TEST_START("gethostname matches Winsock");
@@ -725,9 +737,12 @@ socket_gethostname_tests()
 
 		retValue = ws_gethostname(ws_name, sizeof(ws_name));
 		ASSERT_INT_EQ(retValue, 0);
-		/* Winsock returns the ANSI code page, we return UTF-8 */
-		for (i = 0; ws_name[i] != '\0'; i++)
-			if ((unsigned char)ws_name[i] > 0x7f)
+		/*
+		 * Winsock returns the ANSI code page, we return UTF-8, so only
+		 * an ASCII name can match byte for byte.
+		 */
+		for (i = 0; name[i] != '\0'; i++)
+			if ((unsigned char)name[i] > 0x7f)
 				ascii = FALSE;
 		if (ascii)
 			ASSERT_STRING_EQ(name, ws_name);
@@ -770,7 +785,9 @@ socket_gethostname_tests()
 		ASSERT_INT_NE(SetEnvironmentVariableW(L"_CLUSTER_NETWORK_NAME_",
 		    L"W32-Cluster-VS"), 0);
 		retValue = gethostname(buf, sizeof(buf));
-		SetEnvironmentVariableW(L"_CLUSTER_NETWORK_NAME_", NULL);
+		/* put back whatever the process inherited */
+		SetEnvironmentVariableW(L"_CLUSTER_NETWORK_NAME_", cluster_name);
+		free(cluster_name);
 		ASSERT_INT_EQ(retValue, 0);
 		ASSERT_STRING_EQ(buf, "W32-Cluster-VS");
 		TEST_DONE();
