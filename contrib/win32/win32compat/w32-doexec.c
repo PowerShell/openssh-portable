@@ -262,7 +262,7 @@ cleanup:
 int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 	int pipein[2], pipeout[2], pipeerr[2], ret = -1;
 	char *exec_command = NULL, *posix_cmd_input = NULL, *shell = NULL, *pty_cmd_cp = NULL;;
-	HANDLE job = NULL, process_handle;
+	HANDLE job = NULL, process_handle = NULL;
 	extern char* shell_command_option;
 	extern char* shell_arguments;
 	extern BOOLEAN arg_escape;
@@ -472,7 +472,6 @@ int do_exec_windows(struct ssh *ssh, Session *s, const char *command, int pty) {
 		errno = EOTHER;
 		error("cannot associate job object: %d", GetLastError());
 		TerminateProcess(process_handle, 255);
-		CloseHandle(process_handle);
 		goto cleanup;
 	}
 	s->pid = pid;
@@ -504,6 +503,8 @@ cleanup:
 		free(shell);
 	if (job)
 		CloseHandle(job);
+	if (process_handle)
+		CloseHandle(process_handle);
 	if (pty_cmd_cp)
 		free(pty_cmd_cp);
 
