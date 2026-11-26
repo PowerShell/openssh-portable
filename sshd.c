@@ -1209,6 +1209,7 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s,
 				    posix_spawnattr_setpgroup(&attributes, 0) != 0)
 					error("posix_spawn initialization failed");
 				else {
+					set_nonblock(config_s[0]);
 					child = child_register(config_s[0], *newsock);
 				 	if (posix_spawn(&child->pid, rexec_argv[0], &actions, &attributes, rexec_argv, NULL) != 0)
 				 		error("%s, posix_spawn failed", __func__);
